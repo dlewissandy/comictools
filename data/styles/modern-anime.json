@@ -1,0 +1,69 @@
+{
+  "id": "modern-anime",
+  "name": "Modern Anime",
+  "description": "A fusion of modern anime aesthetics with intricate details and high gloss finishes, reminiscent of RWBY and Princess Mononoke.",
+  "art_style": {
+    "line_styles": "Thin, precise lines with varied thickness for depth; detailed outlines emphasize character features and backgrounds.",
+    "inking_tools": "Predominantly digital tools for crisp, clean lines, with occasional traditional brush strokes for texture.",
+    "shading_style": "Soft cel shading combined with gradient overlays; highlights are glossy and reflective, creating a vibrant, polished look.",
+    "color_palette": "Rich, saturated colors with a focus on jewel tones; contrasting colors enhance visual impact, while muted shades provide depth.",
+    "spot_colors": "Neon accents for magical effects or highlights, like glowing eyes or energy weapons.",
+    "registration": "Tight registration with minimal color bleed; layers should be well-aligned for a clean finish.",
+    "lettering_style": "Bold, dynamic font for dialogue; casual handwritten styles for thoughts, maintaining readability."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:6, emphasizing stylized proportions typical of modern anime.",
+    "limb_proportions": "Long and slender limbs to reflect elegance and agility, with exaggerated hand and foot sizes for dramatic effect.",
+    "anatomy_detail": "Semi-realistic anatomy with exaggerated features; focus on expressive faces and fluid forms.",
+    "eye_style": "Large, expressive eyes with detailed irises and highlights; vibrant colors to convey emotion.",
+    "nose_style": "Simple, stylized noses for a clean look; minimal detail to maintain focus on eyes and expressions.",
+    "mouth_style": "Simple curves with occasional detail for smiles; expressive when conveying emotion.",
+    "expression_exaggeration": "High, with exaggerated facial features to amplify emotional responses.",
+    "silhouette_clarity": "Very high; characters should stand out against backgrounds with distinct outlines.",
+    "silhouette_shape_language": "Angular shapes for dynamic poses combined with rounded features for friendliness.",
+    "detail_complexity": "Moderate to high; intricate clothing designs, armor details, and nature elements enhance visual storytelling.",
+    "texture_accents": "Subtle textures like fabric weaves and armor reflections; use of gradient fills for hair and clothing.",
+    "motion_line_style": "Stylized speed lines that enhance action sequences; blur effects for rapid movement.",
+    "expression_line_style": "Use of sweat drops and blush marks to amplify emotions during key moments.",
+    "signature_motifs": "Iconic hairstyles and costume elements that define character identities; signature weapons for main characters.",
+    "recurring_flourishes": "Flourishes like sparkles around magical effects or action lines during intense moments."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded rectangle with a slight tail for dialogue.",
+      "border": "Thin, solid line with a glossy finish.",
+      "fill_color": "Light gray for readability with soft white highlights.",
+      "font": "Bold and modern sans-serif for clarity."
+    },
+    "whisper": {
+      "shape": "Softly rounded, cloud-like shape to convey softness.",
+      "border": "Dotted line for a gentle appearance.",
+      "fill_color": "Translucent white to indicate quietness.",
+      "font": "Italicized for a whispering effect."
+    },
+    "shout": {
+      "shape": "Jagged edges to convey intensity and urgency.",
+      "border": "Thick, bold line to stand out.",
+      "fill_color": "Bright red to signify loudness.",
+      "font": "Dynamic, angular font that conveys shouting."
+    },
+    "thought": {
+      "shape": "Cloud-like with a small tail pointing to the character's head.",
+      "border": "Thin, sketchy line for a dreamy effect.",
+      "fill_color": "Light blue to signify thoughtfulness.",
+      "font": "Casual script to reflect internal dialogue."
+    },
+    "sound_effect": {
+      "shape": "Dynamic, explosive shapes like bursts or waves.",
+      "border": "Bold, thick lines with a comic-book style.",
+      "fill_color": "Bright colors like yellow or orange to grab attention.",
+      "font": "Stylized, action-oriented font for impact."
+    },
+    "narration": {
+      "shape": "Rectangular with slightly rounded corners for a clean look.",
+      "border": "Thin, elegant line to maintain simplicity.",
+      "fill_color": "White with a soft shadow for depth.",
+      "font": "Classic serif font for storytelling."
+    }
+  }
+}

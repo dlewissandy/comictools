@@ -1,0 +1,69 @@
+{
+  "id": "saturday-morning",
+  "name": "Saturday Morning Cartoon",
+  "description": "A vibrant and playful cartoon style reminiscent of classic Hanna-Barbera shows like 'The Flintstones', 'The Jetsons', and 'Scooby-Doo'. This style is defined by bold outlines, simple shapes, and a whimsical sense of motion.",
+  "art_style": {
+    "line_styles": "Thick, bold outlines for characters and objects, with thinner, delicate lines for details. Smooth line quality to enhance the cartoonish aesthetic.",
+    "inking_tools": "Primarily digital inking for precision, with options for brushes that mimic traditional ink for a classic feel.",
+    "shading_style": "Flat colors with minimal shading; use cel shading techniques for depth, avoiding complex gradients.",
+    "color_palette": "Bright, saturated colors such as sky blue, grass green, and warm yellows. Characters typically feature solid, eye-catching hues.",
+    "spot_colors": "Occasional use of pastel shades for backgrounds or subtle highlights.",
+    "registration": "Standard registration with tight alignment for color layers, ensuring clean edges without any color bleed.",
+    "lettering_style": "Bold, sans-serif fonts for dialogue, with a playful hand-drawn style for sound effects."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:5 for a cartoonish proportion, emphasizing oversized heads for expressiveness.",
+    "limb_proportions": "Short and rounded limbs reflecting a playful, exaggerated style.",
+    "anatomy_detail": "Minimal anatomical detail; characters have simple, cartoonish features with exaggerated expressions.",
+    "eye_style": "Large, expressive eyes, often circular or oval with simple pupils, to convey emotions easily.",
+    "nose_style": "Simple line or dot representation, avoiding complex details.",
+    "mouth_style": "Wide, expressive mouths with clear outlines; vary shapes for emotions.",
+    "expression_exaggeration": "High; expressions should be easily read and exaggerated for comedic effect.",
+    "silhouette_clarity": "High silhouette clarity, allowing characters to stand out against various backgrounds.",
+    "silhouette_shape_language": "Rounded and soft shapes to convey friendliness and approachability.",
+    "detail_complexity": "Low; focus on clear, recognizable forms over intricate details.",
+    "texture_accents": "Subtle texture for hair and clothing, such as simple lines or dots to imply fabric.",
+    "motion_line_style": "Use of dynamic motion lines to indicate action, typically short and curved to suggest speed.",
+    "expression_line_style": "Occasional use of sweat drops or exaggerated lines around faces to emphasize emotion.",
+    "signature_motifs": "Recurring elements like simplistic animal companions or iconic vehicles (e.g., the Mystery Machine).",
+    "recurring_flourishes": "Small, playful details such as animated sparkles or exaggerated facial features for comedic timing."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded rectangle with a slight tail for dialogue.",
+      "border": "Thick outline with a solid color to match character hues.",
+      "fill_color": "White or light pastel for contrast with text.",
+      "font": "Bold, rounded sans-serif for readability."
+    },
+    "whisper": {
+      "shape": "Slightly wavy outline to indicate softness.",
+      "border": "Thin dashed line, matching the dialogue style.",
+      "fill_color": "Light gray to imply quietness.",
+      "font": "Italicized version of the chat font for a whisper effect."
+    },
+    "shout": {
+      "shape": "Jagged, explosive shape to convey volume.",
+      "border": "Thick, jagged outline for emphasis.",
+      "fill_color": "Bright yellow or red to attract attention.",
+      "font": "Bold, exaggerated font, possibly with a shadow."
+    },
+    "thought": {
+      "shape": "Cloud-like shape to indicate thinking.",
+      "border": "Soft outline mimicking a thought bubble.",
+      "fill_color": "Light blue or white for clarity.",
+      "font": "Rounded sans-serif, slightly smaller than chat."
+    },
+    "sound_effect": {
+      "shape": "Dynamic, explosive shapes to match the sound being represented.",
+      "border": "Bold outline, often with exaggerated spikes or curls.",
+      "fill_color": "Bright colors like orange or red for impact.",
+      "font": "Stylized, bold lettering that conveys the emotion of the sound."
+    },
+    "narration": {
+      "shape": "Simple rectangle with rounded corners.",
+      "border": "Thin, clean outline for clarity.",
+      "fill_color": "Light gray or off-white to differentiate from dialogue.",
+      "font": "Clear, bold sans-serif for easy reading."
+    }
+  }
+}

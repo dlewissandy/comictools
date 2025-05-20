@@ -1,0 +1,69 @@
+{
+  "id": "hyper-realism",
+  "name": "Hyper Realism",
+  "description": "A comic style characterized by hyper-realism and cinematic quality, featuring highly detailed illustrations that mimic photorealistic aesthetics in 4k resolution. This style emphasizes glossy finishes and dramatic lighting to create dynamic and immersive scenes, setting it apart from traditional comic styles.",
+  "art_style": {
+    "line_styles": "Fine, precise lines with varied thickness to enhance depth; minimal line work for backgrounds to maintain focus on characters.",
+    "inking_tools": "Digital inking tools for crisp, clean lines and seamless blending of colors.",
+    "shading_style": "Soft gradients and detailed texture work to capture light reflections and shadows accurately, with a focus on realism.",
+    "color_palette": "Rich and vibrant colors with a glossy finish, utilizing gradients to portray depth and dimensionality.",
+    "spot_colors": "",
+    "registration": "Tightly aligned color layers for high fidelity in glossy finishes, ensuring consistency across panels.",
+    "lettering_style": "Modern sans-serif font with clean lines, varying sizes for emphasis, maintaining readability against detailed backgrounds."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:6, realistic proportions that enhance the lifelike quality of characters.",
+    "limb_proportions": "Well-defined and proportionate limbs, reflecting human anatomy accurately.",
+    "anatomy_detail": "Highly detailed anatomical features with realistic muscle structure and skin texture, emphasizing photorealism.",
+    "eye_style": "Detailed irises with reflections, conveying emotion and depth.",
+    "nose_style": "Realistic rendering with subtle shading to suggest form and structure.",
+    "mouth_style": "Realistic lips with texture detail, allowing for a range of expressions.",
+    "expression_exaggeration": "Subtle exaggeration in expressions to maintain emotional clarity without losing realism.",
+    "silhouette_clarity": "Very high silhouette clarity against backgrounds, ensuring characters stand out distinctly.",
+    "silhouette_shape_language": "Naturalistic shapes with subtle curves to reflect human anatomy.",
+    "detail_complexity": "High detail complexity with intricate textures and patterns on clothing and skin.",
+    "texture_accents": "Skin textures, fabric weaves, and hair strands for added realism.",
+    "motion_line_style": "",
+    "expression_line_style": "",
+    "signature_motifs": "",
+    "recurring_flourishes": ""
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded rectangle with soft edges, enhancing the modern aesthetic.",
+      "border": "Thin, subtle outline to maintain focus on the text without distraction.",
+      "fill_color": "Light translucent gray for a clean backdrop to text.",
+      "font": "Modern sans-serif with a slight weight for clarity."
+    },
+    "whisper": {
+      "shape": "Slightly curved rectangle to signify secrecy.",
+      "border": "Dotted line for a softer appearance.",
+      "fill_color": "Pale blue for a subtle effect.",
+      "font": "Same modern sans-serif, italicized for differentiation."
+    },
+    "shout": {
+      "shape": "Bold jagged edges to convey urgency.",
+      "border": "Thick, dark outline for emphasis.",
+      "fill_color": "Bright yellow to grab attention.",
+      "font": "Bold, uppercase sans-serif to enhance the shouting effect."
+    },
+    "thought": {
+      "shape": "Cloud-like with a tail pointing towards the character's head.",
+      "border": "Soft, thin outline for a dream-like quality.",
+      "fill_color": "Light pastel to suggest a softer tone.",
+      "font": "Modern sans-serif, italicized."
+    },
+    "sound_effect": {
+      "shape": "Dynamic shapes that match the sound (e.g., explosion or zap).",
+      "border": "Thick, bold outline to make the effect pop.",
+      "fill_color": "Vibrant colors such as red or orange, depending on the sound.",
+      "font": "Stylized, comic-style font for impact."
+    },
+    "narration": {
+      "shape": "Simple rectangle with rounded edges.",
+      "border": "Thin, dark outline for clarity.",
+      "fill_color": "Light gray for easy reading against complex backgrounds.",
+      "font": "Consistent modern sans-serif, slightly larger for emphasis."
+    }
+  }
+}

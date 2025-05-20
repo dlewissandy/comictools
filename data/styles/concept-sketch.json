@@ -1,0 +1,69 @@
+{
+  "id": "concept-sketch",
+  "name": "Concept Sketch",
+  "description": "A stylistic approach emphasizing rough, expressive pencil sketches that capture dynamic movement and emotional nuances, suitable for conceptual storytelling.",
+  "art_style": {
+    "line_styles": "Lines are loose and fluid, with varying thickness to convey depth and emphasis. Outlines are softer to create a sketchy, unfinished feel, while detail lines are finer and more precise.",
+    "inking_tools": "Primarily graphite pencils, with occasional use of charcoal for shading and depth.",
+    "shading_style": "Shading is achieved through a combination of crosshatching and soft smudging, focusing on creating contrast with varying densities across the page.",
+    "color_palette": "Monochromatic tones of gray, with selective use of muted colors to highlight key elements without overpowering the pencil work.",
+    "spot_colors": "",
+    "registration": "Ensure alignment remains consistent to preserve the sketchy aesthetic, with minimal tolerance for color bleed in any added hues.",
+    "lettering_style": "Handwritten style for dialogue, mimicking a natural and organic flow, with varying sizes to denote different emotional tones."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:4 for a stylized yet approachable look, allowing for exaggerated expressions.",
+    "limb_proportions": "Long and slender limbs to emphasize movement and grace.",
+    "anatomy_detail": "Basic anatomical features with a focus on gesture rather than realism, maintaining a sketch-like simplicity.",
+    "eye_style": "Large, expressive eyes with minimal detail to enhance emotional expression.",
+    "nose_style": "Simple line for nose representation, maintaining a stylized aesthetic.",
+    "mouth_style": "Open curves or simple lines to convey various emotions quickly and effectively.",
+    "expression_exaggeration": "High, allowing characters to communicate feelings through exaggerated facial expressions.",
+    "silhouette_clarity": "Medium clarity to balance between recognizability and the rough sketch aesthetic.",
+    "silhouette_shape_language": "Organic curves to create a sense of fluidity and motion in character designs.",
+    "detail_complexity": "Moderate; maintaining some structural detail while emphasizing the rough sketch style.",
+    "texture_accents": "Subtle textures created through pencil strokes to imply depth in clothing and hair.",
+    "motion_line_style": "Soft, flowing lines to indicate movement without harshness.",
+    "expression_line_style": "Light, sketchy lines around faces to denote emotion without cluttering the visual space.",
+    "signature_motifs": "Incorporation of unique facial expressions or exaggerated features that become recognizable across characters.",
+    "recurring_flourishes": "Frequent use of sketchy borders or annotations to enhance the conceptual nature."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded rectangles with soft corners, mimicking the organic feel of the sketches.",
+      "border": "Thin, sketchy line, slightly uneven to maintain the rough aesthetic.",
+      "fill_color": "Light gray to ensure text visibility without distraction.",
+      "font": "Hand-drawn style, mimicking natural handwriting."
+    },
+    "whisper": {
+      "shape": "Soft, wavy shapes to imply secrecy or softness in tone.",
+      "border": "Delicate and uneven, matching the overall sketch style.",
+      "fill_color": "Very light gray for subtlety.",
+      "font": "Slightly smaller, with a more delicate appearance."
+    },
+    "shout": {
+      "shape": "Angular bursts to convey energy and intensity.",
+      "border": "Bold, uneven lines to enhance the feeling of shouting.",
+      "fill_color": "Bright color to denote importance and volume.",
+      "font": "Larger, more dynamic lettering style."
+    },
+    "thought": {
+      "shape": "Cloud-like forms to represent the flow of thoughts.",
+      "border": "Light and sketchy, maintaining the soft aesthetic.",
+      "fill_color": "Pale blue for differentiation.",
+      "font": "Italicized, flowing script to imply thought."
+    },
+    "sound_effect": {
+      "shape": "Dynamic bursts or waves to convey sound.",
+      "border": "Thick, expressive lines to enhance impact.",
+      "fill_color": "Bright colors for emphasis.",
+      "font": "Bold, stylized font to grab attention."
+    },
+    "narration": {
+      "shape": "Simple rectangles with rounded edges for clarity.",
+      "border": "Thin, sketchy line to match the artistic style.",
+      "fill_color": "White for clear visibility.",
+      "font": "Clean, legible handwritten style."
+    }
+  }
+}

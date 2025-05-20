@@ -1,0 +1,69 @@
+{
+  "id": "conte-crayon",
+  "name": "Conte Crayon",
+  "description": "A hand-drawn comic style characterized by expressive conte crayon sketches. This style blends soft, flowing lines with rough, textured shading to create a vibrant and organic feel.",
+  "art_style": {
+    "line_styles": "No inked lines, only soft, flowing lines created with conte crayon.  Lines are often broken or sketchy to enhance the organic feel.",
+    "inking_tools": "Conte crayon, with occasional use of graphite for depth and shading.",
+    "shading_style": "Soft, crosshatched shading that builds texture and depth, complemented by areas of flat color to enhance contrast.",
+    "color_palette": "Black, white, sanguine (redish-brown) and Bistre (dark brown).  Toothy paper texture to enhance the organic feel",
+    "spot_colors": "colored paper in matte pastel colors can be used as background.",
+    "registration": "Loose registration to allow for a natural, hand-drawn look without strict alignment.",
+    "lettering_style": "Handwritten font style that mimics natural writing, varying in size and weight to match the tone of dialogue."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:6 for a whimsical, exaggerated appearance.",
+    "limb_proportions": "Proportions are slightly exaggerated with long, thin limbs to enhance expressiveness.",
+    "anatomy_detail": "Stylized anatomy with minimal muscular detail, focusing instead on gesture and movement.",
+    "eye_style": "Large, expressive eyes with simple circular shapes to convey emotion.",
+    "nose_style": "Simple, understated lines for noses, often just a small curve or dot.",
+    "mouth_style": "Wide, expressive mouths that can shift to convey a range of emotions with minimal lines.",
+    "expression_exaggeration": "High exaggeration for facial expressions to enhance comedic or dramatic effect.",
+    "silhouette_clarity": "High clarity with strong outlines to ensure characters stand out against backgrounds.",
+    "silhouette_shape_language": "Organic curves and fluid shapes that match the whimsical nature of the style.",
+    "detail_complexity": "Moderate detail focused on facial expressions and key features, with simpler body shapes.",
+    "texture_accents": "Subtle textures added with crayon strokes to suggest fabric and surfaces.",
+    "motion_line_style": "Soft, swirling lines to indicate movement and action, enhancing the dynamic feel.",
+    "expression_line_style": "Minimal use of emotional accent lines, focusing on facial expressions instead.",
+    "signature_motifs": "Curvy, whimsical elements that reflect the playful nature of the style.",
+    "recurring_flourishes": "Scribble-like accents around action or emotional moments, adding to the playful aesthetic."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded rectangles with soft edges, reflecting the organic nature of the art style.",
+      "border": "Thin, hand-drawn outline that complements the sketchy aesthetic.",
+      "fill_color": "Light cream or pastel background to contrast with the text.",
+      "font": "Handwritten font that mimics the flow of speech."
+    },
+    "whisper": {
+      "shape": "Slightly smaller rounded rectangles with a wavy edge for a gentle effect.",
+      "border": "Fainter line, maintaining the hand-drawn feel.",
+      "fill_color": "Very light gray for subtlety.",
+      "font": "Faint, smaller handwritten font."
+    },
+    "shout": {
+      "shape": "Jagged, comic-style bursts to emphasize loudness.",
+      "border": "Thicker, bold outline to indicate intensity.",
+      "fill_color": "Bright yellow or red to grab attention.",
+      "font": "Bold, capitalized handwritten font."
+    },
+    "thought": {
+      "shape": "Cloud-like shapes with a wispy tail.",
+      "border": "Soft, thin outline that merges with the fill color.",
+      "fill_color": "Pale blue or light gray for a dreamy effect.",
+      "font": "Italicized handwritten font to suggest inner thoughts."
+    },
+    "sound_effect": {
+      "shape": "Dynamic, explosive shapes (e.g., 'BANG', 'WHOOSH').",
+      "border": "Thick, bold outline for emphasis.",
+      "fill_color": "Bright colors like red or orange to convey energy.",
+      "font": "Bold, stylized font that captures the sound's essence."
+    },
+    "narration": {
+      "shape": "Simple rectangles with softer corners.",
+      "border": "Thin outline that matches the overall style.",
+      "fill_color": "Light cream to ensure readability.",
+      "font": "Clear, legible handwritten font."
+    }
+  }
+}

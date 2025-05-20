@@ -1,0 +1,69 @@
+{
+  "id": "childlike-crayon",
+  "name": "Childlike Crayon",
+  "description": "A whimsical and colorful comic style that mimics the charm of children's hand-drawn crayon art, characterized by playful shapes and vibrant hues.",
+  "art_style": {
+    "line_styles": "Lines are uneven and slightly wobbly, resembling crayon strokes with varying thickness. Outlines are bold and colorful, often overlapping without precision.",
+    "inking_tools": "Crayons or colored pencils, emphasizing a hand-drawn aesthetic that feels playful and organic.",
+    "shading_style": "Flat coloring with occasional scribbles for texture. No gradients; colors should be bright and saturated, capturing a child's unrefined approach.",
+    "color_palette": "A broad spectrum of bright, primary colors: reds, blues, yellows, greens, with pastel shades for softer elements like background or clouds.",
+    "spot_colors": "Occasional use of glitter or metallic crayons for special effects like stars or magical elements.",
+    "registration": "No strict registration; colors may bleed slightly outside lines to enhance the hand-drawn feel.",
+    "lettering_style": "Bold, playful fonts that mimic handwriting, with uneven baseline and varying letter sizes."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:4, creating exaggerated, cartoonish proportions.",
+    "limb_proportions": "Short and chunky limbs, giving characters a childlike appearance.",
+    "anatomy_detail": "Minimal anatomical detail; figures are simple with rounded edges and basic shapes.",
+    "eye_style": "Large, expressive dots or circles for eyes, often with exaggerated eyebrows for emotion.",
+    "nose_style": "Simple dots or small lines, keeping features basic and approachable.",
+    "mouth_style": "Simple curves or wide grins, often exaggerated for emotional effect.",
+    "expression_exaggeration": "High; emotions are depicted with large facial expressions and body language.",
+    "silhouette_clarity": "Very high; characters should stand out clearly against backgrounds.",
+    "silhouette_shape_language": "Rounded and soft shapes, avoiding sharp angles or harsh lines.",
+    "detail_complexity": "Low; focus on bold colors and simple forms without intricate details.",
+    "texture_accents": "Light scribbles or crayon texture to imply patterns, like stripes or polka dots.",
+    "motion_line_style": "Simple, wavy lines to suggest movement, drawn in a playful manner.",
+    "expression_line_style": "Basic squiggles for sweat or stress, adding a whimsical touch to emotions.",
+    "signature_motifs": "Recurring elements like stars, hearts, or flowers drawn in crayon style.",
+    "recurring_flourishes": "Childish doodles like spirals or small creatures peeking into scenes."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded rectangles with uneven edges, mimicking crayon outlines.",
+      "border": "Thick, colorful borders that match the bubble fill, creating a playful look.",
+      "fill_color": "Light pastel shades to ensure readability while maintaining a fun tone.",
+      "font": "Playful, handwritten-style font with an uneven baseline."
+    },
+    "whisper": {
+      "shape": "Cloud-like puffs with soft edges.",
+      "border": "Thin, dashed lines to suggest quietness.",
+      "fill_color": "Light gray or pale blue to indicate a whispering tone.",
+      "font": "Faint, smaller handwritten font for subtlety."
+    },
+    "shout": {
+      "shape": "Jagged, explosive star shapes to denote shouting.",
+      "border": "Bold, jagged lines to convey loudness.",
+      "fill_color": "Bright red or orange to catch attention.",
+      "font": "Large, exaggerated font with uneven letters."
+    },
+    "thought": {
+      "shape": "Thought bubbles with fluffy, cloud-like shapes.",
+      "border": "Soft, thick outlines that match the fill color.",
+      "fill_color": "Light yellow or cream for a dreamy effect.",
+      "font": "Casual, slightly slanted font to suggest inner thoughts."
+    },
+    "sound_effect": {
+      "shape": "Dynamic, bold shapes like bursts or waves.",
+      "border": "Thick, colorful outlines that convey energy.",
+      "fill_color": "Bright colors like electric blue or vibrant green.",
+      "font": "Bold, cartoonish font that suggests sound intensity."
+    },
+    "narration": {
+      "shape": "Simple rectangles with rounded corners.",
+      "border": "Thick, colorful borders for clear visibility.",
+      "fill_color": "Soft white to ensure legibility.",
+      "font": "Handwritten font with a friendly tone."
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "id": "origami-comic-style",
+  "name": "Origami Comic Style",
+  "description": "A unique comic book style where every element is crafted from origami, using paper folds and textures to convey actions and emotions instead of traditional ink or pencil. Each panel captures the intricate balance of complexity and simplicity inherent in origami, enhancing storytelling through paper layering.",
+  "art_style": {
+    "line_styles": "No traditional lines; instead, edges are defined by the folds and creases of the paper, creating sharp angles and dynamic shapes that suggest movement and form.",
+    "inking_tools": "N/A; all visuals are created using folded paper without ink or digital tools, relying solely on the physical texture and color of the paper.",
+    "shading_style": "Shading is achieved through layered paper thickness and color gradients, using various paper types to create depth and dimension without traditional shading techniques.",
+    "color_palette": "A diverse range of colors reflecting natural and whimsical themes; include muted tones for backgrounds and vibrant hues for characters to enhance emotional impact.",
+    "spot_colors": "Metallic or glitter paper used sparingly for highlights or special effects, drawing attention to key elements within panels.",
+    "registration": "Ensure precise alignment of paper layers in each panel to maintain a clean, cohesive look across scenes, with careful attention to how shadows and textures interact between layers.",
+    "lettering_style": "Handwritten or cut-out letters from paper, maintaining a playful and organic feel, with varied sizes to match the emotional tone of dialogue."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:4, emphasizing stylized heads with exaggerated features to convey emotion through angular folds.",
+    "limb_proportions": "Proportions are exaggerated with long, slender limbs that emphasize movement, crafted from elongated paper strips.",
+    "anatomy_detail": "Simplified anatomy focusing on the essence of form rather than realistic detail, using folds to suggest musculature and movement.",
+    "eye_style": "Large, expressive eyes formed by intricate folds that allow for a range of emotions through slight changes in angle.",
+    "nose_style": "Minimalistic, represented by small paper folds that suggest depth without complicating the design.",
+    "mouth_style": "Simple lines or folds that can open or close to convey speaking or emotions, allowing for a range of expressions.",
+    "expression_exaggeration": "High; emotions are amplified through the use of angular folds and the positioning of paper elements to create dramatic expressions.",
+    "silhouette_clarity": "Very high; characters have distinct silhouettes due to the sharp edges and unique shapes of the folded paper.",
+    "silhouette_shape_language": "Angular and geometric, with sharp edges that reflect the origami nature of the characters.",
+    "detail_complexity": "Moderate; focus on folds and textures rather than intricate decorative details, keeping designs clean and readable.",
+    "texture_accents": "Various paper textures (e.g., glossy, matte, patterned) to add visual interest and differentiation between characters and environments.",
+    "motion_line_style": "No traditional motion lines; instead, dynamic angles and paper positioning convey action and speed.",
+    "expression_line_style": "Use of folds and creases around facial features to indicate stress or emotion, rather than traditional accent lines.",
+    "signature_motifs": "Recurring use of specific folding patterns (e.g., crane wings) that become iconic to the series.",
+    "recurring_flourishes": "Small, whimsical paper elements like origami flowers or stars that enhance backgrounds or borders."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded, soft edges resembling a folded paper cloud.",
+      "border": "Thin, subtle outline mimicking a paper cut edge.",
+      "fill_color": "Light pastel shades to maintain a soft, inviting feel.",
+      "font": "Handwritten font resembling cut-out letters."
+    },
+    "whisper": {
+      "shape": "Small, delicate paper shapes that blend into the background.",
+      "border": "Dotted line, suggesting a gentle and quiet tone.",
+      "fill_color": "Pale shades that fade into the background, enhancing the whisper effect.",
+      "font": "Light, airy font with a slight slant."
+    },
+    "shout": {
+      "shape": "Bold, angular forms that suggest energy and volume.",
+      "border": "Thick, jagged edges to emphasize loudness.",
+      "fill_color": "Bright, contrasting colors to draw attention.",
+      "font": "Large, dynamic font with exaggerated curves."
+    },
+    "thought": {
+      "shape": "Cloud-like, with multiple points suggesting a flowing thought process.",
+      "border": "Soft, wavy line indicating the fluidity of thoughts.",
+      "fill_color": "Soft, muted tones to differentiate from spoken dialogue.",
+      "font": "Cursive style that flows, mimicking thought patterns."
+    },
+    "sound_effect": {
+      "shape": "Dynamic bursts or angular shapes to depict action or noise.",
+      "border": "Thick, bold lines to emphasize strength.",
+      "fill_color": "Vibrant colors that pop against the background.",
+      "font": "Bold, impactful font that conveys the intensity of the sound."
+    },
+    "narration": {
+      "shape": "Rectangular with slightly rounded corners, resembling a folded note.",
+      "border": "Thin, clean line to indicate clarity of narration.",
+      "fill_color": "Neutral tones to focus on the text.",
+      "font": "Simple, easy-to-read font that complements the overall style."
+    }
+  }
+}

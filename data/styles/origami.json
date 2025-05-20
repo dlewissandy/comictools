@@ -1,0 +1,69 @@
+{
+  "id": "00b35b03-20fa-487e-ac32-c95acd4ed12d",
+  "name": "Origami Comic Style",
+  "description": "A unique comic style that transforms characters and panels into folded paper art, emphasizing sharp angles and geometric shapes, reminiscent of intricate origami techniques.",
+  "art_style": {
+    "line_styles": "Use thin, crisp lines with sharp angles to outline characters and elements, mimicking the folds of paper. Maintain a clean and precise quality to enhance the geometric aesthetic.",
+    "inking_tools": "Primarily digital tools for precision, but traditional fineliners can be used for texture. Avoid heavy inking to keep the lightness of the paper feel.",
+    "shading_style": "Utilize layered paper textures for shadows, focusing on subtle gradients created by overlapping colors to enhance the 3D effect. No harsh shadows; aim for soft transitions.",
+    "color_palette": "Natural hues of paper such as beige, off-white, light browns, and pastel tones to reflect the colors of unprinted origami. Avoid bright colors to maintain a subtle aesthetic.",
+    "spot_colors": "",
+    "registration": "Ensure precise alignment of color layers to maintain the clean look of folded paper. Tolerances should be minimal to avoid misalignment of edges.",
+    "lettering_style": "Use a clean, sans-serif font that mimics the simplicity of origami, with slight curves to reflect the paper's texture."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:5 for a stylized, elongated appearance that emphasizes geometric forms.",
+    "limb_proportions": "Long and slender limbs to enhance the angularity of the origami theme.",
+    "anatomy_detail": "Minimalistic detail; focus on clear shapes and folds rather than realistic musculature.",
+    "eye_style": "Simple geometric shapes, like triangles or circles, to emphasize expressiveness in a stylized manner.",
+    "nose_style": "Subtle, angular shapes that blend seamlessly with the character's geometric design.",
+    "mouth_style": "Basic lines or curves, keeping expressions minimal yet clear.",
+    "expression_exaggeration": "Moderate exaggeration for emotional clarity while maintaining geometric integrity.",
+    "silhouette_clarity": "Very high; ensure characters stand out distinctly against backgrounds.",
+    "silhouette_shape_language": "Angular and geometric to reflect the origami aesthetic.",
+    "detail_complexity": "Flat shapes with minimal folds; focus on layering for depth instead of intricate details.",
+    "texture_accents": "Incorporate light textures that suggest paper grain or fold patterns, without overwhelming the design.",
+    "motion_line_style": "Use angular motion lines that reflect paper folds, emphasizing direction and speed.",
+    "expression_line_style": "Subtle accent lines around facial features to indicate emotion without cluttering the geometric forms.",
+    "signature_motifs": "Folding patterns or creases as recurring motifs in backgrounds and character designs.",
+    "recurring_flourishes": "Occasional use of layered paper effects in backgrounds to enhance depth and visual interest."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded rectangles with sharp corners, resembling folded paper.",
+      "border": "Thin, crisp borders that mimic the edges of paper.",
+      "fill_color": "Light beige or off-white to maintain the origami theme.",
+      "font": "Simple sans-serif font with slight curvature to reflect the softness of paper."
+    },
+    "whisper": {
+      "shape": "Softly curved rectangles to suggest quietness, mimicking gentle folds.",
+      "border": "Dotted line to represent delicate paper edges.",
+      "fill_color": "Light gray for subtlety.",
+      "font": "Slightly italicized sans-serif for a softer tone."
+    },
+    "shout": {
+      "shape": "Angular burst shapes to reflect excitement, resembling torn paper edges.",
+      "border": "Thicker, jagged border to convey loudness.",
+      "fill_color": "Pale pastel hue for emphasis without overpowering the design.",
+      "font": "Bold sans-serif, large size for visibility."
+    },
+    "thought": {
+      "shape": "Cloud-like shapes with soft curves, reminiscent of floating paper.",
+      "border": "Thin, smooth border to maintain lightness.",
+      "fill_color": "Light pastel tint to indicate thoughtfulness.",
+      "font": "Curvy sans-serif for a whimsical feel."
+    },
+    "sound_effect": {
+      "shape": "Dynamic, jagged shapes to convey action, mimicking torn paper.",
+      "border": "Thick and bold to emphasize sound intensity.",
+      "fill_color": "Subtle beige or light color for integration with the background.",
+      "font": "Bold, playful font to grab attention."
+    },
+    "narration": {
+      "shape": "Rectangular boxes with slightly rounded corners, resembling folded pages.",
+      "border": "Thin, crisp border to maintain consistency.",
+      "fill_color": "Soft cream to blend with the paper theme.",
+      "font": "Clean sans-serif for readability."
+    }
+  }
+}
