@@ -82,10 +82,8 @@ class ComicStyle(BaseModel):
         """
         format the comic style for display
         """
-        result = f"""
-        # Comic Style ({self.name})\n
-        {self.description}
-        """.strip()
+        result = f"""# Comic Style ({self.name})
+    {self.description}""".strip()
         if self.art_style is not None:
             result += f"\n{self.art_style.format()}"
         if self.character_style is not None:
