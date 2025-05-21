@@ -1,0 +1,70 @@
+{
+  "id": "van-gogh",
+  "name": "Van Gogh",
+  "description": "A comic style inspired by Van Gogh's oil paintings, characterized by bold, vibrant colors and thick applications of paint. The artwork features visible brush strokes and swirling patterns, creating dynamic movement and texture without the use of ink lines. Each panel should evoke an impressionistic quality, allowing colors to blend and interact freely while maintaining a cohesive palette throughout the series.",
+  "art_style": {
+    "line_styles": "No ink lines, relying solely on brushwork for outlines and forms.",
+    "inking_tools": "Oil paints or digital tools that mimic thick impasto techniques.",
+    "shading_style": "Use of color blending and layering to create depth, with no traditional shading techniques.",
+    "color_palette": "Bright, saturated hues reminiscent of Van Gogh's palette, including rich blues, yellows, and greens.",
+    "spot_colors": "",
+    "registration": "Ensure colors are applied with a focus on blending, avoiding hard edges to maintain the impressionistic feel.",
+    "lettering_style": "Handwritten or brush-style lettering that complements the organic flow of the artwork."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:6, emphasizing expressive, exaggerated features.",
+    "limb_proportions": "Proportional",
+    "anatomy_detail": "Loose representation of anatomy, focusing on emotion and expression over realism.",
+    "eye_style": "expressive eyes that convey emotion, painted with vibrant colors.",
+    "nose_style": "Simplistic and stylized, with minimal detail to keep focus on expression.",
+    "mouth_style": "Wide, open mouths that can show a range of emotions, painted with bold colors.",
+    "expression_exaggeration": "High, enhancing emotional impact in every panel.",
+    "silhouette_clarity": "Medium, blending with backgrounds while retaining character identity.",
+    "silhouette_shape_language": "Fluid and organic, with rounded shapes that evoke movement.",
+    "detail_complexity": "Moderate, focusing on texture and color rather than intricate details.",
+    "texture_accents": "Thick brush strokes to create texture in hair and clothing, emphasizing movement.",
+    "motion_line_style": "Impressionistic swirls or color gradients to indicate movement.",
+    "expression_line_style": "",
+    "signature_motifs": "",
+    "recurring_flourishes": "Swirling patterns or textures that echo the Van Gogh style in backgrounds."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Organic, irregular shapes that mimic brush strokes.",
+      "border": "None, relying on color fill to frame text.",
+      "fill_color": "Light, soft tones that harmonize with the background colors.",
+      "font": "Handwritten, flowing script that feels integrated with the artwork."
+    },
+    "whisper": {
+      "shape": "Soft, rounded edges, slightly translucent.",
+      "border": "None, blending into the background.",
+      "fill_color": "Pale, muted tones.",
+      "font": "Delicate, flowing script."
+    },
+    "shout": {
+      "shape": "Dynamic, exaggerated shapes that convey urgency.",
+      "border": "None, with a vibrant fill.",
+      "fill_color": "Bright, eye-catching colors that stand out.",
+      "font": "Bold, expressive lettering."
+    },
+    "thought": {
+      "shape": "Cloud-like, wispy forms.",
+      "border": "None, softly merging with the background.",
+      "fill_color": "Subtle pastels.",
+      "font": "Gentle, cursive style."
+    },
+    "sound_effect": {
+      "shape": "Dynamic, explosive shapes that convey sound.",
+      "border": "None, with a vibrant fill.",
+      "fill_color": "Bright, contrasting colors.",
+      "font": "Bold, energetic lettering."
+    },
+    "narration": {
+      "shape": "Rectangular with softened edges to match the organic style.",
+      "border": "None, using color to separate from the artwork.",
+      "fill_color": "Light, neutral tones that do not distract from the visuals.",
+      "font": "Elegant, serif font that complements the overall artistic style."
+    }
+  },
+  "image": "van-gogh"
+}

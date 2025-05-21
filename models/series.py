@@ -87,7 +87,26 @@ class Series(BaseModel):
             if issue is not None:
                 issues[issue_number] = issue
         return issues
-    
+
+    def image_filepath(self) -> Optional[str]:
+        """
+        Get the filepath to a representative image for the series.   This will be the first cover image of any issue in the series.
+        If there are no issues with cover images, or there are no issues in the series, then return None.
+        """    
+
+        issues = self.get_issues()
+        if not issues:
+            return None
+        for issue in issues.values():
+            if issue.cover and issue.cover != {}:
+                image = issue.cover.get("front", None)
+                if not image:
+                    return None
+                if image:
+                    filepath = os.path.join(issue.path(), "covers", "front", "images", f"{image}.jpg")
+                    if os.path.exists(filepath):
+                        return filepath
+        return None
 
     def path(self) -> str:
         """

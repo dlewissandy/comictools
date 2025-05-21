@@ -90,11 +90,20 @@ class ReferenceImage(BaseModel):
     filepath: str = Field(..., description="The filepath of the reference image")
     relation: Relation = Field(..., description="The relation of the reference image to the panel")
 
+class CoverLocation(StrEnum):
+    FRONT = "front"
+    INSIDE_FRONT = "inside-front"
+    INSIDE_BACK = "inside-back"
+    BACK = "back"
+    
+
 class TitleBoardModel(BaseModel):
-    id: str = Field(..., description="A unique identifier for the panel.   Default to a short (3-5 word) description of the panel")
+    id: str = Field(..., description="A unique identifier for the panel.   Default '<location>-cover'")
+    location: CoverLocation = Field(..., description="The location of the cover.  front, inside-front, inside-back or back.  Default to front")
     issue: str = Field(..., description="The parent issue of the panel.   Default to empty string")
     characters: list[str]  = Field(..., description="The names of the characters in the panel")
-    aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to square")
+    style: str = Field(..., description="The art style of the panel.  Default to 'vintage-4-color'")
+    aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to portrait")
     reference_images: list[ReferenceImage] = Field(..., description="The reference images for the panel")
     foreground: str = Field(..., description="The foreground of the panel")
     background: str | None = Field(None, description="The background of the panel")
@@ -104,7 +113,7 @@ class TitleBoardModel(BaseModel):
         """
         return the path to the panel model
         """
-        return f"{COMICS_FOLDER}/{self.issue}/covers/{self.id}"
+        return os.path.join(COMICS_FOLDER,self.issue,"covers",{self.location})
     
     def filepath(self) -> str:
         """
@@ -117,6 +126,8 @@ class TitleBoardModel(BaseModel):
         format the panel model for display
         """
         text = f"""
+* **location**: {self.location}
+* **style**: {self.style}
 * **aspect**: {self.aspect}
 * **characters**:
 {"\n".join([f"  - {character}" for character in self.characters])}
@@ -136,16 +147,18 @@ class TitleBoardModel(BaseModel):
             f.write(self.model_dump_json(indent=2))
 
     @classmethod
-    def read(cls, issue: str, id: str):
+    def read(cls, issue: str, location: CoverLocation):
         """
         read the panel model from a file
         """
-        filepath = f"{COMICS_FOLDER}/{issue}/covers/{id}/titleboard.json"
+        filepath = os.path.join(issue,"covers", location,"titleboard.json")
         if not os.path.exists(filepath):
             return None
         with open(filepath, "r") as f:
             data = f.read()
             return cls.model_validate_json(data)
+        
+    
 
 class RoughBoardModel(BaseModel):
     id: str = Field(..., description="A unique identifier for the panel.   Default to a short (3-5 word) description of the panel")

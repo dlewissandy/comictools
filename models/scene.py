@@ -330,7 +330,7 @@ This is the list of characters that appear in the scene.  Not all characters wil
             raise FileNotFoundError(f"Panel {panel_id} not found")
         return panels
 
-    def format(self, heading_level: int=1):
+    def format(self, heading_level: int=1, no_panels: bool=False):
         """
         Format the scene for display
         """
@@ -341,9 +341,11 @@ This is the list of characters that appear in the scene.  Not all characters wil
 * **story**: {self.story}
 * **issue**: {self.issue}
 * **style**: {self.style}
-
+"""
+        if not no_panels:
+            text += f"""
 {'#' * (heading_level +1)} PANELS
 """
-        for i,panel in enumerate(self.read_panels()):
-            text += f"""{'#' * (heading_level + 2)} PANEL {i}\n{panel.format()}\n"""
+            for i,panel in enumerate(self.read_panels()):
+                text += f"""{'#' * (heading_level + 2)} PANEL {i}\n{panel.format()}\n"""
         return text

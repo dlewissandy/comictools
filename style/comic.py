@@ -1,5 +1,7 @@
 import os
 import json
+from typing import Optional
+from loguru import logger
 from pydantic import BaseModel, Field
 from style.art import ArtStyle
 from style.character import CharacterStyle
@@ -31,6 +33,7 @@ class ComicStyle(BaseModel):
         ...,
         description="Styling for any kind of text balloon or narration box within the comic."
     )
+    image: Optional[str] = Field(..., description="A reference image for the comic style.  default to None")
 
     @classmethod
     def generate(cls, description: str):     
@@ -55,14 +58,44 @@ class ComicStyle(BaseModel):
         response.write()
         return response
     
+    def filepath(self) -> str:
+        return f"{self.path()}/style.json"
+    
+    def path(self) -> str:
+        return f"{STYLES_FOLDER}/{self.id}"
+    
+    @classmethod
+    def read_all(cls) -> list["ComicStyle"]:
+        """
+        read all comic styles from the styles folder
+        """
+        styles = []
+        for item in os.listdir(STYLES_FOLDER):
+            logger.debug(f"item: {item}")
+            if os.path.isdir(os.path.join(STYLES_FOLDER, item)) and not item.startswith('.'):
+                # if it is a file then it is a style
+                style = cls.read(id=item)
+                if style:
+                    styles.append(style)
+        return styles
+
+    def image_filepath(self) -> str:
+        """
+        return the filepath to the image
+        """
+        if self.image is None:
+            return None
+        return os.path.join(self.path(), "images", f"{self.image}.jpg")
+    
+
     def write(self):
         """
         write the comic style to a file
         """
         # create the directory if it doesn't exist
-        os.makedirs(STYLES_FOLDER, exist_ok=True)
+        os.makedirs(self.path, exist_ok=True)
         # write the comic style to a file
-        with open(f"{STYLES_FOLDER}/{self.id}.json", "w") as f:
+        with open(self.filepath(), "w") as f:
             f.write(self.model_dump_json(indent=2))
 
     @classmethod
@@ -71,12 +104,16 @@ class ComicStyle(BaseModel):
         read the comic style from a file
         """
         # read the comic style from a file
-        filepath = f"{STYLES_FOLDER}/{id}.json"
+        filepath = f"{STYLES_FOLDER}/{id}/style.json"
         if not os.path.exists(filepath):
-            raise FileNotFoundError(f"Comic style {id} not found")
-        with open(f"{STYLES_FOLDER}/{id}.json", "r") as f:
+            logger.error(f"Comic style {id} not found in {STYLES_FOLDER}.")
+            return None
+        with open(f"{STYLES_FOLDER}/{id}/style.json", "r") as f:
+            logger.debug(f"reading {f.name}")
             data = json.load(f)
-            return cls(**data)
+            if not data.get("image", None):
+                data["image"] = None
+            return cls.model_validate(data)
         
     def format(self, include_bubble_styles: bool = True):
         """

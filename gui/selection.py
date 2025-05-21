@@ -1,3 +1,4 @@
+from loguru import logger
 from pydantic import BaseModel, Field
 from nicegui import ui
 
@@ -18,9 +19,10 @@ def update_breadcrumbs(breadcrumbs, details, chat_history, selection):
     """
     breadcrumbs.clear()
     with breadcrumbs:
-        ui.button('', icon='home').props('rounded').on_click(lambda _ : change_selection(breadcrumbs, details, chat_history, selection, []))
+        ui.button('', icon='home').props('rounded').on_click(lambda _, new_sel=[] : change_selection(breadcrumbs, details, chat_history, selection, new_sel))
         for i,item in enumerate(selection):
-            ui.button(item.name).props('rounded').on_click(change_selection(breadcrumbs, details, chat_history, selection, selection[:i+1]))
+            new_sel = selection[:i+1]
+            ui.button(item.name).props('rounded').on_click(lambda _, new_sel=new_sel: change_selection(breadcrumbs, details, chat_history, selection, new=new_sel))
 
 def update_details(breadcrumbs, details, chat_history, selection):
     from gui.home import view_home
@@ -30,6 +32,7 @@ def update_details(breadcrumbs, details, chat_history, selection):
     from gui.issue import view_issue
     from gui.scene import view_scene
     from gui.panel import view_panel
+    logger.debug(f"SELECTION:{selection}")
 
     if selection == []:
         return view_home(breadcrumbs, details, chat_history, selection)

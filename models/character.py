@@ -140,8 +140,7 @@ class CharacterModel(BaseModel):
         """
         format the character model for display
         """
-        result = f"""
-        # Character Model
+        result = f"""# Character Model ({self.name})
 * **Name**: {self.name}
 * **Race**: {self.race}
 * **Gender**: {self.gender}

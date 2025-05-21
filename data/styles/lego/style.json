@@ -1,0 +1,70 @@
+{
+  "id": "lego",
+  "name": "LEGO Style",
+  "description": "A photorealistic style inspired by LEGO aesthetics, where characters, foreground and background are made from lego bricks and minifigures.",
+  "art_style": {
+    "line_styles": "N/A.  No outlines; instead, shapes are defined by the edges of LEGO bricks and minifigures.",
+    "inking_tools": "N/A. No traditional inking; colors are defined by the LEGO bricks",
+    "shading_style": "N/A",
+    "color_palette": "Solid colors that reflect the LEGO palette, including primary colors (red, blue, yellow) and secondary colors (green, orange, purple).  Browns, greys, pastels and transparent colors too.",    
+    "spot_colors": "Occasional metallic or neon colors for special effects or highlights.",
+    "registration": "N/A. No traditional registration; colors are defined by the LEGO bricks.",
+    "lettering_style": "Bold, sans-serif font that is easy to read, with a playful touch, mimicking the blocky nature of LEGO text."
+  },
+  "character_style": {
+    "head_to_body_ratio": "Human sized characters are minifigures.  Taller characters are made from LEGO bricks.",
+    "limb_proportions": "Short and stubby limbs that reflect the blocky aesthetic of LEGO figures.",
+    "anatomy_detail": "Minimal anatomical detail, focusing on simplified shapes and flat surfaces rather than realism.",
+    "eye_style": "Large circular eyes or simple dots, expressing emotion through exaggerated shapes.",
+    "nose_style": "Simple line or dot for a nose, keeping the face clean and uncomplicated.",
+    "mouth_style": "Simple curve or blocky shape with minimal detail, allowing for expressive but easy-to-draw mouths.",
+    "expression_exaggeration": "Moderate exaggeration of facial expressions to convey emotions clearly and accessibly.",
+    "silhouette_clarity": "Very high clarity to ensure characters stand out against backgrounds easily.",
+    "silhouette_shape_language": "Predominantly blocky and angular shapes, reinforcing the LEGO theme.",
+    "detail_complexity": "Low complexity with flat surfaces and minimal textures, focusing on color over intricate details.",
+    "texture_accents": "Subtle textures to mimic plastic surfaces, such as slight gloss or shading.",
+    "motion_line_style": "Stylized speed lines or blocks to indicate action, keeping the motion dynamic but simple.",
+    "expression_line_style": "Basic accent lines to indicate emotion, such as sweat drops or blush, very simplified.",
+    "signature_motifs": "Iconic shapes like LEGO bricks or connectors occasionally integrated into backgrounds or character designs.",
+    "recurring_flourishes": "Small, playful elements, like tiny stars or mini bricks, used as embellishments in panels."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded rectangular with slightly blocky corners.",
+      "border": "Thick black outline with a solid fill.",
+      "fill_color": "Light gray to contrast with text.",
+      "font": "Bold, sans-serif font resembling LEGO lettering."
+    },
+    "whisper": {
+      "shape": "Rounded rectangular with tiny dotted edges for a softer look.",
+      "border": "Thin dashed line for a gentle feel.",
+      "fill_color": "Pale blue to signify whispering.",
+      "font": "Italicized sans-serif font for a whispering effect."
+    },
+    "shout": {
+      "shape": "Jagged edges to convey excitement.",
+      "border": "Thick border with a jagged outline.",
+      "fill_color": "Bright yellow for attention.",
+      "font": "Bold, all-caps font for emphasis."
+    },
+    "thought": {
+      "shape": "Cloud-like with a tail pointing to the character.",
+      "border": "Thin outline to give a light appearance.",
+      "fill_color": "Soft white with a slight shadow.",
+      "font": "Light, airy font to suggest thoughtfulness."
+    },
+    "sound_effect": {
+      "shape": "Explosive bubble form, irregular and dynamic.",
+      "border": "Thick outline with shadow for depth.",
+      "fill_color": "Bright red or orange for impact.",
+      "font": "Slanted, bold font to convey sound intensity."
+    },
+    "narration": {
+      "shape": "Rectangular with smooth corners.",
+      "border": "Solid thin line for clarity.",
+      "fill_color": "Cream color for a soft background.",
+      "font": "Standard sans-serif font for easy reading."
+    }
+  },
+  "image": "lego"
+}

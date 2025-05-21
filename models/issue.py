@@ -25,7 +25,7 @@ class Issue(BaseModel):
     colorist: Optional[str] = Field(..., description="The colorist of the issue.  Optional.   Default to None")
     creative_minds: Optional[str] = Field(..., description="The creative minds behind the issue. Optional. Default to None")
 
-    cover: Optional[TitleBoardModel] = Field(..., description="The cover page of the issue.   Default to None")
+    cover: Optional[dict[str, str]] = Field(..., description="The cover pages of the issue.   Default to None")
     characters: list[str] = Field(..., description="The characters in the issue.  Default to empty string")
     style: Optional[str]  = Field(..., description="The style of the comic book.   Default to 'vintage-four-color'")
     scenes: list[str] = Field(..., description="The scenes of the issue. Default to empty list")
@@ -84,6 +84,10 @@ class Issue(BaseModel):
         self.characters.append(character.id)
         self.write()
 
+    def image_filepath(self) -> Optional[str]:
+        if self.image:
+            return os.path.join(self.path(), "images", f"{self.image}.jpg")
+        return None
 
     def delete_character(self, name: str, variant: str | None = None):
         """
@@ -235,13 +239,13 @@ class Issue(BaseModel):
             data = f.read()
             return cls.model_validate_json(data)
         
-    def format(self, header_level: int=1):
+    def format(self, header_level: int=1, no_covers: bool=False, no_scenes: bool=False, no_style:bool=False) -> str:
         """
         Format the comic book for display
         """
         text = f"{'#'* header_level} ISSUE {self.issue_number}\n\n"
         if self.issue_title is not None:
-            text += f" * **title ** {self.issue_title}\n\n"
+            text += f" * **title** {self.issue_title}\n\n"
         if self.issue_date is not None:
             text += f" * **date** {self.issue_date}\n\n"
         if self.writer is not None:
@@ -256,16 +260,20 @@ class Issue(BaseModel):
             text += f" * **logo** {self.logo}\n\n"
         if self.price is not None:
             text += f" * **price** {self.price}\n\n"
-        if self.style is not None:
+        if self.style is not None and not no_style:
             text += f" * **style** {self.style}\n\n"
 
         if self.characters is not None and len(self.characters) > 0:
             text += f" * **characters** {', '.join(self.characters)}\n\n"
 
-        if self.cover is not None:
-            cover.format(header_level=header_level+1)
+        if self.cover is not None and not no_covers:
+            for cover_type, cover_id in self.cover.items():
+                cover = TitleBoardModel.read(issue=self.id, id=cover_id)
+                if not cover:
+                    continue
+                cover.format(header_level=header_level+1)
         
-        if self.scenes is not None and len(self.scenes) > 0:
+        if self.scenes is not None and len(self.scenes) > 0 and not no_scenes:
             text += f"{'#'* (header_level+1)}  SCENES\n\n"
 
             for i,scene in enumerate(self.get_scenes()):

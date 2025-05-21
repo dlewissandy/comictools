@@ -1,0 +1,70 @@
+{
+  "id": "film-noir",
+  "name": "Film Noir",
+  "description": "A dark, atmospheric style inspired by classic film noir, characterized by high contrast black and white visuals and dramatic chiaroscuro effects.",
+  "art_style": {
+    "line_styles": "N/A. cinematic style with heavy use of shadows and light.",
+    "inking_tools": "N/A. cinematic style with heavy use of shadows and light.",
+    "shading_style": "N/A. cinematic style with heavy use of shadows and light.",
+    "color_palette": "Black, white and gray tones",
+    "spot_colors": "",
+    "registration": "N/A. cinematic style with heavy use of shadows and light.",
+    "lettering_style": "Bold serif font for dialogue and narration, maintaining a cinematic feel, with varying sizes to denote emphasis."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:6 for realistic proportions, with slightly exaggerated features for emotional impact.",
+    "limb_proportions": "Hyper-realistic proportions, with a focus on angular shapes to enhance the noir aesthetic.",
+    "anatomy_detail": "Detailed anatomy with emphasis on muscles and shadows to enhance the noir aesthetic; hands should show detailed fingers.",
+    "eye_style": "Large, expressive eyes with dramatic shadows, often reflecting emotion.",
+    "nose_style": "Defined, angular noses to enhance character distinction.",
+    "mouth_style": "Subtle shapes that convey emotion through slight curves or frowns, often detailed with shadowing.",
+    "expression_exaggeration": "Moderate exaggeration to convey strong emotions, particularly in facial expressions.",
+    "silhouette_clarity": "Very high; characters should stand out distinctly against dark backgrounds.",
+    "silhouette_shape_language": "Angular shapes with sharp lines to evoke tension and drama.",
+    "detail_complexity": "Moderate, focusing on essential details that support the mood without overcrowding the page.",
+    "texture_accents": "Emphasize textures like fabric folds, hair strands, and skin details to enhance realism and depth.",
+    "motion_line_style": "",
+    "expression_line_style": "Subtle lines to denote sweat, stress, or tension for emotional impact, used sparingly.",
+    "signature_motifs": "Recurring motifs like fedoras, trench coats, and street lamps to establish a consistent setting.",
+    "recurring_flourishes": "Stylized shadows and highlights, particularly on clothing and backgrounds, to maintain the noir atmosphere."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded rectangle with sharp corners for a classic feel.",
+      "border": "Thin black border with slight texture to resemble inked edges.",
+      "fill_color": "White or very light gray for clarity.",
+      "font": "Bold serif typeface, size varying for emphasis."
+    },
+    "whisper": {
+      "shape": "Slightly irregular, resembling a thought bubble but with sharper edges.",
+      "border": "Dotted line for a subtle effect.",
+      "fill_color": "Light gray to indicate hushed tones.",
+      "font": "Italicized serif font to denote whispering."
+    },
+    "shout": {
+      "shape": "Jagged edges to depict urgency.",
+      "border": "Thick black border to signify importance.",
+      "fill_color": "White or light gray for contrast.",
+      "font": "Bold, capitalized serif typeface to convey shouting."
+    },
+    "thought": {
+      "shape": "Cloud-like with a tail pointing to the character's head.",
+      "border": "Thin border with a textured look.",
+      "fill_color": "Light gray to differentiate from speech bubbles.",
+      "font": "Slightly smaller serif font for introspective thoughts."
+    },
+    "sound_effect": {
+      "shape": "Dynamic, exaggerated shapes like bursts or waves.",
+      "border": "Thick and bold to capture attention.",
+      "fill_color": "Black to match the dramatic tone.",
+      "font": "Stylized, bold font that reflects the sound being depicted."
+    },
+    "narration": {
+      "shape": "Rectangular with straight edges, resembling a film strip.",
+      "border": "Thin black border.",
+      "fill_color": "Light gray for a subtle background.",
+      "font": "Bold serif font, slightly larger for clarity."
+    }
+  },
+  "image": "film-noir"
+}
