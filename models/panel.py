@@ -113,13 +113,22 @@ class TitleBoardModel(BaseModel):
         """
         return the path to the panel model
         """
-        return os.path.join(COMICS_FOLDER,self.issue,"covers",{self.location})
+        location_id = self.location.value.replace("_", "-")
+        return os.path.join(COMICS_FOLDER,self.issue,"covers",location_id)
     
     def filepath(self) -> str:
         """
         return the filepath to the panel model
         """
         return os.path.join(self.path(),"titleboard.json")
+    
+    def image_filepath(self) -> str | None:
+        """
+        return the filepath to the image
+        """
+        if self.image is None or self.image == "":
+            return None
+        return os.path.join(self.path(), "images", f"{self.image}.jpg")
 
     def format(self, heading_level: int = 1) -> str:
         """
@@ -151,7 +160,13 @@ class TitleBoardModel(BaseModel):
         """
         read the panel model from a file
         """
-        filepath = os.path.join(issue,"covers", location,"titleboard.json")
+        if isinstance(location, CoverLocation):
+            location_id = location.value.replace("_", "-")
+        else:
+            # if it is a string then it is a location
+            location_id = location.replace("_", "-")
+
+        filepath = os.path.join(COMICS_FOLDER, issue, "covers", location_id, "titleboard.json")
         if not os.path.exists(filepath):
             return None
         with open(filepath, "r") as f:

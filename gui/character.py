@@ -6,7 +6,7 @@ from models.character import CharacterModel
 from gui.cardwall import init_cardwall
 from gui.markdown import markdown
 
-def view_character(breadcrumbs, details, chat_history, selection):
+def view_character(gui_elements, selection):
     """
     View the details of a character.
     
@@ -19,6 +19,7 @@ def view_character(breadcrumbs, details, chat_history, selection):
     character_id = selection[-1].id
     series_id = selection[-2].id
     character = CharacterModel.read(series=series_id, id=character_id)
+    details = gui_elements.get("details")
     if character is None:
         details.clear()
         message = f"Character with ID {character_id} not found in series {series_id}."

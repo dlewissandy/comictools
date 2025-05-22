@@ -3,9 +3,11 @@ from nicegui import ui
 from gui.selection import SelectionItem, change_selection
 from gui.cardwall import init_cardwall
 from gui.markdown import markdown
+from gui.style import style_selector
 from models.scene import SceneModel
 
-def view_scene(breadcrumbs, details, chat_history, selection):
+
+def view_scene(gui_elements, selection):
     """
     View the details of a scene.
     
@@ -15,6 +17,7 @@ def view_scene(breadcrumbs, details, chat_history, selection):
         chat_history: The chat history UI element.
         selection: The current selection.
     """
+    details = gui_elements.get("details")
     scene_id = selection[-1].id
     issue_id = selection[-2].id
     scene = SceneModel.read(issue=issue_id, id=scene_id)
@@ -26,8 +29,16 @@ def view_scene(breadcrumbs, details, chat_history, selection):
         return
     
     with details:
-        markdown(scene.format(no_panels=True))
-        ui.markdown("# Panels")
+        with ui.row().classes('w-full flex-nowrap'):
+            with ui.column().classes('w-3/4'):
+                ui.markdown("# Story").style('margin-top: 0; padding-top: 0; bottom-margin: 0; padding-bottom: 0;')
+                markdown(scene.story)
+            with ui.column().classes('w-1/4'):
+                ui.markdown(f"# Style").style('margin-top: 0; padding-top: 0; bottom-margin: 0; padding-bottom: 0;')
+                cardwall = init_cardwall(1)
+                style_selector(gui_elements, selection, cardwall, scene.style)
+                
+        ui.markdown("# Panels").style('margin-top: 0; padding-top: 0; bottom-margin: 0; padding-bottom: 0;')
         panels = scene.get_panels()
         if not panels or panels == []:
             ui.markdown("No panels available for this scene.")
@@ -50,5 +61,5 @@ def view_scene(breadcrumbs, details, chat_history, selection):
                                 markdown(f"## Panel {i+1}\n\n{panel.story}")
                     new_itm = SelectionItem(name=f"panel {i+1}", id=panel.id, kind='panel')
                     new_sel = [s for s in selection]+[new_itm]
-                    card.on('click', lambda _, new_sel=new_sel: change_selection(breadcrumbs, details, chat_history, selection, new=new_sel))
+                    card.on('click', lambda _, new_sel=new_sel: change_selection(gui_elements, selection, new=new_sel))
 

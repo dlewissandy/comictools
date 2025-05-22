@@ -1,13 +1,17 @@
 import os
 import asyncio
+from typing import TypedDict
 from openai import chat
 from nicegui import ui
 from gui.home import view_home
+from gui.elements import GuiElements
 from dotenv import load_dotenv
 from gui.selection import update_breadcrumbs
 from loguru import logger
 import openai
 load_dotenv()
+
+
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
@@ -97,18 +101,18 @@ def main_page(client):
     ui.query('.q-page').classes('flex')
 
     
-    header = ui.header().classes('bg-gray-200 p-4')
+    header = ui.header().classes().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300')
     middle = ui.row().classes('w-screen flex-1 overflow-hidden').style('padding-left:12px; padding-right:12px;')
-    footer = ui.footer().classes('bg-gray-200 p-4')
+    footer = ui.footer().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300')
 
     with middle:
         # ui.column().classes('bg-grey-2 q-pa-md h-full').style('min-width:220px; max-width:320px;overflow:auto;'):
         #     explorer = content_explorer()
         with ui.splitter(limits=(20,80), value=70).classes('h-full w-full') as splitter:
             with splitter.before:
-                details = ui.scroll_area().classes('h-full w-full bg-white border').style('padding-left:12px; padding-right:12px;')
+                details = ui.scroll_area().classes('h-full w-full').style('padding-left:12px; padding-right:12px;')
             with splitter.after:
-                history = ui.scroll_area().classes('bg-grey-1 h-full w-full border').style('padding-left:12px; padding-right:12px;')
+                history = ui.scroll_area().classes('h-full w-full border').style('padding-left:12px; padding-right:12px;')
 
     with footer:
         placeholder = "message"
@@ -118,9 +122,19 @@ def main_page(client):
 
     with header:
         breadcrumbs = ui.button_group()
-        
-    update_breadcrumbs(breadcrumbs, details, history, selection)
-    view_home(breadcrumbs, details, history, selection)
+        ui.space()
+        dark = ui.dark_mode()
+        ui.switch('Dark mode').bind_value(dark)
+
+    gui_elements: GuiElements = {
+        'breadcrumbs': breadcrumbs,
+        'details': details,
+        'history': history,
+        'user_input': user_input,
+        'send_button': send_button
+    } 
+    update_breadcrumbs(gui_elements, selection)
+    view_home(gui_elements, selection)
     #update(None)
     
     user_input.on('keydown.enter', send(message_container=history, text_input=user_input, messages=messages))

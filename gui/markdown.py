@@ -1,5 +1,20 @@
 from nicegui import ui
 
+def header(text: str, level: int = 1) -> None:
+     if level == 0:
+        return ui.label(text).style('font-size: 3rem; font-weight: bold;')
+     if level == 1:
+        return ui.label(text).style('font-size: 2rem; font-weight: bold;')
+     if level == 2:
+        return ui.label(text.title()).style('font-size: 2rem; font-weight: bold;')
+     if level == 3:
+        return ui.label(text.title()).style('font-size: 1.5rem; font-weight: bold;')
+     if level == 4:
+        return ui.label(text.title()).style('font-size: 1rem; font-weight: bold;')
+     if level == 5:
+        return ui.label(text.title()).style('font-size: 0.75rem; font-weight: bold;')
+     return ui.label(text).style('font-size: 0.75rem;')
+
 def markdown(body: str) -> None:
     with ui.element().classes('w-full q-pa-md'):
             # Add custom CSS to ensure markdown content wraps properly
