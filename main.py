@@ -3,11 +3,15 @@ import asyncio
 from typing import TypedDict
 from openai import chat
 from nicegui import ui
+from generators.agents import home_agent
 from gui.home import view_home
 from gui.elements import GuiElements
 from dotenv import load_dotenv
-from gui.selection import update_breadcrumbs
+from gui.selection import update_breadcrumbs, SelectionItem
+from gui.markdown import markdown
 from loguru import logger
+from agents import Agent, Runner, ItemHelpers
+from openai.types.responses import ResponseTextDeltaEvent
 import openai
 load_dotenv()
 
@@ -15,49 +19,71 @@ load_dotenv()
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
-def send(message_container, text_input, messages):
-    async def _send():
-        question = text_input.value
-        text_input.value = ''
-        messages.append({"role": "user", "content": question})
-        with message_container:
-            user_message = ui.chat_message(name='You', sent=True).classes('w-full')
-            with user_message:
-                with ui.element('div').classes('markdown-content'):
-                    ui.markdown(question)
-            response_message = ui.chat_message(name='Bot', sent=False)
-            spinner = ui.spinner(type='dots')
-            await asyncio.sleep(0)
-        response = ''
-        try:
-            stream = openai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=messages,
-                stream=True
-            )
-            for event in stream:
-                delta = event.choices[0].delta
-                content = delta.content
-                if content is not None:
-                    response += content
-                    response_message.clear()
-                    with response_message:
-                        # Apply the same markdown-content styling to chat responses
-                        with ui.element('div').classes('markdown-content'):
-                            ui.markdown(response)
-                    ui.run_javascript('window.scrollTo(0, document.body.scrollHeight)')
-                    # Properly yield to event loop for UI update
+async def send(gui_elements: GuiElements, selection: list[SelectionItem], messages: list[dict]):
+    history = gui_elements.get("history")
+    text_input = gui_elements.get("user_input")
+    question = text_input.value
+    
+    text_input.value = ''
+    messages.append({"role": "user", "content": question})
 
-                    await asyncio.sleep(0)
-            messages.append({"role": "assistant", "content": response})
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            response_message.clear()
-            with response_message:
-                with ui.element('div').classes('markdown-content'):
-                    ui.markdown(f"**[OpenAI error]** {e}")
-        message_container.remove(spinner)
-    return _send
+    with history:
+        with ui.chat_message(name='You', sent=True).classes('w-full'):
+            with ui.element('div').classes('markdown-content'):
+                ui.markdown(question)
+
+        response_message = ui.chat_message(name='Bot', sent=False)
+        spinner = ui.spinner(type='dots')
+    
+
+    async def handle_events(messages: list[dict]):
+        agent = gui_elements.get("agent", None)
+        stream = Runner.run_streamed(agent, input=messages)
+        response = ""
+        streamed_events = stream.stream_events()
+        async for event in streamed_events:
+            # --- RAW TEXT TOKENS ---
+            if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
+                response += event.data.delta
+                response_message.clear()
+                with response_message:
+                    # Apply the same markdown-content styling to chat responses
+                    with ui.element('div').classes('markdown-content'):
+                        ui.markdown(response)
+                ui.run_javascript('window.scrollTo(0, document.body.scrollHeight)')
+                await asyncio.sleep(0)
+
+            # --- AGENT HANDOFFS (if any) ---
+            elif event.type == "agent_updated_stream_event":
+                logger.info(f"\n[Agent switched to: {event.new_agent.name}]")
+
+            # --- TOOL USAGE EVENTS ---
+            elif event.type == "run_item_stream_event":
+                item = event.item
+                raw_item = item.raw_item
+
+                # Tool invocation
+                if item.type == "tool_call_item":
+                    logger.info
+                    logger.info(f"\n[Tool call → {raw_item.name} with input {raw_item.arguments}]")
+
+                # Tool output
+                elif item.type == "tool_call_output_item":
+                    logger.info(f"\n[Tool output → {item.output}]")
+
+                # Completed LLM message (post-tool or final)
+                elif item.type == "message_output_item":
+                    text = ItemHelpers.text_message_output(item)
+                    logger.info(f"\n[Message output → {text}]")
+
+            # (You can handle other event types here…)
+        return stream.to_input_list()
+
+    responses = await handle_events(messages)
+    messages.clear()
+    messages.extend(responses)
+    history.remove(spinner)
+
 
 @ui.page('/')
 def main_page(client):
@@ -131,14 +157,15 @@ def main_page(client):
         'details': details,
         'history': history,
         'user_input': user_input,
-        'send_button': send_button
+        'send_button': send_button,
+        'agent': home_agent
     } 
     update_breadcrumbs(gui_elements, selection)
     view_home(gui_elements, selection)
     #update(None)
     
-    user_input.on('keydown.enter', send(message_container=history, text_input=user_input, messages=messages))
-    send_button.on('click', send(message_container=history, text_input=user_input, messages=messages))
+    user_input.on('keydown.enter', lambda _ : send(gui_elements=gui_elements, selection=selection, messages=messages))
+    send_button.on('click', lambda _:send(gui_elements=gui_elements, selection=selection, messages=messages))
 
 
 ui.run()

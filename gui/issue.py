@@ -4,6 +4,7 @@ from nicegui import ui
 from gui.cardwall import init_cardwall
 from gui.selection import SelectionItem, change_selection
 from gui.markdown import markdown, header
+from gui.style import style_selector
 from gui.constants import TAILWIND_CARD
 from models.issue import Issue
 from models.panel import CoverLocation, TitleBoardModel
@@ -35,7 +36,7 @@ def cover_selectors(gui_elements, selection):
             cover = TitleBoardModel.read(issue=issue_id, location=location)
             if cover is None:
                 # The cover is specified, but it does not exist!
-                card = ui.card().classes('mb-2 p-2 bg-red-50 break-inside-avoid').style(f'aspect-ratio: {aspect}')
+                card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect}')
                 with card:
                     ui.markdown(f"{cover_id} could not be found!\n**Click Here to create a {location_name} Cover**")
                     message = f"I would like to create a {location_name} cover for this issue."
@@ -81,25 +82,37 @@ def view_issue(gui_elements, selection):
     
     with details:
         header(f"ISSUE {issue.issue_number}: {issue.issue_title}", 0)
+
         with ui.row().classes('w-full flex-nowrap'):
-            with ui.column().style('flex: 0 0 20%'): 
-                header("Style")
-                style = ComicStyle.read(id=issue.style)
-                image = style.image_filepath()
-                card = ui.card().classes(TAILWIND_CARD)
-                with card:
-                    ui.markdown(style.id.replace("-", " ").title()).classes('text-center bold').style('top-padding: 0; bottom-padding:0')
-                    if image:
-                        ui.image(source=image).style('top-padding: 0; bottom-padding:0')
-                    new_itm = SelectionItem(name="Pick Style", id=style.id, kind='pick_style')
-                    new_sel = [s for s in selection]+[new_itm]
-                    card.on('click', lambda _, new_sel=new_sel: change_selection(gui_elements, selection, new=new_sel)) 
-            with ui.column().style('flex: 0 0 80%'):
-                new_item_messager(gui_elements, selection, "Covers","I would like to create a new cover for this issue.")
-                if not issue.cover or issue.cover == {}:
-                    ui.markdown("No covers available for this issue.")
-                else:
-                    cover_selectors(gui_elements, selection)
+            with ui.column().classes('w-3/4'):
+                header("Attributes", 2)
+                with ui.grid(rows=5, columns=3).style('grid-template-columns: auto auto auto;'):
+                    ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(gui_elements, selection, "I would like to edit the issue's publication date."))
+                    header("issue date",4)
+                    ui.label(("" if issue.issue_date is None else issue.issue_date).rjust(30))
+                    
+                    ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(gui_elements, selection, "I would like to edit the issue's writer."))
+                    header("writer",4)
+                    ui.label(("" if issue.writer is None else issue.issue_date).rjust(30))
+                    
+                    ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(gui_elements, selection, "I would like to edit the issue's artist."))
+                    header("artist",4)
+                    ui.label(("" if issue.artist is None else issue.artist).rjust(30))
+
+                    ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(gui_elements, selection, "I would like to edit the issue's colorist."))
+                    header("colorist",4)
+                    ui.label(("" if issue.colorist is None else issue.colorist).rjust(30))
+
+                    ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(gui_elements, selection, "I would like to edit the issue's creative minds."))
+                    header("creative minds",4)
+                    ui.label(("" if issue.creative_minds is None else issue.creative_minds).rjust(30))
+
+            with ui.column().classes('w-1/4'):
+                header("Style", 2)
+                style_selector(gui_elements, selection, init_cardwall(1), issue.style)
+
+        new_item_messager(gui_elements, selection, "Covers","I would like to create a new cover for this issue.")
+        cover_selectors(gui_elements, selection)
 
             
         new_item_messager(gui_elements, selection, "Scenes","I would like to create a new scene for this issue.")

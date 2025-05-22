@@ -4,7 +4,9 @@ from nicegui import ui
 from helpers.constants import COMICS_FOLDER
 from models.character import CharacterModel
 from gui.cardwall import init_cardwall
-from gui.markdown import markdown
+from gui.markdown import markdown, header
+from gui.constants import TAILWIND_CARD
+from gui.messaging import new_item_messager
 
 def view_character(gui_elements, selection):
     """
@@ -29,19 +31,20 @@ def view_character(gui_elements, selection):
 
     with details:
         markdown(character.format())
-        ui.markdown("# Images")
+        new_item_messager(gui_elements=gui_elements, selection=selection, caption="IMAGES", message="I would like to render this character in a different style.")
         images = character.image
         if not images or images == {}:
-            ui.markdown("No images available for this character.")
+            header("No images available for this character.",4)
             return
         with init_cardwall():
             for style_id, image_id in images.items():
                 filepath = os.path.join(character.path(), style_id, f"{image_id}.jpg")
                 if os.path.exists(filepath):
-                    with ui.card().classes('mb-2 p-2 h-[200px] bg-blue-100 break-inside-avoid'):
+                    with ui.card().classes(TAILWIND_CARD):
+                        header(style_id.replace("-", " ").title(), 4)
                         ui.image(source=filepath)
                 else:
                     logger.error(f"Image file {filepath} does not exist.")
-                    with ui.card().classes('mb-2 p-2 h-[200px] bg-red-100 break-inside-avoid'):
-                        ui.markdown(f"Image file {filepath} does not exist.")
+                    with ui.card().classes(TAILWIND_CARD):
+                        header("Image Not Found", 4)
             

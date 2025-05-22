@@ -79,7 +79,8 @@ def view_series(gui_elements, selection):
     details.clear()
     with details:
         header(name, 0)
-        new_item_messager(gui_elements, selection, "SERIES", f"I would like to create a new issue of the {series.series_title} series.")
+        markdown(series.description)
+        new_item_messager(gui_elements, selection, "ISSUES", f"I would like to create a new issue of the {series.series_title} series.")
         view_all_issues(gui_elements, selection)
         new_item_messager(gui_elements, selection, "CHARACTER", f"I would like to create a new character for the {series.series_title} series.")
         view_all_characters(gui_elements, selection)

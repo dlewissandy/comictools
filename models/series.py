@@ -8,6 +8,7 @@ from helpers.constants import COMICS_FOLDER
 
 class Series(BaseModel):
     series_title: str = Field(..., description="The series title of the comic book")
+    description: str | None = Field(..., description="A short paragraph describing the comic book series")
     publisher: Optional[str] = Field(..., description="The publisher of the comic book.  Optional.  Default to None")
     logo: Optional[str] = Field(..., description="A refrerence image for the logo of the comic book.  Default to None")
 

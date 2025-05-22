@@ -1,6 +1,7 @@
 from typing import TypedDict
 from nicegui import ui
 from gui.markdown import header
+from agents import Agent
 
 class GuiElements(TypedDict):
     breadcrumbs: ui.button_group
@@ -8,4 +9,5 @@ class GuiElements(TypedDict):
     history: ui.scroll_area
     user_input: ui.input
     send_button: ui.button
+    agent = Agent
 
