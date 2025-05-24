@@ -3,6 +3,7 @@ from typing import Optional
 from loguru import logger
 from pydantic import BaseModel, Field
 from models.character import CharacterModel
+from models.publisher import Publisher
 from models.issue import Issue
 from helpers.constants import COMICS_FOLDER
 
@@ -10,7 +11,13 @@ class Series(BaseModel):
     series_title: str = Field(..., description="The series title of the comic book")
     description: str | None = Field(..., description="A short paragraph describing the comic book series")
     publisher: Optional[str] = Field(..., description="The publisher of the comic book.  Optional.  Default to None")
-    logo: Optional[str] = Field(..., description="A refrerence image for the logo of the comic book.  Default to None")
+
+    @property
+    def name(self) -> str:
+        """
+        return the name of the series.   Synonym for the series_title
+        """
+        return self.series_title
 
     @property
     def id(self) -> str:
@@ -142,7 +149,6 @@ class Series(BaseModel):
             issue_number = kwargs.get("issue_number", issue_number),
             issue_title = kwargs.get("issue_title", None),
             issue_date = kwargs.get("issue_date", None),
-            logo = kwargs.get("logo", None),
             price = kwargs.get("price", None),
             writer = kwargs.get("writer", None),
             artist = kwargs.get("artist", None),
@@ -207,15 +213,21 @@ class Series(BaseModel):
         Returns:
             Either a ComicBookModel object or None if the comic book does not exist.
         """
+        logger.debug(f"series_title: {series_title}, id: {id}")
         if id is None and series_title is None:
-            raise ValueError("Either id or series_title and issue_number must be provided")
+            msg = "Either id or series_title must be provided"
+            logger.error(msg)
+            raise ValueError(msg)
         if series_title is not None:
             id = series_title.lower().replace(" ", "-")
         filepath = os.path.join(COMICS_FOLDER, id, "series.json")
+        logger.debug(f"filepath: {filepath}")
         if not os.path.exists(filepath):
+            logger.error(f"File {filepath} does not exist")
             return None
         with open(filepath, "r") as f:
             data = f.read()
+            logger.debug(f"data: {data}")
             return cls.model_validate_json(data)
         
     def format(self):
@@ -226,3 +238,25 @@ class Series(BaseModel):
                 continue
             result += f"* **{key.replace('_', ' ').capitalize()}**: {value}\n\n"
         return result
+
+    @classmethod
+    def read_all(cls) -> list["Series"]:
+        """
+        Read all the series from the series folder.
+        """
+        result = []
+        for item in os.listdir(COMICS_FOLDER):
+            # if it is a directory and does not start with a dot then it may contain a
+            # series
+            path = os.path.join(COMICS_FOLDER, item)
+            if os.path.isdir(path) and not item.startswith("."):
+                series = cls.read(id=item)
+                if series is not None:
+                    result.append(series)
+        return result
+    
+    def get_publisher(self) -> str:
+        """
+        Get the publisher of the series.
+        """
+        return Publisher.read(id=self.publisher)

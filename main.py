@@ -3,12 +3,12 @@ import asyncio
 from typing import TypedDict
 from openai import chat
 from nicegui import ui
-from generators.agents import home_agent
+from generators.agents import init_agents
 from gui.home import view_home
-from gui.elements import GuiElements
+from gui.state import GUIState
 from dotenv import load_dotenv
-from gui.selection import update_breadcrumbs, SelectionItem
-from gui.markdown import markdown
+from gui.selection import update_breadcrumbs, SelectionItem, redraw_details
+from gui.elements import markdown
 from loguru import logger
 from agents import Agent, Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent
@@ -19,10 +19,11 @@ load_dotenv()
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
-async def send(gui_elements: GuiElements, selection: list[SelectionItem], messages: list[dict]):
-    history = gui_elements.get("history")
-    text_input = gui_elements.get("user_input")
+async def send(state: GUIState):
+    history = state.get("history")
+    text_input = state.get("user_input")
     question = text_input.value
+    messages = state.get("messages")
     
     text_input.value = ''
     messages.append({"role": "user", "content": question})
@@ -37,7 +38,15 @@ async def send(gui_elements: GuiElements, selection: list[SelectionItem], messag
     
 
     async def handle_events(messages: list[dict]):
-        agent = gui_elements.get("agent", None)
+        agents = state.get("agents")
+        selection = state.get("selection")
+        if selection == []:
+            kind = "home"
+        else:
+            kind = selection[-1].kind
+        agent = agents.get(kind, None)
+        if agent is None:
+            raise ValueError(f"Agent not found for kind: {kind}")
         stream = Runner.run_streamed(agent, input=messages)
         response = ""
         streamed_events = stream.stream_events()
@@ -47,10 +56,9 @@ async def send(gui_elements: GuiElements, selection: list[SelectionItem], messag
                 response += event.data.delta
                 response_message.clear()
                 with response_message:
-                    # Apply the same markdown-content styling to chat responses
                     with ui.element('div').classes('markdown-content'):
                         ui.markdown(response)
-                ui.run_javascript('window.scrollTo(0, document.body.scrollHeight)')
+                history.scroll_to(percent=100)
                 await asyncio.sleep(0)
 
             # --- AGENT HANDOFFS (if any) ---
@@ -83,57 +91,20 @@ async def send(gui_elements: GuiElements, selection: list[SelectionItem], messag
     messages.clear()
     messages.extend(responses)
     history.remove(spinner)
+    if state.get("is_dirty",False):
+        redraw_details(state)
+        state['is_dirty'] = False
 
 
 @ui.page('/')
 def main_page(client):
-    messages = []
-    selection = []
-    
-    # Add consistent CSS for markdown content in chat
-    ui.add_head_html('''
-        <style>
-            .markdown-content {
-                width: 100%;
-                max-width: 100%;
-                overflow-wrap: break-word;
-                word-wrap: break-word;
-                word-break: normal;
-                hyphens: auto;
-            }
-            .markdown-content * {
-                white-space: normal !important;
-                max-width: 100%;
-            }
-            .markdown-content pre {
-                white-space: pre-wrap !important;
-                max-width: 100%;
-                overflow-x: auto;
-            }
-            .markdown-content code {
-                white-space: pre-wrap !important;
-            }
-            .markdown-content p, .markdown-content li {
-                overflow-wrap: break-word;
-                word-wrap: break-word;
-                word-break: normal;
-            }
-        </style>
-    ''')
-
-    # make the content container span full width
     ui.query('.nicegui-content').classes('w-full')
-    # turn the page into a column flex container
-    ui.query('.q-page').classes('flex')
-
-    
+    ui.query('.q-page').classes('flex')   
     header = ui.header().classes().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300')
     middle = ui.row().classes('w-screen flex-1 overflow-hidden').style('padding-left:12px; padding-right:12px;')
     footer = ui.footer().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300')
 
     with middle:
-        # ui.column().classes('bg-grey-2 q-pa-md h-full').style('min-width:220px; max-width:320px;overflow:auto;'):
-        #     explorer = content_explorer()
         with ui.splitter(limits=(20,80), value=70).classes('h-full w-full') as splitter:
             with splitter.before:
                 details = ui.scroll_area().classes('h-full w-full').style('padding-left:12px; padding-right:12px;')
@@ -152,20 +123,24 @@ def main_page(client):
         dark = ui.dark_mode()
         ui.switch('Dark mode').bind_value(dark)
 
-    gui_elements: GuiElements = {
+    state: GUIState = {
         'breadcrumbs': breadcrumbs,
         'details': details,
         'history': history,
         'user_input': user_input,
         'send_button': send_button,
-        'agent': home_agent
-    } 
-    update_breadcrumbs(gui_elements, selection)
-    view_home(gui_elements, selection)
+        'agents': {},
+        'messages': [], 
+        'is_dirty': False,
+        'selection': []
+    }
+    state['agents'] = init_agents(state)
+    update_breadcrumbs(state)
+    view_home(state)
     #update(None)
     
-    user_input.on('keydown.enter', lambda _ : send(gui_elements=gui_elements, selection=selection, messages=messages))
-    send_button.on('click', lambda _:send(gui_elements=gui_elements, selection=selection, messages=messages))
+    user_input.on('keydown.enter', lambda _ : send(state=state))
+    send_button.on('click', lambda _:send(state=state))
 
 
 ui.run()

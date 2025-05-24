@@ -3,12 +3,12 @@ from loguru import logger
 from nicegui import ui
 from helpers.constants import COMICS_FOLDER
 from models.character import CharacterModel
-from gui.cardwall import init_cardwall
-from gui.markdown import markdown, header
+from gui.elements import init_cardwall
+from gui.elements import markdown, header
 from gui.constants import TAILWIND_CARD
 from gui.messaging import new_item_messager
 
-def view_character(gui_elements, selection):
+def view_character(state):
     """
     View the details of a character.
     
@@ -16,12 +16,12 @@ def view_character(gui_elements, selection):
         breadcrumbs: The breadcrumbs UI element.
         details: The details UI element.
         chat_history: The chat history UI element.
-        selection: The current selection.
     """
+    selection = state.get("selection")
     character_id = selection[-1].id
     series_id = selection[-2].id
     character = CharacterModel.read(series=series_id, id=character_id)
-    details = gui_elements.get("details")
+    details = state.get("details")
     if character is None:
         details.clear()
         message = f"Character with ID {character_id} not found in series {series_id}."
@@ -31,7 +31,7 @@ def view_character(gui_elements, selection):
 
     with details:
         markdown(character.format())
-        new_item_messager(gui_elements=gui_elements, selection=selection, caption="IMAGES", message="I would like to render this character in a different style.")
+        new_item_messager(state=state, caption="IMAGES", message="I would like to render this character in a different style.")
         images = character.image
         if not images or images == {}:
             header("No images available for this character.",4)

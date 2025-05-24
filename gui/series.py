@@ -1,87 +1,44 @@
 import os
 from loguru import logger
 from models.series import Series
-from gui.cardwall import init_cardwall
-from gui.markdown import markdown, header
+from gui.elements import markdown, header, init_cardwall, view_all_instances, markdown_field_editor, image_field_editor
 from gui.selection import SelectionItem, change_selection
 from gui.constants import TAILWIND_CARD
+from models.publisher import Publisher
 from nicegui import ui
 
-def view_all_issues(gui_elements, selection):
-    from gui.messaging import post_user_message
-    logger.debug("view_all_issues")
-    series = Series.read(id=selection[-1].id)
-    issues = series.get_issues()
-    
-    # sort the issues by issue number
-    issues_list = list(issues.values())
-    issues_list.sort(key=lambda x: x.issue_number)
-    details = gui_elements.get("details")
-    with details:
-        with ui.element().classes('grid grid-cols-4 gap-2 w-full'):
-            for issue in issues_list:
-                w = 200
-                image = None
-                if issue.cover and issue.cover !={}:
-                    image = issue.cover.get("front")
-                card = ui.card().classes(TAILWIND_CARD).style('aspect-ratio: 2/3')
-                with card:
-                    if image:
-                        filepath = os.path.join(issue.path(), "covers", "front", "images", f"{image}.jpg")
-                        if os.path.exists(filepath):
-                            ui.image(source=filepath)
-                        else:
-                            logger.error(f"Cover file {filepath} does not exist.")
-                            ui.markdown(f"Cover file {filepath} does not exist.")
-                    else:
-                        ui.label(f"{issue.issue_title} ({issue.issue_number})").classes('text-center')
-                    new_itm = SelectionItem(name=issue.issue_title, id=issue.id, kind='issue')
-                    new_sel = [s for s in selection]+[new_itm]
 
-
-                card.on('click', lambda _, new_sel=new_sel: change_selection(gui_elements, selection, new=new_sel))
-
-def view_all_characters(gui_elements, selection):
-    from gui.messaging import post_user_message
-    logger.debug("view_all_characters")
-    series_id = selection[-1].id
-    series = Series.read(id=series_id)
-    name = series.id.replace("-", " ").title()
-    characters = series.get_characters()
-    details = gui_elements.get("details")
-    with details:
-        with init_cardwall():
-            for character in characters.values():
-                name = character.name
-                variant = character.variant if character.variant else 'base'
-                card = ui.card().classes(TAILWIND_CARD).style('aspect-ratio: 3/2.75')
-                with card:
-                    ui.label(f"{name} ({variant})").classes('text-center')
-                    if character.image and character.image != {}:
-                        if "vintage-four-color" in character.image:
-                            image = character.image["vintage-four-color"]
-                            style = "vintage-four-color"
-                        else:
-                            image = character.image.items()[0][1]
-                            style = character.image.items()[0][0]
-                        ui.image(source=os.path.join(character.path(), style, f"{image}.jpg"))
-                    new_itm = SelectionItem(name=f"{name} ({variant})", id=character.id, kind='character')
-                    new_sel= [s for s in selection]+[new_itm]
-                    card.on('click', lambda _, new_sel=new_sel: change_selection(gui_elements, selection, new = new_sel))
-
-
-def view_series(gui_elements, selection):
-    logger.debug("view_series")
+def view_series(state):
     from gui.messaging import new_item_messager
+
+    # Dereference the state to get the selection and detials.
+    selection = state.get("selection")
     series = Series.read(id=selection[-1].id)
-    name = series.id.replace("-", " ").title()
-    details = gui_elements.get("details")
+    details = state.get("details")
     details.clear()
+
+    # Create safe accessors for the publisher's name, id and image filepath.
+    pub = None if series.publisher is None else Publisher.read(id=series.publisher)
+    get_name = lambda : None if pub is None else pub.name
+    get_id = lambda : None if pub is None else pub.id
+    get_image_filepath = lambda : None if pub is None else pub.image_filepath()
+    
+    # Render the controls
     with details:
-        header(name, 0)
-        markdown(series.description)
-        new_item_messager(gui_elements, selection, "ISSUES", f"I would like to create a new issue of the {series.series_title} series.")
-        view_all_issues(gui_elements, selection)
-        new_item_messager(gui_elements, selection, "CHARACTER", f"I would like to create a new character for the {series.series_title} series.")
-        view_all_characters(gui_elements, selection)
+        # create a row with two colunms.
+        with ui.row().classes('w-full flex-nowrap'):
+            # The first column is 3/4 of the width and has a markdown text field for the series description.
+            with ui.column().classes('w-3/4'):
+                markdown_field_editor(state, "Description", series.description)
+            with ui.column().classes('w-1/4'):
+                # The second column is 1/4 of the width and has a cardwall displaying the publisher info.
+                image_field_editor(state, "pick-publisher", "Publisher", get_name, get_id, get_image_filepath)
+        
+        # A cardwall for viewing and adding issues of the comic.
+        new_item_messager(state, "Issues", "I would like to create a new issue")
+        view_all_instances(state, series.get_issues().values, kind="issue", aspect_ratio="16/27")
+
+        # A cardwall for viewing and adding characters to the comic series.
+        new_item_messager(state, "Characters", "I would like to create a new character")
+        view_all_instances(state, series.get_characters().values, kind="character", aspect_ratio="1/1", get_name=lambda x: x.variant_name())
         

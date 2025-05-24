@@ -4,7 +4,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 from models.character import CharacterModel
 from models.scene import SceneModel
-from models.panel import TitleBoardModel
+from models.panel import TitleBoardModel, CoverLocation
 from models.scene import SceneModel
 from helpers.constants import COMICS_FOLDER
 from helpers.generator import invoke_generate_api
@@ -29,6 +29,15 @@ class Issue(BaseModel):
     characters: list[str] = Field(..., description="The characters in the issue.  Default to empty string")
     style: Optional[str]  = Field(..., description="The style of the comic book.   Default to 'vintage-four-color'")
     scenes: list[str] = Field(..., description="The scenes of the issue. Default to empty list")
+
+    @property
+    def name(self) -> str:
+        """
+        return the name of the comic book.
+        """
+        if self.issue_title is not None:
+            return f"{self.issue_title}"
+        return f"{self.series_title} {self.issue_number}"
 
     def _series(self) -> str:
         """
@@ -85,8 +94,15 @@ class Issue(BaseModel):
         self.write()
 
     def image_filepath(self) -> Optional[str]:
-        if self.image:
-            return os.path.join(self.path(), "images", f"{self.image}.jpg")
+        """
+        return the image of the comic book
+        """
+        if self.cover is None or self.cover == {}:
+            return None
+        for key, value in self.cover.items():
+            value = TitleBoardModel.read(issue=self.id, location=CoverLocation(key))
+            if value.image is not None:
+                return os.path.join(self.path(), "covers", key, "images", f"{value.image}.jpg")
         return None
 
     def delete_character(self, name: str, variant: str | None = None):
@@ -238,7 +254,7 @@ class Issue(BaseModel):
         with open(filepath, "r") as f:
             data = f.read()
             return cls.model_validate_json(data)
-        
+
     def format(self, header_level: int=1, no_covers: bool=False, no_scenes: bool=False, no_style:bool=False) -> str:
         """
         Format the comic book for display

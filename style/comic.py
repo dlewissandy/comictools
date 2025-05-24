@@ -72,7 +72,9 @@ class ComicStyle(BaseModel):
         styles = []
         for item in os.listdir(STYLES_FOLDER):
             logger.debug(f"item: {item}")
-            if os.path.isdir(os.path.join(STYLES_FOLDER, item)) and not item.startswith('.'):
+            if item.startswith('.'):
+                continue
+            if os.path.isdir(os.path.join(STYLES_FOLDER, item)):
                 # if it is a file then it is a style
                 style = cls.read(id=item)
                 if style:

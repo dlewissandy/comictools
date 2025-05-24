@@ -41,6 +41,13 @@ class CharacterModel(BaseModel):
         """
         return f"{self.path()}/character.json"
 
+    def variant_name(self) -> str:
+        """
+        return the variant name for the character model
+        """
+        if self.variant is None or self.variant == "":
+            return f"{self.name} (base)"
+        return f"{self.name} ({self.variant})"
 
     @classmethod
     def generate(cls, series: str, name: str, description: str, variant: str = ""):
@@ -195,6 +202,21 @@ class CharacterModel(BaseModel):
             self.image[style.id] = image_id
             self.write()
         return raw_image
+
+    def image_filepath(self) -> Optional[str]:
+        """
+        return the filepath to the representative image for the character model
+        """
+        if self.image and self.image != {}:
+            if "vintage-four-color" in self.image:
+                image = self.image["vintage-four-color"]
+                style = "vintage-four-color"
+            else:
+                image = self.image.items()[0][1]
+                style = self.image.items()[0][0]
+            return os.path.join(self.path(), style, f"{image}.jpg")
+        return None
+
 
     def set_image(self, image_id: str, style_id: str):
         """
