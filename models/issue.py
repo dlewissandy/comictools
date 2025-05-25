@@ -14,11 +14,13 @@ from helpers.generator import invoke_generate_api
 class Issue(BaseModel):
     id: str = Field(..., description="A unique identifier for the comic book.   Default to 'series_title/issue_number'")
     style: str = Field(..., description="The style of the comic book.  Default to 'vintage-four-color'")
-    series_title: str = Field(..., description="The title of the comic book")
-    issue_title: Optional[str] = Field(..., description="The title of the issue.  Optional.  Default to None")
+    series: str = Field(..., description="The identifier for the comic book series.  ")
+    title: Optional[str] = Field(..., description="The title of the issue.  Optional.  Default to None")
+    story: Optional[str] = Field(..., description="The story of the comic book.  Optional.  Default to None")
+    
     issue_number: int = Field(..., description="The issue number.  Optional.  default to 1")
-    issue_date: Optional[str] = Field(..., description="The date of the issue.  Optional.  Default to None")
-    logo: Optional[str] = Field(..., description="A refrerence image for the logo of the comic book.  Default to None")
+    publication_date: Optional[str] = Field(..., description="The publication date of the issue.  Optional.  Default to None")
+    
     price: Optional[float] = Field(..., description="The price of the issue.  Default to None")
     writer: Optional[str] = Field(..., description="The writer of the issue.  Optional.   Default to None")
     artist: Optional[str] = Field(..., description="The artist of the issue.  Optional.   Default to None")
@@ -35,34 +37,45 @@ class Issue(BaseModel):
         """
         return the name of the comic book.
         """
-        if self.issue_title is not None:
-            return f"{self.issue_title}"
-        return f"{self.series_title} {self.issue_number}"
+        if self.title is not None:
+            return f"{self.title}"
+        return f"{self.series} {self.issue_number}"
 
     def _series(self) -> str:
         """
         return the series of the comic book
         """
         from models.series import Series
-        return Series.read(series_title=self.series_title)
+        return Series.read(series_title=self.series)
     
     def get_scenes(self) -> list[SceneModel]:
         """
         return the scenes of the comic book
         """
         scenes = []
-        for scene_id in self.scenes:
+        for scene_number, scene_id in enumerate(self.scenes):
             scene = SceneModel.read(id=scene_id, issue=self.id)
             if scene is not None:
                 scenes.append(scene)
         return scenes
+
+    def get_covers(self) -> list[TitleBoardModel]:
+        """
+        return the covers of the comic book
+        """
+        covers = []
+        for cover_type, cover_id in self.cover.items():
+            cover = TitleBoardModel.read(issue=self.id, location=CoverLocation(cover_type))
+            if cover is not None:
+                covers.append(cover)
+        return covers
 
     @property
     def series_id(self) -> str:
         """
         return the series id of the comic book
         """
-        return self.series_title.lower().replace(" ", "-")
+        return self.series.lower().replace(" ", "-")
 
     def path(self) -> str:
         """
@@ -154,7 +167,7 @@ class Issue(BaseModel):
         """
         logger.info(f"name: {name}, description: {description}, variant: {variant}")
         # verify that the character does not already exist!
-        character = CharacterModel.read(series=self.series_title, name=name, variant=variant)
+        character = CharacterModel.read(series=self.series, name=name, variant=variant)
         if character is None:
             character = CharacterModel.generate(name=name, description=description, variant=variant, series=self.series_id())
             if character is None:
@@ -260,8 +273,8 @@ class Issue(BaseModel):
         Format the comic book for display
         """
         text = f"{'#'* header_level} ISSUE {self.issue_number}\n\n"
-        if self.issue_title is not None:
-            text += f" * **title** {self.issue_title}\n\n"
+        if self.title is not None:
+            text += f" * **title** {self.title}\n\n"
         if self.issue_date is not None:
             text += f" * **date** {self.issue_date}\n\n"
         if self.writer is not None:

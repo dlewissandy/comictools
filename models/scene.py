@@ -55,6 +55,22 @@ class SceneModel(BaseModel):
                 panels[panel_id] = panel
         return panels
 
+    def image_filepath(self) -> str | None:
+        """
+        Get the image filepath for the scene.  This is the image of the first panel in the scene.
+        If the scene has no panels, then return an empty string.
+        """
+        panels = self.get_panels()
+        if not panels:
+            return None
+        # Find the first panel that has an image
+        for panel in panels.values():
+            if panel.image_filepath():
+                return panel.image_filepath()
+        # If no panel has an image, return None
+        return None
+
+
     def characters(self) -> list[str]:
         """
         return the list of characters in the scene

@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, TypedDict
 from loguru import logger
 from typing import Callable
 from nicegui import ui
@@ -191,9 +191,9 @@ def image_field_editor(state: GUIState, kind, caption, get_name, get_id, get_ima
     new_sel = [s for s in state.get("selection")]+[new_itm]
     card.on('click', lambda _, new_sel=new_sel: change_selection(state, new=new_sel))
 
-def render_object_choices(state, instances, get_selection, set_selection, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda x: x.name):
+def render_object_choices(state, instances, get_selection, set_selection, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda i,x: x.name):
     with cardwall:
-        for instance in instances:
+        for i,instance in enumerate(instances):
             def on_click(id: str):
                 set_selection(id)
                 cardwall.clear()
@@ -202,7 +202,7 @@ def render_object_choices(state, instances, get_selection, set_selection, cardwa
             card = ui.card().classes(TAILWIND_CARD).style('aspect-ratio: 1/1').on('click', lambda _,id=instance.id: on_click(id=id))       
             card.classes('relative overflow-visible')
             with card:
-                header(get_name(instance),4)
+                header(get_name(i,instance),4)
                 image_filepath = instance.image_filepath()
                 if os.path.exists(image_filepath):
                     ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')
@@ -212,29 +212,45 @@ def render_object_choices(state, instances, get_selection, set_selection, cardwa
                     ui.label(f"Image {image_filepath} not found.").style('color: red;')
 
 
-def render_object_cards(state: GUIState, instances, kind, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda x: x.name):
+def render_object_cards(state: GUIState, instances, kind: str | Callable, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda i,x: x.name, get_markdown: Optional[Callable] = None, number_of_columns: int = 4):
     selection = state.get("selection")
-    with ui.element().classes('grid grid-cols-4 gap-2 w-full'):
-        for instance in instances:
-            name = get_name(instance)
+    with ui.element().classes(f'grid grid-cols-{number_of_columns} gap-2 w-full'):
+        for i,instance in enumerate(instances):
+            name = get_name(i,instance)
             id = instance.id
             logger.debug(f"Creating card for {id}")
             card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}')
             with card:
-                sel_itm = SelectionItem(name=name, id=id, kind=kind)
+                if callable(kind):
+                    kind_value = kind(instance)
+                else:
+                    kind_value = kind
+                sel_itm = SelectionItem(name=name, id=id, kind=kind_value)
                 new_sel = [s for s in selection]+[sel_itm]
                 image = instance.image_filepath()
                 header(name,4)
                 if image:
                     ui.image(source=image).style('top-padding: 0; bottom-padding:0')
                 else:
-                    header("No image available",5)
+                    if get_markdown is None:
+                        header("No image available",5)
+                    else:
+                        markdown(get_markdown(instance))
                 
             # Fix lambda by creating a closure with the current value of new_sel
             card.on('click', lambda _, new_sel=new_sel: change_selection(state, new_sel))
 
 
-def view_all_instances(state, get_instances, kind,  get_name = lambda x: x.name, get_choice: Optional[Callable] = None, set_choice: Optional[Callable] = None, aspect_ratio: str = "1/1"): 
+def view_all_instances(
+        state, 
+        get_instances, 
+        kind: str | Callable,  
+        get_name = lambda i,x: x.name, 
+        get_choice: Optional[Callable] = None, 
+        set_choice: Optional[Callable] = None, 
+        get_markdown: Optional[Callable] = None,
+        number_of_columns: int=4,
+        aspect_ratio: str = "1/1"): 
     """
     A gui shortcut to view all the instances of a given kind.
 
@@ -246,6 +262,8 @@ def view_all_instances(state, get_instances, kind,  get_name = lambda x: x.name,
         set_choice: A function to set the current choice (optional).  This function should take a single
            argument, which is the chosen value.  It should change the badge to the chosen value and then
            update the parent object with the new choice.
+        get_markdown: A function to get the markdown content for the instance (optional).  This is displayed
+           when there is no image.
         kind: The kind of instances (e.g., 'character', 'issue', 'series').
 
     NOTE: Each instance should have the following properties
@@ -275,22 +293,45 @@ def view_all_instances(state, get_instances, kind,  get_name = lambda x: x.name,
     # Render the details with all the available choices
     selection = state.get("selection")
     with state.get("details"):
-        if get_choice is not None:
-            render_object_choices(
-                state=state, 
-                instances=instances, 
-                get_name=get_name,
-                get_selection=get_choice, 
-                set_selection=set_choice, 
-                cardwall=init_cardwall(), 
-                aspect_ratio=aspect_ratio
-            )
-        else:
-            render_object_cards(
-                state=state, 
-                instances=instances, 
-                get_name=get_name,
-                kind=kind, 
-                cardwall=init_cardwall(), 
-                aspect_ratio=aspect_ratio
-            )
+            if get_choice is not None:
+                render_object_choices(
+                    state=state, 
+                    instances=instances, 
+                    get_name=get_name,
+                    get_selection=get_choice, 
+                    set_selection=set_choice, 
+                    cardwall=init_cardwall(), 
+                    aspect_ratio=aspect_ratio
+                )
+            else:
+                render_object_cards(
+                    state=state, 
+                    instances=instances, 
+                    get_name=get_name,
+                    get_markdown=get_markdown,
+                    kind=kind, 
+                    cardwall=init_cardwall(), 
+                    number_of_columns=number_of_columns,
+                    aspect_ratio=aspect_ratio
+                )
+
+class Attribute(TypedDict):
+    caption: str
+    get_value: str | Callable
+
+
+def view_attributes(state: GUIState, caption: str, attributes: list[Attribute] ):
+    
+    with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with expansion.add_slot('header'):
+            header(caption, 2)
+        with ui.grid(rows=len(attributes), columns=3).style('grid-template-columns: auto auto auto;'):
+            for attr in attributes:
+                caption = attr["caption"]
+                value = attr.get("get_value")()
+                ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(state, f"I would like to edit the {caption} date."))
+                header(caption,4)
+                value = attr.get("get_value")()
+                if value is None: 
+                    value = ""
+                ui.label(value)

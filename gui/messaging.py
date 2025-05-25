@@ -12,6 +12,8 @@ def post_user_message(state:GUIState, message: str ):
 def new_item_messager(state: GUIState, caption: str, message: str):
     from gui.elements import header, crud_button
     with ui.row().classes('w-full'):
+        ui.separator()
         header(caption)
         ui.space()
         return crud_button(kind="create", action=lambda _: post_user_message(state, message), size=1)
+        ui.separator()

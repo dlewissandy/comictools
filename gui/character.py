@@ -17,17 +17,21 @@ def view_character(state):
         details: The details UI element.
         chat_history: The chat history UI element.
     """
+    # Read the state to get the selection and ui elements
     selection = state.get("selection")
     character_id = selection[-1].id
     series_id = selection[-2].id
     character = CharacterModel.read(series=series_id, id=character_id)
     details = state.get("details")
+
+    # If the character is not found, clear the details and show an error message
     if character is None:
         details.clear()
+        header("Character Not Found", 2).style('color: red;')
         message = f"Character with ID {character_id} not found in series {series_id}."
+        header(message,4)
         logger.error(message)
-        with details:
-            ui.markdown(message)
+        return
 
     with details:
         markdown(character.format())

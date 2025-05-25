@@ -19,7 +19,7 @@ def view_series(state):
 
     # Create safe accessors for the publisher's name, id and image filepath.
     pub = None if series.publisher is None else Publisher.read(id=series.publisher)
-    get_name = lambda : None if pub is None else pub.name
+    get_name = lambda i, x : None if pub is None else pub.name
     get_id = lambda : None if pub is None else pub.id
     get_image_filepath = lambda : None if pub is None else pub.image_filepath()
     
@@ -32,7 +32,7 @@ def view_series(state):
                 markdown_field_editor(state, "Description", series.description)
             with ui.column().classes('w-1/4'):
                 # The second column is 1/4 of the width and has a cardwall displaying the publisher info.
-                image_field_editor(state, "pick-publisher", "Publisher", get_name, get_id, get_image_filepath)
+                image_field_editor(state, "pick-publisher", "Publisher", lambda: pub.name, get_id, get_image_filepath)
         
         # A cardwall for viewing and adding issues of the comic.
         new_item_messager(state, "Issues", "I would like to create a new issue")
@@ -40,5 +40,5 @@ def view_series(state):
 
         # A cardwall for viewing and adding characters to the comic series.
         new_item_messager(state, "Characters", "I would like to create a new character")
-        view_all_instances(state, series.get_characters().values, kind="character", aspect_ratio="1/1", get_name=lambda x: x.variant_name())
+        view_all_instances(state, series.get_characters().values, kind="character", aspect_ratio="1/1", get_name=lambda _,x: x.variant_name())
         

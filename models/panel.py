@@ -48,6 +48,9 @@ class BeatBoardModel(BaseModel):
         return the filepath to the panel model
         """
         return os.path.join(self.path(),"beatboard.json")
+    
+    def image_filepath(self) -> str:
+        return None
 
     def write(self):
         """
@@ -199,6 +202,14 @@ class RoughBoardModel(BaseModel):
         return the filepath to the panel model
         """
         return os.path.join(self.path(),"roughboard.json")
+    
+    def image_filepath(self) -> str | None:
+        """
+        return the filepath to the image
+        """
+        if self.image is None or self.image == "":
+            return None
+        return os.path.join(self.path(), "images", f"{self.image}.jpg")
 
     def write(self):
         """

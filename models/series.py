@@ -145,9 +145,9 @@ class Series(BaseModel):
         
         issue = Issue(
             id = kwargs.get("id", f"{self.id}/{issue_number}"),
-            series_title = self.series_title,
+            series = self.series_title,
             issue_number = kwargs.get("issue_number", issue_number),
-            issue_title = kwargs.get("issue_title", None),
+            title = kwargs.get("issue_title", None),
             issue_date = kwargs.get("issue_date", None),
             price = kwargs.get("price", None),
             writer = kwargs.get("writer", None),

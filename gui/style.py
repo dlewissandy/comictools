@@ -1,62 +1,18 @@
 from loguru import logger
-from nicegui import ui
 from gui.elements import init_cardwall
 from gui.state import GUIState
-from gui.selection import SelectionItem, change_selection
-from gui.elements import markdown, header, view_all_instances, image_field_editor
+from gui.elements import markdown, header, view_all_instances
 from style.comic import ComicStyle
-from gui.constants import TAILWIND_CARD
-
-
-# def style_selector(state: GUIState, cardwall, style_id):
-#     """
-#     Create a style selector card.
-    
-#     Args:
-#         state: The GUI elements containing the details and selection.
-#         cardwall: The cardwall UI element.
-#         new_sel: The new selection item to be added.
-#     """
-#     selection = state.get("selection")
-#     new_itm = SelectionItem(name=f"Style picker", id=style_id, kind='style-picker')
-#     new_sel = [s for s in selection]+[new_itm]
-#     with cardwall:
-#         if style_id is not None and style_id != "":
-#             style = ComicStyle.read(id=style_id)
-#             if style is None:
-#                 card = ui.card().classes(TAILWIND_CARD)
-#                 with card:
-#                     header("Not Yet Selected", 4)
-#                 card.on('click', lambda _, new_sel=new_sel: change_selection(state, new=new_sel))
-#                 return
-#             image_filepath = style.image_filepath()
-#             if image_filepath is None:
-#                 card = ui.card().classes(TAILWIND_CARD)
-#             else:
-#                 card = ui.card().classes(TAILWIND_CARD)
-#             with card:
-#                 header(style.id.replace("-", " ").title(), 4)
-#                 if image_filepath:
-#                     ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')  
-#                 card.on('click', lambda _, new_sel=new_sel: change_selection(state, new=new_sel))
-#             return
-#         else:
-#             msg = f"No style has been selected."
-#             logger.error(msg)
-#             card = ui.card().classes(TAILWIND_CARD)
-#             with card:
-#                 header("Not Yet Selected", 4)
-#             new_itm = SelectionItem(name=new_itm.name, id=None, kind=new_itm.kind)
-#             new_sel = [s for s in selection]+[new_itm]
-#             card.on('click', lambda _, new_sel=new_sel: change_selection(state, new=new_sel))
 
 def view_style(state: GUIState):
+    """
+    Editor for comic styles.
+    """
     selection = state.get("selection")
     style = ComicStyle.read(id=selection[-1].id)
     details = state.get("details")
     with details:
-        markdown(style.format())
-        
+        markdown(style.format())        
         init_cardwall()
 
 def view_pick_style(state):
@@ -69,6 +25,7 @@ def view_pick_style(state):
     from models.series import Series
     from models.issue import Issue
     from models.scene import SceneModel
+    from models.panel import TitleBoardModel,CoverLocation
     logger.debug("view_pick_style")
 
     # Dereference the state to get the selection and details.
@@ -79,6 +36,14 @@ def view_pick_style(state):
         parent = Issue.read(id=parent_id)
     elif parent_kind == "scene":
         parent = SceneModel.read(id=parent_id, issue=selection[-3].id)
+    elif parent_kind == "front-cover":
+        parent = TitleBoardModel.read(id=parent_id, location=CoverLocation.FRONT_COVER)
+    elif parent_kind == "back-cover":
+        parent = TitleBoardModel.read(id=parent_id, location=CoverLocation.BACK_COVER)
+    elif parent_kind == "inside-front-cover":
+        parent = TitleBoardModel.read(id=parent_id, location=CoverLocation.INSIDE_FRONT_COVER)
+    elif parent_kind == "inside-back-cover":
+        parent = TitleBoardModel.read(id=parent_id, location=CoverLocation.INSIDE_BACK_COVER)
     
     style_id = selection[-1].id
     style = ComicStyle.read(id=style_id) if style_id else None

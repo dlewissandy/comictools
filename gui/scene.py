@@ -1,7 +1,7 @@
 import os
 from nicegui import ui
 from gui.selection import SelectionItem, change_selection
-from gui.elements import init_cardwall
+from gui.elements import init_cardwall, view_all_instances
 from gui.elements import markdown, image_field_editor
 from models.scene import SceneModel
 
