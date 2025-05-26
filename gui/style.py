@@ -1,17 +1,65 @@
 from loguru import logger
 from gui.elements import init_cardwall
 from gui.state import GUIState
-from gui.elements import markdown, header, view_all_instances
+from gui.elements import markdown, header, view_all_instances, markdown_field_editor, view_attributes, Attribute
 from style.comic import ComicStyle
+from nicegui import ui
 
 def view_style(state: GUIState):
     """
     Editor for comic styles.
     """
+    # Read in the state
     selection = state.get("selection")
     style = ComicStyle.read(id=selection[-1].id)
-    details = state.get("details")
-    with details:
+
+    # Sanity check
+    if style is None:
+        msg = f"Style with ID {selection[-1].id} not found."
+        logger.error(msg)
+        header("Error", 0)
+        header(msg, 2).style("color: red;")
+        return
+
+    # Render the information about the style
+    with state.get("details"):
+        header(f"Style: {style.name}", 1)
+        markdown_field_editor(
+            state=state,
+            name = "Description",
+            value = style.description
+        )
+
+        art_style = style.art_style
+        view_attributes(state,caption="Art Style", attributes=[
+                Attribute(caption ="line style", get_value= lambda: art_style.line_styles),
+                Attribute(caption="inking tools", get_value=lambda: art_style.inking_tools),
+                Attribute(caption="shading style", get_value=lambda: art_style.shading_style),
+                Attribute(caption="color palette", get_value=lambda: art_style.color_palette),
+                Attribute(caption="spot colors", get_value=lambda: art_style.spot_colors),
+                Attribute(caption="registration", get_value=lambda: art_style.registration),
+                Attribute(caption="lettering style", get_value=lambda: art_style.lettering_style),
+            ])
+        
+        character_style = style.character_style
+        view_attributes(state, caption="Character Style", attributes=[
+            Attribute(caption="head to body ratio", get_value=lambda: character_style.head_to_body_ratio),
+            Attribute(caption="limb proportions", get_value=lambda: character_style.limb_proportions),
+            Attribute(caption="anatomy detail", get_value=lambda: character_style.anatomy_detail),
+            Attribute(caption="eye style", get_value=lambda: character_style.eye_style),
+            Attribute(caption="nose style", get_value=lambda: character_style.nose_style),
+            Attribute(caption="mouth style", get_value=lambda: character_style.mouth_style),
+            Attribute(caption="expression exaggeration", get_value=lambda: character_style.expression_exaggeration),
+            Attribute(caption="silhouette clarity", get_value=lambda: character_style.silhouette_clarity),
+            Attribute(caption="silhouette shape language", get_value=lambda: character_style.silhouette_shape_language),
+            Attribute(caption="detail complexity", get_value=lambda: character_style.detail_complexity),
+            Attribute(caption="texture accents", get_value=lambda: character_style.texture_accents),
+        ])
+
+
+        with ui.expansion().classes('w-full border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+            with expansion.add_slot('header'):
+                header("Dialog Style", 2)     
         markdown(style.format())        
         init_cardwall()
 
