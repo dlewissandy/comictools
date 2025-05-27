@@ -3,6 +3,7 @@ from typing import Optional, TypedDict
 from loguru import logger
 from typing import Callable
 from nicegui import ui
+from nicegui.events import UploadEventArguments
 from gui.constants import TAILWIND_CARD
 from gui.messaging import post_user_message
 from gui.state import GUIState
@@ -320,18 +321,61 @@ class Attribute(TypedDict):
     get_value: str | Callable
 
 
-def view_attributes(state: GUIState, caption: str, attributes: list[Attribute] ):
+def view_attributes(state: GUIState, caption: str, attributes: list[Attribute], expanded: bool=False, individual_icons: bool = True):
     
-    with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+    with ui.expansion( value=expanded ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
         with expansion.add_slot('header'):
             header(caption, 2)
-        with ui.grid(rows=len(attributes), columns=3).style('grid-template-columns: auto auto auto;'):
+            if not individual_icons:
+                ui.space()
+                crud_button(kind="update", action=lambda _: post_user_message(state, f"I would like to edit the {caption}."))
+                cols = 2
+                col_style = 'grid-template-columns: auto auto;'
+            else:
+                cols = 3
+                col_style = 'grid-template-columns: auto auto auto;'
+        with ui.grid(rows=len(attributes), columns=cols).style(col_style):
             for attr in attributes:
-                caption = attr["caption"]
+                attr_name = attr["caption"]
                 value = attr.get("get_value")()
-                ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(state, f"I would like to edit the {caption} date."))
-                header(caption,4)
+                if individual_icons:
+                    ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(state, f"I would like to edit the {caption} date."))
+                header(attr_name,4)
                 value = attr.get("get_value")()
                 if value is None: 
                     value = ""
                 ui.label(value)
+    return expansion
+
+
+def image_drop_field_editor(
+        state: GUIState,
+        caption: str, 
+        kind: str,
+        get_image_filepath: Callable[[], str | None] = lambda: None,
+        on_upload: Callable[[UploadEventArguments], None] = lambda _: None,
+        aspect_ratio: str = "3/2",
+        width: str = "full", 
+    ):
+    filepath = get_image_filepath()
+    file_exists = filepath is not None and os.path.exists(filepath)
+
+    with ui.row().classes(f'w-{width} flex-nowrap'):
+        header(caption.title(),2)
+        ui.space()
+        if not file_exists:
+            crud_button(kind="create", action = lambda _: post_user_message(state, f"I would like to create a {kind.replace('-',' ').title()}."))
+        
+    if filepath and file_exists:
+        def on_click():
+            change_selection(state, [SelectionItem(name=f"pick-{kind}", id=filepath, kind=kind)])
+        ui.image(filepath).classes(f'w-{width} aspect-{aspect_ratio} rounded-lg shadow-lg').on('click', on_click)
+    else:
+        with ui.card().classes(TAILWIND_CARD).classes(f'w-{width} aspect-[{aspect_ratio}] relative overflow-hidden'):
+            uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
+            uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
+
+            # Visible caption in center
+            with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
+                ui.label('Drop image to upload').classes('text-lg text-gray-600')
+

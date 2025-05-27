@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, Field
 
 class BubbleStyle(BaseModel):
@@ -28,6 +29,9 @@ class BubbleStyle(BaseModel):
                 continue
             result += f"* **{key.replace('_', ' ').capitalize()}**: {value}\n"
         return result.strip()
+    
+    
+    
 
 class BubbleStyles(BaseModel):
     """
@@ -75,3 +79,4 @@ class BubbleStyles(BaseModel):
 """.strip()
         
         return result
+

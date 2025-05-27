@@ -1,8 +1,9 @@
 from loguru import logger
 from gui.elements import init_cardwall
 from gui.state import GUIState
-from gui.elements import markdown, header, view_all_instances, markdown_field_editor, view_attributes, Attribute
+from gui.elements import markdown, header, view_all_instances, markdown_field_editor, view_attributes, Attribute, image_drop_field_editor
 from style.comic import ComicStyle
+from gui.constants import TAILWIND_CARD
 from nicegui import ui
 
 def view_style(state: GUIState):
@@ -30,8 +31,10 @@ def view_style(state: GUIState):
             value = style.description
         )
 
+        # If there is an image, display it here
+
         art_style = style.art_style
-        view_attributes(state,caption="Art Style", attributes=[
+        with view_attributes(state,caption="Art Style", attributes=[
                 Attribute(caption ="line style", get_value= lambda: art_style.line_styles),
                 Attribute(caption="inking tools", get_value=lambda: art_style.inking_tools),
                 Attribute(caption="shading style", get_value=lambda: art_style.shading_style),
@@ -39,10 +42,17 @@ def view_style(state: GUIState):
                 Attribute(caption="spot colors", get_value=lambda: art_style.spot_colors),
                 Attribute(caption="registration", get_value=lambda: art_style.registration),
                 Attribute(caption="lettering style", get_value=lambda: art_style.lettering_style),
-            ])
+            ], individual_icons=False):
+            image_drop_field_editor(
+                state=state, 
+                caption="Image", 
+                kind="art-style-image", 
+                get_image_filepath=style.image_filepath,
+                width="1/2"
+                )
         
         character_style = style.character_style
-        view_attributes(state, caption="Character Style", attributes=[
+        with view_attributes(state, caption="Character Style", attributes=[
             Attribute(caption="head to body ratio", get_value=lambda: character_style.head_to_body_ratio),
             Attribute(caption="limb proportions", get_value=lambda: character_style.limb_proportions),
             Attribute(caption="anatomy detail", get_value=lambda: character_style.anatomy_detail),
@@ -54,14 +64,38 @@ def view_style(state: GUIState):
             Attribute(caption="silhouette shape language", get_value=lambda: character_style.silhouette_shape_language),
             Attribute(caption="detail complexity", get_value=lambda: character_style.detail_complexity),
             Attribute(caption="texture accents", get_value=lambda: character_style.texture_accents),
-        ])
+        ],individual_icons=False):
+            image_drop_field_editor(
+                state=state, 
+                caption="Image", 
+                kind="character-style-image", 
+                get_image_filepath=lambda: None,
+                width="1/2"
+            )
 
 
-        with ui.expansion().classes('w-full border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+
+        with ui.expansion(value=True).classes('w-full border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
                 header("Dialog Style", 2)     
-        markdown(style.format())        
-        init_cardwall()
+
+            with ui.element().classes('grid grid-cols-2 gap-2 w-full'):
+                for key in ["chat", "whisper", "shout", "thought", "sound_effect", "narration"]:
+                    dialog_style = getattr(style.bubble_styles, key, None)
+                    with view_attributes(state, caption=key.replace('_',' ').title() + " Bubble Style", attributes=[
+                        Attribute(caption="shape", get_value=lambda: dialog_style.shape),
+                        Attribute(caption="border", get_value=lambda: dialog_style.border),
+                        Attribute(caption="fill color", get_value=lambda: dialog_style.fill_color),
+                        Attribute(caption="font", get_value=lambda: dialog_style.font)], expanded=False, individual_icons=False):
+                    
+                        image_drop_field_editor(
+                            state=state, 
+                            caption="Image", 
+                            kind=f"{key.replace('_','-')}-dialog-style-image", 
+                            get_image_filepath=lambda: None,
+                            width="full"
+                        )
+                        
 
 def view_pick_style(state):
     """

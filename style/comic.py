@@ -1,5 +1,6 @@
 import os
 import json
+from PIL import Image
 from typing import Optional
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -33,7 +34,7 @@ class ComicStyle(BaseModel):
         ...,
         description="Styling for any kind of text balloon or narration box within the comic."
     )
-    image: Optional[str] = Field(..., description="A reference image for the comic style.  default to None")
+    image: Optional[str] | dict[str, str]= Field(..., description="A reference image for the comic style.  default to None")
 
     @classmethod
     def generate(cls, description: str):     
@@ -81,14 +82,56 @@ class ComicStyle(BaseModel):
                     styles.append(style)
         return styles
 
-    def image_filepath(self) -> str:
+    def image_filepath(self, type: str = "art") -> str:
         """
         return the filepath to the image
         """
         if self.image is None:
             return None
-        return os.path.join(self.path(), "images", f"{self.image}.jpg")
+        if type == "art":
+            if isinstance(self.image, str):
+                # if the image is a string, it is a path to the art style image
+                return os.path.join(self.path(), "images", f"{self.image}.jpg")
+            return None
+         
+        # if the image is a dict, it is a path to the character style image
+        img = self.image.get(type, None)
+        if img is None:
+            return None
+        return os.path.join(self.path(), "images", type.lower().replace("-","_"), f"{img}.jpg")
+        
+    def write_image(self, image: Image, type: str = "art") -> str | None:
+        """
+        write the image to the comic style folder.   Returns the id of the image
+        if successful or None on failure.
+        """
+        is_dirty = False
+        if self.image is None:
+            self.image = {}
+            is_dirty = True
+        if type == "art":
+            path = os.path.join(self.path(), "images")
+        else:
+            path = os.path.join(self.path(), "images", type.lower().replace("-", "_"))
+        
+        id = generate_unique_id(path, create_folder=True)
+        filepath = os.path.join(path, f"{id}.jpg")
+        image.save(filepath, "JPEG")
+
+        if self.image_filepath(type) is None:
+            # There is already an image for this style, so we are done.
+            self.image[type] = id
+            self.write()
+        return id
+
+    def generate_art_image(self) -> str:
+        """
+        render the art style image for the comic style
+        """
+        pass
     
+
+
 
     def write(self):
         """
