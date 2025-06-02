@@ -1,7 +1,6 @@
 import os
 from loguru import logger
 from nicegui import ui
-from helpers.constants import COMICS_FOLDER
 from models.character import CharacterModel
 from gui.elements import init_cardwall
 from gui.elements import markdown, header

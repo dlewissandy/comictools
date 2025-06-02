@@ -1,18 +1,13 @@
 import os
 import asyncio
-from typing import TypedDict
-from openai import chat
 from nicegui import ui
-from generators.agents import init_agents
-from gui.home import view_home
+from generators import init_agents
 from gui.state import GUIState
 from dotenv import load_dotenv
 from gui.selection import update_breadcrumbs, SelectionItem, redraw_details
-from gui.elements import markdown
 from loguru import logger
-from agents import Agent, Runner, ItemHelpers
+from agents import Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent
-import openai
 load_dotenv()
 
 
@@ -96,11 +91,13 @@ async def send(state: GUIState):
         state['is_dirty'] = False
 
 
+
+
 @ui.page('/')
 def main_page(client):
     ui.query('.nicegui-content').classes('w-full')
     ui.query('.q-page').classes('flex')   
-    header = ui.header().classes().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300')
+    header = ui.header().classes().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300 gap-0')
     middle = ui.row().classes('w-screen flex-1 overflow-hidden').style('padding-left:12px; padding-right:12px;')
     footer = ui.footer().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300')
 
@@ -118,6 +115,7 @@ def main_page(client):
         send_button = ui.button('Send').props('rounded').classes('q-ml-md')
 
     with header:
+
         breadcrumbs = ui.button_group()
         ui.space()
         dark = ui.dark_mode()
@@ -132,12 +130,11 @@ def main_page(client):
         'agents': {},
         'messages': [], 
         'is_dirty': False,
-        'selection': []
+        'selection': [SelectionItem(kind="all_series", name="Series", id=None)]
     }
     state['agents'] = init_agents(state)
     update_breadcrumbs(state)
-    view_home(state)
-    #update(None)
+    redraw_details(state)
     
     user_input.on('keydown.enter', lambda _ : send(state=state))
     send_button.on('click', lambda _:send(state=state))

@@ -83,7 +83,7 @@ def view_pick_publisher(state):
         get_instances=Publisher.read_all,
         kind="publisher",
         aspect_ratio="1/1",
-        get_name=lambda x: x.name,
+        get_name=lambda i,x: x.name,
         get_choice=lambda : series.publisher if series else None,
         set_choice=set_publisher,
     )            

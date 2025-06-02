@@ -32,7 +32,7 @@ def view_series(state):
                 markdown_field_editor(state, "Description", series.description)
             with ui.column().classes('w-1/4'):
                 # The second column is 1/4 of the width and has a cardwall displaying the publisher info.
-                image_field_editor(state, "pick-publisher", "Publisher", lambda: pub.name, get_id, get_image_filepath)
+                image_field_editor(state, "pick-publisher", "Publisher", lambda: None if pub is None else pub.name, get_id, get_image_filepath)
         
         # A cardwall for viewing and adding issues of the comic.
         new_item_messager(state, "Issues", "I would like to create a new issue")
