@@ -138,8 +138,9 @@ class ComicStyle(BaseModel):
         write the comic style to a file
         """
         # create the directory if it doesn't exist
-        os.makedirs(self.path, exist_ok=True)
+        os.makedirs(self.path(), exist_ok=True)
         # write the comic style to a file
+        logger.debug(f"writing {self.filepath()}")
         with open(self.filepath(), "w") as f:
             f.write(self.model_dump_json(indent=2))
 

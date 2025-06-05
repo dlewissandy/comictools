@@ -268,6 +268,39 @@ class Issue(BaseModel):
             data = f.read()
             return cls.model_validate_json(data)
 
+    @classmethod
+    def read_all(cls, series_title: Optional[str]=None, series_id: Optional[str]=None) -> list["Issue"]:
+        """
+        Load all comic books from the comics folder.
+
+        Args:
+            series_title (str): The title of the comic book series.  Optional.  Default to None
+
+        Returns:
+            A list of ComicBookModel objects.
+        """
+        if series_id is None and series_title is None:
+            raise ValueError("Either series_id or series_title must be provided")
+        if series_id is None:
+            series_id = series_title.lower().replace(" ", "-")
+        issues = []
+        path = os.path.join(COMICS_FOLDER, series_id)
+        if not os.path.exists(path):
+            logger.warning(f"Comic book series {series_id} does not exist")
+            return issues
+        result = []
+        for filename in os.listdir(path):
+            # check that it is a directory
+            if not os.path.isdir(os.path.join(path, filename)):
+                continue
+            # if it is not a number, skip it
+            if not filename.isdigit():
+                logger.warning(f"Skipping non-numeric issue folder: {filename}")
+                continue
+            issue_number = int(filename)
+            result.append(Issue.read(series_title=series_id, issue_number=issue_number))
+        return result
+
     def format(self, header_level: int=1, no_covers: bool=False, no_scenes: bool=False, no_style:bool=False) -> str:
         """
         Format the comic book for display

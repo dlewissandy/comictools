@@ -15,13 +15,23 @@ def all_series_agent(state: GUIState) -> Agent:
     @function_tool
     def get_all_comic_series_names() -> list[str]:
         """
-        Get a list of all comic series that a user has created.
+        Get a list of the names of all comic series that a user has created.
         
         Returns:
             A list of comic series names.
         """
         series = Series.read_all()
         return [s.series_title for s in series]
+
+    @function_tool
+    def get_all_comic_series() -> list[Series]:
+        """
+        Get a list of all comic series that a user has created.
+        
+        Returns:
+            A list of comic series names.
+        """
+        return Series.read_all()
 
     @function_tool
     def find_comic_series_by_name(name: str) -> Series:
@@ -131,6 +141,7 @@ def all_series_agent(state: GUIState) -> Agent:
             select_comic_series,
             find_comic_series_by_name,
             get_all_comic_series_names,
+            get_all_comic_series,
             create_comic_series,
             delete_comic_series
                     ]

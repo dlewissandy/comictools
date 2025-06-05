@@ -23,6 +23,17 @@ def all_publishers_agent(state: GUIState) -> Agent:
         from models.publisher import Publisher
         publishers = Publisher.read_all()
         return [publisher.name for publisher in publishers]
+    
+    @function_tool
+    def get_publishers() -> list[Publisher]:
+        """
+        Get a list of all publisher the publishers in the database.
+        
+        Returns:
+            A list of publisher names.
+        """
+        from models.publisher import Publisher
+        return Publisher.read_all()
 
     @function_tool
     def get_publisher_by_name(name: str) -> Publisher | None:
@@ -149,6 +160,7 @@ def all_publishers_agent(state: GUIState) -> Agent:
         tools = [
             select_publisher,
             get_publisher_by_name,
+            get_publishers,
             get_publisher_names,
             create_publisher,
             delete_publisher,

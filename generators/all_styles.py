@@ -70,6 +70,17 @@ def all_styles_agent(state: GUIState) -> Agent:
         from style.comic import ComicStyle
         styles = ComicStyle.read_all()
         return [style.name for style in styles]
+    
+    @function_tool
+    def get_comic_styles() -> list[str]:
+        """
+        Get a list of all the comic styles.
+        
+        Returns:
+            A list of comic styles.
+        """
+        from style.comic import ComicStyle
+        return ComicStyle.read_all()
 
     @function_tool
     def get_comic_style_by_name(name: str) -> ComicStyle | None:
@@ -86,8 +97,7 @@ def all_styles_agent(state: GUIState) -> Agent:
         """
         from style.comic import ComicStyle
         id = name.replace(" ", "-").lower()
-        style = ComicStyle.read(id)
-        return None
+        return ComicStyle.read(id)
 
     @function_tool
     def select_comic_style(name: str) -> str:
@@ -153,6 +163,7 @@ def all_styles_agent(state: GUIState) -> Agent:
         model=LANGUAGE_MODEL,
         tools = [
             select_comic_style,
+            get_comic_styles,
             get_comic_style_by_name,
             get_comic_style_names,
             create_style,
