@@ -1,0 +1,72 @@
+{
+  "id": "stained-glass",
+  "name": "Stained Glass",
+  "description": "The \"Stained Glass\" art style captures the vibrant hues and intricate craftsmanship of medieval stained glass from the 12th to 16th centuries. Each panel reflects the dynamic interplay of color and light, with rich blues, deep reds, and soft greens that shift dramatically. Textures and layers create a depth that makes the artwork feel alive, evoking a spiritual quality. This style aims to inspire wonder through its luminous, ephemeral qualities, enhancing the atmosphere of the narrative.",
+  "art_style": {
+    "line_styles": "Fine, thin line work to replicate the lead came structure, with varying thicknesses to suggest depth and light interplay.",
+    "inking_tools": "Digital inking tools to achieve precision and control over color layering and details.",
+    "shading_style": "Translucent layers with gradients to represent varying thickness of glass, capturing light and shadow dynamically while incorporating sparing use of caustics for emphasis.",
+    "color_palette": "Vibrant blues, reds, greens, and yellows with rich jewel tones, mimicking the luminosity of stained glass under light.",
+    "spot_colors": "Subtle metallic accents like gold and silver to evoke reflective qualities.",
+    "registration": "Precise alignment to maintain the integrity of overlapping colors, ensuring clarity and vibrancy.",
+    "lettering_style": "Elegant, serif font resembling Gothic script to enhance the medieval aesthetic."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:5 semi-realistic, allowing for expressive features while maintaining stylization.",
+    "limb_proportions": "Proportional, with slightly elongated limbs to emphasize ethereal qualities.",
+    "anatomy_detail": "Moderate detail with stylized forms capturing a sense of movement and light.",
+    "eye_style": "Large, expressive eyes with highlights depicting reflections of stained-glass colors.",
+    "nose_style": "Simple, slightly exaggerated to maintain character consistency.",
+    "mouth_style": "Slightly curved with visible teeth for expressions, often showcasing emotional intensity.",
+    "expression_exaggeration": "Medium to high, allowing for vivid portrayals of emotion.",
+    "silhouette_clarity": "High silhouette clarity to ensure characters stand out against the intricate backgrounds.",
+    "silhouette_shape_language": "Rounded and organic forms to mimic the flowing nature of stained glass designs.",
+    "detail_complexity": "Moderate complexity with a focus on ornamental details reminiscent of stained glass patterns.",
+    "texture_accents": "Subtle textures like glass etching or surface ripples to suggest light refractivity.",
+    "motion_line_style": "Delicate, flowing lines that reflect light, adding to the ethereal quality of movement.",
+    "expression_line_style": "Soft, curved accent lines to suggest emotions without overwhelming character designs.",
+    "signature_motifs": "Geometric patterns or floral designs typical of stained glass as recurring design elements.",
+    "recurring_flourishes": "Small detail features like drops of light mimicking reflections from glass."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded with pointed tails to mimic soft edges of glass panes.",
+      "border": "Thin, intricate border resembling lead came outlines.",
+      "fill_color": "Light grey to maintain clarity without overwhelming the text.",
+      "font": "Elegant serif font, consistent with medieval influence."
+    },
+    "whisper": {
+      "shape": "Softly rounded, wispy edges to suggest a delicate tone of voice.",
+      "border": "Faint, delicate, to not distract from the message.",
+      "fill_color": "Slightly translucent light blue to suggest secrecy.",
+      "font": "Italicized serif font for a gentle whisper effect."
+    },
+    "shout": {
+      "shape": "Jagged, burst-like to denote volume and intensity.",
+      "border": "Thick and bold to emphasize loudness.",
+      "fill_color": "Bright red for immediate attention.",
+      "font": "Bold sans-serif font to emphasize urgency."
+    },
+    "thought": {
+      "shape": "Cloud-like to convey internal contemplation.",
+      "border": "Soft, rounded to suggest intimacy.",
+      "fill_color": "Pastel shades to blend smoothly with the art style.",
+      "font": "Handwritten style font for a personal touch."
+    },
+    "sound_effect": {
+      "shape": "Dynamic, sharp shapes to convey action.",
+      "border": "Bold and prominent to attract attention.",
+      "fill_color": "Bright yellow or orange for visibility.",
+      "font": "Bold and expressive font for impact."
+    },
+    "narration": {
+      "shape": "Rectangular with soft edges for readability.",
+      "border": "Thin and subtle to maintain focus on text content.",
+      "fill_color": "White for clear contrast with text.",
+      "font": "Traditional serif font for a classic narrative feel."
+    }
+  },
+  "image": {
+    "art": "1f33d0f4-d342-4641-9bfe-d64d80b0db09"
+  }
+}

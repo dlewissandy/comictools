@@ -66,5 +66,7 @@
       "font": "Consistent modern sans-serif, slightly larger for emphasis."
     }
   },
-  "image": "hyper-realism"
+  "image": {
+    "art": "hyper-realism"
+  }
 }

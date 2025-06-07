@@ -66,5 +66,7 @@
       "font": "Clean, legible handwritten style."
     }
   },
-  "image": "concept-sketch"
+  "image": {
+    "art": "concept-sketch"
+  }
 }

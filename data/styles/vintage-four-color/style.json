@@ -66,5 +66,7 @@
       "font": "Sentence-case hand-lettered sans-serif."
     }
   },
-  "image": "vintage-four-color"
+  "image": {
+    "art": "vintage-four-color"
+  }
 }

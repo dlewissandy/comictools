@@ -4,7 +4,7 @@ from nicegui import ui
 from generators import init_agents
 from gui.state import GUIState
 from dotenv import load_dotenv
-from gui.selection import update_breadcrumbs, SelectionItem, redraw_details
+from gui.selection import update_breadcrumbs, SelectionItem, redraw_details, save_state, STATE_FILEPATH
 from loguru import logger
 from agents import Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent
@@ -95,6 +95,20 @@ async def send(state: GUIState):
 
 @ui.page('/')
 def main_page(client):
+    state_data = {}
+    if os.path.exists(STATE_FILEPATH):
+        import json
+
+        with open(STATE_FILEPATH, 'r') as f:
+            state_data = json.load(f)
+
+    selection = [SelectionItem(**item) for item in state_data.get('selection', [{"kind":"all_series", "name":"Series", "id":None}])]
+    history = state_data.get('history', [])
+    messages = state_data.get('messages', [])
+    dark_value = state_data.get('dark_mode', False)
+
+
+
     ui.query('.nicegui-content').classes('w-full')
     ui.query('.q-page').classes('flex')   
     header = ui.header().classes().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300 gap-0')
@@ -118,8 +132,10 @@ def main_page(client):
 
         breadcrumbs = ui.button_group()
         ui.space()
-        dark = ui.dark_mode()
-        ui.switch('Dark mode').bind_value(dark)
+        dark = ui.dark_mode(value=dark_value)
+        darkswitch = ui.switch('Dark mode').bind_value(dark)
+
+    
 
     state: GUIState = {
         'breadcrumbs': breadcrumbs,
@@ -128,11 +144,12 @@ def main_page(client):
         'user_input': user_input,
         'send_button': send_button,
         'agents': {},
-        'messages': [], 
+        'messages': messages, 
         'is_dirty': False,
-        'selection': [SelectionItem(kind="all_series", name="Series", id=None)]
+        'selection': selection
     }
     state['agents'] = init_agents(state)
+    dark.on_value_change(lambda _, state=state, dark=dark: save_state(state,dark.value))
     update_breadcrumbs(state)
     redraw_details(state)
     

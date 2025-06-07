@@ -7,6 +7,7 @@ from style.comic import ComicStyle
 from style.art import ArtStyle
 from style.character import CharacterStyle
 from style.bubble import BubbleStyles, BubbleStyle
+import os
 
 def style_agent(state: GUIState) -> Agent:
 
@@ -83,35 +84,6 @@ def style_agent(state: GUIState) -> Agent:
             return style.art_style
         return None
 
-    @function_tool
-    def create_dialog_style_image(dialog_type: str) -> str:
-        """
-        Create an image for the dialog style of the currently selected comic style.
-        
-        Args:
-            dialog_type: The type of dialog style to create an image for. Must be one of:
-            "chat", "whisper", "shout", "thought", "sound_effect", "narration".
-        
-        Returns:
-            A status message indicating the result of the operation.
-        """
-        style = get_comic_style()
-        if style is None:
-            return "No comic style selected."
-        bubble_styles = style.bubble_styles
-        if bubble_styles is None:
-            return "No bubble styles defined for this comic style."
-        
-        bubble_style = getattr(bubble_styles, dialog_type, None)
-        if bubble_style is None:
-            return f"Invalid dialog type: {dialog_type}. Must be one of: chat, whisper, shout, thought, sound_effect, narration."
-        
-        img = bubble_styles.render(dialog_type)
-        if img is None:
-            return f"Could not render image for {dialog_type} dialog style."
-        
-        state["is_dirty"] = True
-        return f"Image for {dialog_type} dialog style created and saved to {img}."
 
     @function_tool
     def update_art_style(
@@ -202,6 +174,51 @@ def style_agent(state: GUIState) -> Agent:
             return getattr(style.bubble_styles, bubble_type, None)
         return None
 
+    @function_tool
+    def render_art_style_example() -> Tuple[str, str]:
+        """
+        Render an example of the art style for the currently selected comic style.
+        
+        Returns:
+            A tuple containing the image filepath and a description of the art style.
+        """
+        style = get_comic_style()
+        if style:
+            return style.render_art_style()
+        return None, "No comic style selected."
+
+    @function_tool
+    def delete_art_style_example() -> str:
+        """
+        Delete the example of the art style for the currently selected comic style.
+        THIS IS IRREVERSIBLE.  YOU MUST ASK THE USER TO CONFIRM PRIOR TO CALLING
+        THIS FUNCTION.
+        
+        Returns:
+            A status message indicating the result of the operation.
+        """
+        style = get_comic_style()
+        # if there is no style selected, return an error message
+        if not style:
+            return "No comic style selected."
+        # if the images are not a dictionary, return an error message
+        if not isinstance(style.image, dict):
+            return "No art style example image to delete."
+        # if there is no art style example image selected, return an error message.
+        image = style.image.get("art",None)
+        if not image:
+            return "No art style example image to delete."
+        # otherwise, delete the art style example image.
+        style.image["art"] = None
+        image_filepath = os.path.join(style.image_path(img_type="art"), f"{image}.jpg")
+        if not os.path.exists(image_filepath):
+            return "The file does not exist.  Nothing to delete."
+        os.remove(image_filepath)
+        style.write()
+        state["is_dirty"] = True
+        return f"Art style example for {style.name} deleted."
+        
+
     return Agent(
         name="Style Assistant",
         instructions="""
@@ -220,7 +237,8 @@ def style_agent(state: GUIState) -> Agent:
             # set_character_style,
             read_dialog_style,
             # set_dialog_style,
-            # render_art_style_example,
+            render_art_style_example,
+            delete_art_style_example,
             # render_character_style_example,
             # render_dialog_style_example
         ],

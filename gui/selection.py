@@ -79,6 +79,9 @@ def redraw_details(state: GUIState):
     
     if kind == 'style':
         view_style(state)
+    elif kind == 'art-style-image':
+        from gui.style import view_pick_art_style_image
+        view_pick_art_style_image(state)
     
     elif kind == 'series':
         view_series(state)
@@ -120,7 +123,29 @@ def change_selection(state: GUIState,new:list[SelectionItem], clear_history=True
         chat_history.clear()
     state.get("messages").clear()
     details.clear()
+    save_state(state)
     update_breadcrumbs(state)
     redraw_details(state)
     # TODO: Select the correct agent
 
+STATE_FILEPATH = "state.json"
+
+def save_state(state: GUIState, darkmode: bool = False):
+    """
+    Save the current state of the GUI.
+    
+    Args:
+        state: The GUI elements containing the current state.
+    """
+    from gui.state import GUIState
+    
+    logger.debug("Saving state to file")
+    state_json = {
+        "selection": [item.dict() for item in state.get("selection")],
+        "history": [msg.dict() for msg in state.get("history", [])],
+        "messages": state.get("messages", []),
+        "dark_mode": darkmode,
+    }
+    with open(STATE_FILEPATH, "w") as f:
+        import json
+        json.dump(state_json, f, indent=2)

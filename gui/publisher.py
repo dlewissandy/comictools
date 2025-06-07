@@ -45,12 +45,11 @@ def view_publisher(state):
         # preferred image for the publisher's logo.
         full_width_image_selector_grid(
             state=state,
-            kind="logo",
+            kind="logo image",
             images_path=os.path.join(publisher.path(), "images"),
             get_images=publisher.all_images,
-            get_selection=lambda _ : publisher.image,
+            get_selection=lambda : publisher.image,
             set_selection=publisher.set_image,
-            title="IMAGES"
         )        
                 
 def view_pick_publisher(state):

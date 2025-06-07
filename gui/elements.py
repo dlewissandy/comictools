@@ -31,7 +31,7 @@ CRUD_BUTTON_STYLES = {
 }
 
 def init_cardwall(columns: int = 4):
-    return ui.element('div').classes(f'columns-{columns} w-full gap-2')
+    return ui.element('div').classes(f'columns-{columns} w-full gap-2').style('padding: 2ex')
 
 def crud_button(kind: str, action: Callable, size: int = 2):
     """Create a button with a specific style and action.
@@ -50,9 +50,9 @@ def crud_button(kind: str, action: Callable, size: int = 2):
     button.on('click', action)
     return button
 
-def markdown_field_editor(state: GUIState, name: str, value: str | None):
+def markdown_field_editor(state: GUIState, name: str, value: str | None, header_size: int = 2):
     with ui.row().classes('w-full flex-nowrap'):
-        header(name.title(),2)
+        header(name.title(),header_size)
         ui.space()
         if value is not None:
             crud_button(kind="update", action=lambda _: post_user_message(state, f"I would like to edit the {name}"))
@@ -112,7 +112,7 @@ def markdown(body: str) -> None:
             with ui.element('div').classes('markdown-content'):
                 ui.markdown(body)
 
-def full_width_image_selector_grid(state: GUIState, kind: str, images_path: str, get_images, get_selection, set_selection, title: str = "IMAGES" ):
+def full_width_image_selector_grid(state: GUIState, kind: str, images_path: str, get_images, get_selection, set_selection, aspect_ratio="1/1", caption: str = "Images", columns: int = 4, header_size: int = 2):
     """
     Create a grid of full-width image selectors.
 
@@ -125,45 +125,69 @@ def full_width_image_selector_grid(state: GUIState, kind: str, images_path: str,
         set_selection: A function to set the current selection.
         title: The title for the image selector grid.
     """
-    def render_image_cards(state, get_images, get_selection, set_selection, cardwall):
+    def on_upload(e: UploadEventArguments):
+            if e.name and e.type.startswith('image/'):
+                file_name = e.name
+                save_filepath = os.path.join(images_path, file_name)
+                # recursively create the directory if it doesn't exist
+                os.makedirs(images_path, exist_ok=True)
+                
+                with open(save_filepath, 'wb') as f:
+                    f.write(e.content.read())
+                logger.debug(f"Saved uploaded file to {save_filepath}")
+                set_selection(file_name[:-4])  # Remove file extension for selection
+                cardwall.clear()
+                render_image_cards(state, get_images=get_images, get_selection=get_selection, set_selection=set_selection, cardwall=cardwall, aspect_ratio=aspect_ratio)
+
+    def render_image_cards(state, get_images, get_selection, set_selection, cardwall, aspect_ratio="1/1"):
         all_images = get_images()
         with cardwall:
             for image in all_images:
                 def on_click(image: str):
                     set_selection(image)
                     cardwall.clear()
-                    render_image_cards(state, get_images=get_images, get_selection=get_selection, set_selection=set_selection, cardwall=cardwall)
+                    render_image_cards(state, get_images=get_images, get_selection=get_selection, set_selection=set_selection, cardwall=cardwall, aspect_ratio=aspect_ratio)
 
 
-                card = ui.card().classes(TAILWIND_CARD).style('aspect-ratio: 1/1').on('click', lambda _,image=image: on_click(image))       
+                card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}').on('click', lambda _,image=image: on_click(image))       
                 card.classes('relative overflow-visible')
                 with card:
-                    header(image,4)
                     image_filepath = os.path.join(images_path, f"{image}.jpg")
                     logger.debug(f"image_filepath: {image_filepath}")
+                    current_selection = get_selection()
                     if os.path.exists(image_filepath):
-                        ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')
-                        if image == get_selection(None):
+                        logger.debug(f"Image {image} exists at {image_filepath}")
+                        ui.image(source=image_filepath).style(f'top-padding: 0; bottom-padding:0; aspect-ratio: {aspect_ratio};')
+                        if image == current_selection:
                             ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10').style('aspect-ratio: 1/1;')
                     else:
                         ui.label(f"Image {image} not found.").style('color: red;')
+            with ui.card().classes(TAILWIND_CARD).classes(f'aspect-[{aspect_ratio}] relative overflow-hidden'):
+                uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
+                uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
 
-    with ui.row().classes('w-full flex-nowrap'):
-        header(f"Images",2)
+                # Visible caption in center
+                with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
+                    ui.label('Drop image to upload').classes('text-lg text-gray-600')
+
+    with ui.row().classes('w-full flex-nowrap').style('padding-left: 2ex; padding-right: 2ex;'):
+        header(caption,header_size)
         ui.space()
         crud_button(kind="create", action = lambda _: post_user_message(state, f"I would like to render the {kind}."))
+        crud_button(kind="delete", action=lambda _: post_user_message(state, f"I would like to delete the currently selected {kind}."))
 
     all_images = get_images()
     logger.debug(f"all_images: {all_images}")
     
-    cardwall = init_cardwall()
+    cardwall = init_cardwall(columns=columns)
     render_image_cards(
             state=state, 
             get_images=get_images,
             get_selection=get_selection,
             set_selection=set_selection,
-            cardwall=cardwall
-        )        
+            cardwall=cardwall,
+            aspect_ratio=aspect_ratio
+        )     
 
 def image_field_editor(state: GUIState, kind, caption, get_name, get_id, get_image_filepath, aspect_ratio: str = "1/1"):
     with ui.row().classes('w-full flex-nowrap'):
@@ -321,31 +345,31 @@ class Attribute(TypedDict):
     get_value: str | Callable
 
 
-def view_attributes(state: GUIState, caption: str, attributes: list[Attribute], expanded: bool=False, individual_icons: bool = True):
-    
-    with ui.expansion( value=expanded ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
-        with expansion.add_slot('header'):
-            header(caption, 2)
-            if not individual_icons:
-                ui.space()
-                crud_button(kind="update", action=lambda _: post_user_message(state, f"I would like to edit the {caption}."))
-                cols = 2
-                col_style = 'grid-template-columns: auto auto;'
-            else:
-                cols = 3
-                col_style = 'grid-template-columns: auto auto auto;'
-        with ui.grid(rows=len(attributes), columns=cols).style(col_style):
-            for attr in attributes:
-                attr_name = attr["caption"]
-                value = attr.get("get_value")()
-                if individual_icons:
-                    ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(state, f"I would like to edit the {caption} date."))
-                header(attr_name,4)
-                value = attr.get("get_value")()
-                if value is None: 
-                    value = ""
-                ui.label(value)
-    return expansion
+def view_attributes(state: GUIState, caption: str, attributes: list[Attribute], expanded: bool=False, individual_icons: bool = True, header_size: int=1):
+    with ui.element().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as container:
+        with ui.expansion( value=expanded ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+            with expansion.add_slot('header'):
+                header(caption, header_size)
+                if not individual_icons:
+                    ui.space()
+                    crud_button(kind="update", action=lambda _: post_user_message(state, f"I would like to edit the {caption}."))
+                    cols = 2
+                    col_style = 'grid-template-columns: auto auto;'
+                else:
+                    cols = 3
+                    col_style = 'grid-template-columns: auto auto auto;'
+            with ui.grid(rows=len(attributes), columns=cols).style(col_style):
+                for attr in attributes:
+                    attr_name = attr["caption"]
+                    value = attr.get("get_value")()
+                    if individual_icons:
+                        ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(state, f"I would like to edit the {caption} date."))
+                    header(attr_name,4)
+                    value = attr.get("get_value")()
+                    if value is None: 
+                        value = ""
+                    ui.label(value)
+    return container
 
 
 def image_drop_field_editor(
@@ -357,25 +381,50 @@ def image_drop_field_editor(
         aspect_ratio: str = "3/2",
         width: str = "full", 
     ):
-    filepath = get_image_filepath()
-    file_exists = filepath is not None and os.path.exists(filepath)
+    """
+    A field editor for uploading an image.
+    Args:
+        state: The GUI elements containing the details and selection.
+        caption: The caption for the image field.
+        kind: The kind of image (e.g., 'publisher', 'series', 'logo').
+        on_upload: A function to call when an image is uploaded.
+        aspect_ratio: The aspect ratio of the image (default is "3/2").
+        width: The width of the image field (default is "full").
+    """
+    with ui.card().classes(TAILWIND_CARD).classes(f'w-{width} aspect-[{aspect_ratio}] relative overflow-hidden'):
+        uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
+        uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
 
-    with ui.row().classes(f'w-{width} flex-nowrap'):
-        header(caption.title(),2)
-        ui.space()
-        if not file_exists:
-            crud_button(kind="create", action = lambda _: post_user_message(state, f"I would like to create a {kind.replace('-',' ').title()}."))
-        
-    if filepath and file_exists:
-        def on_click():
-            change_selection(state, [SelectionItem(name=f"pick-{kind}", id=filepath, kind=kind)])
-        ui.image(filepath).classes(f'w-{width} aspect-{aspect_ratio} rounded-lg shadow-lg').on('click', on_click)
-    else:
-        with ui.card().classes(TAILWIND_CARD).classes(f'w-{width} aspect-[{aspect_ratio}] relative overflow-hidden'):
-            uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
-            uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
+        # Visible caption in center
+        with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
+            ui.label('Drop image to upload').classes('text-lg text-gray-600')
 
-            # Visible caption in center
-            with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
-                ui.label('Drop image to upload').classes('text-lg text-gray-600')
 
+def view_image_choices(
+    state: GUIState,
+    kind: str,
+    images_path: str,
+    get_images: Callable[[], list[str]],
+    get_selection: Callable[[], list[str]],
+    set_selection: Callable[[str], None],
+): 
+    """
+    """
+    details = state.get("details")
+    details.clear()
+    with details:
+        with ui.row():
+            header(1, f"Select {kind.title()} Image")
+            ui.space()
+            ui.button(icon="add").tooltip("Generate a new image")
+        full_width_image_selector_grid(
+            state=state,
+            kind=kind,
+            images_path=images_path,
+            get_images=get_images,
+            get_selection=get_selection,
+            set_selection=set_selection,
+
+        )
+
+    

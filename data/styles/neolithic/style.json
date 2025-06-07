@@ -66,5 +66,7 @@
       "font": "Consistent, legible font that complements the overall primitive style."
     }
   },
-  "image": "neolithic"
+  "image": {
+    "art": "neolithic"
+  }
 }

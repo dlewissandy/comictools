@@ -66,5 +66,7 @@
       "font": "Classic serif font for storytelling."
     }
   },
-  "image": "modern-anime"
+  "image": {
+    "art": "modern-anime"
+  }
 }

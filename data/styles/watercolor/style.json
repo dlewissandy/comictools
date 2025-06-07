@@ -66,5 +66,7 @@
       "font": "Simple, clean sans-serif font for easy reading."
     }
   },
-  "image": "watercolor"
+  "image": {
+    "art": "watercolor"
+  }
 }

@@ -66,5 +66,7 @@
       "font": "Handwritten font with a friendly tone."
     }
   },
-  "image": "childlike-crayon"
+  "image": {
+    "art": "childlike-crayon"
+  }
 }

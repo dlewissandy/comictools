@@ -66,5 +66,7 @@
       "font": "Simple, easy-to-read font that complements the overall style."
     }
   },
-  "image": "origami"
+  "image": {
+    "art": "origami"
+  }
 }

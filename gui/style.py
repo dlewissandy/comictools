@@ -1,7 +1,7 @@
 from loguru import logger
 from gui.elements import init_cardwall
 from gui.state import GUIState
-from gui.elements import markdown, header, view_all_instances, markdown_field_editor, view_attributes, Attribute, image_drop_field_editor
+from gui.elements import markdown, header, view_all_instances, markdown_field_editor, view_attributes, Attribute, image_drop_field_editor, full_width_image_selector_grid
 from style.comic import ComicStyle
 from gui.constants import TAILWIND_CARD
 from nicegui import ui
@@ -24,11 +24,11 @@ def view_style(state: GUIState):
 
     # Render the information about the style
     with state.get("details"):
-        header(f"Style: {style.name}", 1)
         markdown_field_editor(
             state=state,
             name = "Description",
-            value = style.description
+            value = style.description,
+            header_size=2
         )
 
         # If there is an image, display it here
@@ -42,14 +42,16 @@ def view_style(state: GUIState):
                 Attribute(caption="spot colors", get_value=lambda: art_style.spot_colors),
                 Attribute(caption="registration", get_value=lambda: art_style.registration),
                 Attribute(caption="lettering style", get_value=lambda: art_style.lettering_style),
-            ], individual_icons=False):
-            image_drop_field_editor(
-                state=state, 
-                caption="Image", 
-                kind="art-style-image", 
-                get_image_filepath=style.image_filepath,
-                width="1/2"
-                )
+            ], individual_icons=False, header_size=2):
+            full_width_image_selector_grid(
+                state=state,
+                kind="art-style-image",
+                images_path=style.image_path(img_type="art"),
+                get_selection=lambda: style.image["art"] if isinstance(style.image, dict) else None,
+                set_selection=lambda img_id: style.set_image(image_type="art", id=img_id),
+                get_images=style.all_images,
+                aspect_ratio="3/2"
+            )
         
         character_style = style.character_style
         with view_attributes(state, caption="Character Style", attributes=[
@@ -64,13 +66,15 @@ def view_style(state: GUIState):
             Attribute(caption="silhouette shape language", get_value=lambda: character_style.silhouette_shape_language),
             Attribute(caption="detail complexity", get_value=lambda: character_style.detail_complexity),
             Attribute(caption="texture accents", get_value=lambda: character_style.texture_accents),
-        ],individual_icons=False):
-            image_drop_field_editor(
-                state=state, 
-                caption="Image", 
-                kind="character-style-image", 
-                get_image_filepath=lambda: None,
-                width="1/2"
+        ],individual_icons=False, header_size=2):
+            full_width_image_selector_grid(
+                state=state,
+                kind="character-style-image",
+                images_path=style.image_path(img_type="character"),
+                get_selection=lambda: style.image.get("character",None) if isinstance(style.image, dict) else None,
+                set_selection=lambda img_id: style.set_image(image_type="character", id=img_id),
+                get_images=lambda: style.all_images(img_type="character"),
+                aspect_ratio="3/2"
             )
 
 
@@ -82,18 +86,23 @@ def view_style(state: GUIState):
             with ui.element().classes('grid grid-cols-2 gap-2 w-full'):
                 for key in ["chat", "whisper", "shout", "thought", "sound_effect", "narration"]:
                     dialog_style = getattr(style.bubble_styles, key, None)
+                    logger.debug(f"key={key}, dialog_style={dialog_style}")
                     with view_attributes(state, caption=key.replace('_',' ').title() + " Bubble Style", attributes=[
                         Attribute(caption="shape", get_value=lambda: dialog_style.shape),
                         Attribute(caption="border", get_value=lambda: dialog_style.border),
                         Attribute(caption="fill color", get_value=lambda: dialog_style.fill_color),
-                        Attribute(caption="font", get_value=lambda: dialog_style.font)], expanded=False, individual_icons=False):
-                    
-                        image_drop_field_editor(
-                            state=state, 
-                            caption="Image", 
-                            kind=f"{key.replace('_','-')}-dialog-style-image", 
-                            get_image_filepath=lambda: None,
-                            width="full"
+                        Attribute(caption="font", get_value=lambda: dialog_style.font)], expanded=False, individual_icons=False, header_size=3):
+                        k = key.replace('_','-')
+                        full_width_image_selector_grid(
+                            state=state,
+                            kind=f"{k}-bubble-style-image",
+                            images_path=style.image_path(img_type=f"{k}-bubble"),
+                            get_selection=lambda: style.image.get(f"{k}-bubble",None) if isinstance(style.image, dict) else None,
+                            set_selection=lambda img_id: style.set_image(image_type=f"{k}-bubble", id=img_id),
+                            get_images=lambda: style.all_images(img_type=f"{k}-bubble"),
+                            aspect_ratio="1/1",
+                            columns=2,
+                            header_size=3
                         )
                         
 
@@ -147,3 +156,46 @@ def view_pick_style(state):
         get_choice=lambda : parent.style if parent else None,
         set_choice=set_style,
     )           
+
+
+def view_pick_art_style_image(
+    state: GUIState
+):
+    from gui.elements import full_width_image_selector_grid
+    selection = state.get("selection")
+    style_id = selection[-2].id
+    style = ComicStyle.read(id=style_id)
+    if style is None:
+        msg = f"Style with ID {style_id} not found."
+        logger.error(msg)
+        header("Error", 0)
+        header(msg, 2).style("color: red;")
+        return
+
+    def get_selection():
+        style = ComicStyle.read(id=style_id)
+        return style.image_filepath(img_type="art")
+    
+    def set_selection(id: str):
+        style = ComicStyle.read(id=style_id)
+        style.set_image(img_type="art", image_id=id)
+        style.write()
+        state["is_dirty"] = True
+
+    def get_images():
+        style = ComicStyle.read(id=style_id)
+        return style.all_images(img_type="art")
+    
+    image_path = style.image_path(img_type="art")
+
+    with state.get("details"):
+        header(f"Art Style Image for {style.name}", 1)
+    full_width_image_selector_grid(
+        state=state,
+        kind ="art-style-image",
+        images_path = image_path,
+        get_selection=get_selection,
+        set_selection=set_selection,
+        get_images=get_images,
+    )
+    

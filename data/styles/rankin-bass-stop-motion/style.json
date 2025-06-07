@@ -66,5 +66,7 @@
       "font": "Clear, serif font that adds a narrative quality."
     }
   },
-  "image": "rankin-bass-3"
+  "image": {
+    "art": "rankin-bass-3"
+  }
 }

@@ -66,5 +66,7 @@
       "font": "Elegant, serif font that complements the overall artistic style."
     }
   },
-  "image": "van-gogh"
+  "image": {
+    "art": "van-gogh"
+  }
 }

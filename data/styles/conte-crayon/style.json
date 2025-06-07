@@ -66,5 +66,7 @@
       "font": "Clear, legible handwritten font."
     }
   },
-  "image": "conte-crayon"
+  "image": {
+    "art": "conte-crayon"
+  }
 }

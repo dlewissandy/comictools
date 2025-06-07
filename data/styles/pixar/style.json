@@ -66,5 +66,7 @@
       "font": "Casual, friendly serif font to match the storytelling tone."
     }
   },
-  "image": "pixar"
+  "image": {
+    "art": "pixar"
+  }
 }

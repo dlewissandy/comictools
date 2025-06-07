@@ -67,14 +67,16 @@ def invoke_generate_image_api(prompt: str, model: str = "gpt-image-1", size: str
     )
     return decode_image_response(response)
 
-def invoke_edit_image_api(images: list, prompt: str, mask: str | None = None, n: int = 1, size: str = "1024x1024", quality: IMAGE_QUALITY = IMAGE_QUALITY.LOW):
+def invoke_edit_image_api(images: list, prompt: str, mask: str | None = None, n: int = 1, size: str = "1024x1024", quality: IMAGE_QUALITY = IMAGE_QUALITY.LOW, reference_images: list[str] | None = None):
     """
     Invoke the OpenAI API to edit an image based on the prompt.
     """
     openai.api_key = os.getenv('OPENAI_API_KEY')
-    args = { "images": images, "prompt": prompt, "n": n, "size": size, "moderation": "low", "quality": quality.name.lower() }
+    args = { "prompt": prompt, "n": n, "size": size, "quality": quality.name.lower(), "model": "gpt-image-1" }
     if mask:
         args["mask"] = mask
+    if reference_images:
+        args["image"] = [open(filepath, "rb") for filepath in reference_images]
     response = openai.images.edit( **args)
     return decode_image_response(response)
 

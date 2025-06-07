@@ -46,7 +46,12 @@ class ArtStyle(BaseModel):
         self_json = self.model_dump()
         result = "## Art Style\n  The art style defines the visual language of the medium, including linework.\n\n"
         for key, value in self_json.items():
+            if key == "lettering_style":
+                continue
             if value is None or value == "":
                 continue
             result += f"* **{key.replace('_', ' ').capitalize()}**: {value}\n\n"
         return result
+
+        
+

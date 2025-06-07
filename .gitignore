@@ -5,8 +5,11 @@ build/
 dist/
 wheels/
 *.egg-info
-data/characters
-data/comics
+# ignore anything in the data/publishers directory
+data/publishers/**
+data/characters/**
+data/comics/**
+state.json
 
 # Virtual environments
 .venv

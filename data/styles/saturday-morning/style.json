@@ -66,5 +66,7 @@
       "font": "Clear, bold sans-serif for easy reading."
     }
   },
-  "image": "saturday-morning"
+  "image": {
+    "art": "saturday-morning"
+  }
 }

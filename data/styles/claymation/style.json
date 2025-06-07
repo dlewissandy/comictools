@@ -66,5 +66,7 @@
       "font": "Clear, legible font with a slightly whimsical touch, consistent with the hand-drawn theme."
     }
   },
-  "image": "claymation"
+  "image": {
+    "art": "claymation"
+  }
 }

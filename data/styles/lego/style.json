@@ -6,7 +6,7 @@
     "line_styles": "N/A.  No outlines; instead, shapes are defined by the edges of LEGO bricks and minifigures.",
     "inking_tools": "N/A. No traditional inking; colors are defined by the LEGO bricks",
     "shading_style": "N/A",
-    "color_palette": "Solid colors that reflect the LEGO palette, including primary colors (red, blue, yellow) and secondary colors (green, orange, purple).  Browns, greys, pastels and transparent colors too.",    
+    "color_palette": "Solid colors that reflect the LEGO palette, including primary colors (red, blue, yellow) and secondary colors (green, orange, purple).  Browns, greys, pastels and transparent colors too.",
     "spot_colors": "Occasional metallic or neon colors for special effects or highlights.",
     "registration": "N/A. No traditional registration; colors are defined by the LEGO bricks.",
     "lettering_style": "Bold, sans-serif font that is easy to read, with a playful touch, mimicking the blocky nature of LEGO text."
@@ -66,5 +66,7 @@
       "font": "Standard sans-serif font for easy reading."
     }
   },
-  "image": "lego"
+  "image": {
+    "art": "lego"
+  }
 }

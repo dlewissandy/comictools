@@ -66,5 +66,7 @@
       "font": "Bold serif font, slightly larger for clarity."
     }
   },
-  "image": "film-noir"
+  "image": {
+    "art": "film-noir"
+  }
 }
