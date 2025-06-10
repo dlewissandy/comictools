@@ -5,12 +5,14 @@ from agents import Agent, function_tool
 from gui.state import GUIState
 from style.comic import ComicStyle
 from style.art import ArtStyle
+from style.bubble import DialogType
 from style.character import CharacterStyle
 from style.bubble import BubbleStyles, BubbleStyle
 import os
+from loguru import logger
 
 def style_agent(state: GUIState) -> Agent:
-
+    from gui.selection import save_state, change_selection
 
     def get_comic_style() -> ComicStyle:
         """
@@ -23,18 +25,6 @@ def style_agent(state: GUIState) -> Agent:
         if selection and selection[-1].kind == "style":
             return ComicStyle.read(id=selection[-1].id)
         return None
-
-    def get_style_by_name(name: str) -> ComicStyle | None:
-        """
-        Get a comic style by its name.
-        
-        Args:
-            name: The name of the comic style.
-        
-        Returns:
-            The ComicStyle object if found, otherwise None.
-        """
-        return ComicStyle.read(name.lower().replace(" ", "-"))
     
     @function_tool
     def get_description() -> str:
@@ -153,25 +143,24 @@ def style_agent(state: GUIState) -> Agent:
         return None
 
     @function_tool
-    def read_dialog_style( bubble_type: str ) -> BubbleStyles | None:
+    def read_dialog_style( dialog_type: DialogType ) -> BubbleStyles | None:
         """
-        Read the dialog style of the currently selected comic style.  The dialog style
+        Read one of the dialog styles (chat, whisper, shout, thought, sound-effect
+        , narration) of the currently selected comic style.  The dialog style
         defines the visual language used for dialog  in the comic book, such as font, fill color,
         and more.  It is used by artists to ensure that the text bubbles in a comic book have
         a consistent look and feel throughout the series.
         
         Args:
-            bubble_type: The type of bubble style to read.  must be one of: "chat", "whisper", 
-            "shout", "thought", "sound_effect", "narration".
+            dialog_type: The type of dialog style to read.
         
         Returns:
             The BubbleStyles object if found, otherwise None.
         """
         style = get_comic_style()
         if style:
-            if bubble_type not in ["chat", "whisper", "shout", "thought", "sound_effect", "narration"]:
-                raise ValueError(f"Invalid bubble type: {bubble_type}. Must be one of: chat, whisper, shout, thought, sound_effect, narration.")
-            return getattr(style.bubble_styles, bubble_type, None)
+            dialog_style = getattr(style.bubble_styles, dialog_type.value.replace("-", "_"), None)
+            return dialog_style
         return None
 
     @function_tool
@@ -217,7 +206,198 @@ def style_agent(state: GUIState) -> Agent:
         style.write()
         state["is_dirty"] = True
         return f"Art style example for {style.name} deleted."
+    
+    @function_tool
+    def delete_character_style_example() -> str:
+        """
+        Delete the example of the character style for the currently selected comic style.
+        THIS IS IRREVERSIBLE.  YOU MUST ASK THE USER TO CONFIRM PRIOR TO CALLING
+        THIS FUNCTION.
         
+        Returns:
+            A status message indicating the result of the operation.
+        """
+        style = get_comic_style()
+        # if there is no style selected, return an error message
+        if not style:
+            return "No comic style selected."
+        # if the images are not a dictionary, return an error message
+        if not isinstance(style.image, dict):
+            return "No character style example image to delete."
+        # if there is no art style example image selected, return an error message.
+        image = style.image.get("character",None)
+        if not image:
+            return "No character style example image to delete."
+        # otherwise, delete the character style example image.
+        style.image["character"] = None
+        image_filepath = os.path.join(style.image_path(img_type="character"), f"{image}.jpg")
+        if not os.path.exists(image_filepath):
+            return "The file does not exist.  Nothing to delete."
+        os.remove(image_filepath)
+        style.write()
+        state["is_dirty"] = True
+        return f"Character style example for {style.name} deleted."
+    
+    @function_tool
+    def delete_dialog_style_example(dialog_type: DialogType) -> str:
+        """
+        Delete the example for one of the dialog styles (chat, whisper, shout, 
+        thought, sound-effect, narration) for the currently selected comic style.
+        THIS IS IRREVERSIBLE.  YOU MUST ASK THE USER TO CONFIRM PRIOR TO CALLING
+        THIS FUNCTION.
+        
+        Returns:
+            A status message indicating the result of the operation.
+        """
+        style = get_comic_style()
+        # if there is no style selected, return an error message
+        if not style:
+            return "No comic style selected."
+        # if the images are not a dictionary, return an error message
+        if not isinstance(style.image, dict):
+            return "No dialog style example image to delete."
+        # if there is no art style example image selected, return an error message.
+        image = style.image.get(f"{dialog_type.value}",None)
+        if not image:
+            return "No chat style example image to delete."
+        # otherwise, delete the character style example image.
+        style.image[dialog_type.value] = None
+        image_filepath = os.path.join(style.image_path(img_type=dialog_type.value), f"{image}.jpg")
+        if not os.path.exists(image_filepath):
+            return "The file does not exist.  Nothing to delete."
+        os.remove(image_filepath)
+        style.write()
+        state["is_dirty"] = True
+        return f"Character style example for {style.name} deleted."
+        
+    @function_tool
+    def render_character_style_example() -> str:
+        """
+        Render an example of the character style for the currently selected comic style.
+        if this runs successfully, it will create a new image and select it as the current
+        example image for the character style
+        
+        Returns:
+            A string indicating the result of the operation.
+        """
+        style = get_comic_style()
+    
+        if style:
+            result = style.render_character_style_example()
+            state["is_dirty"] = True
+            return result
+        return "No style is selected, or the style does not exist."
+
+    @function_tool()
+    def delete_style() -> str:
+        """
+        Delete the current style (with its associated art, character and dialog styles).
+        NOTE: YOU MUST ASK FOR CONFIRMATION BEFORE YOU DO THIS.  IT IS DESTRUCTIVE AND IRREVERSIBLE.
+        """
+        selection = state.get("selection")
+        style = get_comic_style()
+        if not style:
+            logger.error("No style is currently selected.")
+            return "Something odd happened.  No style is currently selected."  
+        style.delete()
+        state["is_dirty"] = True
+        change_selection(state, selection[:-1])
+        return f"Style {style.name} deleted."
+
+    def render_dialog_example(state, bubble_type: str) -> str:
+        """
+        Render an example of a dialog bubble as an image.
+        
+        Returns:
+            A message indicating the result of the operation.
+        """
+        style = get_comic_style()
+        if style:
+            img_id = style.render_dialog_example(bubble_type=bubble_type)
+            state["is_dirty"] = True
+            return f"Dialog bubble example rendered and saved to {img_id}.jpg"
+        return "No comic style selected."
+
+    @function_tool
+    def render_chat_dialog_example() -> str:
+        """Render an example image of the chat dialog style for the currently selected comic style.
+        
+        Returns:
+            A message indicating the result of the operation.
+        """
+        return render_dialog_example(state, bubble_type="chat")
+    
+    @function_tool
+    def render_whisper_dialog_example() -> str:
+        """Render an example image of the whisper dialog style for the currently selected comic style.
+        
+        Returns:
+            A message indicating the result of the operation.
+        """
+        return render_dialog_example(state, bubble_type="whisper")
+    
+    @function_tool
+    def render_shout_dialog_example() -> str:
+        """Render an example image of the shout dialog style for the currently selected comic style.
+        
+        Returns:
+            A message indicating the result of the operation.
+        """
+        return render_dialog_example(state, bubble_type="shout")
+    
+    @function_tool
+    def render_thought_dialog_example() -> str:
+        """Render an example image of the thought dialog style for the currently selected comic style.
+        
+        Returns:
+            A message indicating the result of the operation.
+        """
+        return render_dialog_example(state, bubble_type="thought")
+    
+    @function_tool
+    def render_sound_effect_dialog_example() -> str:
+        """Render an example image of the sound effect dialog style for the currently selected comic style.
+        
+        Returns:
+            A message indicating the result of the operation.
+        """
+        return render_dialog_example(state, bubble_type="sound-effect")
+    
+    @function_tool
+    def render_narration_dialog_example() -> str:
+        """Render an example image of the narration dialog style for the currently selected comic style.
+        Returns:
+            A message indicating the result of the operation.
+        """        
+        
+        return render_dialog_example(state, bubble_type="narration")
+
+    @function_tool
+    def update_dialog_style(dialog_type: DialogType, dialog_style: BubbleStyle) -> str:
+        """
+        Update the dialog style for one of the dialog types (chat, whisper, shout, thought, sound-effect
+        , narration).
+        
+        Args:
+            dialog_type: The type of dialog style to update.
+            bubble_style: The value of the new dialog style.
+        """
+        style = get_comic_style()
+        if style is None:
+            logger.error("No comic style selected.")
+            return "No comic style selected."
+        dialog_type = dialog_type.value.replace("-", "_")
+        old_style = getattr(style.bubble_styles, dialog_type, None)
+        if old_style is None:
+            logger.debug(f"Unrecognized dialog type: {dialog_type}.")
+            return f"Unrecognized dialog type: {dialog_type}."
+        
+        bubble_styles = style.bubble_styles
+        setattr(bubble_styles, dialog_type, dialog_style)
+        logger.debug(f"Updated dialog style for {dialog_type}: {dialog_style}")
+        style.write()
+        state["is_dirty"] = True
+        return f"Dialog style for {style.name} updated."
 
     return Agent(
         name="Style Assistant",
@@ -229,18 +409,32 @@ def style_agent(state: GUIState) -> Agent:
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,
         tools=[
-            get_description,
+            # UPDATERS
             update_description,
-            read_art_style,
             update_art_style,
+            update_dialog_style,
+            
+            # READ
+            get_description,
+            read_art_style,
             read_character_style,
-            # set_character_style,
             read_dialog_style,
-            # set_dialog_style,
+            # RENDER
+            render_chat_dialog_example,
+            render_whisper_dialog_example,
+            render_shout_dialog_example,
+            render_thought_dialog_example,
+            render_sound_effect_dialog_example,
+            render_narration_dialog_example,
             render_art_style_example,
+            render_character_style_example,
+            # DELETE
+            delete_style,
             delete_art_style_example,
-            # render_character_style_example,
-            # render_dialog_style_example
+            delete_character_style_example,
+            delete_dialog_style_example
+
+
         ],
     )
 

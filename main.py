@@ -4,7 +4,7 @@ from nicegui import ui
 from generators import init_agents
 from gui.state import GUIState
 from dotenv import load_dotenv
-from gui.selection import update_breadcrumbs, SelectionItem, redraw_details, save_state, STATE_FILEPATH
+from gui.selection import update_breadcrumbs, SelectionItem, redraw_details, save_state, STATE_FILEPATH, restore_history, serialize_history, set_dark_mode
 from loguru import logger
 from agents import Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent
@@ -18,15 +18,18 @@ async def send(state: GUIState):
     history = state.get("history")
     text_input = state.get("user_input")
     question = text_input.value
-    messages = state.get("messages")
+    messages = []
+    for msg in serialize_history(state):
+        role = "user" if msg.get("name", "user").lower()=="you" else "assistant"
+        content = msg.get("text_html", "")
+        messages.append({"role": role, "content": content})
     
     text_input.value = ''
     messages.append({"role": "user", "content": question})
 
     with history:
         with ui.chat_message(name='You', sent=True).classes('w-full'):
-            with ui.element('div').classes('markdown-content'):
-                ui.markdown(question)
+            ui.markdown(question)
 
         response_message = ui.chat_message(name='Bot', sent=False)
         spinner = ui.spinner(type='dots')
@@ -51,8 +54,7 @@ async def send(state: GUIState):
                 response += event.data.delta
                 response_message.clear()
                 with response_message:
-                    with ui.element('div').classes('markdown-content'):
-                        ui.markdown(response)
+                    ui.markdown(response)
                 history.scroll_to(percent=100)
                 await asyncio.sleep(0)
 
@@ -83,9 +85,13 @@ async def send(state: GUIState):
         return stream.to_input_list()
 
     responses = await handle_events(messages)
+    logger.debug(f"messages: {messages}")
+    if spinner in history:
+        history.remove(spinner)
     messages.clear()
     messages.extend(responses)
-    history.remove(spinner)
+
+    save_state(state)
     if state.get("is_dirty",False):
         redraw_details(state)
         state['is_dirty'] = False
@@ -103,10 +109,8 @@ def main_page(client):
             state_data = json.load(f)
 
     selection = [SelectionItem(**item) for item in state_data.get('selection', [{"kind":"all_series", "name":"Series", "id":None}])]
-    history = state_data.get('history', [])
     messages = state_data.get('messages', [])
     dark_value = state_data.get('dark_mode', False)
-
 
 
     ui.query('.nicegui-content').classes('w-full')
@@ -128,30 +132,32 @@ def main_page(client):
             .classes('w-full self-center').style('flex-grow: 1; width: 100vh;')
         send_button = ui.button('Send').props('rounded').classes('q-ml-md')
 
+
+
     with header:
 
         breadcrumbs = ui.button_group()
+
+        state: GUIState = {
+            'breadcrumbs': breadcrumbs,
+            'details': details,
+            'history': history,
+            'user_input': user_input,
+            'send_button': send_button,
+            'agents': {},
+            'is_dirty': False,
+            'selection': selection
+        }
+        set_dark_mode(state, dark_value)
         ui.space()
-        dark = ui.dark_mode(value=dark_value)
-        darkswitch = ui.switch('Dark mode').bind_value(dark)
-
+        dark = ui.dark_mode()
+        darkswitch = ui.switch('Dark mode').on_value_change(lambda e, state=state: set_dark_mode(state, e.value))
+        darkswitch.value = dark_value        
     
-
-    state: GUIState = {
-        'breadcrumbs': breadcrumbs,
-        'details': details,
-        'history': history,
-        'user_input': user_input,
-        'send_button': send_button,
-        'agents': {},
-        'messages': messages, 
-        'is_dirty': False,
-        'selection': selection
-    }
     state['agents'] = init_agents(state)
-    dark.on_value_change(lambda _, state=state, dark=dark: save_state(state,dark.value))
     update_breadcrumbs(state)
     redraw_details(state)
+    restore_history(state, messages)
     
     user_input.on('keydown.enter', lambda _ : send(state=state))
     send_button.on('click', lambda _:send(state=state))

@@ -51,7 +51,7 @@
       "shape": "Cloud-like shapes with a wispy tail.",
       "border": "Soft, thin outline that merges with the fill color.",
       "fill_color": "Pale blue or light gray for a dreamy effect.",
-      "font": "Italicized handwritten font to suggest inner thoughts."
+      "font": "Handwritten font that mimics the flow of speech."
     },
     "sound_effect": {
       "shape": "Dynamic, explosive shapes (e.g., 'BANG', 'WHOOSH').",
@@ -60,13 +60,20 @@
       "font": "Bold, stylized font that captures the sound's essence."
     },
     "narration": {
-      "shape": "Simple rectangles with softer corners.",
-      "border": "Thin outline that matches the overall style.",
-      "fill_color": "Light cream to ensure readability.",
-      "font": "Clear, legible handwritten font."
+      "shape": "Simple rectangles with softer corners. Anchored to top or bottom of frame. No protrusions or tail",
+      "border": "plain",
+      "fill_color": "light gray",
+      "font": "Arial, 12pt"
     }
   },
   "image": {
-    "art": "conte-crayon"
+    "art": "conte-crayon",
+    "character": "5118f02f-1551-4f5a-b02a-6e8a3a62b048",
+    "chat": "cc68071e-865f-4df3-a3e3-030fbc9d1a13",
+    "whisper": "ce60f034-3a2d-4912-a8d0-8d91ab2876e8",
+    "thought": "8bc25031-5f96-490a-8f77-c2dbcb2aa76f",
+    "shout": "00719dfe-76f2-4f40-8d4c-035a4d99d605",
+    "sound-effect": "f4043f74-844e-43e0-bdaa-b7c2eda6c33f",
+    "narration": "58c67d39-3573-49ce-a97b-2b06082e38dc"
   }
 }

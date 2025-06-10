@@ -11,6 +11,70 @@ from helpers.generator import invoke_generate_api
 from helpers.constants import STYLES_FOLDER
 from helpers.file import generate_unique_id
 
+BUBBLE_TEXT = {
+    "chat": "Nice day, isn't it?",
+    "narration": "Once upon a time...",
+    "whisper": "Shhh.  It's a secret.",
+    "thought": "I wonder what will happen...",
+    "shout": "Watch out!",
+    "sound-effect": "Boom!"
+}
+
+def render_dialog_example(style_description: str, bubble_style_description: str, bubble_type: str, bubble_text: str, save_path: str) -> str | None:
+    """
+    Render an example of a dialog bubble as an image.
+    
+    Returns:
+        A message indicating the result of the operation.
+    """
+    from helpers.generator import invoke_generate_image_api, IMAGE_QUALITY
+    import os
+
+    # Ensure the output path exists
+    logger.debug(f"Ensuring dialog image path exists")
+    os.makedirs(save_path, exist_ok=True)
+
+    logger.debug(f"Preparing the image generation prompt")
+    # Serialize the descripiton of the style
+    prompt = f"""
+       Render an example of the of a {bubble_type} dialog in the style described below.
+
+       # ART STYLE
+       {style_description}
+
+       # DIALOG STYLE
+       {bubble_style_description}
+
+       # DIALOG TEXT
+         {bubble_text}
+
+       # OTHER INSTRUCTIONS
+       * The image should have a 1:1 aspect ratio 
+       * It should be a close-up of the dialog element, with no other elements in the image.
+       * If there is a conflict between the art style and the dialog style, the dialog style should take precedence.
+       """
+    
+    raw_img = invoke_generate_image_api(
+        prompt=prompt,
+        n=1,
+        size="1024x1024",
+        quality=IMAGE_QUALITY.HIGH,
+    )
+
+    # Save the image to a unique file
+    logger.debug(f"generating unique ID for dialog bubble image")
+    unique_id = generate_unique_id(save_path, create_folder=False)
+    output_filepath = os.path.join(save_path, f"{unique_id}.jpg")
+    logger.debug(f"Saving dialog bubble image to {output_filepath}")
+    with open(output_filepath, "wb") as f:
+        f.write(raw_img.getbuffer())
+    logger.debug(f"Saved dialog bubble image to {output_filepath}")
+    return unique_id
+
+
+
+
+
 class ComicStyle(BaseModel):
     """
     Comic style guidelines for a comic series or title.
@@ -18,9 +82,9 @@ class ComicStyle(BaseModel):
     id: str = Field(
         ...,
         description="A unique identifier for the comic style.  e.g. 'vintage 4 color', etc.")
-    name: str = Field(...,description="A short (1-5 word) name for the comic style.  e.g. 'vintage 4 color', etc.")
+    name: str = Field(...,description="A short (1-5 word) name for the comic style.  e.g. 'vintage 4 color', etc.   It should not include the words 'comic' or 'style'.")
     description: str = Field(
-        ..., description="One or two sentences describing the comic style capturing the overall aesthetic and tone, and perhaps defining titles in the genre."
+        ..., description="A Description the comic style capturing the overall aesthetic and tone, and perhaps historical perspective, artists and defining works in the genre.  This should be at least 3 sentences and no longer than several paragraphs."
     )
     art_style: ArtStyle = Field(
         ...,
@@ -86,8 +150,8 @@ class ComicStyle(BaseModel):
         """
         return the path to the image
         """
-        if img_type not in ["art", "character", "chat-bubble", "narration-bubble", "whisper-bubble", "thought-bubble", "shout-bubble", "sound-effect-bubble"]:
-            raise ValueError(f"Invalid image type: {img_type}. Must be one of 'art', 'character', 'chat-bubble', 'narration-bubble', 'whisper-bubble', 'thought-bubble', 'shout-bubble', or 'sound-effect-bubble'.")
+        if img_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
+            raise ValueError(f"Invalid image type: {img_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'.")
         return os.path.join(self.path(), "images", f"{img_type.lower()}-style")
 
     def image_filepath(self, img_type: str = "art") -> str:
@@ -184,12 +248,40 @@ the original image as possible so that it can serve as a visual reference for th
 
         return f"Art style image saved to {output_filepath}."
 
+    def render_character_style_example(self) -> str:
+        """
+        Render an example of the character style as an image.
+        
+        Returns:
+            A message indicating the result of the operation.
+        """
+        from models.character import render_character_image
+        from generators.constants import RUGOR_DESCRIPTION
+        import os
+
+        # Ensure the output path exists
+        logger.debug(f"Ensuring character image path exists")
+        save_path = self.image_path("character")
+        os.makedirs(save_path, exist_ok=True)
+
+        logger.debug(f"Preparing the image generation prompt")
+        # Serialize the descripiton of the style
+        style_description = self.format(include_bubble_styles=False, include_character_style=True)
+
+        logger.debug(f"Rendering character image with style: {self.name}")
+        img_id = render_character_image(character_name = "Rugor", character_description = RUGOR_DESCRIPTION, style_description = style_description, save_path = save_path)
+        if img_id is None:
+            self.set_image("character", img_id)
+            return "success.  The new character style image has been saved."
+        return "Character style image could not be rendered."
+
+
     def set_image(self, image_type: str, id: str):
         """
         set the image for the comic style
         """
-        if image_type not in ["art", "character", "chat-bubble", "narration-bubble", "whisper-bubble", "thought-bubble", "shout-bubble", "sound-effect-bubble"]:
-            msg = f"Invalid image type: {image_type}. Must be one of 'art', 'character', 'chat-bubble', 'narration-bubble', 'whisper-bubble', 'thought-bubble', 'shout-bubble', or 'sound-effect-bubble'."
+        if image_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
+            msg = f"Invalid image type: {image_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'."
             logger.error(msg)
             return
     
@@ -273,8 +365,8 @@ the original image as possible so that it can serve as a visual reference for th
         """
         return all the identifiers for the images for the comic style
         """
-        if img_type not in ["art", "character", "chat-bubble", "narration-bubble", "whisper-bubble", "thought-bubble", "shout-bubble", "sound-effect-bubble"]:
-            raise ValueError(f"Invalid image type: {img_type}. Must be one of 'art', 'character', 'chat-bubble', 'narration-bubble', 'whisper-bubble', 'thought-bubble', 'shout-bubble', or 'sound-effect-bubble'.")
+        if img_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
+            raise ValueError(f"Invalid image type: {img_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'.")
         
         image_path = self.image_path(img_type)
         if not os.path.exists(image_path):
@@ -286,3 +378,39 @@ the original image as possible so that it can serve as a visual reference for th
                 result.append(item[:-4])
         
         return result
+    
+    def delete(self):
+        """
+        delete the comic style
+        """
+        from shutil import rmtree
+        # delete the comic style directory and all its contents, 
+        # ignore errors.   
+        rmtree(self.path(), ignore_errors=True)
+
+    def render_dialog_example(self, bubble_type: str) -> str:
+        """
+        Render an example of a dialog bubble as an image.
+        
+        Returns:
+            A message indicating the result of the operation.
+        """
+        style_description = self.format(include_bubble_styles=False, include_character_style=False)
+        bubble_style = getattr(self.bubble_styles, bubble_type.replace("-", "_"), None)
+        if bubble_style is None:
+            msg = f"Invalid bubble type: {bubble_type}. Must be one of 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'."
+            logger.error(msg)
+            return msg
+        
+        bubble_style_description = bubble_style.format()
+
+        bubble_text = BUBBLE_TEXT[bubble_type]
+
+        save_path = self.image_path(f"{bubble_type}")
+
+        img_id = render_dialog_example(style_description, bubble_style_description, bubble_type, bubble_text, save_path)
+        if img_id is not None:
+            self.set_image(bubble_type, img_id)
+            return f"success.  The new {bubble_type} dialog bubble image has been saved."
+        return f"{bubble_type} dialog bubble image could not be rendered."
+        

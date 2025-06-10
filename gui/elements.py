@@ -56,7 +56,6 @@ def markdown_field_editor(state: GUIState, name: str, value: str | None, header_
         ui.space()
         if value is not None:
             crud_button(kind="update", action=lambda _: post_user_message(state, f"I would like to edit the {name}"))
-            crud_button(kind="delete", action=lambda _: post_user_message(state, f"I would like to delete the {name}."))
         else:
             crud_button(kind="create", action = lambda _: post_user_message(state, f"I would like to add a {name}."))
 
@@ -196,10 +195,10 @@ def image_field_editor(state: GUIState, kind, caption, get_name, get_id, get_ima
         image_filepath = get_image_filepath()
         header(caption.title(),2)
         ui.space()
-        if value is not None:
-            crud_button(kind="delete", action=lambda _: post_user_message(state, f"I would like to delete the {caption}."))
-        else:
-            crud_button(kind="create", action = lambda _: post_user_message(state, f"I would like to add a {caption}."))
+        #if value is not None:
+        #    crud_button(kind="delete", action=lambda _: post_user_message(state, f"I would like to delete the {caption}."))
+        #else:
+        #    crud_button(kind="create", action = lambda _: post_user_message(state, f"I would like to add a {caption}."))
 
 
     card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}')
@@ -263,7 +262,7 @@ def render_object_cards(state: GUIState, instances, kind: str | Callable, cardwa
                         markdown(get_markdown(instance))
                 
             # Fix lambda by creating a closure with the current value of new_sel
-            card.on('click', lambda _, new_sel=new_sel: change_selection(state, new_sel))
+            card.on('click', lambda _, new_sel=new_sel: change_selection(state, new_sel, clear_history=False))
 
 
 def view_all_instances(

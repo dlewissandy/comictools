@@ -8,7 +8,7 @@ class GUIState(TypedDict):
     history: ui.scroll_area
     user_input: ui.input
     send_button: ui.button
-    messages: list[dict]
     agents: dict[str, Agent]
+    dark_mode: bool
     is_dirty: bool
 

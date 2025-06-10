@@ -30,6 +30,12 @@ class Publisher(BaseModel):
         """
         return os.path.join(self.path(), "publisher.json")
     
+    def image_path(self) -> str:
+        """
+        return the path to the images for the publisher
+        """
+        return os.path.join(self.path(), "images")
+
     def image_filepath(self) -> str | None:
         """
         return the filepath to the image
@@ -112,8 +118,9 @@ class Publisher(BaseModel):
         """
         delete the publisher model
         """
+        from shutil import rmtree
         # delete the publisher directory and all its contents
-        os.remove(self.path())
+        rmtree(self.path())
 
     def render(self):
         """

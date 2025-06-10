@@ -121,7 +121,6 @@ def change_selection(state: GUIState,new:list[SelectionItem], clear_history=True
     details = state.get("details")
     if clear_history:
         chat_history.clear()
-    state.get("messages").clear()
     details.clear()
     save_state(state)
     update_breadcrumbs(state)
@@ -130,7 +129,90 @@ def change_selection(state: GUIState,new:list[SelectionItem], clear_history=True
 
 STATE_FILEPATH = "state.json"
 
-def save_state(state: GUIState, darkmode: bool = False):
+def serialize_history(state: GUIState) -> list[dict]:
+    """
+    Serialize the messages from the GUI state into a list of dictionaries.
+    
+    Args:
+        state: The GUI elements containing the messages.
+    
+    Returns:
+        A list of dictionaries representing the messages.
+    """
+    logger.critical("Serializing history")
+    history: ui.scroll_area = state.get("history", [])
+    logger.critical(history)
+    result = []
+    for message in history.default_slot.children:
+        if message.tag != "q-chat-message":
+            logger.warning(f"Skipping non-chat_message item: {message.tag}")
+            continue
+        name = message.props.get( 'name', 'Unknown')
+        sent = message.props.get('sent', False)
+        child = message
+        text_html = message.props.get('text_html', None)
+        while child and child.default_slot.children is not None:
+            logger.critical(f"Child: {child.tag}")
+            FIELDS = ['innerHTML', 'content']
+            logger.critical(child.tag)
+            logger.critical(f"FIELDS: {child.props}")
+            for field in FIELDS:
+                if field in child.props:
+                    text_html = child.props.get(field, None)
+                    break
+            if text_html:
+                break
+            child = child.default_slot.children[0] if child.default_slot.children else None
+
+        if not text_html:
+            logger.warning(f"Skipping message without text_html: {message}")
+            continue
+        result.append({
+            'name': name,
+            'text_html': text_html,
+            'sent': sent
+        })
+    return result
+
+def restore_history(state: GUIState, messages: list[dict]):
+    """
+    Restore the chat history from the GUI state.
+    
+    Args:
+        state: The GUI elements containing the messages.
+    """
+    logger.debug("Restoring history")
+    history: ui.scroll_area = state.get("history")
+    for message in messages:
+        if not isinstance(message, dict):
+            logger.warning(f"Skipping non-dict message: {message}")
+            continue
+        name = message.get('name', 'Unknown')
+        text_html = message.get('text_html', '')
+        sent = message.get('sent', False)
+        # add the message to the history
+        with history:
+            ui.chat_message(name=name, sent=sent, text=text_html, text_html=True).classes('w-full')
+
+    # scroll to the bottom of the history
+    history.value = 100
+
+def set_dark_mode(state: GUIState, dark: bool):
+    """
+    Set the dark mode for the GUI.
+    
+    Args:
+        state: The GUI elements containing the dark mode setting.
+        dark_mode: A boolean indicating whether to enable dark mode.
+    """
+    state["dark_mode"] = dark
+    save_state(state)
+    if dark:
+        ui.dark_mode().enable()
+    else:
+        ui.dark_mode().disable()
+
+def save_state(state: GUIState):
     """
     Save the current state of the GUI.
     
@@ -140,11 +222,11 @@ def save_state(state: GUIState, darkmode: bool = False):
     from gui.state import GUIState
     
     logger.debug("Saving state to file")
+    
     state_json = {
         "selection": [item.dict() for item in state.get("selection")],
-        "history": [msg.dict() for msg in state.get("history", [])],
-        "messages": state.get("messages", []),
-        "dark_mode": darkmode,
+        "messages": serialize_history(state),
+        "dark_mode": state.get("dark_mode", False),
     }
     with open(STATE_FILEPATH, "w") as f:
         import json

@@ -1,5 +1,14 @@
 from typing import Optional
 from pydantic import BaseModel, Field
+from enum import StrEnum
+
+class DialogType(StrEnum):
+    CHAT = "chat"
+    WHISPER = "whisper"
+    SHOUT = "shout"
+    THOUGHT = "thought"
+    SOUND_EFFECT = "sound-effect"
+    NARRATION = "narration"
 
 class BubbleStyle(BaseModel):
     """

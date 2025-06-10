@@ -23,7 +23,11 @@ def all_styles_agent(state: GUIState) -> Agent:
         bubble_styles: BubbleStyles,
         ) -> ComicStyle | str | None:
         """
-        Create a new style with the given name.
+        Create a new style with the given name.   Use as much of the relevant information
+        from the chat history as possible to fill in the details of the style.  Each field
+        should be a short phrase or paragraph, except for the description which can be longer.
+        focus on the visual and artistic aspects of the style that might be important for an
+        artist to replicate the style.
         
         Args:
             name: The name of the new style.
@@ -36,6 +40,7 @@ def all_styles_agent(state: GUIState) -> Agent:
             The created Style object or an error message if the style already exists.
         """
         # check to see if the publisher already exists.
+        name = name.strip().title().replace("-", " ")
         id = name.lower().replace(" ", "-")
         if ComicStyle.read(id=id) is not None:
             logger.error(f"Style with name '{name}' already exists.")
@@ -55,8 +60,8 @@ def all_styles_agent(state: GUIState) -> Agent:
         selection = state.get("selection")
         new_itm = SelectionItem(name=style.name, id=style.id, kind='style')
         new_sel = [s for s in selection]+[new_itm]
-        change_selection(state, new=new_sel, clear_history=False)
         state["is_dirty"] = True
+        change_selection(state, new=new_sel, clear_history=False)
         return style
         
     @function_tool

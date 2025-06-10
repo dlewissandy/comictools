@@ -3,7 +3,7 @@ from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import GUIState
-
+import os
 
 
 def publisher_agent(state: GUIState) -> Agent:
@@ -11,49 +11,38 @@ def publisher_agent(state: GUIState) -> Agent:
     Create an agent for the publisher assistant.
     """
     from models.publisher import Publisher
+    from gui.selection import save_state, change_selection
+
+    def _get_publisher() -> Optional[Publisher]:
+        """
+        Get the currently selected publisher.
+        """
+        selection = state.get("selection")
+        if selection and selection[-1].kind == "publisher":
+            return Publisher.read(id=selection[-1].id)
+        return None
 
     def _get_publisher_attribute(attribute: str) -> str:
         """
         Get the specified attribute of the currently selected publisher.
         """
-        selection = state.get("selection")
-        if selection and selection[-1].kind == "publisher":
-            publisher = Publisher.read(id=selection[-1].id)
+        publisher = _get_publisher()
+        if publisher:
             return getattr(publisher, attribute, "Currently selected publisher does not have a {attribute} attribute.")
         return "Something odd happened.  No publisher is currently selected."
 
-    def _del_publisher_attribute(attribute: str) -> str:
-        """
-        Delete the specified attribute of the currently selected publisher.
-        """
-        selection = state.get("selection")
-        if selection and selection[-1].kind == "publisher":
-            publisher = Publisher.read(id=selection[-1].id)
-            # set the attribute to None
-            try:
-                setattr(publisher, attribute, None)
-                publisher.write()
-            except Exception as e:
-                # couldn't be set to None.   Set it to an empty string.
-                setattr(publisher, attribute, "")
-                publisher.write()
-            state["is_dirty"] = True
-            return f"{attribute} for {publisher.name} deleted."
-        return "Something odd happened.  No publisher is currently selected."
-    
     def _set_publisher_attribute(attribute: str, value: str) -> str:
         """
         Set the specified attribute of the currently selected publisher.
         """
-        selection = state.get("selection")
-        if selection and selection[-1].kind == "publisher":
-            publisher = Publisher.read(id=selection[-1].id)
-            setattr(publisher, attribute, value)
-            publisher.write()
-            state["is_dirty"] = True
-            return f"{attribute} for {publisher.name} updated."
-        return "Something odd happened.  No publisher is currently selected."
-
+        publisher = _get_publisher()
+        if not publisher:
+            return "Something odd happened.  No publisher is currently selected."
+        setattr(publisher, attribute, value)
+        publisher.write()
+        state["is_dirty"] = True
+        return f"{attribute} for {publisher.name} updated."
+        
     @function_tool
     def get_publisher_id() -> str:
         """
@@ -79,21 +68,6 @@ def publisher_agent(state: GUIState) -> Agent:
         """
         return _get_publisher_attribute("logo")
 
-    @function_tool
-    def delete_publisher_description() -> str:
-        """
-        Delete the description of the currently selected publisher.
-        NOTE: YOU MUST ASK FOR CONFIRMATION BEFORE YOU DO THIS.  IT IS DESTRUCTIVE AND IRREVERSIBLE.
-        """
-        return _del_publisher_attribute("description")
-
-    @function_tool
-    def delete_logo_description() -> str:
-        """
-        Delete the description of the currently selected publisher's logo.
-        NOTE: YOU MUST ASK FOR CONFIRMATION BEFORE YOU DO THIS.  IT IS DESTRUCTIVE AND IRREVERSIBLE.
-        """
-        return _del_publisher_attribute("logo")
     
     @function_tool()
     def delete_publisher() -> str:
@@ -102,13 +76,14 @@ def publisher_agent(state: GUIState) -> Agent:
         NOTE: YOU MUST ASK FOR CONFIRMATION BEFORE YOU DO THIS.  IT IS DESTRUCTIVE AND IRREVERSIBLE.
         """
         selection = state.get("selection")
-        if selection and selection[-1].kind == "publisher":
-            publisher = Publisher.read(id=selection[-1].id)
-            publisher.delete()
-            state["is_dirty"] = True
-            state["selection"] = selection[:-1]
-            return f"Publisher {publisher.name} deleted."
-        return "Something odd happened.  No publisher is currently selected."
+        publisher = _get_publisher()
+        if not publisher:
+            return "Something odd happened.  No publisher is currently selected."  
+        publisher.delete()
+        state["is_dirty"] = True
+        change_selection(state, selection[:-1])
+        save_state(state)
+        return f"Publisher {publisher.name} deleted."
     
     @function_tool
     def update_publisher_description(value: str) -> str:
@@ -162,6 +137,27 @@ def publisher_agent(state: GUIState) -> Agent:
         state["is_dirty"] = True        
         return f"The logo for publisher '{publisher.name}' has been rendered and is saved to {img}.jpg"
 
+    @function_tool
+    def delete_logo_image() -> str:
+        """
+        Delete the logo image for the current publisher.  NOTE: YOU MUST ASK FOR CONFIRMATION BEFORE YOU DO THIS.  IT IS DESTRUCTIVE AND IRREVERSIBLE.
+        """
+        publisher = _get_publisher()
+        if not publisher:
+            return "Something odd happened.  No publisher is currently selected."
+        # if the images are not a dictionary, return an error message
+        if publisher.image is None:
+            return "No logo image to delete."
+        # otherwise, delete the image.
+        image_filepath = publisher.image_filepath()
+        publisher.image = None
+        if not os.path.exists(image_filepath):
+            return "The file does not exist.  Nothing to delete."
+        os.remove(image_filepath)
+        publisher.write()
+        state["is_dirty"] = True
+        return f"logo image for {publisher.name} deleted."
+
 
     return Agent(
         name="Publisher Assistant",
@@ -177,8 +173,8 @@ def publisher_agent(state: GUIState) -> Agent:
             get_publisher_name,
             get_publisher_description,
             get_logo_description,
-            delete_logo_description,
-            delete_publisher_description,
+            delete_logo_image,
+            delete_publisher,
             update_publisher_description,
             update_logo_description,
             render_logo,

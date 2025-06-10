@@ -1,7 +1,7 @@
 from loguru import logger
-from gui.elements import init_cardwall
 from gui.state import GUIState
-from gui.elements import markdown, header, view_all_instances, markdown_field_editor, view_attributes, Attribute, image_drop_field_editor, full_width_image_selector_grid
+from gui.elements import header, view_all_instances, markdown_field_editor, view_attributes, Attribute, image_drop_field_editor, full_width_image_selector_grid, crud_button
+from gui.messaging import post_user_message
 from style.comic import ComicStyle
 from gui.constants import TAILWIND_CARD
 from nicegui import ui
@@ -10,6 +10,7 @@ def view_style(state: GUIState):
     """
     Editor for comic styles.
     """
+    
     # Read in the state
     selection = state.get("selection")
     style = ComicStyle.read(id=selection[-1].id)
@@ -24,6 +25,11 @@ def view_style(state: GUIState):
 
     # Render the information about the style
     with state.get("details"):
+        with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
+            header(style.name.title(), 0)
+            ui.space()
+            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current style."),size=1)
+
         markdown_field_editor(
             state=state,
             name = "Description",
@@ -95,11 +101,11 @@ def view_style(state: GUIState):
                         k = key.replace('_','-')
                         full_width_image_selector_grid(
                             state=state,
-                            kind=f"{k}-bubble-style-image",
-                            images_path=style.image_path(img_type=f"{k}-bubble"),
-                            get_selection=lambda: style.image.get(f"{k}-bubble",None) if isinstance(style.image, dict) else None,
-                            set_selection=lambda img_id: style.set_image(image_type=f"{k}-bubble", id=img_id),
-                            get_images=lambda: style.all_images(img_type=f"{k}-bubble"),
+                            kind=f"{k}-style-example-image",
+                            images_path=style.image_path(img_type=f"{k}"),
+                            get_selection=lambda k=k: style.image.get(k.lower().replace("_", "-"),None),
+                            set_selection=lambda img_id, k=k: style.set_image(image_type=f"{k}", id=img_id),
+                            get_images=lambda k=k: style.all_images(img_type=f"{k}"),
                             aspect_ratio="1/1",
                             columns=2,
                             header_size=3

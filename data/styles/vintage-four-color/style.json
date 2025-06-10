@@ -36,9 +36,9 @@
       "font": "Sentence-case hand-lettered sans-serif."
     },
     "whisper": {
-      "shape": "Smooth, oval shapes with a pointed tail.",
-      "border": "Solid hand drawn border",
-      "fill_color": "Solid cream/off-white.",
+      "shape": "Smooth, oval shapes with a pointed tail",
+      "border": "Dashed line (not solid) to indicate blending into the ambient",
+      "fill_color": "Solid cream/off-white",
       "font": "Lower-case hand-lettered sans-serif."
     },
     "shout": {
@@ -54,19 +54,24 @@
       "font": "Sentence-case hand-lettered sans-serif."
     },
     "sound_effect": {
-      "shape": "Oval, with broken border described below",
-      "border": "short, thin, motion lines radiating away from the text, with single line to the sourse of the sound.",
-      "fill_color": "No fill color",
-      "font": "Bold, expressive lettering style."
+      "shape": "jagged (stellated) polygon with no tail",
+      "border": "thick solid",
+      "fill_color": "yellow",
+      "font": "comic sans"
     },
     "narration": {
-      "shape": "Rectangles with subtly rounded corners.",
-      "border": "Solid hand drawn border",
+      "shape": "Rectangle with slightly rounded corners. Anchored to either the top or bottom of frame. No tail or protruding elements",
+      "border": "solid thick",
       "fill_color": "Mustard yellow",
-      "font": "Sentence-case hand-lettered sans-serif."
+      "font": "Hand written sans serif"
     }
   },
   "image": {
-    "art": "vintage-four-color"
+    "art": "vintage-four-color",
+    "character": "eec9af1c-8592-43e0-88b8-5a7d0d3306ed",
+    "chat": null,
+    "whisper": null,
+    "sound-effect": null,
+    "narration": null
   }
 }

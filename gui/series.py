@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from models.series import Series
-from gui.elements import markdown, header, init_cardwall, view_all_instances, markdown_field_editor, image_field_editor
+from gui.elements import markdown, header, init_cardwall, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message
 from gui.selection import SelectionItem, change_selection
 from gui.constants import TAILWIND_CARD
 from models.publisher import Publisher
@@ -25,6 +25,11 @@ def view_series(state):
     
     # Render the controls
     with details:
+        with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
+            header(series.name.title(), 0)
+            ui.space()
+            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current series."),size=1)
+            
         # create a row with two colunms.
         with ui.row().classes('w-full flex-nowrap'):
             # The first column is 3/4 of the width and has a markdown text field for the series description.

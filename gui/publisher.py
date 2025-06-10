@@ -2,7 +2,7 @@ import os
 from loguru import logger
 from nicegui import ui
 from models.publisher import Publisher
-from gui.elements import header, crud_button, markdown_field_editor, full_width_image_selector_grid, view_all_instances
+from gui.elements import header, crud_button, markdown_field_editor, full_width_image_selector_grid, view_all_instances, view_attributes, Attribute
 from gui.messaging import post_user_message
 from gui.elements import init_cardwall
 from gui.constants import TAILWIND_CARD
@@ -28,29 +28,38 @@ def view_publisher(state):
     with details:
         # The title for the viewer is the Publisher name
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
-            header("Publisher: " + publisher.name, 0)
+            header(publisher.name.title(), 0)
             ui.space()
             crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current publisher."),size=1)
 
 
         # Below that we have a full width row for editing the publisher's description
         # and a button to save the changes
-        markdown_field_editor(state, "publisher description", publisher.description)
+        markdown_field_editor(state, "Description", publisher.description)
 
         # Below that we have a full width row for editing the description of the
         # publisher's logo
-        markdown_field_editor(state, "logo description", publisher.logo)
-        
-        # Below that we have a series of full width rows for selecting the
-        # preferred image for the publisher's logo.
-        full_width_image_selector_grid(
-            state=state,
-            kind="logo image",
-            images_path=os.path.join(publisher.path(), "images"),
-            get_images=publisher.all_images,
-            get_selection=lambda : publisher.image,
-            set_selection=publisher.set_image,
-        )        
+        with view_attributes(
+            state=state, 
+            caption="Logo",
+            attributes=[
+                Attribute(caption="description", get_value=lambda: publisher.logo)
+            ], 
+            expanded=False, 
+            individual_icons = False,
+            header_size = 2
+            ):
+
+            # Below that we have a series of full width rows for selecting the
+            # preferred image for the publisher's logo.
+            full_width_image_selector_grid(
+                state=state,
+                kind="logo image",
+                images_path=os.path.join(publisher.path(), "images"),
+                get_images=publisher.all_images,
+                get_selection=lambda : publisher.image,
+                set_selection=publisher.set_image,
+            )        
                 
 def view_pick_publisher(state):
     """
