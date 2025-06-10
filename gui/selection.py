@@ -8,6 +8,15 @@ class SelectionItem(BaseModel):
     id: str | None = Field(..., description="The id of the item.  This will be used to identify the item in the system.")
     kind: str = Field(..., description="The kind of item.  This will be used to identify the item in the system.")
 
+def thoughts_container():
+    """
+    Create a container for displaying the bot's thoughts.
+    
+    Returns:
+        A UI element representing the thoughts container.
+    """
+    return ui.expansion("Thoughts", value=False).classes('w-full').classes("text-sm")
+
 def breadcrumb_selector(state: GUIState):
     
 
@@ -139,40 +148,34 @@ def serialize_history(state: GUIState) -> list[dict]:
     Returns:
         A list of dictionaries representing the messages.
     """
-    logger.critical("Serializing history")
-    history: ui.scroll_area = state.get("history", [])
-    logger.critical(history)
-    result = []
-    for message in history.default_slot.children:
-        if message.tag != "q-chat-message":
-            logger.warning(f"Skipping non-chat_message item: {message.tag}")
-            continue
-        name = message.props.get( 'name', 'Unknown')
-        sent = message.props.get('sent', False)
-        child = message
-        text_html = message.props.get('text_html', None)
-        while child and child.default_slot.children is not None:
-            logger.critical(f"Child: {child.tag}")
-            FIELDS = ['innerHTML', 'content']
-            logger.critical(child.tag)
-            logger.critical(f"FIELDS: {child.props}")
-            for field in FIELDS:
-                if field in child.props:
-                    text_html = child.props.get(field, None)
-                    break
-            if text_html:
-                break
-            child = child.default_slot.children[0] if child.default_slot.children else None
+    def serialize_history_item(elem: ui.element, name: str | None, sent = bool | None) -> list[dict]: 
+        logger.debug(f"Processing message: {elem.tag}")
+        name = name or elem.props.get( 'name', None)
+        sent = sent if sent is not None else elem.props.get('sent', None)
 
-        if not text_html:
-            logger.warning(f"Skipping message without text_html: {message}")
-            continue
-        result.append({
-            'name': name,
-            'text_html': text_html,
-            'sent': sent
-        })
-    return result
+        text_html = elem.props.get('text_html', None)
+        text_html = text_html if text_html is not None else elem.props.get('content', text_html)
+        text_html = text_html if text_html is not None else elem.props.get('innerHTML', text_html)
+        if text_html is not None and name is not None:
+            return [{
+                'name': name,
+                'text_html': text_html,
+                'sent': sent if sent is not None else False,
+            }]
+        
+        if elem.default_slot.children is None:
+            return []
+        
+        if len(elem.default_slot.children) == 0:
+            return []
+        
+        result = []
+        for child in elem.default_slot.children:
+            result.extend(serialize_history_item(child, name=name, sent=sent))
+        return result
+    
+    logger.debug("Serializing history")
+    return serialize_history_item(state.get("history"), None, None) 
 
 def restore_history(state: GUIState, messages: list[dict]):
     """
@@ -183,15 +186,24 @@ def restore_history(state: GUIState, messages: list[dict]):
     """
     logger.debug("Restoring history")
     history: ui.scroll_area = state.get("history")
+    parent_container = history
     for message in messages:
         if not isinstance(message, dict):
             logger.warning(f"Skipping non-dict message: {message}")
             continue
+
         name = message.get('name', 'Unknown')
         text_html = message.get('text_html', '')
         sent = message.get('sent', False)
+
+        if name in ["Tool Call", "Tool Output"] and parent_container == history:
+            with history:
+                parent_container = ui.expansion("Thoughts", value=False).classes('w-full').classes("text-sm")
+        elif name in ["You", "Bot"] and parent_container != history:
+            parent_container = history
+
         # add the message to the history
-        with history:
+        with parent_container:
             ui.chat_message(name=name, sent=sent, text=text_html, text_html=True).classes('w-full')
 
     # scroll to the bottom of the history

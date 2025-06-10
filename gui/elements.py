@@ -23,6 +23,7 @@ CRUD_ICON = {
     'read': 'sync',
     'update': 'edit',
     'delete': 'delete',
+    'render': 'brush'
 }
 
 CRUD_BUTTON_STYLES = {
@@ -31,7 +32,7 @@ CRUD_BUTTON_STYLES = {
 }
 
 def init_cardwall(columns: int = 4):
-    return ui.element('div').classes(f'columns-{columns} w-full gap-2').style('padding: 2ex')
+    return ui.element('div').classes(f'columns-{columns} w-full gap-2')
 
 def crud_button(kind: str, action: Callable, size: int = 2):
     """Create a button with a specific style and action.
@@ -43,7 +44,7 @@ def crud_button(kind: str, action: Callable, size: int = 2):
     """
     if size not in [1, 2]:
         raise ValueError("Size must be 1 or 2.")
-    if kind not in ['create', 'read', 'update', 'delete']:
+    if kind not in CRUD_ICON.keys():
         raise ValueError("Kind must be one of: create, read, update, delete.")
     
     button = ui.button(icon=CRUD_ICON[kind]).classes('text-base rounded-md').style(CRUD_BUTTON_STYLES[str(size)])
@@ -72,7 +73,7 @@ def header(text: str, level: int = 1) -> None:
     """
      if level < 0 or level > 5:
         raise ValueError("Header level must be between 0 and 5.")
-     return ui.label(text).style(HEADER_STYLES[level])
+     return ui.label(text).style(HEADER_STYLES[level]).style('margin-top: 0px; margin-bottom: 0px')
 
 def markdown(body: str) -> None:
     with ui.element().classes('w-full q-pa-md'):
@@ -172,7 +173,7 @@ def full_width_image_selector_grid(state: GUIState, kind: str, images_path: str,
     with ui.row().classes('w-full flex-nowrap').style('padding-left: 2ex; padding-right: 2ex;'):
         header(caption,header_size)
         ui.space()
-        crud_button(kind="create", action = lambda _: post_user_message(state, f"I would like to render the {kind}."))
+        crud_button(kind="render", action = lambda _: post_user_message(state, f"I would like to render the {kind}."))
         crud_button(kind="delete", action=lambda _: post_user_message(state, f"I would like to delete the currently selected {kind}."))
 
     all_images = get_images()
@@ -249,11 +250,12 @@ def render_object_choices(state, instances, get_selection, set_selection, cardwa
                         ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10').style('aspect-ratio: 1/1;')
                 else:
                     ui.label(f"Image {image_filepath} not found.").style('color: red;')
+    return cardwall
 
 
 def render_object_cards(state: GUIState, instances, kind: str | Callable, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda i,x: x.name, get_markdown: Optional[Callable] = None, number_of_columns: int = 4):
     selection = state.get("selection")
-    with ui.element().classes(f'grid grid-cols-{number_of_columns} gap-2 w-full'):
+    with ui.element().classes(f'grid grid-cols-{number_of_columns} gap-2 w-full') as grid:
         for i,instance in enumerate(instances):
             name = get_name(i,instance)
             id = instance.id
@@ -278,6 +280,7 @@ def render_object_cards(state: GUIState, instances, kind: str | Callable, cardwa
                 
             # Fix lambda by creating a closure with the current value of new_sel
             card.on('click', lambda _, new_sel=new_sel: change_selection(state, new_sel, clear_history=False))
+    return grid
 
 
 def view_all_instances(
@@ -330,29 +333,27 @@ def view_all_instances(
     instances = get_instances()
 
     # Render the details with all the available choices
-    selection = state.get("selection")
-    with state.get("details"):
-            if get_choice is not None:
-                render_object_choices(
-                    state=state, 
-                    instances=instances, 
-                    get_name=get_name,
-                    get_selection=get_choice, 
-                    set_selection=set_choice, 
-                    cardwall=init_cardwall(), 
-                    aspect_ratio=aspect_ratio
-                )
-            else:
-                render_object_cards(
-                    state=state, 
-                    instances=instances, 
-                    get_name=get_name,
-                    get_markdown=get_markdown,
-                    kind=kind, 
-                    cardwall=init_cardwall(), 
-                    number_of_columns=number_of_columns,
-                    aspect_ratio=aspect_ratio
-                )
+    if get_choice is not None:
+        return render_object_choices(
+            state=state, 
+            instances=instances, 
+            get_name=get_name,
+            get_selection=get_choice, 
+            set_selection=set_choice, 
+            cardwall=init_cardwall(), 
+            aspect_ratio=aspect_ratio
+        )
+    else:
+        return render_object_cards(
+            state=state, 
+            instances=instances, 
+            get_name=get_name,
+            get_markdown=get_markdown,
+            kind=kind, 
+            cardwall=init_cardwall(), 
+            number_of_columns=number_of_columns,
+            aspect_ratio=aspect_ratio
+        )
 
 class Attribute(TypedDict):
     caption: str

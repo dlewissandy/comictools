@@ -86,15 +86,16 @@ def view_pick_publisher(state):
 
     with state.get("details"):
         header("Pick a Publisher", 1)
-    view_all_instances(
-        state=state,
-        get_instances=Publisher.read_all,
-        kind="publisher",
-        aspect_ratio="1/1",
-        get_name=lambda i,x: x.name,
-        get_choice=lambda : series.publisher if series else None,
-        set_choice=set_publisher,
-    )            
+
+        view_all_instances(
+            state=state,
+            get_instances=Publisher.read_all,
+            kind="publisher",
+            aspect_ratio="1/1",
+            get_name=lambda i,x: x.name,
+            get_choice=lambda : series.publisher if series else None,
+            set_choice=set_publisher,
+        )            
 
             
         

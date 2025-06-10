@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from models.series import Series
-from gui.elements import markdown, header, init_cardwall, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message
+from gui.elements import markdown, header, init_cardwall, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message, view_attributes
 from gui.selection import SelectionItem, change_selection
 from gui.constants import TAILWIND_CARD
 from models.publisher import Publisher
@@ -40,10 +40,14 @@ def view_series(state):
                 image_field_editor(state, "pick-publisher", lambda: "Publisher", get_id, get_image_filepath, caption_size=2)
         
         # A cardwall for viewing and adding issues of the comic.
-        new_item_messager(state, "Issues", "I would like to create a new issue")
-        view_all_instances(state, series.get_issues().values, kind="issue", aspect_ratio="16/27")
+        with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+            with expansion.add_slot('header'):
+                new_item_messager(state, "Issues", "I would like to create a new issue")
+            view_all_instances(state, series.get_issues().values, kind="issue", aspect_ratio="16/27").style('margin-top: 0px; margin-bottom: 0px')
 
         # A cardwall for viewing and adding characters to the comic series.
-        new_item_messager(state, "Characters", "I would like to create a new character")
-        view_all_instances(state, series.get_characters().values, kind="character", aspect_ratio="1/1", get_name=lambda _,x: x.variant_name())
+        with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+            with expansion.add_slot('header'):
+                new_item_messager(state, "Characters", "I would like to create a new character")
+            view_all_instances(state, series.get_characters().values, kind="character", aspect_ratio="1/1", get_name=lambda _,x: x.variant_name())
         

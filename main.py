@@ -1,16 +1,29 @@
 import os
 import asyncio
+import json
 from nicegui import ui
 from generators import init_agents
 from gui.state import GUIState
 from dotenv import load_dotenv
-from gui.selection import update_breadcrumbs, SelectionItem, redraw_details, save_state, STATE_FILEPATH, restore_history, serialize_history, set_dark_mode
+from gui.selection import (
+    update_breadcrumbs,
+    thoughts_container,
+    SelectionItem,
+    redraw_details,
+    save_state,
+    STATE_FILEPATH,
+    restore_history,
+    serialize_history,
+    set_dark_mode)
 from loguru import logger
 from agents import Runner, ItemHelpers
 from openai.types.responses import ResponseTextDeltaEvent
 load_dotenv()
 
-
+ROLE_MAP = {
+    "you": "user",
+    "bot": "assistant",
+}
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
@@ -20,7 +33,11 @@ async def send(state: GUIState):
     question = text_input.value
     messages = []
     for msg in serialize_history(state):
-        role = "user" if msg.get("name", "user").lower()=="you" else "assistant"
+        # TODO: Need to handle tool call information
+        role = ROLE_MAP.get(msg.get("name", "user").lower(), None)
+        if role is None:
+            logger.warning(f"Unknown role in message: {msg}")
+            continue
         content = msg.get("text_html", "")
         messages.append({"role": role, "content": content})
     
@@ -31,6 +48,7 @@ async def send(state: GUIState):
         with ui.chat_message(name='You', sent=True).classes('w-full'):
             ui.markdown(question)
 
+        internal_thoughts_container = thoughts_container()
         response_message = ui.chat_message(name='Bot', sent=False)
         spinner = ui.spinner(type='dots')
     
@@ -38,16 +56,14 @@ async def send(state: GUIState):
     async def handle_events(messages: list[dict]):
         agents = state.get("agents")
         selection = state.get("selection")
-        if selection == []:
-            kind = "home"
-        else:
-            kind = selection[-1].kind
+        kind = "home" if not selection else selection[-1].kind
         agent = agents.get(kind, None)
         if agent is None:
             raise ValueError(f"Agent not found for kind: {kind}")
         stream = Runner.run_streamed(agent, input=messages)
         response = ""
         streamed_events = stream.stream_events()
+        parent_container = history
         async for event in streamed_events:
             # --- RAW TEXT TOKENS ---
             if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
@@ -61,6 +77,8 @@ async def send(state: GUIState):
             # --- AGENT HANDOFFS (if any) ---
             elif event.type == "agent_updated_stream_event":
                 logger.info(f"\n[Agent switched to: {event.new_agent.name}]")
+                # with internal_thoughts_container:
+                #     ui.markdown(f"➡️ Agent switched to **{event.new_agent.name}**")
 
             # --- TOOL USAGE EVENTS ---
             elif event.type == "run_item_stream_event":
@@ -69,27 +87,44 @@ async def send(state: GUIState):
 
                 # Tool invocation
                 if item.type == "tool_call_item":
-                    logger.info
-                    logger.info(f"\n[Tool call → {raw_item.name} with input {raw_item.arguments}]")
+                    tool_name = raw_item.name
+                    args = raw_item.arguments
+                    thought = f"🔧 Calling tool **{tool_name}** with arguments:\n```\n{args}\n```"
+                    logger.debug(thought)
+                    with internal_thoughts_container:
+                        with ui.chat_message(name='Tool Call', sent=False).classes('w-full'):
+                            ui.markdown(f"{tool_name}({args})")
 
                 # Tool output
                 elif item.type == "tool_call_output_item":
-                    logger.info(f"\n[Tool output → {item.output}]")
+                    tool_name = raw_item.get("name", raw_item)
+                    output = item.output
+                    thought = f"📤 Tool responded with:\n```\n{output}\n```"
+                    logger.debug(thought)
+                    with internal_thoughts_container:
+                        with ui.chat_message(name='Tool Output', sent=False).classes('w-full'):
+                            ui.markdown(str(output))
 
                 # Completed LLM message (post-tool or final)
                 elif item.type == "message_output_item":
                     text = ItemHelpers.text_message_output(item)
-                    logger.info(f"\n[Message output → {text}]")
+                    thought = f"🧠 Using tool output to generate message"
+                    logger.debug(thought)
 
             # (You can handle other event types here…)
         return stream.to_input_list()
 
     responses = await handle_events(messages)
     logger.debug(f"messages: {messages}")
+    if internal_thoughts_container in history and len(internal_thoughts_container.default_slot.children) == 0:
+        history.remove(internal_thoughts_container)
     if spinner in history:
         history.remove(spinner)
     messages.clear()
     messages.extend(responses)
+
+    # delete the internal thoughts container if it has no children
+
 
     save_state(state)
     if state.get("is_dirty",False):
