@@ -188,32 +188,47 @@ def full_width_image_selector_grid(state: GUIState, kind: str, images_path: str,
             aspect_ratio=aspect_ratio
         )     
 
-def image_field_editor(state: GUIState, kind, caption, get_name, get_id, get_image_filepath, aspect_ratio: str = "1/1"):
-    with ui.row().classes('w-full flex-nowrap'):
-        value = get_name()
-        id = get_id()
-        image_filepath = get_image_filepath()
-        header(caption.title(),2)
-        ui.space()
-        #if value is not None:
-        #    crud_button(kind="delete", action=lambda _: post_user_message(state, f"I would like to delete the {caption}."))
-        #else:
-        #    crud_button(kind="create", action = lambda _: post_user_message(state, f"I would like to add a {caption}."))
+def image_field_editor(
+        state: GUIState, 
+        kind: str, 
+        get_caption: Callable[[], str|None], 
+        get_id: Callable[[], str|None], 
+        get_image_filepath: Callable[[], str|None], 
+        aspect_ratio: str = "1/1",
+        caption_size: int = 2
+        ) -> ui.element:
+        
+    """
+    Display a field by a representative image.
 
+    Args:
+        state: The GUI elements containing the details and selection.
+        kind: The kind of image (e.g., 'publisher', 'series', 'logo').
+        get_caption: A function to get the caption of the item.
+        get_id: A function to get the ID of the item.
+        get_image_filepath: A function to get the file path of the image.
+        aspect_ratio: The aspect ratio of the image (default is "1/1").
 
-    card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}')
-    with card:
-        if value is not None and value !="":
-            header(value,4)
-            if os.path.exists(image_filepath):
-                ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')
+    """
+    caption = get_caption()
+    id = get_id()
+    image_filepath = get_image_filepath()
+
+    with ui.row().classes('w-full flex-nowrap') as row:
+        with ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}') as card:
+            if caption is not None and caption !="":
+                header(caption,2)
+            if image_filepath is None:
+                ui.label(f"Click to select").classes('text-gray-500').style('text-align: center;')
+            elif not os.path.exists(image_filepath):
+                ui.label(f"Image for {caption} not found.").style('color: red;')
             else:
-                ui.label(f"Image {value} not found.").style('color: red;')
-        else:
-            ui.label(f"No image available.")
-    new_itm = SelectionItem(name=kind.replace('-',' ').title(), id=id, kind=kind)
-    new_sel = [s for s in state.get("selection")]+[new_itm]
-    card.on('click', lambda _, new_sel=new_sel: change_selection(state, new=new_sel))
+                ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')
+        new_itm = SelectionItem(name=kind.replace('-',' ').title(), id=id, kind=kind)
+        new_sel = [s for s in state.get("selection")]+[new_itm]
+        card.on('click', lambda _, new_sel=new_sel: change_selection(state, new=new_sel))
+
+        return row
 
 def render_object_choices(state, instances, get_selection, set_selection, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda i,x: x.name):
     with cardwall:
