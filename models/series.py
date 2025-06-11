@@ -51,19 +51,14 @@ class Series(BaseModel):
         for item in contents:
             # if the item is a directory and not hidden, then it is a character
             if os.path.isdir(os.path.join(characters_path, item)) and not item.startswith("."):
-                # We want the varants, so we will add the item to the list
-                subcontents = os.listdir(os.path.join(characters_path, item))
-                for subitem in subcontents:
-                    if os.path.isdir(os.path.join(characters_path, item, subitem)) and not subitem.startswith("."):
-                        # We want the varants, so we will add the item to the list
-                        characters.append(f"{item}/{subitem}")
+                characters.append(item)
         return characters
     
-    def get_character(self, name: str | None = None, variant: str | None = None, id: str | None = None) -> Optional[CharacterModel]:
+    def get_character(self, name: str | None = None, id: str | None = None) -> Optional[CharacterModel]:
         """
         Get a character from the series.  If the name is not provided, then the id must be provided.
         """
-        character = CharacterModel.read(series=self.id, name=name, variant=variant, id=id)
+        character = CharacterModel.read(series=self.id, name=name, id=id)
         return character
     
     def get_characters(self) -> dict[str, CharacterModel]:
@@ -71,11 +66,10 @@ class Series(BaseModel):
         Get all the characters in the series.
         """
         characters = {}
-        for character in self.characters:
-            name, variant = character.split("/")
-            character_model = CharacterModel.read(series=self.id, name=name, variant=variant)
+        for character_id in self.characters:
+            character_model = CharacterModel.read(series=self.id, id=character_id)
             if character_model is not None:
-                characters[character] = character_model
+                characters[character_id] = character_model
         return characters
     
     def get_issue(self, issue_number: int) -> Optional[Issue]:

@@ -2,13 +2,12 @@ from typing import Tuple, Optional, List
 from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
-from gui.state import GUIState
+from gui.state import APPState
 from style.comic import ComicStyle
 from models.publisher import Publisher
-from gui.selection import change_selection
 
 
-def all_publishers_agent(state: GUIState) -> Agent:
+def all_publishers_agent(state: APPState) -> Agent:
     from models.series import Series
     from gui.selection import SelectionItem
 
@@ -73,10 +72,10 @@ def all_publishers_agent(state: GUIState) -> Agent:
         logger.info(f"The name '{name}' is available.")
         publisher = Publisher(name=name, logo=None, description=description, image=None)
         publisher.write()
-        selection = state.get("selection")
+        selection = state.selection
         new_itm = SelectionItem(name=publisher.name, id=publisher.id, kind='publisher')
         new_sel = [s for s in selection]+[new_itm]
-        change_selection(state, new=new_sel, clear_history=False)
+        state.change_selection(new=new_sel, clear_history=False)
         state["is_dirty"] = True
         return publisher
     

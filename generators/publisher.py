@@ -2,22 +2,21 @@ from typing import Tuple, Optional, List
 from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
-from gui.state import GUIState
+from gui.state import APPState
 import os
 
 
-def publisher_agent(state: GUIState) -> Agent:
+def publisher_agent(state: APPState) -> Agent:
     """
     Create an agent for the publisher assistant.
     """
     from models.publisher import Publisher
-    from gui.selection import save_state, change_selection
 
     def _get_publisher() -> Optional[Publisher]:
         """
         Get the currently selected publisher.
         """
-        selection = state.get("selection")
+        selection = state.selection
         if selection and selection[-1].kind == "publisher":
             return Publisher.read(id=selection[-1].id)
         return None
@@ -75,14 +74,14 @@ def publisher_agent(state: GUIState) -> Agent:
         Delete the currently selected publisher.
         NOTE: YOU MUST ASK FOR CONFIRMATION BEFORE YOU DO THIS.  IT IS DESTRUCTIVE AND IRREVERSIBLE.
         """
-        selection = state.get("selection")
+        selection = state.selection
         publisher = _get_publisher()
         if not publisher:
             return "Something odd happened.  No publisher is currently selected."  
         publisher.delete()
         state["is_dirty"] = True
-        change_selection(state, selection[:-1])
-        save_state(state)
+        state.change_selection(selection[:-1])
+        state.write()
         return f"Publisher {publisher.name} deleted."
     
     @function_tool
@@ -114,7 +113,7 @@ def publisher_agent(state: GUIState) -> Agent:
             A status message indicating the result of the rendering.
         """
         from models.publisher import Publisher
-        selection = state.get("selection")
+        selection = state.selection
         kind = selection[-1].kind
         if kind != "publisher":
             msg = f"The selection is not a publisher: {kind}"

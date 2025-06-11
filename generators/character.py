@@ -1,10 +1,10 @@
 from typing import Tuple, Optional, List
-from gui.state import GUIState
+from gui.state import APPState
 from agents import Agent, function_tool
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 
 
-def character_agent(state: GUIState) -> Agent:
+def character_agent(state: APPState) -> Agent:
     return Agent(
         name="Character Assistant",
         instructions="""

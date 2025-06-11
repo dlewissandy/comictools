@@ -1,16 +1,12 @@
-from typing import Optional
 from loguru import logger
 from agents import function_tool
-from style.comic import ComicStyle
-from models.series import Series
-from models.publisher import Publisher
-from gui.state import GUIState
-from gui.selection import SelectionItem, change_selection
+from gui.state import APPState
+
 
 
 
     
-def wrap_render_logo(state: GUIState):
+def wrap_render_logo(state: APPState):
     """
     Render the logo for a publisher.
     
@@ -29,7 +25,7 @@ def wrap_render_logo(state: GUIState):
             A status message indicating the result of the rendering.
         """
         from models.publisher import Publisher
-        selection = state.get("selection")
+        selection = state.selection
         kind = selection[-1].kind
         if kind != "publisher":
             msg = f"The selection is not a publisher: {kind}"

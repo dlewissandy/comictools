@@ -9,11 +9,11 @@ from .publisher import publisher_agent
 from .scene import scene_agent
 from .series import series_agent
 from .style import style_agent
-from gui.state import GUIState
+from gui.state import APPState
 from agents import Agent
 
 
-def init_agents(state: GUIState) -> dict[str, Agent]:
+def init_agents(state: APPState) -> dict[str, Agent]:
     """
     Initialize the agents for the application.
     

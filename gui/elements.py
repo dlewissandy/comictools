@@ -6,8 +6,8 @@ from nicegui import ui
 from nicegui.events import UploadEventArguments
 from gui.constants import TAILWIND_CARD
 from gui.messaging import post_user_message
-from gui.state import GUIState
-from gui.selection import SelectionItem, change_selection
+from gui.state import APPState
+from gui.selection import SelectionItem
 
 HEADER_STYLES = {
     0: 'font-size: 3rem; font-weight: bold;',
@@ -51,7 +51,7 @@ def crud_button(kind: str, action: Callable, size: int = 2):
     button.on('click', action)
     return button
 
-def markdown_field_editor(state: GUIState, name: str, value: str | None, header_size: int = 2):
+def markdown_field_editor(state: APPState, name: str, value: str | None, header_size: int = 2):
     with ui.row().classes('w-full flex-nowrap'):
         header(name.title(),header_size)
         ui.space()
@@ -112,7 +112,7 @@ def markdown(body: str) -> None:
             with ui.element('div').classes('markdown-content'):
                 ui.markdown(body)
 
-def full_width_image_selector_grid(state: GUIState, kind: str, images_path: str, get_images, get_selection, set_selection, aspect_ratio="1/1", caption: str = "Images", columns: int = 4, header_size: int = 2):
+def full_width_image_selector_grid(state: APPState, kind: str, images_path: str, get_images, get_selection, set_selection, aspect_ratio="1/1", caption: str = "Images", columns: int = 4, header_size: int = 2):
     """
     Create a grid of full-width image selectors.
 
@@ -190,7 +190,7 @@ def full_width_image_selector_grid(state: GUIState, kind: str, images_path: str,
         )     
 
 def image_field_editor(
-        state: GUIState, 
+        state: APPState, 
         kind: str, 
         get_caption: Callable[[], str|None], 
         get_id: Callable[[], str|None], 
@@ -226,8 +226,8 @@ def image_field_editor(
             else:
                 ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')
         new_itm = SelectionItem(name=kind.replace('-',' ').title(), id=id, kind=kind)
-        new_sel = [s for s in state.get("selection")]+[new_itm]
-        card.on('click', lambda _, new_sel=new_sel: change_selection(state, new=new_sel))
+        new_sel = [s for s in state.selection]+[new_itm]
+        card.on('click', lambda _, new_sel=new_sel: state.change_selection(new=new_sel))
 
         return row
 
@@ -253,11 +253,12 @@ def render_object_choices(state, instances, get_selection, set_selection, cardwa
     return cardwall
 
 
-def render_object_cards(state: GUIState, instances, kind: str | Callable, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda i,x: x.name, get_markdown: Optional[Callable] = None, number_of_columns: int = 4):
-    selection = state.get("selection")
+def render_object_cards(state: APPState, instances, kind: str | Callable, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda i,x: x.name, get_markdown: Optional[Callable] = None, number_of_columns: int = 4):
+    selection = state.selection
     with ui.element().classes(f'grid grid-cols-{number_of_columns} gap-2 w-full') as grid:
         for i,instance in enumerate(instances):
             name = get_name(i,instance)
+            logger.debug(f"Rendering card for {name} with kind {kind}")
             id = instance.id
             logger.debug(f"Creating card for {id}")
             card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}')
@@ -279,7 +280,7 @@ def render_object_cards(state: GUIState, instances, kind: str | Callable, cardwa
                         markdown(get_markdown(instance))
                 
             # Fix lambda by creating a closure with the current value of new_sel
-            card.on('click', lambda _, new_sel=new_sel: change_selection(state, new_sel, clear_history=False))
+            card.on('click', lambda _, new_sel=new_sel: state.change_selection( new_sel, clear_history=False))
     return grid
 
 
@@ -360,7 +361,7 @@ class Attribute(TypedDict):
     get_value: str | Callable
 
 
-def view_attributes(state: GUIState, caption: str, attributes: list[Attribute], expanded: bool=False, individual_icons: bool = True, header_size: int=1):
+def view_attributes(state: APPState, caption: str, attributes: list[Attribute], expanded: bool=False, individual_icons: bool = True, header_size: int=1):
     with ui.element().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as container:
         with ui.expansion( value=expanded ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
@@ -388,7 +389,7 @@ def view_attributes(state: GUIState, caption: str, attributes: list[Attribute], 
 
 
 def image_drop_field_editor(
-        state: GUIState,
+        state: APPState,
         caption: str, 
         kind: str,
         get_image_filepath: Callable[[], str | None] = lambda: None,
@@ -416,7 +417,7 @@ def image_drop_field_editor(
 
 
 def view_image_choices(
-    state: GUIState,
+    state: APPState,
     kind: str,
     images_path: str,
     get_images: Callable[[], list[str]],
@@ -425,8 +426,8 @@ def view_image_choices(
 ): 
     """
     """
-    details = state.get("details")
-    details.clear()
+    details = state.details
+    state.clear_details()
     with details:
         with ui.row():
             header(1, f"Select {kind.title()} Image")

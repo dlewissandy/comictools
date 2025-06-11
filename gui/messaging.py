@@ -1,15 +1,15 @@
 from loguru import logger
-from gui.state import GUIState
+from gui.state import APPState
 from nicegui import ui
 
-def post_user_message(state:GUIState, message: str ):
+def post_user_message(state:APPState, message: str ):
     logger.debug(str)
-    user_input = state.get("user_input")
-    send_button = state.get("send_button")
+    user_input = state.user_input
+    send_button = state.send_button
     user_input.value = message
     send_button.run_method('click')
     
-def new_item_messager(state: GUIState, caption: str, message: str, caption_size: int = 2):
+def new_item_messager(state: APPState, caption: str, message: str, caption_size: int = 2):
     from gui.elements import header, crud_button
     with ui.row().classes('w-full') as row:
         header(caption, caption_size)

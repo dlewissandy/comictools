@@ -1,12 +1,13 @@
 import os
 from nicegui import ui
-from gui.selection import SelectionItem, change_selection
-from gui.elements import init_cardwall, view_all_instances
+from gui.selection import SelectionItem
+from gui.elements import init_cardwall
 from gui.elements import markdown, image_field_editor
 from models.scene import SceneModel
+from gui.state import APPState
 
 
-def view_scene(state):
+def view_scene(state: APPState):
     """
     View the details of a scene.
     
@@ -14,13 +15,13 @@ def view_scene(state):
         state: The GUI elements containing the details and selection.
     """
     from style.comic import ComicStyle
-    details = state.get("details")
-    selection = state.get("selection")
+    details = state.details
+    selection = state.selection
     scene_id = selection[-1].id
     issue_id = selection[-2].id
     scene = SceneModel.read(issue=issue_id, id=scene_id)
     if scene is None:
-        details.clear()
+        state.clear_details()
         message = f"Scene with ID {scene_id} not found in issue {issue_id}."
         with details:
             ui.markdown(message)
@@ -66,5 +67,5 @@ def view_scene(state):
                                 markdown(f"## Panel {i+1}\n\n{panel.story}")
                     new_itm = SelectionItem(name=f"panel {i+1}", id=panel.id, kind='panel')
                     new_sel = [s for s in selection]+[new_itm]
-                    card.on('click', lambda _, new_sel=new_sel: change_selection(state, new=new_sel))
+                    card.on('click', lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
 

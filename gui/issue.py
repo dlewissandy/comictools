@@ -4,8 +4,9 @@ from nicegui import ui
 from gui.elements import markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes
 from models.issue import Issue
 from style.comic import ComicStyle
+from gui.state import APPState
 
-def view_issue(state):
+def view_issue(state:APPState):
     """
     View the details of an issue.
     
@@ -13,12 +14,12 @@ def view_issue(state):
         state: The GUI elements containing the details and selection.
     """
     from gui.messaging import new_item_messager, post_user_message
-    selection = state.get("selection")
+    selection = state.selection
     issue_id = selection[-1].id
     issue = Issue.read(id=issue_id)
-    details = state.get("details")
+    details = state.details
     if issue is None:
-        details.clear()
+        state.clear_details()
         message = f"Issue with ID {issue_id} not found."
         with details:
             ui.markdown(message)

@@ -2,7 +2,7 @@
 from typing import Tuple
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
-from gui.state import GUIState
+from gui.state import APPState
 from style.comic import ComicStyle
 from style.art import ArtStyle
 from style.bubble import DialogType
@@ -11,9 +11,8 @@ from style.bubble import BubbleStyles, BubbleStyle
 import os
 from loguru import logger
 
-def style_agent(state: GUIState) -> Agent:
-    from gui.selection import save_state, change_selection
-
+def style_agent(state: APPState) -> Agent:
+    
     def get_comic_style() -> ComicStyle:
         """
         Get the currently selected comic style.
@@ -21,7 +20,7 @@ def style_agent(state: GUIState) -> Agent:
         Returns:
             The ComicStyle object if found, otherwise None.
         """
-        selection = state.get("selection")
+        selection = state.selection
         if selection and selection[-1].kind == "style":
             return ComicStyle.read(id=selection[-1].id)
         return None
@@ -294,14 +293,14 @@ def style_agent(state: GUIState) -> Agent:
         Delete the current style (with its associated art, character and dialog styles).
         NOTE: YOU MUST ASK FOR CONFIRMATION BEFORE YOU DO THIS.  IT IS DESTRUCTIVE AND IRREVERSIBLE.
         """
-        selection = state.get("selection")
+        selection = state.selection
         style = get_comic_style()
         if not style:
             logger.error("No style is currently selected.")
             return "Something odd happened.  No style is currently selected."  
         style.delete()
         state["is_dirty"] = True
-        change_selection(state, selection[:-1])
+        state.change_selection(selection[:-1])
         return f"Style {style.name} deleted."
 
     def render_dialog_example(state, bubble_type: str) -> str:

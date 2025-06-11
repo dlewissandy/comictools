@@ -4,8 +4,7 @@ from nicegui import ui
 from models.publisher import Publisher
 from gui.elements import header, crud_button, markdown_field_editor, full_width_image_selector_grid, view_all_instances, view_attributes, Attribute
 from gui.messaging import post_user_message
-from gui.elements import init_cardwall
-from gui.constants import TAILWIND_CARD
+from gui.state import APPState
 
 
 def view_publisher(state):
@@ -16,10 +15,10 @@ def view_publisher(state):
         state: The GUI elements containing the details and selection.
     """
     logger.debug("view_publisher")
-    selection = state.get("selection")
+    selection = state.selection
     publisher_id = selection[-1].id
     publisher = Publisher.read(id=publisher_id)
-    details = state.get("details")
+    details = state.details
 
     if publisher is None:
         header("Publisher not found", 0).style('text-red-500')
@@ -61,7 +60,7 @@ def view_publisher(state):
                 set_selection=publisher.set_image,
             )        
                 
-def view_pick_publisher(state):
+def view_pick_publisher(state:APPState):
     """
     View the publisher picker.
     
@@ -72,7 +71,7 @@ def view_pick_publisher(state):
     logger.debug("view_pick_publisher")
 
     # Dereference the state to get the selection and details.
-    selection = state.get("selection")
+    selection = state.selection
     series_id = selection[-2].id
     series = Series.read(id=series_id)
     pub_id = selection[-1].id
@@ -84,7 +83,7 @@ def view_pick_publisher(state):
             series.publisher = publisher_id
             series.write()
 
-    with state.get("details"):
+    with state.details:
         header("Pick a Publisher", 1)
 
         view_all_instances(

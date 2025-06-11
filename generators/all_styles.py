@@ -1,17 +1,14 @@
-from typing import Tuple, Optional, List
 from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
-from gui.state import GUIState
+from gui.state import APPState
 from style.comic import ComicStyle
-from gui.selection import change_selection
 from style.art import ArtStyle
 from style.character import CharacterStyle
-from style.bubble import BubbleStyle, BubbleStyles
+from style.bubble import BubbleStyles
 
 
-def all_styles_agent(state: GUIState) -> Agent:
-    from models.series import Series
+def all_styles_agent(state: APPState) -> Agent:
     from gui.selection import SelectionItem
 
     @function_tool
@@ -57,11 +54,11 @@ def all_styles_agent(state: GUIState) -> Agent:
             image=None
         )
         style.write()
-        selection = state.get("selection")
+        selection = state.selection
         new_itm = SelectionItem(name=style.name, id=style.id, kind='style')
         new_sel = [s for s in selection]+[new_itm]
         state["is_dirty"] = True
-        change_selection(state, new=new_sel, clear_history=False)
+        state.change_selection(new=new_sel, clear_history=False)
         return style
         
     @function_tool
@@ -161,8 +158,8 @@ def all_styles_agent(state: GUIState) -> Agent:
     return Agent(
         name="Home Screen Assistant",
         instructions="""
-        You are an interactive artistic assistant who helps human artists and creators manage
-        comic book styles.  
+        You are an interactive artistic assistant who helps human artists and 
+        creators manage comic book styles.  
   
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,

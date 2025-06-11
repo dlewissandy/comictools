@@ -1,18 +1,19 @@
 from loguru import logger
-from gui.state import GUIState
+from gui.state import APPState
 from gui.elements import header, view_all_instances, markdown_field_editor, view_attributes, Attribute, image_drop_field_editor, full_width_image_selector_grid, crud_button
 from gui.messaging import post_user_message
 from style.comic import ComicStyle
 from gui.constants import TAILWIND_CARD
 from nicegui import ui
+from gui.state import APPState
 
-def view_style(state: GUIState):
+def view_style(state: APPState):
     """
     Editor for comic styles.
     """
     
     # Read in the state
-    selection = state.get("selection")
+    selection = state.selection
     style = ComicStyle.read(id=selection[-1].id)
 
     # Sanity check
@@ -24,7 +25,7 @@ def view_style(state: GUIState):
         return
 
     # Render the information about the style
-    with state.get("details"):
+    with state.details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(style.name.title(), 0)
             ui.space()
@@ -126,7 +127,7 @@ def view_pick_style(state):
     logger.debug("view_pick_style")
 
     # Dereference the state to get the selection and details.
-    selection = state.get("selection")
+    selection = state.selection
     parent_id = selection[-2].id
     parent_kind = selection[-2].kind
     if parent_kind == "issue":
@@ -151,7 +152,7 @@ def view_pick_style(state):
             parent.style = style_id
             parent.write()
 
-    with state.get("details"):
+    with state.details:
         header("Pick a Style", 1)
     view_all_instances(
         state=state,
@@ -165,10 +166,10 @@ def view_pick_style(state):
 
 
 def view_pick_art_style_image(
-    state: GUIState
+    state: APPState
 ):
     from gui.elements import full_width_image_selector_grid
-    selection = state.get("selection")
+    selection = state.selection
     style_id = selection[-2].id
     style = ComicStyle.read(id=style_id)
     if style is None:
@@ -194,7 +195,7 @@ def view_pick_art_style_image(
     
     image_path = style.image_path(img_type="art")
 
-    with state.get("details"):
+    with state.details:
         header(f"Art Style Image for {style.name}", 1)
     full_width_image_selector_grid(
         state=state,

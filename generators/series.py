@@ -1,11 +1,11 @@
 from typing import Tuple, Optional, List
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
-from gui.state import GUIState
+from gui.state import APPState
 from models.series import Series
 
 
-def series_agent(state: GUIState) -> Agent:
+def series_agent(state: APPState) -> Agent:
     from models.issue import Issue
     
     @function_tool
@@ -16,7 +16,7 @@ def series_agent(state: GUIState) -> Agent:
         Returns:
             A string containing the details of the current comic series.
         """
-        selection = state.get("selection")
+        selection = state.selection
         sel_item = selection[-1] if selection else None
         if not sel_item or sel_item.kind != "series":
             return "No comic series selected. Please select a series to view details."
@@ -41,7 +41,7 @@ def series_agent(state: GUIState) -> Agent:
             A confirmation message indicating the update was successful.
         """
         from models.series import Series
-        selection = state.get("selection")
+        selection = state.selection
         series_id = selection[-1].id if selection else None
         if not series_id:
             return "No series selected. Please select a series to update."
@@ -61,7 +61,7 @@ def series_agent(state: GUIState) -> Agent:
         Returns:
             A list of the names of the issues in the current comic series.
         """
-        selection = state.get("selection")
+        selection = state.selection
         sel_item = selection[-1] if selection else None
         if not sel_item or sel_item.kind != "series":
             return ["No comic series selected. Please select a series to view issues."]

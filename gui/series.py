@@ -2,19 +2,18 @@ import os
 from loguru import logger
 from models.series import Series
 from gui.elements import markdown, header, init_cardwall, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message, view_attributes
-from gui.selection import SelectionItem, change_selection
-from gui.constants import TAILWIND_CARD
 from models.publisher import Publisher
 from nicegui import ui
+from gui.state import APPState
 
 
-def view_series(state):
+def view_series(state: APPState):
     from gui.messaging import new_item_messager
 
     # Dereference the state to get the selection and detials.
-    selection = state.get("selection")
+    selection = state.selection
     series = Series.read(id=selection[-1].id)
-    details = state.get("details")
+    details = details
     details.clear()
 
     # Create safe accessors for the publisher's name, id and image filepath.
@@ -49,5 +48,5 @@ def view_series(state):
         with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Characters", "I would like to create a new character")
-            view_all_instances(state, series.get_characters().values, kind="character", aspect_ratio="1/1", get_name=lambda _,x: x.variant_name())
+            view_all_instances(state, series.get_characters().values, kind="character", aspect_ratio="1/1", get_name=lambda _,x: x.name)
         
