@@ -4,6 +4,19 @@ from agents.items import TResponseInputItem
 from loguru import logger
 
 STATE_FILEPATH = 'state.json'
+def elipsis(text: str, max_length: int = 50) -> str:
+    """
+    Truncate the text to a maximum length and add an ellipsis if it exceeds that length.
+    
+    Args:
+        text: The text to truncate.
+        max_length: The maximum length of the text.
+        
+    Returns:
+        The truncated text with an ellipsis if it was truncated.
+    """
+    return text if len(text) <= max_length else text[:max_length] + '...'
+
 
 class APPState:
     from gui.selection import SelectionItem
@@ -105,6 +118,7 @@ class APPState:
         """
         logger.trace("Clearing history")
         self.history.clear()
+        # TODO: re-enable the send button
         return self.history
 
     def clear_details(self):
@@ -130,8 +144,8 @@ class APPState:
         Returns:
             A list of openai messages.
         """
-        def get_message(elem: ui.element, name: str | None, sent = bool | None) -> list[dict]: 
-            logger.debug(f"Processing message: {elem.tag}")
+        def _get_transcript(elem: ui.element, name: str | None, sent = bool | None, indent:int= 0) -> list[dict]: 
+            logger.debug(" "*indent +f"Processing message: {elem.tag}")
             name = name or elem.props.get( 'name', None)
             sent = sent if sent is not None else elem.props.get('sent', None)
 
@@ -139,6 +153,7 @@ class APPState:
             text_html = text_html if text_html is not None else elem.props.get('content', text_html)
             text_html = text_html if text_html is not None else elem.props.get('innerHTML', text_html)
             if text_html is not None and name is not None:
+                logger.debug(" "*indent +f"Found message: {name} - {elipsis(text_html)}")
                 return [{
                     'name': name,
                     'text_html': text_html,
@@ -146,18 +161,43 @@ class APPState:
                 }]
             
             if elem.default_slot.children is None:
+                logger.debug(" "*indent +"No children in element: {elem.tag}")
                 return []
             
             if len(elem.default_slot.children) == 0:
+                logger.debug(" "*indent +f"zero children in element: {elem.tag}" )
                 return []
             
             result = []
             for child in elem.default_slot.children:
-                result.extend(get_message(child, name=name, sent=sent))
+                result.extend(_get_transcript(child, name=name, sent=sent, indent=indent+2))
             return result
         
-        logger.debug("Serializing history")
-        return get_message(self.history, None, None) 
+        logger.trace("Serializing history")
+        result =  _get_transcript(self.history, None, None) 
+        logger.debug(f"Serialized history: {[{'name': msg.get('name', 'user'), 'text_html': elipsis(msg.get('text_html', ''))} for msg in result]}")
+        return result
+    
+    def get_messages(self, role_map: dict[str,str] = {}) -> list[dict]:
+        """
+        Get the messages from the chat history in the GUI state.   This list can then be sent
+        directly to an agent to generate a response
+        
+        Args:
+            state: The GUI elements containing the messages.
+        
+        Returns:
+            A list of dictionaries representing the messages in the chat history.
+        """
+        messages = []
+        for msg in self.get_transcript( ):
+            role = role_map.get(msg.get("name", "user").lower(), None)
+            if role is None:
+                logger.error(f"Unknown role in message: {msg}")
+                continue
+            content = msg.get("text_html", "")
+            messages.append({"role": role, "content": content})
+        return messages
 
     def restore_history(self, messages: list[dict]):
         """
