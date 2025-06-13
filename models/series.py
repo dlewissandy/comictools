@@ -8,6 +8,7 @@ from models.issue import Issue
 from helpers.constants import COMICS_FOLDER
 
 class Series(BaseModel):
+
     series_title: str = Field(..., description="The series title of the comic book")
     description: str | None = Field(..., description="A short paragraph describing the comic book series")
     publisher: Optional[str] = Field(..., description="The publisher of the comic book.  Optional.  Default to None")
@@ -83,13 +84,8 @@ class Series(BaseModel):
         """
         Get all the issues in the series.
         """
-        issues = {}
-        for issue_number in self.issues:
-            issue = Issue.read(series_title=self.series_title, issue_number=issue_number)
-            if issue is not None:
-                issues[issue_number] = issue
-        return issues
-
+        return { issue.id: issue for issue in Issue.read_all(series_id = self.id)}
+        
     def image_filepath(self) -> Optional[str]:
         """
         Get the filepath to a representative image for the series.   This will be the first cover image of any issue in the series.
@@ -110,6 +106,15 @@ class Series(BaseModel):
                         return filepath
         return None
 
+    def delete(self):
+        """
+        Delete the series and all its issues and characters.
+        """
+        import shutil
+        path = self.path()
+        if os.path.exists(path):
+            shutil.rmtree(path)
+
     def path(self) -> str:
         """
         return the path to the panel model
@@ -122,36 +127,50 @@ class Series(BaseModel):
         """
         return os.path.join(self.path(), "series.json")
 
-    def add_issue(self, **kwargs):
+    def add_issue(self, 
+                  title: str,
+                  story: str,
+                  issue_number: Optional[int] = None,
+                  ):
         """
-        Create a new comic book.
+        Create a new issue in the current comic book series.
+
+        Args:
+            title (str): The title of the issue.
+            story (str): An outline or synopsis of the story in the issue.   This should be detailed enough that it
+               could be used as a launching point for creating beatboards.
+            issue_number (int, optional): The issue number of the issue to create.  If not provided, it will be auto-generated.
+
+            
+        Returns:
+            An Issue object representing the newly created issue.
         """
         # get all the subfolders in the series' folder that are numbers.  These will be
         # the issue numbers.  If there are no subfolders, then the issue number is 1.
         # If there are subfolders, then the issue number is the max of the subfolders + 1
         issue_number = 1
-        issue_numbers = self.issues
-        issue_number= max(issue_numbers) + 1 if issue_numbers else 1
+        issue_numbers = self.get_issues().keys()
+        while issue_number in issue_numbers:
+            issue_number += 1
         
-        issue_number=kwargs.get("issue_number", issue_number)
         if issue_number in issue_numbers:
             raise ValueError(f"Issue {issue_number} already exists")
         
         issue = Issue(
-            id = kwargs.get("id", f"{self.id}/{issue_number}"),
+            id = title.lower().replace(" ", "-"),
             series = self.series_title,
-            issue_number = kwargs.get("issue_number", issue_number),
-            title = kwargs.get("issue_title", None),
-            issue_date = kwargs.get("issue_date", None),
-            price = kwargs.get("price", None),
-            writer = kwargs.get("writer", None),
-            artist = kwargs.get("artist", None),
-            colorist = kwargs.get("colorist", None),
-            creative_minds = kwargs.get("creative_minds", None),
-            cover = kwargs.get("cover", None),
-            characters = kwargs.get("characters", []),
-            style = kwargs.get("style", "vintage-four-color"),
-            scenes = kwargs.get("scenes", []),
+            issue_number = issue_number,
+            title = title,
+            issue_date = None,
+            price = None,
+            writer = None,
+            artist = None,
+            colorist = None,
+            creative_minds = None,
+            cover = {},
+            characters = [],
+            style = "vintage-four-color",
+            scenes = [],
         )
         issue.write()
         return issue
@@ -224,6 +243,17 @@ class Series(BaseModel):
             logger.debug(f"data: {data}")
             return cls.model_validate_json(data)
         
+    def get_next_issue_number(self) -> int:
+        """
+        Get the next issue number for the series.  This is the max issue number + 1.
+        If there are no issues, then the next issue number is 1.
+        """
+        issue_numbers = self.get_issues().keys()
+        issue_number = 1
+        while issue_number in issue_numbers:
+            issue_number += 1
+        return issue_number
+
     def format(self):
         self_json = self.model_dump()
         result = "## Series\n\n"

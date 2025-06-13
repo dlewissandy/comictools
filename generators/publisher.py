@@ -39,7 +39,7 @@ def publisher_agent(state: APPState) -> Agent:
             return "Something odd happened.  No publisher is currently selected."
         setattr(publisher, attribute, value)
         publisher.write()
-        state["is_dirty"] = True
+        state.is_dirty = True
         return f"{attribute} for {publisher.name} updated."
         
     @function_tool

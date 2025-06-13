@@ -10,6 +10,7 @@ data/publishers/**
 data/characters/**
 data/comics/**
 state.json
+*.log
 
 # Virtual environments
 .venv

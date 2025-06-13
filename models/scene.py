@@ -32,8 +32,10 @@ class SceneModel(BaseModel):
     A scene is a collection of pannels that tell a story.   For example, a scene could be a page in a comic book.
     """
     id: str = Field(..., description="A unique identifier for the scene.   Default to a short (5 words or less) description of the scene'")
+    title: str = Field(..., description="A short title for the scene.   Default to a short (5 words or less) description of the scene'")
     story: str = Field(..., description="The story or narrative arc of the scene")
     issue: str = Field(..., description="The identifier of the issue comic book or project that this scene belongs to. default to empty string")
+    series: str = Field(..., description="The identifier of the series that this scene belongs to. default to empty string")
     style: str = Field(..., description="The art style of the scene.   Default to 'vintage-four-color'")
     panels: list[str] = Field(..., description="The identifiers of the panels in the scene that tell the story visually.")
 
@@ -189,13 +191,13 @@ Do not add any new characters to the story.  Only use the characters that are al
         
 
     @classmethod
-    def read(cls, id: str, issue: str):
+    def read(cls, id: str, issue: str, series: str):
         """
         Read the scene from a file, by either reading the issue project/comic book or the scene itself.
         """
         # Verify that the issue exists
         from models.issue import Issue
-        issue_obj = Issue.read(id = issue)
+        issue_obj = Issue.read(id = issue, series_id= series)
         if issue_obj is None:
             raise FileNotFoundError(f"issue {issue} not found")
         path = os.path.join(issue_obj.path(), "scenes", id)

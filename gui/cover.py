@@ -19,8 +19,9 @@ def view_cover(state: APPState):
     selection = state.selection
     location = selection[-1].id
     issue_id = selection[-2].id
-    logger.debug(f"issue: {issue_id} cover: {location}")
-    cover  = TitleBoardModel.read(issue=issue_id, location=location)
+    series_id = selection[-3].id if len(selection) > 2 else None
+    logger.debug(f"series: {series_id} issue: {issue_id} cover: {location}")
+    cover  = TitleBoardModel.read(series=series_id, issue=issue_id, location=location)
     with details:
         if cover:
             markdown(cover.format())

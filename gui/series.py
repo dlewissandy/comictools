@@ -13,7 +13,7 @@ def view_series(state: APPState):
     # Dereference the state to get the selection and detials.
     selection = state.selection
     series = Series.read(id=selection[-1].id)
-    details = details
+    details = state.details
     details.clear()
 
     # Create safe accessors for the publisher's name, id and image filepath.

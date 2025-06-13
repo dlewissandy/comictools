@@ -104,6 +104,7 @@ class TitleBoardModel(BaseModel):
     id: str = Field(..., description="A unique identifier for the panel.   Default '<location>-cover'")
     location: CoverLocation = Field(..., description="The location of the cover.  front, inside-front, inside-back or back.  Default to front")
     issue: str = Field(..., description="The parent issue of the panel.   Default to empty string")
+    series: str = Field(..., description="The parent series of the panel.   Default to empty string")
     characters: list[str]  = Field(..., description="The names of the characters in the panel")
     style: str = Field(..., description="The art style of the panel.  Default to 'vintage-4-color'")
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to portrait")
@@ -117,7 +118,7 @@ class TitleBoardModel(BaseModel):
         return the path to the panel model
         """
         location_id = self.location.value.replace("_", "-")
-        return os.path.join(COMICS_FOLDER,self.issue,"covers",location_id)
+        return os.path.join(COMICS_FOLDER,self.series,"issues",self.issue,"covers",location_id)
     
     def filepath(self) -> str:
         """
@@ -159,7 +160,7 @@ class TitleBoardModel(BaseModel):
             f.write(self.model_dump_json(indent=2))
 
     @classmethod
-    def read(cls, issue: str, location: CoverLocation):
+    def read(cls, series: str, issue: str, location: CoverLocation):
         """
         read the panel model from a file
         """
@@ -169,7 +170,7 @@ class TitleBoardModel(BaseModel):
             # if it is a string then it is a location
             location_id = location.replace("_", "-")
 
-        filepath = os.path.join(COMICS_FOLDER, issue, "covers", location_id, "titleboard.json")
+        filepath = os.path.join(COMICS_FOLDER, series, "issues", issue, "covers", location_id, "titleboard.json")
         if not os.path.exists(filepath):
             return None
         with open(filepath, "r") as f:

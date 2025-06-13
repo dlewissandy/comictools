@@ -15,8 +15,9 @@ def view_issue(state:APPState):
     """
     from gui.messaging import new_item_messager, post_user_message
     selection = state.selection
+    series_id = selection[-2].id if len(selection) > 1 else None
     issue_id = selection[-1].id
-    issue = Issue.read(id=issue_id)
+    issue = Issue.read(series_id=series_id, id=issue_id)
     details = state.details
     if issue is None:
         state.clear_details()
@@ -26,9 +27,13 @@ def view_issue(state:APPState):
         return
     
     if issue.style is None:
+        logger.debug(f"Issue {issue.id} has no style set.")
         style = None
     else:
         style = ComicStyle.read(id=issue.style) if issue.style else None
+        if style is None:
+            logger.warning(f"Issue {issue.id} has style set to {issue.style} but style not found.")
+
     
     with details:
         header(f"ISSUE {issue.issue_number}: {issue.title}", 0)
@@ -40,11 +45,13 @@ def view_issue(state:APPState):
 
             with ui.column().classes('w-1/4'):
                 image_field_editor(
-                    state, "pick-style", "Style", 
-                    lambda: style.name if style else None, 
-                    lambda: style.id if style else None, 
-                    lambda: style.image_filepath() if style else None
+                    state=state, 
+                    kind="pick-style", 
+                    get_caption=lambda: "Style", 
+                    get_id =lambda: style.id if style else None, 
+                    get_image_filepath=lambda: style.image_filepath() if style else None
                 )
+
 
         view_attributes(
                     state = state,
@@ -62,7 +69,7 @@ def view_issue(state:APPState):
         new_item_messager(state, "Covers","I would like to create a new cover for this issue.")
         view_all_instances(
             state=state,
-            get_instances = issue.get_covers,
+            get_instances = lambda: issue.covers,
             kind=lambda cover: cover.location.replace("_", "-").lower() + "-cover",
             get_name=lambda _,cover: f"{cover.location.replace('_', ' ').title()} Cover",
             aspect_ratio="6/9"
@@ -72,10 +79,10 @@ def view_issue(state:APPState):
         new_item_messager(state, "Scenes","I would like to create a new scene for this issue.")
         view_all_instances(
             state=state,
-            get_instances = issue.get_scenes,
+            get_instances = lambda: issue.scenes,
             kind="scene",
             aspect_ratio="16/9",
-            get_name=lambda i,_: f"Scene {i+1}",
+            get_name=lambda i,scene: f"Scene {i+1}:{scene.title}",
             get_markdown=lambda scene: scene.story,
             number_of_columns=3
         )                

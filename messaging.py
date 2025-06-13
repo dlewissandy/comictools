@@ -18,6 +18,8 @@ from gui.state import APPState
 ROLE_MAP = {
     "you": "user",
     "bot": "assistant",
+    "tool output": "assistant",
+    "tool call": "assistant",
 }
 
 def append_history(sender: str, content: ui.element, sent: bool = True):

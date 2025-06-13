@@ -106,6 +106,18 @@ class APPState:
         """
         return self._is_dirty
 
+    @is_dirty.setter
+    def is_dirty(self, value: bool):
+        """
+        Set the dirty state of the GUI.
+        
+        Args:
+            value: A boolean indicating whether the GUI state has unsaved changes.
+        """
+        logger.debug(f"Setting is_dirty to {value}")
+        self._is_dirty = value
+
+
     def clear_history(self):
         """
         Clear the chat history in the GUI state.
@@ -246,10 +258,11 @@ class APPState:
         if old == new:
             logger.debug("New selection is the same as the old selection. No changes made.")
             return
+
         self._selection = new
 
         # If required (like moving up in the hierarchy), then clear the history
-        if clear_history:
+        if clear_history and len(new) <= len(old):
             self.clear_history()
         self.write()
 
@@ -259,7 +272,7 @@ class APPState:
             breadcrumb_selector(self)
             for i,item in enumerate(self.selection[1:]):
                 new_sel = self.selection[:i+2]
-                ui.button(item.name).props('rounded').on_click(lambda _, new_sel=new_sel: state.change_selection(new=new_sel))
+                ui.button(item.name).props('rounded').on_click(lambda _, new_sel=new_sel: self.change_selection(new=new_sel))
 
         self.refresh_details()
 

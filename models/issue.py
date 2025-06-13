@@ -27,10 +27,8 @@ class Issue(BaseModel):
     colorist: Optional[str] = Field(..., description="The colorist of the issue.  Optional.   Default to None")
     creative_minds: Optional[str] = Field(..., description="The creative minds behind the issue. Optional. Default to None")
 
-    cover: Optional[dict[str, str]] = Field(..., description="The cover pages of the issue.   Default to None")
     characters: list[str] = Field(..., description="The characters in the issue.  Default to empty string")
     style: Optional[str]  = Field(..., description="The style of the comic book.   Default to 'vintage-four-color'")
-    scenes: list[str] = Field(..., description="The scenes of the issue. Default to empty list")
 
     @property
     def name(self) -> str:
@@ -48,24 +46,66 @@ class Issue(BaseModel):
         from models.series import Series
         return Series.read(series_title=self.series)
     
-    def get_scenes(self) -> list[SceneModel]:
+    @property
+    def scenes(self) -> list[SceneModel]:
         """
         return the scenes of the comic book
         """
         scenes = []
-        for scene_number, scene_id in enumerate(self.scenes):
-            scene = SceneModel.read(id=scene_id, issue=self.id)
-            if scene is not None:
-                scenes.append(scene)
+        
+        scenes_rootpath = os.path.join(self.path(), "scenes")
+        if not os.path.exists(scenes_rootpath):
+            logger.warning(f"Scenes folder {scenes_rootpath} does not exist")
+            return scenes
+        for scene_id in os.listdir(scenes_rootpath):
+            scene_path = os.path.join(scenes_rootpath, scene_id)
+            # skip if not a dir
+            if not os.path.isdir(scene_path):
+                logger.warning(f"Scene {scene_id} is not a directory")
+                continue
+            # skip if hidden
+            if scene_id.startswith("."):
+                logger.warning(f"Scene {scene_id} is a hidden file")
+                continue
+            # read the scene
+            scene = SceneModel.read(series=self.series_id, issue=self.id, id=scene_id)
+            if scene is None:
+                logger.warning(f"Scene {scene_id} does not exist")
+                continue
+            scenes.append(scene)
+        
         return scenes
 
-    def get_covers(self) -> list[TitleBoardModel]:
+    @property
+    def covers(self) -> list[TitleBoardModel]:
         """
         return the covers of the comic book
         """
+        # get all the subfolders of the covers folder
         covers = []
-        for cover_type, cover_id in self.cover.items():
-            cover = TitleBoardModel.read(issue=self.id, location=CoverLocation(cover_type))
+        covers_path = os.path.join(self.path(), "covers")
+        if not os.path.exists(covers_path):
+            logger.warning(f"Covers folder {covers_path} does not exist")
+            return covers
+        possible_covers = os.listdir(covers_path)
+        logger.debug(f"possible_covers: {possible_covers}")
+        for cover_type in possible_covers:
+            # skip if it is not a directory
+            if not os.path.isdir(os.path.join(self.path(), "covers", cover_type)):
+                logger.debug(f"Skipping non-directory item in covers folder: {cover_type}")
+                continue
+            # skip if it is a hidden file
+            if cover_type.startswith("."):
+                logger.debug(f"Skipping hidden file in covers folder: {cover_type}")
+                continue
+            # skip if it is not a valid cover type
+            cover_types = [ct.name.lower() for ct in CoverLocation]
+            logger.debug(f"cover_types: {cover_types}")
+            if cover_type not in cover_types:
+                logger.debug(f"Invalid cover type: {cover_type}")
+                continue
+            # read the cover
+            cover = TitleBoardModel.read(series=self.series_id, issue=self.id, location=CoverLocation(cover_type))
             if cover is not None:
                 covers.append(cover)
         return covers
@@ -81,13 +121,13 @@ class Issue(BaseModel):
         """
         return the path to the panel model
         """
-        return f"{COMICS_FOLDER}/{self.id}"
+        return os.path.join(COMICS_FOLDER, self.series_id, "issues", self.id)
     
     def filepath(self) -> str:
         """
         return the filepath to the panel model
         """
-        return os.path.join(self.path(), "comic.json")
+        return os.path.join(self.path(), "issue.json")
    
     def add_character(self, name: str, variant: str | None = None):
         """
@@ -110,13 +150,27 @@ class Issue(BaseModel):
         """
         return the image of the comic book
         """
-        if self.cover is None or self.cover == {}:
+        covers = self.covers
+        if len(covers) == 0:
             return None
-        for key, value in self.cover.items():
-            value = TitleBoardModel.read(issue=self.id, location=CoverLocation(key))
-            if value.image is not None:
-                return os.path.join(self.path(), "covers", key, "images", f"{value.image}.jpg")
-        return None
+        # Sort the covers in order Front, Back, Inside Front, Inside Back
+        locations = [cover.location for cover in covers]
+        priorities = [CoverLocation.FRONT, CoverLocation.BACK, CoverLocation.INSIDE_FRONT, CoverLocation.INSIDE_BACK]
+        locations.sort(key=lambda x: priorities.index(x) if x in priorities else len(priorities))
+        # Return the first cover that has an image
+        location = locations[0]
+        series_id = self.series_id
+        issue_id = self.id
+        cover_filepath = os.path.join(COMICS_FOLDER, series_id, "issues", issue_id, "covers", location, "images",f"{locations[0]}.jpg")
+        logger.debug(f"cover_filepath: {cover_filepath}")
+        if not os.path.exists(cover_filepath):
+            logger.warning(f"Cover image {cover_filepath} does not exist")
+            return None
+        titleboard = TitleBoardModel.read(series=series_id, issue=issue_id, location=location)
+        if not titleboard:
+            logger.warning(f"TitleBoardModel for {series_id}/{issue_id}/{location} does not exist")
+            return None
+        return titleboard.image_filepath()
 
     def delete_character(self, name: str, variant: str | None = None):
         """
@@ -242,26 +296,20 @@ class Issue(BaseModel):
             f.write(self.model_dump_json(indent=2))  
 
     @classmethod
-    def read(cls, series_title: Optional[str]=None, issue_number: Optional[int]=None, id: Optional[str] = None) -> Optional["Issue"]:
+    def read(cls, series_id: str, id: str) -> Optional["Issue"]:
         """
         Load the comic book from a file.
 
         Args:
             series_title (str): The title of the comic book.  Optional.  Default to None
-            issue_number (int): The issue number.  Optional.  default to 1
+            issue_id (str): The issue identifier.  Optional.  default to 1
             id (str): The id of the comic book.  Optional.  Default to None
         NOTE: You must provide either the id or the series_title and issue_number
 
         Returns:
             Either a ComicBookModel object or None if the comic book does not exist.
         """
-        if id is None and series_title is None:
-            raise ValueError("Either id or series_title and issue_number must be provided")
-        if id is None:
-            if issue_number is None:
-                issue = 1
-            id = f"{series_title.lower().replace(' ', '-')}/{issue_number}".replace(" ", "-")
-        filepath = os.path.join(COMICS_FOLDER, id, "comic.json")
+        filepath = os.path.join(COMICS_FOLDER, series_id, "issues", id, "issue.json")
         if not os.path.exists(filepath):
             return None
         with open(filepath, "r") as f:
@@ -269,7 +317,7 @@ class Issue(BaseModel):
             return cls.model_validate_json(data)
 
     @classmethod
-    def read_all(cls, series_title: Optional[str]=None, series_id: Optional[str]=None) -> list["Issue"]:
+    def read_all(cls, series_id: str) -> list["Issue"]:
         """
         Load all comic books from the comics folder.
 
@@ -279,12 +327,9 @@ class Issue(BaseModel):
         Returns:
             A list of ComicBookModel objects.
         """
-        if series_id is None and series_title is None:
-            raise ValueError("Either series_id or series_title must be provided")
-        if series_id is None:
-            series_id = series_title.lower().replace(" ", "-")
+        series_id = series_id.lower().replace(" ", "-")
         issues = []
-        path = os.path.join(COMICS_FOLDER, series_id)
+        path = os.path.join(COMICS_FOLDER, series_id, "issues")
         if not os.path.exists(path):
             logger.warning(f"Comic book series {series_id} does not exist")
             return issues
@@ -292,13 +337,14 @@ class Issue(BaseModel):
         for filename in os.listdir(path):
             # check that it is a directory
             if not os.path.isdir(os.path.join(path, filename)):
+                logger.debug(f"Skipping non-directory item in issues folder: {filename}")
                 continue
             # if it is not a number, skip it
-            if not filename.isdigit():
-                logger.warning(f"Skipping non-numeric issue folder: {filename}")
+            if filename.startswith("."):
+                logger.debug(f"Skipping hidden file in issues folder: {filename}")
                 continue
-            issue_number = int(filename)
-            result.append(Issue.read(series_title=series_id, issue_number=issue_number))
+            issue_id = filename
+            result.append(Issue.read(series_id=series_id, id=issue_id))
         return result
 
     def format(self, header_level: int=1, no_covers: bool=False, no_scenes: bool=False, no_style:bool=False) -> str:

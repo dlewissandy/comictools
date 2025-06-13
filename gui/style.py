@@ -128,20 +128,33 @@ def view_pick_style(state):
 
     # Dereference the state to get the selection and details.
     selection = state.selection
-    parent_id = selection[-2].id
+    
     parent_kind = selection[-2].kind
     if parent_kind == "issue":
-        parent = Issue.read(id=parent_id)
+        issue_id = selection[-2].id
+        series_id = selection[-3].id
+        parent = Issue.read(series_id=series_id, id=issue_id)
     elif parent_kind == "scene":
-        parent = SceneModel.read(id=parent_id, issue=selection[-3].id)
+        scene_id = selection[-2].id
+        issue_id = selection[-3].id
+        series_id = selection[-4].id
+        parent = SceneModel.read()
     elif parent_kind == "front-cover":
-        parent = TitleBoardModel.read(id=parent_id, location=CoverLocation.FRONT_COVER)
+        issue_id = selection[-2].id
+        series_id = selection[-3].id
+        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.FRONT_COVER)
     elif parent_kind == "back-cover":
-        parent = TitleBoardModel.read(id=parent_id, location=CoverLocation.BACK_COVER)
+        issue_id = selection[-2].id
+        series_id = selection[-3].id
+        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.BACK_COVER)
     elif parent_kind == "inside-front-cover":
-        parent = TitleBoardModel.read(id=parent_id, location=CoverLocation.INSIDE_FRONT_COVER)
+        gissue_id = selection[-2].id
+        series_id = selection[-3].id
+        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.INSIDE_FRONT_COVER)
     elif parent_kind == "inside-back-cover":
-        parent = TitleBoardModel.read(id=parent_id, location=CoverLocation.INSIDE_BACK_COVER)
+        issue_id = selection[-2].id
+        series_id = selection[-3].id
+        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.INSIDE_BACK_COVER)
     
     style_id = selection[-1].id
     style = ComicStyle.read(id=style_id) if style_id else None
