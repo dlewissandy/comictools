@@ -96,8 +96,8 @@ class Series(BaseModel):
         if not issues:
             return None
         for issue in issues.values():
-            if issue.cover and issue.cover != {}:
-                image = issue.cover.get("front", None)
+            if issue.covers and issue.covers != []:
+                image = issue.covers[0]
                 if not image:
                     return None
                 if image:

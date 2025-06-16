@@ -167,15 +167,15 @@ def view_pick_style(state):
 
     with state.details:
         header("Pick a Style", 1)
-    view_all_instances(
-        state=state,
-        get_instances=style.read_all,
-        kind="style",
-        aspect_ratio="1/1",
-        get_name=lambda x: x.name,
-        get_choice=lambda : parent.style if parent else None,
-        set_choice=set_style,
-    )           
+        view_all_instances(
+            state=state,
+            get_instances=style.read_all,
+            kind="style",
+            aspect_ratio="1/1",
+            get_name=lambda _,x: x.name,
+            get_choice=lambda : parent.style if parent else None,
+            set_choice=set_style,
+        )           
 
 
 def view_pick_art_style_image(

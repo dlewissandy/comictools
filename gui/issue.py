@@ -1,10 +1,11 @@
 import os
 from loguru import logger
 from nicegui import ui
-from gui.elements import markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes
+from gui.elements import markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes, crud_button
 from models.issue import Issue
 from style.comic import ComicStyle
 from gui.state import APPState
+from gui.messaging import post_user_message
 
 def view_issue(state:APPState):
     """
@@ -13,7 +14,7 @@ def view_issue(state:APPState):
     Args:
         state: The GUI elements containing the details and selection.
     """
-    from gui.messaging import new_item_messager, post_user_message
+    from gui.messaging import new_item_messager
     selection = state.selection
     series_id = selection[-2].id if len(selection) > 1 else None
     issue_id = selection[-1].id
@@ -36,7 +37,11 @@ def view_issue(state:APPState):
 
     
     with details:
-        header(f"ISSUE {issue.issue_number}: {issue.title}", 0)
+        with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
+            header(f"ISSUE {issue.issue_number}: {issue.title}", 0)
+            ui.space()
+            crud_button(kind="delete", action=lambda _: ui.notify("I would like to delete the current issue."),size=1)
+
         
         with ui.row().classes('w-full flex-nowrap'):
             with ui.column().classes('w-3/4'):
@@ -63,27 +68,31 @@ def view_issue(state:APPState):
                         Attribute(caption="artist", get_value=lambda: issue.artist),
                         Attribute(caption="colorist", get_value=lambda: issue.colorist),
                         Attribute(caption="creative minds", get_value=lambda: issue.creative_minds)
-                    ]
+                    ],
+                    individual_icons=False,
                 )
 
-        new_item_messager(state, "Covers","I would like to create a new cover for this issue.")
-        view_all_instances(
-            state=state,
-            get_instances = lambda: issue.covers,
-            kind=lambda cover: cover.location.replace("_", "-").lower() + "-cover",
-            get_name=lambda _,cover: f"{cover.location.replace('_', ' ').title()} Cover",
-            aspect_ratio="6/9"
-        )
+        with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+            with expansion.add_slot('header'):
+                new_item_messager(state, "Covers","I would like to create a new cover for this issue.")
+            view_all_instances(
+                state=state,
+                get_instances = lambda: issue.covers,
+                kind=lambda cover: cover.location.replace("_", "-").lower() + "-cover",
+                get_name=lambda _,cover: f"{cover.location.replace('_', ' ').title()} Cover",
+                aspect_ratio="6/9"
+            )
 
-            
-        new_item_messager(state, "Scenes","I would like to create a new scene for this issue.")
-        view_all_instances(
-            state=state,
-            get_instances = lambda: issue.scenes,
-            kind="scene",
-            aspect_ratio="16/9",
-            get_name=lambda i,scene: f"Scene {i+1}:{scene.title}",
-            get_markdown=lambda scene: scene.story,
-            number_of_columns=3
-        )                
+        with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+            with expansion.add_slot('header'):
+                new_item_messager(state, "Scenes","I would like to create a new scene for this issue.")
+            view_all_instances(
+                state=state,
+                get_instances = lambda: issue.scenes,
+                kind="scene",
+                aspect_ratio="16/9",
+                get_name=lambda i,scene: f"Scene {i+1}:{scene.title}",
+                get_markdown=lambda scene: scene.story,
+                number_of_columns=3
+            )                
         

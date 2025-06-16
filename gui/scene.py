@@ -1,9 +1,14 @@
 import os
+from loguru import logger
 from nicegui import ui
+from nicegui.events import UploadEventArguments
 from gui.selection import SelectionItem
 from gui.elements import init_cardwall
-from gui.elements import markdown, image_field_editor
+from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button
+from gui.messaging import post_user_message
 from models.scene import SceneModel
+from models.panel import FrameLayout
+from helpers.file import generate_unique_id
 from gui.state import APPState
 
 
@@ -14,12 +19,14 @@ def view_scene(state: APPState):
     Args:
         state: The GUI elements containing the details and selection.
     """
+    # DEREFERENCE THE DATA
     from style.comic import ComicStyle
     details = state.details
     selection = state.selection
     scene_id = selection[-1].id
     issue_id = selection[-2].id
-    scene = SceneModel.read(issue=issue_id, id=scene_id)
+    series_id = selection[-3].id if len(selection) > 2 else None
+    scene = SceneModel.read(series=series_id, issue=issue_id, id=scene_id)
     if scene is None:
         state.clear_details()
         message = f"Scene with ID {scene_id} not found in issue {issue_id}."
@@ -29,43 +36,112 @@ def view_scene(state: APPState):
     
     style = ComicStyle.read(id=scene.style) if scene.style else None
     
+    # Draw the detials window.   It will have a row with the story and style, and then
+    # cardwall with the panels.   Unlike other cardwalls, this one will try to match each
+    # card to the size and aspect ratio of the panel image.  Each row can contain at most
+    # 4 "square" cards, or 2 "landscape" cards with one "square" card.   Portrait cards
+    # Are not currently supported.
+    #
+    #   +--------------------------------------------------+
+    #   | Story (3/4)                        | Style (1/4) |
+    #   +--------------------------------------------------+
+    #   | Panels (cardwall)                                |
+    #   +--------------------------------------------------+
+    #   |                  |                   |           |
+    #   +--------------------------------------------------+
+    #   |           |              |           |           |
+    #   +--------------------------------------------------+ 
     with details:
         with ui.row().classes('w-full flex-nowrap'):
             with ui.column().classes('w-3/4'):
-                ui.markdown("# Story").style('margin-top: 0; padding-top: 0; bottom-margin: 0; padding-bottom: 0;')
-                markdown(scene.story)
+                # TODO: Add button to convert story into multiple panels
+                markdown_field_editor(
+                    state=state, 
+                    name = "Story", 
+                    value = scene.story, 
+                    header_size = 2
+                )
             with ui.column().classes('w-1/4'):
-                ui.markdown(f"# Style").style('margin-top: 0; padding-top: 0; bottom-margin: 0; padding-bottom: 0;')
-                cardwall = init_cardwall(1)
                 image_field_editor(
-                    state, "pick-style", "Style", 
-                    lambda: style.name if style else None, 
-                    lambda: style.id if style else None, 
-                    lambda: style.image_filepath() if style else None
+                    state=state, 
+                    kind="pick-style", 
+                    get_caption = lambda: "Style", 
+                    get_id = lambda: style.id if style else None, 
+                    get_image_filepath = lambda: style.image_filepath() if style else None
                 )
                 
-        ui.markdown("# Panels").style('margin-top: 0; padding-top: 0; bottom-margin: 0; padding-bottom: 0;')
-        panels = scene.get_panels()
-        if not panels or panels == []:
-            ui.markdown("No panels available for this scene.")
-        else:
-            with init_cardwall():
-                for i,panel in enumerate(panels.values()):
+        with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+            with expansion.add_slot('header'):
+                header("Panels", 2)
+                ui.space()
+                crud_button("create", lambda: post_user_message(state, "I would like to add a new panel to the scene."))
+            expansion.value = True
+
+            panels = scene.panels
+            if not panels or panels == []:
+                ui.markdown("No panels available for this scene.")
+            else:
+                row = ui.row().classes("w-full")
+                w = 0
+                for panel in panels:
+                    if panel.aspect == FrameLayout.LANDSCAPE:
+                        panel_width = 3
+                        aspect = "3/2"
+                    else:
+                        panel_width = 2
+                        aspect = "1/1"
+                    if w + panel_width > 8:
+                        # Start a new row
+                        row = ui.row().classes("w-full")
+                        w = 0
+                    w += panel_width
                     image = None
                     if hasattr(panel, "image"):
                         image = getattr(panel, "image")
                         if image == "":
                             image == None
-                    card = ui.card().classes('mb-2 p-2 bg-blue-100 break-inside-avoid')
-                    with card:
-                        if image is not None:
-                            ui.image(source=os.path.join(scene.path, "panels", "images", f"image.py"))
-                        else:
-                            if isinstance(panel, str):
-                                ui.markdown(f"## Panel {i+1}\n\n{panel}")
+                    with row:
+                        # Create a new card that is panel_width/8 wide
+                        with ui.card().classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800').style(f'; width: {panel_width*12.25}%; aspect-ratio: {aspect}').classes('mb-2 p-2 break-inside-avoid ') as card:
+                            if image is not None:
+                                ui.image(source=os.path.join(scene.path, "panels", "images", f"image.py"))
                             else:
-                                markdown(f"## Panel {i+1}\n\n{panel.story}")
-                    new_itm = SelectionItem(name=f"panel {i+1}", id=panel.id, kind='panel')
-                    new_sel = [s for s in selection]+[new_itm]
-                    card.on('click', lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
+                                with ui.scroll_area().classes('w-full h-full').style('overflow: auto;'):
+                                    header(f"Panel {panel.id}", 3)
+                                    markdown(panel.description)
+                        new_itm = SelectionItem(name=f"panel {panel.id}", id=str(panel.id), kind='panel')
+                        new_sel = [s for s in selection]+[new_itm]
+                        card.on('click', lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
+                # Add a card for uploading an image to create a new panel
+                if w + 2 > 8:
+                    # Start a new row
+                    row = ui.row().classes("w-full")
+                    w = 0
+                with row:
+                    def on_upload(e:UploadEventArguments):
+                        # Save the uploaded file to the data/uploads directory with a unique name
+                        upload_dir = os.path.join("data", "uploads")
+                        if not os.path.exists(upload_dir):
+                            os.makedirs(upload_dir)
+
+                        # Check to see if the file is an image
+                        filepath = os.path.join(upload_dir, e.name)
+                        mime_type = e.type
+                        if not mime_type.startswith("image/"):
+                            raise ValueError("Uploaded file is not an image")
+                        
+                        # if the file already exists, then overwrite it.
+                        with open(filepath, "wb") as f:
+                            f.write(e.content.read())
+                        logger.info(f"Uploaded file to {filepath}")
+
+                        post_user_message(state, "I would like to generate a panel from the uploaded image: " + filepath)
+
+                    with ui.card().classes(DARK_MODE_STYLES).style('width: 24.5%; aspect-ratio: 1/1'):
+                        uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
+                        uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
+
+                        # Visible caption in center
+                        with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
+                            ui.label('Drop image to upload').classes('text-lg text-gray-600')
 

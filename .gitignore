@@ -9,6 +9,7 @@ wheels/
 data/publishers/**
 data/characters/**
 data/comics/**
+data/uploads/**
 state.json
 *.log
 

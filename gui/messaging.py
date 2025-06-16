@@ -2,7 +2,7 @@ from loguru import logger
 from gui.state import APPState
 from nicegui import ui
 
-def post_user_message(state:APPState, message: str ):
+def post_user_message(state:APPState, message: str):
     logger.debug(str)
     user_input = state.user_input
     send_button = state.send_button

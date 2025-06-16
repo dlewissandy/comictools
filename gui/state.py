@@ -261,9 +261,17 @@ class APPState:
 
         self._selection = new
 
-        # If required (like moving up in the hierarchy), then clear the history
+        # If required (like moving up in the hierarchy), we may need to clear the history.
         if clear_history and len(new) <= len(old):
-            self.clear_history()
+            # TODO: if returning from a lower level, we may want to add additional dialog.
+            # If we just are going up 1 level, and the last element in the old selection
+            # has a kind that starts with "pick-", then we can assume that the user
+            # has just picked an item, and we don't have to clear the history.
+            if len(new) == len(old) - 1 and old[-1].kind.startswith("pick-"):
+                logger.debug("Not clearing history because we are returning from a pick- selection.")
+            else:
+                logger.debug("Clearing history because we are moving up in the hierarchy.")
+                self.clear_history()
         self.write()
 
         # Update the breadcrumbs and details
@@ -280,15 +288,18 @@ class APPState:
         logger.trace("Refreshing details")
         logger.debug(f"SELECTION:{self.selection}")
         # These imports are here to avoid circular imports
+        from models.panel import CoverLocation
         from gui.home import view_all_styles, view_all_series, view_all_publishers
         from gui.style import view_style, view_pick_style
         from gui.series import view_series
-        from gui.character import view_character
+        from gui.character import view_character, view_character_reference
         from gui.issue import view_issue
         from gui.scene import view_scene
         from gui.panel import view_panel
         from gui.cover import view_cover
         from gui.publisher import view_publisher, view_pick_publisher
+        from gui.style import view_pick_art_style_image
+        from gui.reference_image import view_reference_image
 
         self.clear_details()
         selection = self.selection
@@ -298,44 +309,51 @@ class APPState:
 
         kind = selection[-1].kind
         
-
-        if kind == "all_series":
-            return view_all_series(self)
-        if kind == "all_publishers":
-            return view_all_publishers(self)
-        if kind == "all_styles":
-            return view_all_styles(self)
-        
-        if kind == 'style':
-            view_style(self)
-        elif kind == 'art-style-image':
-            from gui.style import view_pick_art_style_image
-            view_pick_art_style_image(self)
-        
-        elif kind == 'series':
-            view_series(self)
-        elif kind == 'character':
-            view_character(self)
-        elif kind == "issue":
-            view_issue(self)
-        elif kind == "scene":
-            view_scene(self)
-        elif kind == "panel":
-            view_panel(self)
-        elif kind == "cover":
-            view_cover(self)
-        elif kind == "publisher":
-            view_publisher(self)
-        elif kind == "pick-publisher":
-            view_pick_publisher(self)
-        elif kind == "pick-style":
-            view_pick_style(self)
-        else:
-            # Handle other cases or return a default message
-            self.clear_details()
-            with self.details:
-                ui.markdown(f"No description available for this item. {kind}")
-                return    
+        match kind:
+            case "all_series":
+                return view_all_series(self)
+            case "all_publishers":
+                return view_all_publishers(self)
+            case "all_styles":
+                return view_all_styles(self)
+            case "style":
+                return view_style(self)
+            case "art-style-image":
+                return view_pick_art_style_image(self)
+            case "series":
+                return view_series(self)
+            case "character":
+                return view_character(self)
+            case "issue":
+                return view_issue(self)
+            case "scene":
+                return view_scene(self)
+            case "panel":
+                return view_panel(self)
+            case "front-cover":
+                return view_cover(self, location=CoverLocation.FRONT)
+            case "back-cover":
+                return view_cover(self, location=CoverLocation.BACK)
+            case "inside-front-cover":
+                return view_cover(self, location=CoverLocation.INSIDE_FRONT)
+            case "inside-back-cover":
+                return view_cover(self, location=CoverLocation.INSIDE_BACK)
+            case "publisher":
+                return view_publisher(self)
+            case "pick-publisher":
+                return view_pick_publisher(self)
+            case "pick-style":
+                return view_pick_style(self)
+            case "character-reference":
+                return view_character_reference(self)
+            case "reference-image":
+                return view_reference_image(self)
+            case _:        
+                # Handle other cases or return a default message
+                self.clear_details()
+                with self.details:
+                    ui.markdown(f"No description available for this item. {kind}")
+                    return    
 
 
     def write(self):

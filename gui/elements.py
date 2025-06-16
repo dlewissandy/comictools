@@ -8,6 +8,7 @@ from gui.constants import TAILWIND_CARD
 from gui.messaging import post_user_message
 from gui.state import APPState
 from gui.selection import SelectionItem
+from models.panel import FrameLayout
 
 HEADER_STYLES = {
     0: 'font-size: 3rem; font-weight: bold;',
@@ -26,13 +27,15 @@ CRUD_ICON = {
     'render': 'brush'
 }
 
+DARK_MODE_STYLES = "border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800"
+
 CRUD_BUTTON_STYLES = {
      "1": "font-size: 1.25em; height: 1.25em; aspect-ratio: 1/1; padding: 0; line-height: inherit",
      "2": 'font-size: 1em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit'
 }
 
 def init_cardwall(columns: int = 4):
-    return ui.element('div').classes(f'columns-{columns} w-full gap-2')
+    return ui.element('div').classes(f'columns-{columns} w-full gap-2 ')
 
 def crud_button(kind: str, action: Callable, size: int = 2):
     """Create a button with a specific style and action.
@@ -152,8 +155,12 @@ def full_width_image_selector_grid(state: APPState, kind: str, images_path: str,
                 card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}').on('click', lambda _,image=image: on_click(image))       
                 card.classes('relative overflow-visible')
                 with card:
-                    image_filepath = os.path.join(images_path, f"{image}.jpg")
-                    logger.debug(f"image_filepath: {image_filepath}")
+                    # if it is a full path, then use it as, else construct a filepath
+                    if image.startswith(images_path):
+                        image_filepath = image
+                    else:
+                        image_filepath = os.path.join(images_path, f"{image}.jpg")
+                    logger.critical(f"image_filepath: {image_filepath}")
                     current_selection = get_selection()
                     if os.path.exists(image_filepath):
                         logger.debug(f"Image {image} exists at {image_filepath}")
@@ -162,7 +169,7 @@ def full_width_image_selector_grid(state: APPState, kind: str, images_path: str,
                             ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10').style('aspect-ratio: 1/1;')
                     else:
                         ui.label(f"Image {image} not found.").style('color: red;')
-            with ui.card().classes(TAILWIND_CARD).classes(f'aspect-[{aspect_ratio}] relative overflow-hidden'):
+            with ui.card().classes(TAILWIND_CARD + ' relative overflow-hidden').style(f'aspect-ratio: {aspect_ratio}'):
                 uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
                 uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
 
@@ -216,7 +223,7 @@ def image_field_editor(
     image_filepath = get_image_filepath()
 
     with ui.row().classes('w-full flex-nowrap') as row:
-        with ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}') as card:
+        with ui.card().classes(TAILWIND_CARD+ " w-24%").style(f'aspect-ratio: {aspect_ratio}') as card:
             if caption is not None and caption !="":
                 header(caption,2)
             if image_filepath is None:
@@ -231,25 +238,49 @@ def image_field_editor(
 
         return row
 
-def render_object_choices(state, instances, get_selection, set_selection, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda i,x: x.name):
+def render_object_choices(state, instances, get_selection, set_selection, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda i,x: x.name, number_of_columns: int = 4):    
+    """
+    Render a list of choices for a given object type.   Clicking on a choice will set the selection to that choice.
+
+    Args:
+        state: The application state
+        instances: The list of instances to render
+        get_selection: A function to get the current selection
+        set_selection: A function to set the current selection
+        cardwall: The cardwall to render the choices in
+        aspect_ratio: The aspect ratio of the cards
+        get_name: A function to get the name of an instance
+    """
+    logger.trace("render_object_choices")
+
+    def on_click(id: str):
+        # set the selection to the clicked item
+        set_selection(id)
+        cardwall.clear()
+        render_object_choices(state, instances=instances, get_selection=get_selection, set_selection=set_selection, cardwall=cardwall)
+
+    logger.debug([instance.name for instance in instances])
     with cardwall:
         for i,instance in enumerate(instances):
-            def on_click(id: str):
-                set_selection(id)
-                cardwall.clear()
-                render_object_choices(state, instances=instances, get_selection=get_selection, set_selection=set_selection, cardwall=cardwall)
-            
-            card = ui.card().classes(TAILWIND_CARD).style('aspect-ratio: 1/1').on('click', lambda _,id=instance.id: on_click(id=id))       
-            card.classes('relative overflow-visible')
-            with card:
+            logger.debug(f"Rendering card for {instance.name} with id {instance.id}")
+            with ui.card().classes(TAILWIND_CARD).style('aspect-ratio: 1/1').on('click', lambda _,id=instance.id: on_click(id=id)) as card:
+                logger.debug(f"Creating card for {instance.id}")
+                card.classes('relative overflow-visible')
                 header(get_name(i,instance),4)
                 image_filepath = instance.image_filepath()
-                if os.path.exists(image_filepath):
+                if image_filepath is not None and os.path.exists(image_filepath):
+                    logger.debug(f"Image {image_filepath} exists.")
                     ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')
-                    if instance.id == get_selection():
-                        ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10').style('aspect-ratio: 1/1;')
+                    logger.debug(f"instance.id={instance.id}, get_selection()={get_selection()}")
                 else:
+                    logger.debug(f"Image {image_filepath} does not exist.")
                     ui.label(f"Image {image_filepath} not found.").style('color: red;')
+                if instance.id == get_selection():
+                    logger.debug(f"Image {image_filepath} is selected.")
+                    ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10').style('aspect-ratio: 1/1;')
+                else:
+                    logger.debug(f"Image {image_filepath} is not selected.")
+                
     return cardwall
 
 
@@ -407,7 +438,7 @@ def image_drop_field_editor(
         aspect_ratio: The aspect ratio of the image (default is "3/2").
         width: The width of the image field (default is "full").
     """
-    with ui.card().classes(TAILWIND_CARD).classes(f'w-{width} aspect-[{aspect_ratio}] relative overflow-hidden'):
+    with ui.card().classes(TAILWIND_CARD).classes(f'w-{width} relative overflow-hidden').style(f'aspect-ratio: {aspect_ratio}') as card:
         uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
         uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
 
@@ -443,4 +474,34 @@ def view_image_choices(
 
         )
 
+    
+
+def aspect_ratio_picker(state: APPState, parent: ui.element, caption: str, get_aspect_ratio: Callable[[], str], set_aspect_ratio: Callable[[FrameLayout], None]):
+    """
+    A field editor for selecting an aspect ratio.
+    Args:
+        state: The GUI elements containing the details and selection.
+        caption: The caption for the aspect ratio field.
+        get_aspect_ratio: A function to get the current aspect ratio.
+        set_aspect_ratio: A function to set the current aspect ratio.
+    """
+    raw_value:FrameLayout = get_aspect_ratio()
+    text = raw_value.value.lower().replace("_", " ")
+    logger.debug(f"value={text}")
+
+    def on_click(value: FrameLayout):
+        select.text = value.value.lower().replace("_", " ")
+        set_aspect_ratio(value)
+
+    with parent:
+        header(caption,2)
+        with ui.dropdown_button(text=text, auto_close=True).style('width: 100%;') as select:
+            landscape = ui.item("landscape")
+            portrait = ui.item("portrait")
+            square = ui.item("square")
+
+    landscape.on_click(lambda _: on_click(FrameLayout.LANDSCAPE))
+    portrait.on_click(lambda _: on_click(FrameLayout.PORTRAIT))
+    square.on_click(lambda _: on_click(FrameLayout.SQUARE))
+    
     

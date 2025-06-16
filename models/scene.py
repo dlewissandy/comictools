@@ -1,60 +1,57 @@
 import os
 from loguru import logger
 from pydantic import BaseModel, Field
-from models.panel import RoughBoardModel, BeatBoardModel
+from models.panel import Panel
 from models.character import CharacterModel
 from helpers.constants import SCENES_FOLDER, STYLES_FOLDER, COMICS_FOLDER, PANELS_FOLDER
 from helpers.generator import invoke_generate_api
 from helpers.file import generate_unique_id
 
-class RoughBoardsModel(BaseModel):
-    """
-    A scene is a collection of pannels that tell a story.   For example, a scene could be a page in a comic book.
-    """
-    id: str = Field(..., description="A unique identifier for the scene.   Default to a short (5 words or less) description of the scene'")
-    story: str = Field(..., description="The story or narrative arc of the scene")
-    issue: str = Field(..., description="The identifier of the issue comic book or project that this scene belongs to. default to empty string")
-    style: str = Field(..., description="The art style of the scene.   Default to 'vintage-four-color'")
-    panels: list[RoughBoardModel ] = Field(..., description="The panels in the scene that tell the story visually.")
-
-class BeatBoardsModel(BaseModel):
-    """
-    A scene is a collection of pannels that tell a story.   For example, a scene could be a page in a comic book.
-    """
-    id: str = Field(..., description="A unique identifier for the scene.   Default to a short (5 words or less) description of the scene'")
-    story: str = Field(..., description="The story or narrative arc of the scene")
-    issue: str = Field(..., description="The identifier of the issue comic book or project that this scene belongs to. default to empty string")
-    style: str = Field(..., description="The art style of the scene.   Default to 'vintage-four-color'")
-    panels: list[BeatBoardModel ] = Field(..., description="The panels in the scene that tell the story visually.")
-
 class SceneModel(BaseModel):
     """
     A scene is a collection of pannels that tell a story.   For example, a scene could be a page in a comic book.
     """
-    id: str = Field(..., description="A unique identifier for the scene.   Default to a short (5 words or less) description of the scene'")
-    title: str = Field(..., description="A short title for the scene.   Default to a short (5 words or less) description of the scene'")
-    story: str = Field(..., description="The story or narrative arc of the scene")
     issue: str = Field(..., description="The identifier of the issue comic book or project that this scene belongs to. default to empty string")
     series: str = Field(..., description="The identifier of the series that this scene belongs to. default to empty string")
+    title: str = Field(..., description="A short title for the scene.   Default to a short (5 words or less) description of the scene'")
+    story: str = Field(..., description="The story or narrative arc of the scene")
     style: str = Field(..., description="The art style of the scene.   Default to 'vintage-four-color'")
-    panels: list[str] = Field(..., description="The identifiers of the panels in the scene that tell the story visually.")
 
-    def get_panels(self) -> dict[str, RoughBoardModel | BeatBoardModel]:
+    @property
+    def id(self) -> str:
+        """
+        The id of the scene is the same as the title, but with spaces replaced by underscores.
+        """
+        return self.title.replace(" ", "_")
+
+    @property
+    def panels(self) -> list[Panel]:
         """
         Get the panels in the scene
         """
-        panels = {}
-        for panel_id in self.panels:
-            panel = RoughBoardModel.read(issue=self.issue, scene=self.id, id=panel_id)
+
+        panels_path = os.path.join(self.path(), "panels")
+        panels = []
+
+        if not os.path.exists(panels_path):
+            return panels
+        
+        folder_contents = os.listdir(panels_path)
+        for panel_id in folder_contents:
+            # skip if it is not a folder
+            if not os.path.isdir(os.path.join(panels_path, panel_id)):
+                logger.warning(f"Skipping {panel_id} because it is not a folder")
+                continue
+            # Try to read the panel as a RoughBoardModel.  If that fails, then read it as a BeatBoardModel
+            panel = Panel.read(series=self.series, issue=self.issue, scene=self.id, id=panel_id)
             if panel is None:
-                panel = BeatBoardModel.read(issue=self.issue, scene=self.id, id=panel_id)
-            if panel is None:
-                # remove the panel from the list of panels
                 logger.warning(f"Panel {panel_id} not found in scene {self.id}.  Removing from scene")
-                self.panels.remove(panel_id)
-                self.write()
+                continue
             else:
-                panels[panel_id] = panel
+                panels.append(panel)
+
+        # Sort the panels by the numeric value of their id
+        panels.sort(key=lambda x: int(x.id))
         return panels
 
     def image_filepath(self) -> str | None:
@@ -62,16 +59,10 @@ class SceneModel(BaseModel):
         Get the image filepath for the scene.  This is the image of the first panel in the scene.
         If the scene has no panels, then return an empty string.
         """
-        panels = self.get_panels()
-        if not panels:
+        first_panel = self.read_panel(0)
+        if first_panel is None:
             return None
-        # Find the first panel that has an image
-        for panel in panels.values():
-            if panel.image_filepath():
-                return panel.image_filepath()
-        # If no panel has an image, return None
-        return None
-
+        return first_panel.image
 
     def characters(self) -> list[str]:
         """
@@ -102,7 +93,7 @@ class SceneModel(BaseModel):
         """
         return the path to the scene model
         """
-        return os.path.join(COMICS_FOLDER,self.issue, "scenes", self.id)
+        return os.path.join(COMICS_FOLDER,self.series,"issues",self.issue, "scenes", self.id)
         
     def filepath(self) -> str:
         """
@@ -320,23 +311,23 @@ This is the list of characters that appear in the scene.  Not all characters wil
         self.panels = posterior_ids
         self.write()
 
-    def read_panel(self, index:int):
+    def read_panel(self, index:int) -> Panel | None:
         """
         Read a panel from the scene
         """
-        if index < 0 or index >= len(self.panels):
+        logger.debug(f"Reading panel {index} from scene {self.id}")
+        if index < 0:
             raise IndexError(f"Panel index {index} out of range")
         # Try to read the panel as a RoughBoardModel.  If that fails, then read it as a BeatBoardModel
         # If that fails then raise an error.
-        panel_id = self.panels[index]
-        panel = RoughBoardModel.read(issue = self.issue, scene=self.id, id=panel_id)
-        if panel is not None:
-            return panel
-        panel = BeatBoardModel.read(issue=self.issue, scene=self.id, id=panel_id)
-        if panel is not None:
-            return panel
-        return None
-
+        panel = Panel.read(series=self.series,issue = self.issue, scene=self.id, id=index)
+        if panel is None:
+            logger.error(f"Panel {index} not found.")
+            return None
+        
+        logger.debug(f"Found beatboard panel {index}")
+        return panel
+        
     def read_panels(self):
         """
         Read the panels from the scene
