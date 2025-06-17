@@ -1,4 +1,9 @@
 
+"""
+This file displays the a reference image for either a panel or cover.
+It allows the user to select an image from the uploads directory or to upload a new one.
+"""
+
 import os
 from loguru import logger
 from nicegui import ui
@@ -89,5 +94,6 @@ def view_reference_image(
             get_selection=get_selection,
             set_selection=set_selection,
             get_images=get_images,
+            include_render_button=False,
         )
     

@@ -265,6 +265,52 @@ class CharacterModel(BaseModel):
         self.write()
         return self
     
+class StyledImage(BaseModel):
+    style_id: str = Field(..., description="The id of the style for which this image is generated.  e.g. 'vintage-four-color'")
+    series_id: str = Field(..., description="The id of the comic book series for which this image is generated.  e.g. 'spiderman'")
+    character_id: str = Field(..., description="The id of the character for which this image is generated.  e.g. 'spiderman'")
+    variant_id: str = Field(..., description="The id of the character variant for which this image is generated.  e.g. 'base' or 'young'")
+    image_id: str = Field(..., description="The id of the image.  This is a unique identifier for the image.")  
+
+    @property
+    def id(self) -> str:
+        """
+        return the id of the styled image
+        """
+        # Normalize the id:
+        return self.style_id
+
+    @property
+    def name(self) -> str:
+        """
+        return the name of the styled image
+        """
+        return self.style_id.replace("-", " ").title() 
+    
+    def image_path(self) -> str:
+        """
+        return the path to the styled image
+        """
+        return os.path.join(COMICS_FOLDER, self.series_id.lower().replace(" ", "-"), "characters", self.character_id.lower().replace(" ", "-"), self.variant_id.lower().replace(" ", "-"), "images", self.style_id.replace(" ", "-").lower())
+    
+    def image_filepath(self) -> str:
+        """
+        return the filepath to the styled image
+        """
+        return os.path.join(self.image_path(), f"{self.image_id}.jpg")
+    
+    def set_image(self, image_id: str):
+        """
+        set the image for the styled image
+        """
+        # verify that the file exists
+        self.image_id = image_id
+        variant = CharacterVariant.read(series=self.series_id, character=self.character_id, id=self.variant_id)
+        if variant is None:
+            raise ValueError(f"Variant {self.variant_id} for character {self.character_id} in series {self.series_id} not found.")
+        variant.images[self.style_id] = self.image_id
+        variant.write()
+
 class CharacterVariant(BaseModel):
     series: str = Field(..., description="The comic book series (title) that the character belongs to.  Default to empty string")
     character: str = Field(..., description="The identifier of the character for which this is a variant.  e.g. '<name>'")
@@ -360,12 +406,6 @@ class CharacterVariant(BaseModel):
         """
         write the character model to a file
         """
-        # create the directory if it doesn't exist
-        variant = self.variant
-        if self.variant is None or self.variant == "":
-            variant = "base"
-        # Normalize the id:
-        self.id =  os.path.join(self.name,variant).lower().replace(" ", "-")
         # Verify folder exists
         os.makedirs(self.path(), exist_ok=True)
         # write the character model to a file
@@ -465,14 +505,14 @@ class CharacterVariant(BaseModel):
             del self.image[style]
             self.write()
 
-    def images(self,style_id: str) -> list[str]:
-        """
-        return the list of images for the character model and given style
-        """
-        variant = self.variant
-        if self.variant is None or self.variant == "":
-            variant = "base"
-        return get_folder_contents(f"{CHARACTERS_FOLDER}/{self.id}/{variant}/{style_id}")
+    # def images(self,style_id: str) -> list[str]:
+    #     """
+    #     return the list of images for the character model and given style
+    #     """
+    #     variant = self.variant
+    #     if self.variant is None or self.variant == "":
+    #         variant = "base"
+    #     return get_folder_contents(f"{CHARACTERS_FOLDER}/{self.id}/{variant}/{style_id}")
     
     def styles(self) -> list[str]:
         """

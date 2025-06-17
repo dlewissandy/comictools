@@ -95,9 +95,11 @@ class Series(BaseModel):
         issues = self.get_issues()
         if not issues:
             return None
-        for issue in issues.values():
+        # sort the issues by issue number
+        issues_list = sorted(issues.values(), key=lambda x: x.issue_number)
+        for issue in issues_list:
             if issue.covers and issue.covers != []:
-                image = issue.covers[0]
+                image = issue.covers[0].image
                 if not image:
                     return None
                 if image:

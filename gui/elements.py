@@ -30,8 +30,9 @@ CRUD_ICON = {
 DARK_MODE_STYLES = "border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800"
 
 CRUD_BUTTON_STYLES = {
-     "1": "font-size: 1.25em; height: 1.25em; aspect-ratio: 1/1; padding: 0; line-height: inherit",
-     "2": 'font-size: 1em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit'
+     "1": "font-size: 1.25em; height: 1.25em; aspect-ratio: 1/1; padding: 0; line-height: inherit; margin: 0;",
+     "2": 'font-size: 1em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit; margin: 0;',
+     "3": 'font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit; margin: 0;'
 }
 
 def init_cardwall(columns: int = 4):
@@ -55,7 +56,7 @@ def crud_button(kind: str, action: Callable, size: int = 2):
     return button
 
 def markdown_field_editor(state: APPState, name: str, value: str | None, header_size: int = 2):
-    with ui.row().classes('w-full flex-nowrap'):
+    with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
         header(name.title(),header_size)
         ui.space()
         if value is not None:
@@ -112,10 +113,24 @@ def markdown(body: str) -> None:
             ''')
             
             # Apply the custom class to the markdown container
-            with ui.element('div').classes('markdown-content'):
-                ui.markdown(body)
+            with ui.element('div').classes('markdown-content').style('padding: 0; margin: 0;') as element:
+                ui.markdown(body).style('padding: 0; margin: 0;')
+            return element
 
-def full_width_image_selector_grid(state: APPState, kind: str, images_path: str, get_images, get_selection, set_selection, aspect_ratio="1/1", caption: str = "Images", columns: int = 4, header_size: int = 2):
+def full_width_image_selector_grid(
+    state: APPState,
+    kind: str,
+    images_path: str,
+    get_images,
+    get_selection,
+    set_selection,
+    aspect_ratio="1/1",
+    caption: str = "Images",
+    columns: int = 4,
+    header_size: int = 2,
+    include_delete_button: bool = True,
+    include_render_button: bool = True,
+    ):
     """
     Create a grid of full-width image selectors.
 
@@ -180,8 +195,10 @@ def full_width_image_selector_grid(state: APPState, kind: str, images_path: str,
     with ui.row().classes('w-full flex-nowrap').style('padding-left: 2ex; padding-right: 2ex;'):
         header(caption,header_size)
         ui.space()
-        crud_button(kind="render", action = lambda _: post_user_message(state, f"I would like to render the {kind}."))
-        crud_button(kind="delete", action=lambda _: post_user_message(state, f"I would like to delete the currently selected {kind}."))
+        if include_render_button:
+            crud_button(kind="render", action = lambda _: post_user_message(state, f"I would like to render the {kind}."))
+        if include_delete_button:
+            crud_button(kind="delete", action=lambda _: post_user_message(state, f"I would like to delete the currently selected {kind}."))
 
     all_images = get_images()
     logger.debug(f"all_images: {all_images}")

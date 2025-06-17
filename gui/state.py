@@ -300,6 +300,8 @@ class APPState:
         from gui.publisher import view_publisher, view_pick_publisher
         from gui.style import view_pick_art_style_image
         from gui.reference_image import view_reference_image
+        from gui.variant import view_character_variant
+        from gui.styled_image import view_styled_image
 
         self.clear_details()
         selection = self.selection
@@ -348,12 +350,18 @@ class APPState:
                 return view_character_reference(self)
             case "reference-image":
                 return view_reference_image(self)
+            case "variant":
+                return view_character_variant(self)
+            case "styled-image":
+                return view_styled_image(self)
             case _:        
                 # Handle other cases or return a default message
                 self.clear_details()
                 with self.details:
                     ui.markdown(f"No description available for this item. {kind}")
                     return    
+                
+            
 
 
     def write(self):
