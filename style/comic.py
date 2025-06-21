@@ -326,11 +326,11 @@ the original image as possible so that it can serve as a visual reference for th
                 data["image"] = None
             return cls.model_validate(data)
         
-    def format(self, include_bubble_styles: bool = True, include_character_style: bool = True) -> str:
+    def format(self, include_bubble_styles: bool = True, include_character_style: bool = True, heading_level: int = 1) -> str:
         """
         format the comic style for display
         """
-        result = f"""# Comic Style ({self.name})
+        result = f"""{'#'*heading_level} Comic Style ({self.name})
     {self.description}""".strip()
         if self.art_style is not None:
             result += f"\n{self.art_style.format()}"

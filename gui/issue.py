@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from nicegui import ui
-from gui.elements import markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes, crud_button
+from gui.elements import markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes, crud_button, post_user_message
 from models.issue import Issue
 from style.comic import ComicStyle
 from gui.state import APPState
@@ -40,7 +40,7 @@ def view_issue(state:APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"ISSUE {issue.issue_number}: {issue.title}", 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: ui.notify("I would like to delete the current issue."),size=1)
+            crud_button(kind="delete", action=lambda _: post_user_message("I would like to delete the current issue."))
 
         
         with ui.row().classes('w-full flex-nowrap'):

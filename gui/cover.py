@@ -4,7 +4,7 @@ from gui.selection import SelectionItem
 from models.panel import TitleBoardModel
 from gui.state import APPState
 from models.panel import CoverLocation
-from gui.elements import header, crud_button, view_attributes, Attribute, markdown_field_editor, image_field_editor, full_width_image_selector_grid, aspect_ratio_picker, TAILWIND_CARD
+from gui.elements import header, crud_button, view_reference_images, view_character_references, Attribute, markdown_field_editor, image_field_editor, full_width_image_selector_grid, aspect_ratio_picker, TAILWIND_CARD
 from gui.messaging import post_user_message
 from style.comic import ComicStyle
 
@@ -70,23 +70,13 @@ def view_cover(state: APPState, location: CoverLocation):
                 header_size=2
             )
 
-        with view_attributes(
+        view_character_references(
             state=state, 
-            caption="Characters",
-            attributes=[],
-            expanded=False,
-            individual_icons=False,
-            header_size=2
-        ):
-            pass
+            parent=cover,
+        )
+
+        view_reference_images(
+            state=state, 
+            parent=cover,
+        )
     
-        with view_attributes(
-            state=state, 
-            caption="Reference Images",
-            attributes=[
-            ],
-            expanded=False,
-            individual_icons=False,
-            header_size=2
-        ):
-            pass

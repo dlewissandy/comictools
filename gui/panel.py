@@ -1,20 +1,21 @@
+import os
 from loguru import logger
 from nicegui import ui
+from nicegui.events import UploadEventArguments
 from models.scene import SceneModel
 from models.panel import Panel, FrameLayout
+from helpers.constants  import DATA_FOLDER
 from gui.elements import (
-    init_cardwall, 
-    markdown, 
-    image_field_editor, 
     DARK_MODE_STYLES, 
     markdown_field_editor, 
     header, 
     crud_button, 
+    uploader_card,
     aspect_ratio_picker, 
     TAILWIND_CARD, 
     full_width_image_selector_grid, 
-    view_all_instances,
-    view_attributes )
+    view_reference_images,
+    view_character_references )
 from gui.selection import SelectionItem
 from gui.state import APPState
 from gui.messaging import post_user_message
@@ -119,7 +120,6 @@ def view_panel(state: APPState):
             with ui.card().classes('mb-2 p-2 w-1/4 bg-blue-100 dark:bg-gray-800 break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
                 aspect_ratio_picker(state,parent=col2, caption="Aspect Ratio",set_aspect_ratio=lambda x: panel.set_aspect(x), get_aspect_ratio  = lambda: panel.aspect,)    
         markdown_field_editor(state, "Narration and Dialogue", panel.format_dialogue())
-                
 
         with ui.card().classes(TAILWIND_CARD).style('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800'):
             # TODO: When there are no images, the drop field has wrong aspect ratio
@@ -133,35 +133,18 @@ def view_panel(state: APPState):
                 get_images=lambda: panel.all_images(),
                 aspect_ratio={aspect},
                 columns=4,
-                header_size=2
+                header_size=2,
             )
 
-        with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
-            with expansion.add_slot('header'):
-                header("Characters", 2)
-                ui.space()
-                crud_button("create", lambda: post_user_message(state, "I would like to add a new character reference for the current the panel."))
+        view_character_references(
+            state=state, 
+            parent=panel,
+        )
 
-            view_all_instances(
-                state=state, 
-                kind="character-reference",
-                get_instances=lambda: panel.characters,
-                get_name= lambda _, x: x.name, 
-            )
-        expansion.open()
+        view_reference_images(
+            state=state, 
+            parent=panel,
+        )
     
-        with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
-            with expansion.add_slot('header'):
-                header("Reference Images", 2)
-                ui.space()
-                crud_button("create", lambda: post_user_message(state, "I would like to add a new reference image for the current the panel."))
 
-            # TODO: Add drop region to add new reference image
-            view_all_instances(
-                state=state, 
-                kind="reference-image",
-                get_instances=lambda: panel.reference_images,
-                get_name= lambda _, x: x.relation.value + " image"
-            )
-        expansion.open()
             

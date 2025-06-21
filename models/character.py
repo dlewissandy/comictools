@@ -100,11 +100,34 @@ class CharacterModel(BaseModel):
         return the list of variants for the character model
         """
         result = []
+        base_variant = self.get_variant("base")
         for variant_id in self.variant_ids:
             variant = CharacterVariant.read(series=self.series, character=self.id, id=variant_id)
-            if variant is not None:
+            if variant is not None and variant.id != "base":
                 result.append(variant)
+        
+
+        # sort the variants by name, but keep the base variant first
+        result.sort(key=lambda x: x.lower().name)
+        if base_variant is not None:
+            result.insert(0, base_variant)
+
         return result
+
+    def image_filepath(self):
+        """
+        return the filepath to the representative image for the character model
+        """
+        logger.trace("character.image_filepath() called")
+        # Get the base variant
+        variants = self.variants
+        while len(variants) > 0:
+            variant = variants.pop()
+            filepath = variant.image_filepath()
+            if filepath is not None:
+                return filepath
+        # If no image is found, return None
+        return None
 
     @classmethod
     def generate(cls, series: str, name: str, description: str, variant: str = ""):
@@ -214,18 +237,6 @@ class CharacterModel(BaseModel):
         variant_id = variant_id.lower().replace(" ", "-")
         return CharacterVariant.read(series=self.series, character=self.id, id=variant_id)
     
-    def image_filepath(self, style_id: str = "vintage-four-color") -> Optional[str]:
-        """
-        return the filepath to the representative image for the character model
-        """
-        # Get the variant base variant
-        base_variant = self.get_variant("base")
-        if base_variant is None:
-            logger.warning(f"Base variant for character {self.name} not found. Cannot get image filepath.")
-            return None
-        # Check if the image exists for the given style
-        return base_variant.image_filepath(style_id)
-
     
     def generate_variant(self, prompt, variant: str):
         """
@@ -264,6 +275,17 @@ class CharacterModel(BaseModel):
         self.appearance = response.appearance
         self.write()
         return self
+    
+    def delete(self):
+        """
+        delete the character model and all its variants
+        """
+        # Delete the character model folder
+        import shutil
+        path = self.path()
+        if os.path.exists(path):
+            logger.info(f"Deleting character model {self.name} at {path}")
+            shutil.rmtree(path)
     
 class StyledImage(BaseModel):
     style_id: str = Field(..., description="The id of the style for which this image is generated.  e.g. 'vintage-four-color'")
@@ -418,34 +440,64 @@ class CharacterVariant(BaseModel):
         read the character model from a file.  If the charater model does not exist, then
         return None.
         """
+        character_id = character.lower().replace(" ", "-")
+        series_id = series.lower().replace(" ", "-")
+        
         if id is None and name is None:
             logger.error("Either id or name must be specified")
             return None
+        
+        variant_id = id.lower().replace(" ", "-") if id else None
         # read the character model from a file
         if id is None:
             id = name.lower().replace(" ", "-")
-        filepath = f"{COMICS_FOLDER}/{series}/characters/{character}/{id}/variant.json"
+        filepath = f"{COMICS_FOLDER}/{series_id}/characters/{character_id}/{variant_id}/variant.json"
+        logger.debug(f"Reading character variant from {filepath}")
         if not os.path.exists(filepath):
+            logger.warning(f"Character variant {id} not found in {filepath}. Returning None.")
             return None
         with open(filepath, "r") as f:
             data = f.read()
+            logger.debug(f"Character variant data read from {filepath}: {data}")
             return cls.model_validate_json(data)
 
-    def format(self):
+    @classmethod
+    def read_all(cls, series: str, character: str) -> list["CharacterVariant"]:
+        """
+        read all character variants for the given series and character
+        """
+        character_id = character.lower().replace(" ", "-")
+        series_id = series.lower().replace(" ", "-")
+        path = f"{COMICS_FOLDER}/{series_id}/characters/{character_id}"
+        subfolders = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f)) and not f.startswith('.')]
+        
+        variants = []
+        for variant_dir in subfolders:
+            variant_id = variant_dir.lower().replace(" ", "-")
+            variant = cls.read(series=series_id, character=character_id, id=variant_id)
+            if variant is not None:
+                variants.append(variant)
+            else:
+                logger.warning(f"Variant {variant_id} for character {character} in series {series} not found.")
+        return variants
+
+    def format(self, heading_level: int = 2) -> str:
         """
         format the character model for display
         """
-        result = f"""# Character Model ({self.name})
+        result = f"""{'#'*heading_level} Character Model ({self.name})
 * **Name**: {self.name}
 * **Race**: {self.race}
+* **Age**: {self.age}
+* **Height**: {self.height}
 * **Gender**: {self.gender}
 * **Description**: {self.description}
 * **Attire**: {self.attire}
         """.strip()
-        if self.behavior is not None and self.behavior != "":
-            result += f"\n* **Behavior**: {self.behavior}"
         if self.appearance is not None and self.appearance != "":
             result += f"\n* **Appearance**: {self.appearance}"
+        if self.behavior is not None and self.behavior != "":
+            result += f"\n* **Behavior**: {self.behavior}"
         return result
 
     def render(self, style: ComicStyle):
@@ -465,19 +517,33 @@ class CharacterVariant(BaseModel):
             self.write()
         return "success"
 
-    def image_filepath(self, style_id: str = "vintage-four-color") -> Optional[str]:
+    def image_filepath(self, style_id: str | None = None ) -> Optional[str]:
         """
         return the filepath to the representative image for the character model
         """
-        image = self.images.get(style_id, None)
-        if image is None:
-            logger.warning(f"No image found for style {style_id} in character model {self.character}({self.name}).")
-            return None
-        filepath = os.path.join(self.path(),"images",style_id, f"{image}.jpg")
-        if not os.path.exists(filepath):
-            logger.warning(f"Image {filepath} does not exist.")
-            return None
-        return os.path.join(self.path(), "images", style_id, f"{image}.jpg")
+        if style_id is None or style_id == "":
+            # We are going to try to find an image using any of the styles
+            styles = self.images.keys()
+            sorted_styles = sorted(styles, key=lambda x: x.lower())
+            for style in sorted_styles:
+                image = self.images.get(style, None)
+                if image is not None:
+                    filepath = os.path.join(self.path(), "images", style, f"{image}.jpg")
+                    if os.path.exists(filepath):
+                        return filepath
+            logger.warning(f"No image found for character model {self.character}({self.name}).")
+        else:
+            # A style was specified, so we will try to find the image for that style
+
+            image = self.images.get(style_id, None)
+            if image is None:
+                logger.warning(f"No image found for style {style_id} in character model {self.character}({self.name}).")
+                return None
+            filepath = os.path.join(self.path(),"images",style_id, f"{image}.jpg")
+            if not os.path.exists(filepath):
+                logger.warning(f"Image {filepath} does not exist.")
+                return None
+            return os.path.join(self.path(), "images", style_id, f"{image}.jpg")
         
 
 
@@ -586,3 +652,15 @@ class CharacterVariant(BaseModel):
         self.appearance = response.appearance
         self.write()
         return self
+    
+    def delete(self):
+        """
+        delete the character model and all its variants
+        """
+        # Delete the character model folder
+        import shutil
+        path = self.path()
+        if os.path.exists(path):
+            logger.info(f"Deleting character model {self.name} at {path}")
+            shutil.rmtree(path)
+        

@@ -2,8 +2,36 @@ import os
 import openai
 from loguru import logger
 from pydantic import BaseModel
+from base64 import b64encode, b64decode
+from io import BytesIO
 
 from helpers.image import resize_image, decode_image_response, IMAGE_QUALITY
+
+def filepath_to_filehandle(filepath: str) -> bytes:
+    """
+    Convert a file path to a byte stream.
+
+    Args:
+        filepath (str): The path to the file.
+
+    Returns:
+        bytes: The byte stream of the file.
+    """
+    return open(filepath, "rb")
+
+def filepath_to_img_input(filepath: str) -> dict:
+    """
+    Convert a file path to an image input dictionary for the OpenAI API.
+
+    Args:
+        filepath (str): The path to the image file.
+
+    Returns:
+        dict: A dictionary containing the image input.
+    """
+    with open(filepath, "rb") as f:
+        b64_image = b64encode(f.read()).decode("utf-8")
+    return {"type": "input_image", "image_url": f"data:image/jpeg;base64,{b64_image}"}
 
 def invoke_generate_api(
         prompt: str, 
@@ -64,20 +92,42 @@ def invoke_generate_image_api(prompt: str, model: str = "gpt-image-1", size: str
         size=size,
         moderation="low",
         quality= quality.name.lower(),
+        response_format="b64_json"
     )
     return decode_image_response(response)
 
-def invoke_edit_image_api(images: list, prompt: str, mask: str | None = None, n: int = 1, size: str = "1024x1024", quality: IMAGE_QUALITY = IMAGE_QUALITY.LOW, reference_images: list[str] | None = None):
+def invoke_edit_image_api( prompt: str, mask: str | None = None, n: int = 1, size: str = "1024x1024", quality: IMAGE_QUALITY = IMAGE_QUALITY.HIGH, reference_images: list[str] = []):
     """
     Invoke the OpenAI API to edit an image based on the prompt.
+
+    Args:
+        prompt (str): The prompt to send to the OpenAI API.
+        mask (str | None): The filepath of the mask image. Defaults to None.
+        n (int): The number of images to generate. Defaults to 1.
+        size (str): The size of the generated image. Defaults to "1024x1024".
+        quality (IMAGE_QUALITY): The quality of the generated image. Defaults to IMAGE_QUALITY.HIGH.
+        reference_images (list[str]): A list of base64 encoded images to use as references.   Defaults to an empty list.
     """
+    from contextlib import ExitStack
     openai.api_key = os.getenv('OPENAI_API_KEY')
-    args = { "prompt": prompt, "n": n, "size": size, "quality": quality.name.lower(), "model": "gpt-image-1" }
+    # Build your static args
+    args = {
+        "prompt": prompt,
+        "n": n,
+        "size": size,
+        "quality": quality.name.lower(),
+        "model": "gpt-image-1",
+        "output_format": "jpeg"
+    }
+
+    # Use an ExitStack so all files stay open until after the call
+    args["image"] =  [filepath_to_filehandle(filepath) for filepath in reference_images]
     if mask:
-        args["mask"] = mask
-    if reference_images:
-        args["image"] = [open(filepath, "rb") for filepath in reference_images]
-    response = openai.images.edit( **args)
+        args["mask"] = filepath_to_filehandle(mask)
+    response = openai.images.edit(**args)
+
+    logger.critical(response)
+
     return decode_image_response(response)
 
 

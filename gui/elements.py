@@ -9,6 +9,7 @@ from gui.messaging import post_user_message
 from gui.state import APPState
 from gui.selection import SelectionItem
 from models.panel import FrameLayout
+from pydantic import BaseModel
 
 HEADER_STYLES = {
     0: 'font-size: 3rem; font-weight: bold;',
@@ -130,6 +131,7 @@ def full_width_image_selector_grid(
     header_size: int = 2,
     include_delete_button: bool = True,
     include_render_button: bool = True,
+    uploader: Optional[Callable[[UploadEventArguments], None]] = None,
     ):
     """
     Create a grid of full-width image selectors.
@@ -156,6 +158,9 @@ def full_width_image_selector_grid(
                 set_selection(file_name[:-4])  # Remove file extension for selection
                 cardwall.clear()
                 render_image_cards(state, get_images=get_images, get_selection=get_selection, set_selection=set_selection, cardwall=cardwall, aspect_ratio=aspect_ratio)
+
+    if not uploader:
+        uploader = on_upload
 
     def render_image_cards(state, get_images, get_selection, set_selection, cardwall, aspect_ratio="1/1"):
         all_images = get_images()
@@ -184,13 +189,11 @@ def full_width_image_selector_grid(
                             ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10').style('aspect-ratio: 1/1;')
                     else:
                         ui.label(f"Image {image} not found.").style('color: red;')
-            with ui.card().classes(TAILWIND_CARD + ' relative overflow-hidden').style(f'aspect-ratio: {aspect_ratio}'):
-                uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
-                uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
-
-                # Visible caption in center
-                with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
-                    ui.label('Drop image to upload').classes('text-lg text-gray-600')
+            uploader_card(
+                state=state, 
+                on_upload=uploader, 
+                aspect_ratio=aspect_ratio
+            )
 
     with ui.row().classes('w-full flex-nowrap').style('padding-left: 2ex; padding-right: 2ex;'):
         header(caption,header_size)
@@ -522,3 +525,65 @@ def aspect_ratio_picker(state: APPState, parent: ui.element, caption: str, get_a
     square.on_click(lambda _: on_click(FrameLayout.SQUARE))
     
     
+def view_character_references(state: APPState, parent: BaseModel):
+    with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with expansion.add_slot('header'):
+            header("Characters", 2)
+            ui.space()
+            crud_button("create", lambda: post_user_message(state, "I would like to add a new character reference."))
+
+        view_all_instances(
+            state=state, 
+            kind="character-reference",
+            get_instances=lambda: parent.characters,
+            get_name= lambda _, x: x.name, 
+        )
+    expansion.open()
+    return expansion
+
+def view_reference_images(state: APPState, parent: BaseModel, images_path: str | None = "data/uploads"):
+
+    def on_upload(e: UploadEventArguments):
+        if e.name and e.type.startswith('image/'):
+            file_name = e.name
+            save_filepath = os.path.join(images_path, file_name)
+            # recursively create the directory if it doesn't exist
+            os.makedirs(images_path, exist_ok=True)
+            
+            with open(save_filepath, 'wb') as f:
+                f.write(e.content.read())
+            logger.debug(f"Saved uploaded file to {save_filepath}")
+            redraw()
+
+    def redraw():
+        with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+            with expansion.add_slot('header'):
+                header("Reference Images", 2)
+                ui.space()
+                crud_button("create", lambda: post_user_message(state, "I would like to add a new reference image."))
+
+            # TODO: Add drop region to add new reference image
+            with view_all_instances(
+                state=state, 
+                kind="reference-image",
+                get_instances=lambda: parent.reference_images,
+                get_name= lambda _, x: x.relation.value + " image"
+            ):
+                if images_path:
+                    uploader_card(state, on_upload=on_upload )
+                else:
+                    pass
+        expansion.open()
+        return expansion
+    return redraw()
+            
+
+
+def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], None], aspect_ratio: str = "3/2"): 
+    with ui.card().classes(TAILWIND_CARD + ' relative overflow-hidden').style(f'aspect-ratio: {aspect_ratio}'):
+            uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
+            uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
+
+            # Visible caption in center
+            with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
+                ui.label('Drop image to upload').classes('text-lg text-gray-600')

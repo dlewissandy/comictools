@@ -154,23 +154,12 @@ class Issue(BaseModel):
         if len(covers) == 0:
             return None
         # Sort the covers in order Front, Back, Inside Front, Inside Back
-        locations = [cover.location for cover in covers]
         priorities = [CoverLocation.FRONT, CoverLocation.BACK, CoverLocation.INSIDE_FRONT, CoverLocation.INSIDE_BACK]
-        locations.sort(key=lambda x: priorities.index(x) if x in priorities else len(priorities))
+        covers.sort(key=lambda x: priorities.index(x.location) if x in priorities else len(priorities))
         # Return the first cover that has an image
-        location = locations[0]
-        series_id = self.series_id
-        issue_id = self.id
-        cover_filepath = os.path.join(COMICS_FOLDER, series_id, "issues", issue_id, "covers", location, "images",f"{locations[0]}.jpg")
-        logger.debug(f"cover_filepath: {cover_filepath}")
-        if not os.path.exists(cover_filepath):
-            logger.warning(f"Cover image {cover_filepath} does not exist")
-            return None
-        titleboard = TitleBoardModel.read(series=series_id, issue=issue_id, location=location)
-        if not titleboard:
-            logger.warning(f"TitleBoardModel for {series_id}/{issue_id}/{location} does not exist")
-            return None
-        return titleboard.image_filepath()
+        for cover in covers:
+            if cover.image_filepath() is not None:
+                return cover.image_filepath()
 
     def delete_character(self, name: str, variant: str | None = None):
         """
@@ -272,6 +261,20 @@ class Issue(BaseModel):
         del self.scenes[index]
         self.write()
 
+    def delete(self):
+        """
+        Delete the comic book from the comics folder.
+        """
+        path = self.path()
+        if not os.path.exists(path):
+            logger.warning(f"Comic book {self.id} does not exist")
+            return
+        logger.info(f"Deleting comic book {self.id} at {path}")
+        # remove the directory and all its contents
+        import shutil
+        shutil.rmtree(path)
+        logger.info(f"Comic book {self.id} deleted successfully")
+
 
     def add_cover(self, cover: TitleBoardModel):
         """
@@ -347,15 +350,15 @@ class Issue(BaseModel):
             result.append(Issue.read(series_id=series_id, id=issue_id))
         return result
 
-    def format(self, header_level: int=1, no_covers: bool=False, no_scenes: bool=False, no_style:bool=False) -> str:
+    def format(self, heading_level: int=1) -> str:
         """
         Format the comic book for display
         """
-        text = f"{'#'* header_level} ISSUE {self.issue_number}\n\n"
+        text = f"{'#'* heading_level} ISSUE {self.issue_number}\n\n"
         if self.title is not None:
             text += f" * **title** {self.title}\n\n"
-        if self.issue_date is not None:
-            text += f" * **date** {self.issue_date}\n\n"
+        if self.publication_date is not None:
+            text += f" * **date** {self.publication_date}\n\n"
         if self.writer is not None:
             text += f" * **writer** {self.writer}\n\n"
         if self.artist is not None:
@@ -364,26 +367,6 @@ class Issue(BaseModel):
             text += f" * **colorist** {self.colorist}\n\n"
         if self.creative_minds is not None:
             text += f" * **creative minds** {self.creative_minds}\n\n"
-        if self.logo is not None:
-            text += f" * **logo** {self.logo}\n\n"
         if self.price is not None:
             text += f" * **price** {self.price}\n\n"
-        if self.style is not None and not no_style:
-            text += f" * **style** {self.style}\n\n"
-
-        if self.characters is not None and len(self.characters) > 0:
-            text += f" * **characters** {', '.join(self.characters)}\n\n"
-
-        if self.cover is not None and not no_covers:
-            for cover_type, cover_id in self.cover.items():
-                cover = TitleBoardModel.read(issue=self.id, id=cover_id)
-                if not cover:
-                    continue
-                cover.format(header_level=header_level+1)
-        
-        if self.scenes is not None and len(self.scenes) > 0 and not no_scenes:
-            text += f"{'#'* (header_level+1)}  SCENES\n\n"
-
-            for i,scene in enumerate(self.get_scenes()):
-                text += f"* **scene {i+1}** {scene.story}\n\n"
         return text

@@ -124,6 +124,7 @@ def all_series_agent(state: APPState) -> Agent:
         state["is_dirty"] = True
         return f"Deleted comic series: {series.name}"
 
+
     return Agent(
         name="Comic Series Assistant",
         instructions="""

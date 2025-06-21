@@ -140,21 +140,21 @@ def view_pick_style(state):
         series_id = selection[-4].id
         parent = SceneModel.read()
     elif parent_kind == "front-cover":
-        issue_id = selection[-2].id
-        series_id = selection[-3].id
-        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.FRONT_COVER)
+        issue_id = selection[-3].id
+        series_id = selection[-4].id
+        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.FRONT)
     elif parent_kind == "back-cover":
         issue_id = selection[-2].id
         series_id = selection[-3].id
-        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.BACK_COVER)
+        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.BACK)
     elif parent_kind == "inside-front-cover":
         gissue_id = selection[-2].id
         series_id = selection[-3].id
-        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.INSIDE_FRONT_COVER)
+        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.INSIDE_FRONT)
     elif parent_kind == "inside-back-cover":
         issue_id = selection[-2].id
         series_id = selection[-3].id
-        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.INSIDE_BACK_COVER)
+        parent = TitleBoardModel.read(series=series_id, issue=issue_id, location=CoverLocation.INSIDE_BACK)
     
     style_id = selection[-1].id
     style = ComicStyle.read(id=style_id) if style_id else None

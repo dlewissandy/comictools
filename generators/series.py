@@ -3,6 +3,7 @@ from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
 from models.series import Series
+from gui.selection import SelectionItem
 from models.character import CharacterModel
 from models.publisher import Publisher
 from models.issue import Issue
@@ -175,25 +176,46 @@ def series_agent(state: APPState) -> Agent:
         Returns:
             A confirmation message indicating the character was deleted successfully.
         """
-        return "Not implemented yet.  This is a placeholder for the delete_character function."
+        selection = state.selection
+        series = _get_series()
+        if not series:
+            return "No comic series selected. Please select a series to delete a character."
+        
+        series_id = series.id
+        character = CharacterModel.read(series=series_id, name=name)
+        if not character:
+            return f"Character with name '{name}' not found in series '{series.series_title}'."
+        
+        character.delete()
+        state.is_dirty = True
+        return f"Character '{name}' deleted successfully from series '{series.series_title}'."
     
     @function_tool
-    def create_character(character: CharacterModel) -> str:
+    def create_character(character_name: str, description: str) -> str:
         """
         Create a new character in the currently selected comic series.
         
         Args:
-            character: The character model to create.
+            character_name: The name of the character to create.
+            description: A brief description (no more than 3 paragraphs) about the character.  This should serve
+               as a summary of the character's background, and role in the comic series.
         
         Returns:
             A confirmation message indicating the character was created successfully.
         """
+        # Normalize the identifiers
         series = _get_series()
         if not series:
             return "No comic series selected. Please select a series to add a character."
         
+        character = CharacterModel(
+            series = series.id,
+            name = character_name,
+            description = description,
+        )
+
         character.write()
-        state.is_dirty = True
+        state.change_selection(new=state.selection + [SelectionItem(kind="character", id=character.id, name=character.name)])
         return f"Character '{character.name}' created successfully in series '{series.series_title}'."
 
 

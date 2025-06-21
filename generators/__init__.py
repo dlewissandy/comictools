@@ -9,6 +9,7 @@ from .publisher import publisher_agent
 from .scene import scene_agent
 from .series import series_agent
 from .style import style_agent
+from .variant import variant_agent
 from gui.state import APPState
 from agents import Agent
 
@@ -35,6 +36,11 @@ def init_agents(state: APPState) -> dict[str, Agent]:
         "cover": cover_agent(state),
         "panel": panel_agent(state),
         "publisher": publisher_agent(state),
+        "variant": variant_agent(state),
+        "front-cover": cover_agent(state),
+        "back-cover": cover_agent(state),
+        "inside-front-cover": cover_agent(state),
+        "inside-back-cover": cover_agent(state),
     }
     return agents
 
