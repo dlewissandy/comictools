@@ -67,6 +67,10 @@ def view_character_variant(state:APPState):
 
         with view_attributes(state,caption="Description", attributes=[
                 Attribute(caption ="General Description", get_value= lambda: variant.description),
+                Attribute(caption="Race", get_value=lambda: variant.race),
+                Attribute(caption="Gender", get_value=lambda: variant.gender),
+                Attribute(caption="Age", get_value=lambda: variant.age),
+                Attribute(caption="Height", get_value=lambda: variant.height),
                 Attribute(caption="Physical Appearance", get_value=lambda: variant.appearance),
                 Attribute(caption="Attire", get_value=lambda: variant.attire),
                 Attribute(caption="Behavior", get_value=lambda: variant.behavior),

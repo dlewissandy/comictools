@@ -214,6 +214,88 @@ def variant_agent(state: APPState) -> Agent | str:
         return f"Behavior for {variant.name} updated successfully."
 
 
+    @function_tool
+    def update_race(race: str) -> str:
+        """
+        Update the race of the currently selected character variant.
+        Args
+            race: The new race description for the character variant.
+        Returns:
+            A confirmation message indicating the race was updated successfully.
+        """
+        variant = _get_character_variant()
+        if isinstance(variant, str):
+            return variant
+        variant: CharacterVariant = variant
+        variant.race = race
+        variant.write()
+        state.is_dirty = True
+
+        return f"Race for {variant.name} updated successfully."
+
+    @function_tool
+    def update_gender(gender: str) -> str:
+        """
+        Update the gender of the currently selected character variant.
+        Args
+            gender: The new gender description for the character
+        variant.
+        Returns:
+            A confirmation message indicating the gender was updated successfully.
+        """
+        variant = _get_character_variant()
+        if isinstance(variant, str):
+            return variant
+        variant: CharacterVariant = variant
+        variant.gender = gender
+        variant.write()
+        state.is_dirty = True
+
+        return f"Gender for {variant.name} updated successfully."
+
+    @function_tool
+    def update_age(age: str) -> str:
+        """
+        Update the age of the currently selected character variant.
+        
+        Args:
+            age: The new age description for the character variant.
+        
+        Returns:
+            A confirmation message indicating the age was updated successfully.
+        """
+        variant = _get_character_variant()
+        if isinstance(variant, str):
+            return variant
+        variant: CharacterVariant = variant
+        variant.age = age
+        variant.write()
+        state.is_dirty = True
+
+        return f"Age for {variant.name} updated successfully."
+    
+    @function_tool
+    def update_height(height: str) -> str:
+        """
+        Update the height of the currently selected character variant.
+        
+        Args:
+            height: The new height description for the character variant.
+        
+        Returns:
+            A confirmation message indicating the height was updated successfully.
+        """
+        variant = _get_character_variant()
+        if isinstance(variant, str):
+            return variant
+        variant: CharacterVariant = variant
+        variant.height = height
+        variant.write()
+        state.is_dirty = True
+        return f"Height for {variant.name} updated successfully."
+
+
+
     return Agent(
         name="Variant Assistant",
         instructions="""
@@ -233,7 +315,11 @@ def variant_agent(state: APPState) -> Agent | str:
             update_general_description,
             update_physical_appearance,
             update_attire,
-            update_behavior
+            update_behavior,
+            update_race,
+            update_gender,
+            update_age,
+            update_height,
             ],
     )
 

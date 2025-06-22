@@ -261,6 +261,41 @@ def series_agent(state: APPState) -> Agent:
         state.is_dirty = True
         return f"Issue '{issue.issue_number}' created successfully in series '{series.series_title}'."
 
+    @function_tool
+    def create_character_from_reference_image(
+        character_name: str, 
+        reference_image: str
+    ) -> str:
+        """
+        Create a new character in the currently selected comic series using a reference image.
+        
+        Args:
+            character_name: The name of the character to create.
+            reference_image: The filepath of the reference image to use for the character.
+        
+        Returns:
+            A confirmation message indicating the character was created successfully.
+        """
+        from helpers.generator import invoke_generate_api
+        # Normalize the identifiers
+        series = _get_series()
+        if not series:
+            return "No comic series selected. Please select a series to add a character."
+
+        prompt = f"""Create a new CharacterModel for {character_name} in the {series.id} comic series using the reference image as a starting point."""
+        character:CharacterModel = invoke_generate_api(
+            prompt=prompt,
+            model=LANGUAGE_MODEL,
+            image=reference_image,
+            text_format=CharacterModel
+        )
+
+        character.write()
+        state.change_selection(new=state.selection + [SelectionItem(kind="character", id=character.id, name=character.name)])
+
+        
+        return f"Character '{character.name}' created successfully in series '{series.series_title}'."
+
     return Agent(
         name="Series Agent",
         instructions="""
@@ -275,6 +310,7 @@ def series_agent(state: APPState) -> Agent:
             get_publisher,
 
             create_character,
+            create_character_from_reference_image,
             create_issue,
 
             

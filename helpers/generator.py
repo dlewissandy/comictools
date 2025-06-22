@@ -78,6 +78,8 @@ def invoke_generate_api(
         args["input"] = [{"role": "user", "content": content}]
     
     response = openai.responses.parse(**args)
+    if text_format is None:
+        return response.output[0].content[0].text
     return response.output_parsed
 
 def invoke_generate_image_api(prompt: str, model: str = "gpt-image-1", size: str = "1024x1024", n: int = 1, quality: IMAGE_QUALITY = IMAGE_QUALITY.LOW):
@@ -85,16 +87,21 @@ def invoke_generate_image_api(prompt: str, model: str = "gpt-image-1", size: str
     Invoke the OpenAI API to generate an image based on the prompt.
     """
     openai.api_key = os.getenv('OPENAI_API_KEY')
-    response = openai.images.generate(
-        model=model,
-        prompt=prompt,
-        n=n,
-        size=size,
-        moderation="low",
-        quality= quality.name.lower(),
-        response_format="b64_json"
-    )
-    return decode_image_response(response)
+    try:
+        response = openai.images.generate(
+            model=model,
+            prompt=prompt,
+            n=n,
+            size=size,
+            moderation="low",
+            quality= quality.name.lower(),
+            response_format=None
+        )
+        return decode_image_response(response)
+    except Exception as e:
+        logger.critical(f"Error invoking OpenAI image generation API: {e}")
+        raise e
+
 
 def invoke_edit_image_api( prompt: str, mask: str | None = None, n: int = 1, size: str = "1024x1024", quality: IMAGE_QUALITY = IMAGE_QUALITY.HIGH, reference_images: list[str] = []):
     """
@@ -125,8 +132,6 @@ def invoke_edit_image_api( prompt: str, mask: str | None = None, n: int = 1, siz
     if mask:
         args["mask"] = filepath_to_filehandle(mask)
     response = openai.images.edit(**args)
-
-    logger.critical(response)
 
     return decode_image_response(response)
 

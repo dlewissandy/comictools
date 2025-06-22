@@ -42,7 +42,7 @@ def view_character(state:APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(character.name.title(), 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current series."),size=1)
+            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current character."),size=1)
 
         markdown_field_editor(state, "Description", character.description)        
 

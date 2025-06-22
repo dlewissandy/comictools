@@ -57,7 +57,7 @@ def render_character_image(character_name: str, character_description: str, styl
     logger.debug(f"Unique id generated: {image_id}.  Saving image to {save_path}/{image_id}.jpg")
     save_filepath = f"{save_path}/{image_id}.jpg"
     with open(save_filepath, "wb") as f:
-        f.write(raw_image.getbuffer())
+        f.write(raw_image)
     logger.debug(f"Image saved to {save_filepath} with id {image_id}")
     return image_id
 
@@ -108,10 +108,9 @@ class CharacterModel(BaseModel):
         
 
         # sort the variants by name, but keep the base variant first
-        result.sort(key=lambda x: x.lower().name)
+        result.sort(key=lambda x: x.name.lower())
         if base_variant is not None:
             result.insert(0, base_variant)
-
         return result
 
     def image_filepath(self):
@@ -122,7 +121,7 @@ class CharacterModel(BaseModel):
         # Get the base variant
         variants = self.variants
         while len(variants) > 0:
-            variant = variants.pop()
+            variant = variants.pop(0)
             filepath = variant.image_filepath()
             if filepath is not None:
                 return filepath
@@ -333,6 +332,17 @@ class StyledImage(BaseModel):
         variant.images[self.style_id] = self.image_id
         variant.write()
 
+class CharacterVariantMinimal(BaseModel):
+    description: str = Field(..., description="A 3-5 sentence description of the character.  This should be sufficient to distinguish the character from others.")
+    race: str = Field(..., description="The race of the character.  Default to 'human'")
+    gender: str = Field(..., description="The gender of the character")
+    age: str = Field(..., description="The age of the character.  Default to 'adult'")
+    height: str = Field(..., description="The height of the character.  Default to 'average'")
+    attire: str = Field(..., description="A detailed description (3-5 paragraphs) of what the character is wearing.   This should be in sufficient detail so that an artist can recreate the character's attire without a reference image.")
+    behavior: str  = Field(..., description="Notes on the The character's behavior")
+    appearance: str  = Field(..., description="A detailed description (3-5 paragraphs) of the character's physical appearance and attributes.   This should be in sufficient detail so that an artist can recreate the character's appearance without a reference image.    ")
+
+
 class CharacterVariant(BaseModel):
     series: str = Field(..., description="The comic book series (title) that the character belongs to.  Default to empty string")
     character: str = Field(..., description="The identifier of the character for which this is a variant.  e.g. '<name>'")
@@ -345,7 +355,7 @@ class CharacterVariant(BaseModel):
     attire: str = Field(..., description="What the character is wearing")
     behavior: str  = Field(..., description="Notes on the The character's behavior")
     appearance: str  = Field(..., description="Notes on the The character's physical appearance and attributes")
-    images: dict[str,str] = Field(None, description="The reference images that can be used by artists to draw this character.   defaults to empty dict")
+    images: dict[str,str] = Field(..., description="The reference images that can be used by artists to draw this character.   defaults {}")
 
     @property
     def id(self) -> str:

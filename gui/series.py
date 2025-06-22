@@ -1,10 +1,13 @@
 import os
 from loguru import logger
+from nicegui.events import UploadEventArguments
 from models.series import Series
-from gui.elements import markdown, header, init_cardwall, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message, view_attributes
+from gui.elements import markdown, header, uploader_card, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message, view_attributes
 from models.publisher import Publisher
 from nicegui import ui
 from gui.state import APPState
+
+
 
 
 def view_series(state: APPState):
@@ -21,6 +24,30 @@ def view_series(state: APPState):
     get_name = lambda i, x : None if pub is None else pub.name
     get_id = lambda : None if pub is None else pub.id
     get_image_filepath = lambda : None if pub is None else pub.image_filepath()
+
+    def on_upload(e: UploadEventArguments):
+        # dereference the series
+        series = Series.read(id=state.selection[-1].id)
+        images_path = os.path.join(series.path(), 'uploads')
+        # Save the uploaded image to the uploads folder.
+        if not e.name:
+            logger.error("No file name provided in upload event.")
+        if not e.type.startswith('image/'):
+            logger.error(f"Uploaded file is not an image: {e.type}")
+            return
+        file_name = e.name
+        save_filepath = os.path.join(images_path, file_name)
+        # recursively create the directory if it doesn't exist
+        os.makedirs(images_path, exist_ok=True)
+        
+        with open(save_filepath, 'wb') as f:
+            f.write(e.content.read())
+        logger.debug(f"Saved uploaded file to {save_filepath}")
+        # post a user message with the image.  The image should be included in the message using the markdown image anchor syntax.
+        logger.debug(f"Image saved to {save_filepath}")
+        post_user_message(state, f"I would like to create a new character using this image as a reference: ![image]({os.path.join(save_filepath)})")
+
+
     
     # Render the controls
     with details:
@@ -48,5 +75,10 @@ def view_series(state: APPState):
         with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Characters", "I would like to create a new character")
-            view_all_instances(state, series.get_characters().values, kind="character", aspect_ratio="1/1", get_name=lambda _,x: x.name)
+            with view_all_instances(state, series.get_characters().values, kind="character", aspect_ratio="6/5", get_name=lambda _,x: x.name):
+                uploader_card(
+                    state=state,
+                    on_upload=lambda e: on_upload(e),
+                    aspect_ratio="6/5"
+                )
         

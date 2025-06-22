@@ -2,7 +2,8 @@ from typing import Tuple, Optional, List
 from gui.state import APPState
 from agents import Agent, function_tool
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from models.character import CharacterModel, CharacterVariant
+from models.character import CharacterModel, CharacterVariant, CharacterVariantMinimal
+from gui.selection import SelectionItem
 
 
 def character_agent(state: APPState) -> Agent:
@@ -48,6 +49,7 @@ def character_agent(state: APPState) -> Agent:
             return None
         
         character: CharacterModel = character
+        character.delete()  # Delete the character from the database
         state.change_selection(new=state.selection[:-1])  # Remove the deleted character from selection
         state.write()
         state.is_dirty = True
@@ -129,9 +131,83 @@ def character_agent(state: APPState) -> Agent:
             images = {}
         )
         variant.write()
+        sel_item = SelectionItem( id = variant.id, name=variant.name, kind="variant")
+        state.selection.append(sel_item)  # Add the new variant to the selection
+        state.write()
         state.is_dirty = True
         return variant
 
+
+    @function_tool
+    def create_variant_from_image(variant_name: str, image_path: str) -> CharacterVariant | str:
+        """
+        Create a new character variant from a reference image.
+        
+        Args:
+            variant_name: The name of the variant.   This should be unique within the character's variants and should be short (1-3 words).
+            image_path: The path to the image file to use as a reference for the variant.
+        
+        Returns:
+            The newly created CharacterVariant object or an error message if the image could not be processed.
+        """
+        from helpers.generator import invoke_generate_api
+        character = _get_character()
+        if character is None:
+            return "No character selected."
+                
+        prompt = f"""Create a variant of the character {character.name} in the {character.series} comic sereis using the provided image as a reference."""
+        minimal:CharacterVariantMinimal = invoke_generate_api(
+            prompt=prompt,
+            image=image_path,
+            model=LANGUAGE_MODEL,
+            text_format=CharacterVariantMinimal
+        )
+        variant = CharacterVariant(
+            series=character.series,
+            character=character.id,
+            name=variant_name,
+            race=minimal.race,
+            gender=minimal.gender,
+            age=minimal.age,
+            height=minimal.height,
+            description=minimal.description,
+            appearance=minimal.appearance,
+            attire=minimal.attire,
+            behavior=minimal.behavior,
+            images = {}
+            )
+
+        variant.write()
+        sel_item = SelectionItem( id = variant.id, name=variant.name, kind="variant")
+        state.selection.append(sel_item)  # Add the new variant to the selection
+        state.write()
+        state.is_dirty = True
+        return variant
+    
+    @function_tool
+    def describe_image(image_path: str) -> str:
+        """
+        Describe the provided image in sufficient detail that it could be used
+        to create a character variant.
+        
+        Args:
+            image_path: The path to the image file to describe.
+        
+        Returns:
+            A description of the image.
+        """
+        from helpers.generator import invoke_generate_api
+        prompt = f"""Describe character in the given image in detail.  Your description
+           should focus on visual elements that would be necessary for an artist to recreate
+           the character.   For example, what is their physical appearance, age, stature, 
+           attire.   Do they have any defining features, accessories or mannerisms.  Your 
+           description should be exhaustive."""
+        description = invoke_generate_api(
+            prompt=prompt,
+            image=image_path,
+            model=LANGUAGE_MODEL
+        )
+        return description
 
     return Agent(
         name="Character Assistant",
@@ -144,11 +220,13 @@ def character_agent(state: APPState) -> Agent:
         model=LANGUAGE_MODEL,
         tools=[
             get_current_character,
+            describe_image,
             update_character_description,
 
             delete_current_character,
             get_variants,
             create_variant,
+            create_variant_from_image
             ],
     )
 

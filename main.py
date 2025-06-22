@@ -1,7 +1,7 @@
 
 import os
 import json
-from nicegui import ui
+from nicegui import ui, app
 from gui.state import APPState, STATE_FILEPATH, set_dark_mode
 from dotenv import load_dotenv
 from gui.selection import (SelectionItem)
@@ -108,11 +108,13 @@ def main_page(client):
     state.change_selection(selection, clear_history=False)   # update the selection to force the redraw of the breadcrumbs
     state.refresh_details()             # Redraw the details based on the current selection
 
-
     # ENABLE THE EVENT HANDLERS
     darkswitch.bind_value_to(state, "dark_mode")
     user_input.on('keydown.enter', lambda _ : send(state=state))
     send_button.on('click', lambda _:send(state=state))
+
+    # Set static paths
+    app.add_static_files('/data', './data')
 
 ui.run()
 
