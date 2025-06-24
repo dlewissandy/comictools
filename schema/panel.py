@@ -3,9 +3,9 @@ from typing import Optional
 from loguru import logger
 from pydantic import BaseModel, Field, computed_field
 from enum import StrEnum
-from models.character import CharacterModel, CharacterVariant
-from models.bubble import Naration, NarationLocation, Dialogue, DialogueEmphasis
-from style.comic import ComicStyle
+from schema.character import CharacterModel, CharacterVariant
+from schema.dialog import Naration, NarationLocation, Dialogue, DialogueEmphasis
+from schema.style.comic import ComicStyle
 from helpers.constants import PANELS_FOLDER, SCENES_FOLDER, COMICS_FOLDER
 from helpers.image import load_b64_image, load_b64_images
 from helpers.file import generate_unique_id
@@ -76,23 +76,13 @@ class CharacterRef(BaseModel):
         """
         return f"{self.character.replace('_', ' ').title()} ({self.variant.replace('_', ' ').title()})"
     
-    def image_filepath(self) -> str | None:
-        """
-        return the filepath of the character variant
-        """
-        variant = CharacterVariant.read(series=self.series, character=self.character, id=self.variant)
-        if variant is None:
-            logger.warning(f"Character {self.character} ({self.variant}) not found in series {self.series}")
-            return None
-        return variant.image_filepath()
-
-
 class Panel(BaseModel):
     # IDENTIFIERS
-    id: int = Field(..., description="A unique identifier for the panel.   Default to 1")
+    id: str = Field(..., description="A unique identifier for the panel.   Default to 1")
     issue: str = Field(..., description="The parent issue of the panel.   Default to empty")
     scene: str = Field(..., description="The parent scene of the panel.   Default to empty string")
     series: str = Field(..., description="The parent series of the panel.   Default to empty string")
+
     #PROPERTIES
     description: str = Field(..., description="A detailed description of the image in the panel.   This should describe the image in sufficient detail so that different artists could from this information alone reproduce the same image.   This should include the setting, foreground, background, characters, props, scenery and any other elements in the panel.")
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to square")
@@ -103,78 +93,9 @@ class Panel(BaseModel):
     dialogue: list[Dialogue] = Field(..., description="The dialogue of the panel, default to empty list")
     
     # IMAGES
-    reference_images: list[ReferenceImage] = Field(..., description="The reference images for the panel. default to empty list")
     image: str | None = Field(None, description="The selected image for this panel.  default to None")
+    reference_images: list[ReferenceImage] = Field(..., description="The reference images for the panel.  default to empty list")
 
-    def set_aspect(self, aspect: FrameLayout):
-        """
-        set the aspect ratio of the panel
-        """
-        logger.debug(f"set aspect {aspect}")
-        self.aspect = aspect
-        self.write()
-
-    def path(self) -> str:
-        """
-        return the path to the panel model
-        """
-        return f"{COMICS_FOLDER}/{self.series}/issues/{self.issue}/scenes/{self.scene}/panels/{self.id}"
-    
-    def filepath(self) -> str:
-        """
-        return the filepath to the panel model
-        """
-        return os.path.join(self.path(),"panel.json")
-    
-    def image_filepath(self) -> str:
-        return None
-
-    def write(self):
-        """
-        write the panel model to a file
-        """
-        # create the directory if it doesn't exist
-        os.makedirs(self.path(), exist_ok=True)
-        # write the panel model to a file
-        with open(self.filepath(), "w") as f:
-            f.write(self.model_dump_json(indent=2))
-
-    def image_path(self) -> str:
-        """
-        return the path to the images for this panel
-        """
-        return os.path.join(self.path(), "images")
-    
-    def all_images(self) -> list[str]:
-        """
-        return a list of all the images in the panel
-        """
-        images_path = self.image_path()
-        if not os.path.exists(images_path):
-            return []
-        return [f[:-4] for f in os.listdir(images_path) if f.endswith(".jpg")]
-    
-    def set_image(self, id: str):
-        """
-        set the image for the panel
-        """
-        self.image = id
-        self.write()
-
-    @classmethod
-    def read(cls, series:str, issue: str, scene: str, id: str):
-        """
-        read the panel model from a file
-        """
-        import json
-        # read the panel model from a file
-        filepath = f"{COMICS_FOLDER}/{series}/issues/{issue}/scenes/{scene}/panels/{id}/panel.json"
-        if not os.path.exists(filepath):
-            logger.warning(f"file not found: {filepath}")
-            return None
-        with open(filepath, "r") as f:
-            data = f.read()
-            return cls.model_validate_json(data)
 
     def format(self, heading_level: int = 1) -> str:
         """
@@ -223,56 +144,49 @@ class TitleBoardModel(BaseModel):
     background: str | None = Field(None, description="The background of the panel")
     image: str | None = Field(None, description="The selected image for this panel")
 
-    def set_aspect(self, aspect: FrameLayout):
-        """
-        set the aspect ratio of the panel
-        """
-        self.aspect = aspect
-        self.write()
+    # def set_aspect(self, aspect: FrameLayout):
+    #     """
+    #     set the aspect ratio of the panel
+    #     """
+    #     self.aspect = aspect
+    #     self.write()
 
 
-    def path(self) -> str:
-        """
-        return the path to the panel model
-        """
-        location_id = self.location.value.replace("_", "-")
-        return os.path.join(COMICS_FOLDER,self.series,"issues",self.issue,"covers",location_id)
+    # def path(self) -> str:
+    #     """
+    #     return the path to the panel model
+    #     """
+    #     location_id = self.location.value.replace("_", "-")
+    #     return os.path.join(COMICS_FOLDER,self.series,"issues",self.issue,"covers",location_id)
     
-    def filepath(self) -> str:
-        """
-        return the filepath to the panel model
-        """
-        return os.path.join(self.path(),"titleboard.json")
+    # def filepath(self) -> str:
+    #     """
+    #     return the filepath to the panel model
+    #     """
+    #     return os.path.join(self.path(),"titleboard.json")
     
-    def image_path(self) -> str:
-        """
-        return the path to the images for this panel
-        """
-        return os.path.join(self.path(), "images")
+    # def image_path(self) -> str:
+    #     """
+    #     return the path to the images for this panel
+    #     """
+    #     return os.path.join(self.path(), "images")
 
-    def image_filepath(self) -> str | None:
-        """
-        return the filepath to the image
-        """
-        if self.image is None or self.image == "":
-            return None
-        return os.path.join(self.image_path(), f"{self.image}.jpg")
+    # def image_filepath(self) -> str | None:
+    #     """
+    #     return the filepath to the image
+    #     """
+    #     if self.image is None or self.image == "":
+    #         return None
+    #     return os.path.join(self.image_path(), f"{self.image}.jpg")
     
-    def all_images(self) -> list[str]:
-        """
-        return a list of all the images in the panel
-        """
-        images_path = self.image_path()
-        if not os.path.exists(images_path):
-            return []
-        return [f[:-4] for f in os.listdir(images_path) if f.endswith(".jpg")]
-    
-    def set_image(self, id: str):
-        """
-        set the image for the panel
-        """
-        self.image = id
-        self.write()
+    # def all_images(self) -> list[str]:
+    #     """
+    #     return a list of all the images in the panel
+    #     """
+    #     images_path = self.image_path()
+    #     if not os.path.exists(images_path):
+    #         return []
+    #     return [f[:-4] for f in os.listdir(images_path) if f.endswith(".jpg")]
 
     def format(self, heading_level: int = 1) -> str:
         """
@@ -289,40 +203,6 @@ class TitleBoardModel(BaseModel):
 """
         return text
     
-    def write(self):
-        """
-        write the panel model to a file
-        """
-        # create the directory if it doesn't exist
-        os.makedirs(self.path(), exist_ok=True)
-        # write the panel model to a file
-        with open(self.filepath(), "w") as f:
-            f.write(self.model_dump_json(indent=2))
-
-    @classmethod
-    def read(cls, series: str, issue: str, location: CoverLocation):
-        """
-        read the panel model from a file
-        """
-        if isinstance(location, CoverLocation):
-            location_id = location.value.replace("_", "-")
-        else:
-            # if it is a string then it is a location
-            location_id = location.replace("_", "-")
-
-        filepath = os.path.join(COMICS_FOLDER, series, "issues", issue, "covers", location_id, "titleboard.json")
-        if not os.path.exists(filepath):
-            return None
-        with open(filepath, "r") as f:
-            data = f.read()
-            return cls.model_validate_json(data)
-        
-    def delete(self):
-        """
-        delete the panel model
-        """
-        import shutil
-        shutil.rmtree(self.path(), ignore_errors=True)
 
     def render(self) -> str:
         """
@@ -331,11 +211,11 @@ class TitleBoardModel(BaseModel):
         Returns:
             A string indicating the status of the rendering operation.
         """
-        from style.comic import ComicStyle      # Needed for style description
-        from models.publisher import Publisher  # Needed for publisher logo
-        from models.series import Series        # Needed for Series name
-        from models.issue import Issue          # Needed for issue name, price, creative team, etc.
-        from models.character import CharacterVariant # Needed for character models and images
+        from schema.style.comic import ComicStyle      # Needed for style description
+        from schema.publisher import Publisher  # Needed for publisher logo
+        from schema.series import Series        # Needed for Series name
+        from schema.issue import Issue          # Needed for issue name, price, creative team, etc.
+        from schema.character import CharacterVariant # Needed for character models and images
 
         # Read the style, issue, series and characters
         try:

@@ -1,15 +1,17 @@
 import os
-from loguru import logger
 from nicegui import ui
+from loguru import logger
 from nicegui.events import UploadEventArguments
 from gui.selection import SelectionItem
 from gui.elements import init_cardwall
 from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button
 from gui.messaging import post_user_message
-from models.scene import SceneModel
-from models.panel import FrameLayout
+from schema.scene import SceneModel
+from schema.panel import FrameLayout
 from helpers.file import generate_unique_id
 from gui.state import APPState
+from storage.generic import GenericStorage
+from logger.generic import Logger
 
 
 def view_scene(state: APPState):
@@ -20,13 +22,15 @@ def view_scene(state: APPState):
         state: The GUI elements containing the details and selection.
     """
     # DEREFERENCE THE DATA
-    from style.comic import ComicStyle
+    from schema.style.comic import ComicStyle
     details = state.details
+    storage: GenericStorage = state.storage
+
     selection = state.selection
     scene_id = selection[-1].id
     issue_id = selection[-2].id
     series_id = selection[-3].id if len(selection) > 2 else None
-    scene = SceneModel.read(series=series_id, issue=issue_id, id=scene_id)
+    scene = storage.find_scene(series_id=series_id, issue_id=issue_id, scene_id=scene_id)
     if scene is None:
         state.clear_details()
         message = f"Scene with ID {scene_id} not found in issue {issue_id}."
@@ -34,7 +38,7 @@ def view_scene(state: APPState):
             ui.markdown(message)
         return
     
-    style = ComicStyle.read(id=scene.style) if scene.style else None
+    style = storage.read_style(id=scene.style) if scene.style else None
     
     # Draw the detials window.   It will have a row with the story and style, and then
     # cardwall with the panels.   Unlike other cardwalls, this one will try to match each
@@ -67,7 +71,7 @@ def view_scene(state: APPState):
                     kind="pick-style", 
                     get_caption = lambda: "Style", 
                     get_id = lambda: style.id if style else None, 
-                    get_image_filepath = lambda: style.image_filepath() if style else None
+                    get_image_filepath = lambda: storage.find_style_image(style.id) if style else None
                 )
                 
         with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
@@ -77,7 +81,10 @@ def view_scene(state: APPState):
                 crud_button("create", lambda: post_user_message(state, "I would like to add a new panel to the scene."))
             expansion.value = True
 
-            panels = scene.panels
+            panels = storage.find_panels(
+                series_id=series_id, 
+                issue_id=issue_id, 
+                scene_id=scene_id)
             if not panels or panels == []:
                 ui.markdown("No panels available for this scene.")
             else:
@@ -120,22 +127,15 @@ def view_scene(state: APPState):
                 with row:
                     def on_upload(e:UploadEventArguments):
                         # Save the uploaded file to the data/uploads directory with a unique name
-                        upload_dir = os.path.join("data", "uploads")
-                        if not os.path.exists(upload_dir):
-                            os.makedirs(upload_dir)
+                        locator = storage.upload_scene_reference_image(
+                            series_id=series_id, 
+                            issue_id=issue_id, 
+                            scene_id=scene_id, 
+                            image_name=e.name, 
+                            image_data=e.content, 
+                            mime_type=e.type)
 
-                        # Check to see if the file is an image
-                        filepath = os.path.join(upload_dir, e.name)
-                        mime_type = e.type
-                        if not mime_type.startswith("image/"):
-                            raise ValueError("Uploaded file is not an image")
-                        
-                        # if the file already exists, then overwrite it.
-                        with open(filepath, "wb") as f:
-                            f.write(e.content.read())
-                        logger.info(f"Uploaded file to {filepath}")
-
-                        post_user_message(state, "I would like to generate a panel from the uploaded image: " + filepath)
+                        post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
 
                     with ui.card().classes(DARK_MODE_STYLES).style('width: 24.5%; aspect-ratio: 1/1'):
                         uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)

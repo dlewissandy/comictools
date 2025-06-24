@@ -6,17 +6,11 @@ from helpers.file import generate_unique_id
 from helpers.image import IMAGE_QUALITY
 
 class Publisher(BaseModel):
+    id: str | None = Field(None, description="The unique identifier for the publisher.  This is usually the publisher name in lowercase with spaces replaced by dashes.  defaults to null")
     name: str = Field(..., description="The name of the publisher")
     description: str | None = Field(..., description="A description of the publisher.  defaults to null")
     logo: str | None = Field(..., description="A description of the logo of the publisher.  defaults to null")
     image: str | None = Field(None, description="The selected image for the logo")
-
-    @property
-    def id(self) -> str:
-        """
-        return the id of the publisher
-        """
-        return self.name.replace(" ", "-").lower()
 
     def path(self) -> str:
         """
@@ -43,85 +37,7 @@ class Publisher(BaseModel):
         if self.image is None or self.image == "":
             return None
         return os.path.join(self.path(), "images", f"{self.image}.jpg")
-    
-    @classmethod
-    def read(cls, id: str | None = None, name: str | None = None) -> "Publisher":
-        """
-        read the publisher model from a file
-        """
-        if not (id is None or name is None):
-            raise ValueError("You must provide either id or name, not both.")
-        if id is None and name is None:
-            raise ValueError("You must provide an id or name.")
-        if name is not None:
-            id = name.replace(" ", "-").lower()
-        filepath = os.path.join(DATA_FOLDER, "publishers", id, "publisher.json")
-        if not os.path.exists(filepath):
-            return None
-        with open(filepath, "r") as f:
-            data = f.read()
-            return cls.model_validate_json(data)
         
-    def write(self):
-        """
-        write the publisher model to a file
-        """
-        # create the directory if it doesn't exist
-        os.makedirs(self.path(), exist_ok=True)
-        # write the publisher model to a file
-        with open(self.filepath(), "w") as f:
-            f.write(self.model_dump_json(indent=2))
-
-    @classmethod
-    def read_all(cls) -> list["Publisher"]:
-        """
-        read all publishers from the data folder
-        """
-        publishers = []
-        for item in os.listdir(os.path.join(DATA_FOLDER, "publishers")):
-            if item.startswith('.'):
-                continue
-            if os.path.isdir(os.path.join(DATA_FOLDER, "publishers", item)):
-                # if it is a file then it is a publisher
-                publisher = cls.read(id=item)
-                if publisher:
-                    publishers.append(publisher)
-        return publishers
-
-    def set_image(self, image: str):
-        """
-        set the image for the publisher
-        """
-        # Verify that the image exists
-        if not os.path.exists(os.path.join(self.path(), "images", f"{image}.jpg")):
-            raise ValueError(f"Image {image} does not exist.")
-        
-        self.image = image
-        self.write()
-
-    def all_images(self) -> list[str]:
-        """
-        return all images for the publisher
-        """
-        images = []
-        images_path = os.path.join(self.path(), "images")
-        if not os.path.exists(images_path):
-            return images
-        
-        if os.path.isdir(images_path):
-            for item in os.listdir(images_path):
-                if item.endswith(".jpg") and not item.startswith('.'):
-                    images.append(item[:-4])
-        return images
-    
-    def delete(self):
-        """
-        delete the publisher model
-        """
-        from shutil import rmtree
-        # delete the publisher directory and all its contents
-        rmtree(self.path())
-
     def render(self):
         """
         render the logo for the publisher on success, returns the id of the generated image.

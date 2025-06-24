@@ -7,7 +7,7 @@ from helpers.constants import CHARACTERS_FOLDER, COMICS_FOLDER, DATA_FOLDER
 from helpers.file import generate_unique_id, get_folder_contents, subfolders
 from helpers.image import IMAGE_QUALITY
 
-from style.comic import ComicStyle
+from schema.style.comic import ComicStyle
 
 def render_character_image(character_name: str, character_description: str, style_description: str, save_path: str):
     """
@@ -63,70 +63,23 @@ def render_character_image(character_name: str, character_description: str, styl
 
 class CharacterModel(BaseModel):
     # Note: The character name:variant is used as the key in the characters dictionary and must be unique
+    id : str = Field(..., description="The unique identifier for the character model.  This is usually the character name in lowercase with spaces replaced by dashes.  defaults to null")
     series: str = Field(..., description="The comic book series (title) that the character belongs to.  Default to empty string")
     description: str = Field(..., description="A 1-2 sentence description of the character.  This should be sufficient to distinguish the character from others.")
     name: str = Field(..., description="The name of the character")
     
-    @property
-    def id(self) -> str:
-        """
-        return the id of the character
-        """
-        return self.name.lower().replace(" ", "-")
-
-    def path(self) -> str:
-        """
-        return the path to the character model
-        """
-        return f"{COMICS_FOLDER}/{self.series.lower().replace(' ', '-')}/characters/{self.id}"
+    # def path(self) -> str:
+    #     """
+    #     return the path to the character model
+    #     """
+    #     return f"{COMICS_FOLDER}/{self.series.lower().replace(' ', '-')}/characters/{self.id}"
     
-    def filepath(self) -> str:
-        """
-        return the filepath to the character model
-        """
-        return f"{self.path()}/character.json"
+    # def filepath(self) -> str:
+    #     """
+    #     return the filepath to the character model
+    #     """
+    #     return f"{self.path()}/character.json"
     
-    @property
-    def variant_ids(self) -> list[str]:
-        """
-        return the list of variant ids for the character model
-        """
-        # Get all the non-hidden subfolders in the character model folder
-        return subfolders(self.path())
-
-    @property
-    def variants(self) -> list["CharacterVariant"]:
-        """
-        return the list of variants for the character model
-        """
-        result = []
-        base_variant = self.get_variant("base")
-        for variant_id in self.variant_ids:
-            variant = CharacterVariant.read(series=self.series, character=self.id, id=variant_id)
-            if variant is not None and variant.id != "base":
-                result.append(variant)
-        
-
-        # sort the variants by name, but keep the base variant first
-        result.sort(key=lambda x: x.name.lower())
-        if base_variant is not None:
-            result.insert(0, base_variant)
-        return result
-
-    def image_filepath(self):
-        """
-        return the filepath to the representative image for the character model
-        """
-        logger.trace("character.image_filepath() called")
-        # Get the base variant
-        variants = self.variants
-        while len(variants) > 0:
-            variant = variants.pop(0)
-            filepath = variant.image_filepath()
-            if filepath is not None:
-                return filepath
-        # If no image is found, return None
-        return None
 
     @classmethod
     def generate(cls, series: str, name: str, description: str, variant: str = ""):
@@ -185,36 +138,6 @@ class CharacterModel(BaseModel):
         response.write()
         return response
 
-    def write(self):
-        """
-        write the character model to a file
-        """
-        os.makedirs(self.path(), exist_ok=True)
-        # write the character model to a file
-        with open(self.filepath(), "w") as f:
-            f.write(self.model_dump_json(indent=2))
-
-    @classmethod
-    def read(cls,  series: str, id: str | None = None, name: str | None = None) -> Optional["CharacterModel"]:
-        """
-        read the character model from a file.  If the charater model does not exist, then
-        return None.
-        """
-        if id is None and name is None:
-            logger.error("Either id or name must be specified")
-            return None
-        series = series.lower().replace(" ", "-")
-        # read the character model from a file
-        if id is None:
-            id = os.path.join(name).lower().replace(" ", "-")
-        filepath = f"{COMICS_FOLDER}/{series}/characters/{id}/character.json"
-        if not os.path.exists(filepath):
-            logger.warning(f"Character model {id} not found in {filepath}. Returning None.")
-            return None
-        logger.debug(f"Reading character model from {filepath}")
-        with open(filepath, "r") as f:
-            data = f.read()
-            return cls.model_validate_json(data)
 
     def format(self):
         """
@@ -275,16 +198,6 @@ class CharacterModel(BaseModel):
         self.write()
         return self
     
-    def delete(self):
-        """
-        delete the character model and all its variants
-        """
-        # Delete the character model folder
-        import shutil
-        path = self.path()
-        if os.path.exists(path):
-            logger.info(f"Deleting character model {self.name} at {path}")
-            shutil.rmtree(path)
     
 class StyledImage(BaseModel):
     style_id: str = Field(..., description="The id of the style for which this image is generated.  e.g. 'vintage-four-color'")
@@ -344,6 +257,7 @@ class CharacterVariantMinimal(BaseModel):
 
 
 class CharacterVariant(BaseModel):
+    id: str = Field(..., description="The unique identifier for the character variant.  This is usually the character name in lowercase with spaces replaced by dashes.  defaults to null")
     series: str = Field(..., description="The comic book series (title) that the character belongs to.  Default to empty string")
     character: str = Field(..., description="The identifier of the character for which this is a variant.  e.g. '<name>'")
     description: str = Field(..., description="A 3-5 sentence description of the character.  This should be sufficient to distinguish the character from others.")
@@ -356,14 +270,6 @@ class CharacterVariant(BaseModel):
     behavior: str  = Field(..., description="Notes on the The character's behavior")
     appearance: str  = Field(..., description="Notes on the The character's physical appearance and attributes")
     images: dict[str,str] = Field(..., description="The reference images that can be used by artists to draw this character.   defaults {}")
-
-    @property
-    def id(self) -> str:
-        """
-        return the id of the character variant
-        """
-        # Normalize the id:
-        return self.name.lower().replace(" ", "-")
 
     def path(self) -> str:
         """
@@ -434,62 +340,6 @@ class CharacterVariant(BaseModel):
         response.write()
         return response
 
-    def write(self):
-        """
-        write the character model to a file
-        """
-        # Verify folder exists
-        os.makedirs(self.path(), exist_ok=True)
-        # write the character model to a file
-        with open(self.filepath(), "w") as f:
-            f.write(self.model_dump_json(indent=2))
-
-    @classmethod
-    def read(cls,  series: str, character: str, id: str | None = None, name: str | None = None) -> Optional["CharacterModel"]:
-        """
-        read the character model from a file.  If the charater model does not exist, then
-        return None.
-        """
-        character_id = character.lower().replace(" ", "-")
-        series_id = series.lower().replace(" ", "-")
-        
-        if id is None and name is None:
-            logger.error("Either id or name must be specified")
-            return None
-        
-        variant_id = id.lower().replace(" ", "-") if id else None
-        # read the character model from a file
-        if id is None:
-            id = name.lower().replace(" ", "-")
-        filepath = f"{COMICS_FOLDER}/{series_id}/characters/{character_id}/{variant_id}/variant.json"
-        logger.debug(f"Reading character variant from {filepath}")
-        if not os.path.exists(filepath):
-            logger.warning(f"Character variant {id} not found in {filepath}. Returning None.")
-            return None
-        with open(filepath, "r") as f:
-            data = f.read()
-            logger.debug(f"Character variant data read from {filepath}: {data}")
-            return cls.model_validate_json(data)
-
-    @classmethod
-    def read_all(cls, series: str, character: str) -> list["CharacterVariant"]:
-        """
-        read all character variants for the given series and character
-        """
-        character_id = character.lower().replace(" ", "-")
-        series_id = series.lower().replace(" ", "-")
-        path = f"{COMICS_FOLDER}/{series_id}/characters/{character_id}"
-        subfolders = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f)) and not f.startswith('.')]
-        
-        variants = []
-        for variant_dir in subfolders:
-            variant_id = variant_dir.lower().replace(" ", "-")
-            variant = cls.read(series=series_id, character=character_id, id=variant_id)
-            if variant is not None:
-                variants.append(variant)
-            else:
-                logger.warning(f"Variant {variant_id} for character {character} in series {series} not found.")
-        return variants
 
     def format(self, heading_level: int = 2) -> str:
         """
@@ -581,15 +431,6 @@ class CharacterVariant(BaseModel):
             del self.image[style]
             self.write()
 
-    # def images(self,style_id: str) -> list[str]:
-    #     """
-    #     return the list of images for the character model and given style
-    #     """
-    #     variant = self.variant
-    #     if self.variant is None or self.variant == "":
-    #         variant = "base"
-    #     return get_folder_contents(f"{CHARACTERS_FOLDER}/{self.id}/{variant}/{style_id}")
-    
     def styles(self) -> list[str]:
         """
         return the list of styles for which the character model has images
@@ -663,14 +504,3 @@ class CharacterVariant(BaseModel):
         self.write()
         return self
     
-    def delete(self):
-        """
-        delete the character model and all its variants
-        """
-        # Delete the character model folder
-        import shutil
-        path = self.path()
-        if os.path.exists(path):
-            logger.info(f"Deleting character model {self.name} at {path}")
-            shutil.rmtree(path)
-        

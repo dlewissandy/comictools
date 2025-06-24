@@ -67,7 +67,7 @@
     }
   },
   "image": {
-    "art": "childlike-crayon",
-    "character": "43669585-f724-455e-a8b1-74d7f28a3bf2"
+    "art": "data/styles/childlike-crayon/images/art-style/childlike-crayon.jpg",
+    "character": "data/styles/childlike-crayon/images/character-style/bd1b1b0f-8c9d-4240-9c75-5f1625e4518f.jpg"
   }
 }

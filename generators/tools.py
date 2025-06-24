@@ -3,13 +3,18 @@ from agents import function_tool
 from typing import Callable, Optional, Union
 from pydantic import BaseModel
 from gui.state import APPState
-from models.series import Series
-from models.issue import Issue
-from style.comic import ComicStyle
-from models.publisher import Publisher
-from models.character import CharacterModel, CharacterVariant
-from models.panel import Panel, TitleBoardModel, CoverLocation
-from models.scene import SceneModel
+from schema import (
+    ComicStyle,
+    Publisher,
+    CharacterModel,
+    CharacterVariant,
+    Panel,
+    TitleBoardModel,
+    CoverLocation,
+    SceneModel,
+    Series,
+    Issue,
+)
 from helpers.image import load_b64_image
 
 class ImageLoadResult(BaseModel):
@@ -246,7 +251,7 @@ def get_series(state: APPState, series_id: int) -> str | Series:
     Returns:
         The series object or an error message if not found.
     """
-    from models.series import Series
+    from schema.series import Series
     series_id = normalize_id(series_id)
     msg = None
     try: 
@@ -490,7 +495,7 @@ def wrap_render_logo(state: APPState):
         Returns:
             A status message indicating the result of the rendering.
         """
-        from models.publisher import Publisher
+        from schema.publisher import Publisher
         selection = state.selection
         kind = selection[-1].kind
         if kind != "publisher":
@@ -527,7 +532,7 @@ def delete_publisher(state: APPState, publisher_id: str) -> str:
     Returns:
         A status message indicating the result of the deletion operation.
     """
-    from models.publisher import Publisher
+    from schema.publisher import Publisher
     publisher = get_publisher(state, publisher_id)
     if isinstance(publisher, str):
         return publisher

@@ -1,7 +1,8 @@
 from nicegui import ui
 from agents import Agent
 from agents.items import TResponseInputItem
-from loguru import logger
+from storage.generic import GenericStorage
+from logger.generic import Logger
 
 STATE_FILEPATH = 'state.json'
 def elipsis(text: str, max_length: int = 50) -> str:
@@ -26,9 +27,8 @@ class APPState:
     history: ui.scroll_area
     user_input: ui.input
     send_button: ui.button
-
     
-    def __init__(self, breadcrumbs, details, history, user_input, send_button, dark_mode: bool = False, selection: list[SelectionItem] = []):
+    def __init__(self, breadcrumbs, details, history, user_input, send_button, storage: GenericStorage, logger: Logger,dark_mode: bool = False, selection: list[SelectionItem] = []):
         from generators import init_agents
         # GUI ELEMENTS
         self.breadcrumbs = breadcrumbs
@@ -43,10 +43,34 @@ class APPState:
         self._selection = selection
         self._dark_controller = ui.dark_mode()
 
+        # Storage and logging must be initialized before agents
+        self._storage = storage
+        self._logger = logger
+
         # AGENTS
         self._agents = init_agents(self)
         
+
         
+    @property
+    def storage(self) -> GenericStorage:
+        """
+        Get the current storage instance for the GUI state.
+        
+        Returns:
+            The GenericStorage instance used for data persistence.
+        """
+        return self._storage
+    
+    @property
+    def logger(self) -> Logger:
+        """
+        Get the current logger instance for the GUI state.
+        
+        Returns:
+            The Logger instance used for logging.
+        """
+        return self._logger
 
     @property
     def selection(self) -> list[SelectionItem]:
@@ -88,7 +112,7 @@ class APPState:
         Args:
             value: A boolean indicating whether to enable dark mode.
         """
-        logger.debug(f"Setting dark mode to {value}")
+        self.logger.debug(f"Setting dark mode to {value}")
         self._dark_mode = value
         if value:
             self._dark_controller.enable()
@@ -114,7 +138,7 @@ class APPState:
         Args:
             value: A boolean indicating whether the GUI state has unsaved changes.
         """
-        logger.debug(f"Setting is_dirty to {value}")
+        self.logger.debug(f"Setting is_dirty to {value}")
         self._is_dirty = value
 
 
@@ -128,7 +152,7 @@ class APPState:
         Returns:
             The cleared history to facilitate repopulation if needed.
         """
-        logger.trace("Clearing history")
+        self.logger.trace("Clearing history")
         self.history.clear()
         # TODO: re-enable the send button
         return self.history
@@ -142,7 +166,7 @@ class APPState:
         Returns:
             The cleared details to facilitate repopulation if needed.
         """
-        logger.trace("Clearing details")
+        self.logger.trace("Clearing details")
         self.details.clear()
         return self.details
 
@@ -157,7 +181,7 @@ class APPState:
             A list of openai messages.
         """
         def _get_transcript(elem: ui.element, name: str | None, sent = bool | None, indent:int= 0) -> list[dict]: 
-            logger.debug(" "*indent +f"Processing message: {elem.tag}")
+            self.logger.debug(" "*indent +f"Processing message: {elem.tag}")
             name = name or elem.props.get( 'name', None)
             sent = sent if sent is not None else elem.props.get('sent', None)
 
@@ -165,7 +189,7 @@ class APPState:
             text_html = text_html if text_html is not None else elem.props.get('content', text_html)
             text_html = text_html if text_html is not None else elem.props.get('innerHTML', text_html)
             if text_html is not None and name is not None:
-                logger.debug(" "*indent +f"Found message: {name} - {elipsis(text_html)}")
+                self.logger.debug(" "*indent +f"Found message: {name} - {elipsis(text_html)}")
                 return [{
                     'name': name,
                     'text_html': text_html,
@@ -173,11 +197,11 @@ class APPState:
                 }]
             
             if elem.default_slot.children is None:
-                logger.debug(" "*indent +"No children in element: {elem.tag}")
+                self.logger.debug(" "*indent +"No children in element: {elem.tag}")
                 return []
             
             if len(elem.default_slot.children) == 0:
-                logger.debug(" "*indent +f"zero children in element: {elem.tag}" )
+                self.logger.debug(" "*indent +f"zero children in element: {elem.tag}" )
                 return []
             
             result = []
@@ -185,9 +209,9 @@ class APPState:
                 result.extend(_get_transcript(child, name=name, sent=sent, indent=indent+2))
             return result
         
-        logger.trace("Serializing history")
+        self.logger.trace("Serializing history")
         result =  _get_transcript(self.history, None, None) 
-        logger.debug(f"Serialized history: {[{'name': msg.get('name', 'user'), 'text_html': elipsis(msg.get('text_html', ''))} for msg in result]}")
+        self.logger.debug(f"Serialized history: {[{'name': msg.get('name', 'user'), 'text_html': elipsis(msg.get('text_html', ''))} for msg in result]}")
         return result
     
     def get_messages(self, role_map: dict[str,str] = {}) -> list[dict]:
@@ -205,7 +229,7 @@ class APPState:
         for msg in self.get_transcript( ):
             role = role_map.get(msg.get("name", "user").lower(), None)
             if role is None:
-                logger.error(f"Unknown role in message: {msg}")
+                self.logger.error(f"Unknown role in message: {msg}")
                 continue
             content = msg.get("text_html", "")
             messages.append({"role": role, "content": content})
@@ -218,13 +242,13 @@ class APPState:
         Args:
             state: The GUI elements containing the messages.
         """
-        logger.trace("Restoring history")
-        logger.debug("Restoring history with messages: %s", messages)
+        self.logger.trace("Restoring history")
+        self.logger.debug(f"Restoring history with messages: {messages}")
         history: ui.scroll_area = self.history
         parent_container = history
         for message in messages:
             if not isinstance(message, dict):
-                logger.warning(f"Skipping non-dict message: {message}")
+                self.logger.warning(f"Skipping non-dict message: {message}")
                 continue
 
             name = message.get('name', 'Unknown')
@@ -253,10 +277,10 @@ class APPState:
             new: The new selection to set.
             clear_history: Whether to clear the history after changing the selection.
         """
-        logger.debug(f"Changing selection to {new} with clear_history={clear_history}")
+        self.logger.debug(f"Changing selection to {new} with clear_history={clear_history}")
         old = self.selection
         if old == new:
-            logger.debug("New selection is the same as the old selection. No changes made.")
+            self.logger.debug("New selection is the same as the old selection. No changes made.")
             return
 
         self._selection = new
@@ -268,9 +292,9 @@ class APPState:
             # has a kind that starts with "pick-", then we can assume that the user
             # has just picked an item, and we don't have to clear the history.
             if len(new) == len(old) - 1 and old[-1].kind.startswith("pick-"):
-                logger.debug("Not clearing history because we are returning from a pick- selection.")
+                self.logger.debug("Not clearing history because we are returning from a pick- selection.")
             else:
-                logger.debug("Clearing history because we are moving up in the hierarchy.")
+                self.logger.debug("Clearing history because we are moving up in the hierarchy.")
                 self.clear_history()
         self.write()
 
@@ -285,10 +309,10 @@ class APPState:
         self.refresh_details()
 
     def refresh_details(self):
-        logger.trace("Refreshing details")
-        logger.debug(f"SELECTION:{self.selection}")
+        self.logger.trace("Refreshing details")
+        self.logger.debug(f"SELECTION:{self.selection}")
         # These imports are here to avoid circular imports
-        from models.panel import CoverLocation
+        from schema.panel import CoverLocation
         from gui.home import view_all_styles, view_all_series, view_all_publishers
         from gui.style import view_style, view_pick_style
         from gui.series import view_series
@@ -365,7 +389,7 @@ class APPState:
 
 
     def write(self):
-        logger.debug("Saving state to file")
+        self.logger.debug("Saving state to file")
     
         state_json = {
             "selection": [item.model_dump() for item in self.selection],
@@ -383,7 +407,7 @@ class APPState:
         Returns:
             The initialized breadcrumbs UI element.
         """
-        logger.debug("Initializing breadcrumbs")
+        self.logger.debug("Initializing breadcrumbs")
         self.breadcrumbs = ui.button_group().classes('w-full flex-nowrap overflow-x-auto')
         with self.breadcrumbs:
             breadcrumb_selector(self)

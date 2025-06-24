@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from nicegui import ui
-from models.character import CharacterModel
+from schema.character import CharacterModel
 from gui.elements import (
     header, 
     crud_button, 
@@ -12,6 +12,7 @@ from gui.elements import (
 from gui.messaging import new_item_messager
 from gui.messaging import post_user_message
 from gui.state import APPState
+from storage.generic import GenericStorage
 
 def view_character(state:APPState):
     """
@@ -24,9 +25,12 @@ def view_character(state:APPState):
     """
     # Read the state to get the selection and ui elements
     selection = state.selection
+    storage = state.storage
+
     character_id = selection[-1].id
     series_id = selection[-2].id
-    character = CharacterModel.read(series=series_id, id=character_id)
+    
+    character = storage.find_character(series_id=series_id, character_id =character_id)
     details = state.details
 
     # If the character is not found, clear the details and show an error message
@@ -50,7 +54,13 @@ def view_character(state:APPState):
         with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state=state, caption="Variants", message="I would like to create a new variant for this character.")
-            view_all_instances(state, lambda: character.variants, kind="variant", aspect_ratio="3:2").style('margin-top: 0px; margin-bottom: 0px')
+            view_all_instances(
+                state=state,
+                get_instances=lambda: storage.find_character_variants(series_id=series_id, character_id=character_id), 
+                get_image_locator=lambda variant: storage.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant.id),
+                kind="variant", 
+                aspect_ratio="3:2"
+                ).style('margin-top: 0px; margin-bottom: 0px')
         
         
             
@@ -59,8 +69,11 @@ def view_character_reference(state: APPState):
     View the details of a character reference.    Here we should show all the variants for a 
     particular character so that the user can select from them.
     """
+    from schema.panel import Panel, CharacterRef
+
     logger.critical("view_character_reference")
-    from models.panel import Panel, CharacterRef
+    storage: GenericStorage = state.storage
+
     # DEREFERENCE THE DATA
     panel_id = state.selection[-2].id
     scene_id = state.selection[-3].id
@@ -111,7 +124,8 @@ def view_character_reference(state: APPState):
 
         view_all_instances(
             state,
-            get_instances= lambda: character.variants,
+            get_instances= lambda: storage.find_character_variants(series_id=series_id, character_id=character_id),
+            get_image_locator=lambda variant: storage.find_variant_image(series_id= series_id, character_id= character_id, variant_id=variant.id),
             kind="variant",
             aspect_ratio="3/2",
             get_choice = lambda: get_choice(),

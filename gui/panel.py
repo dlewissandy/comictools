@@ -2,8 +2,8 @@ import os
 from loguru import logger
 from nicegui import ui
 from nicegui.events import UploadEventArguments
-from models.scene import SceneModel
-from models.panel import Panel, FrameLayout
+from schema.scene import SceneModel
+from schema.panel import Panel, FrameLayout
 from helpers.constants  import DATA_FOLDER
 from gui.elements import (
     DARK_MODE_STYLES, 
@@ -19,6 +19,7 @@ from gui.elements import (
 from gui.selection import SelectionItem
 from gui.state import APPState
 from gui.messaging import post_user_message
+from storage.generic import GenericStorage
 
 def panel_selector(state: APPState, container: ui.element, image_filepath, new_itm:SelectionItem):
     selection = state.selection
@@ -54,24 +55,22 @@ def view_panel(state: APPState):
         state: The GUI elements containing the details and selection.
     """
     details = state.details
+    storage: GenericStorage = state.storage
     
     selection = state.selection
-    id = selection[-1].id
-    panel_number = int(id)
+    panel_id = selection[-1].id
+    panel_number = int(panel_id)
+
     scene_id = selection[-2].id
     issue_id = selection[-3].id
     series_id = selection[-4].id
     logger.debug(f"series: {series_id} issue: {issue_id} scene: {scene_id} panel: {panel_number}")
     
-    scene = SceneModel.read(series=series_id, issue=issue_id, id=scene_id)
-    if scene is None:
-        message = f"Scene with ID {scene_id} not found in issue {issue_id}."
-        logger.error(message)
-        details.clear()
-        with details:
-            ui.markdown(message).style('color: red;')
-        return
-    panel: Panel = scene.read_panel(panel_number)
+    panel: Panel = storage.find_panel(
+        series_id=series_id, 
+        issue_id=issue_id, 
+        scene_id=scene_id, 
+        panel_id = panel_id)
     if panel is None:
         message = f"Panel with number {panel_number} not found in scene {scene_id}."
         logger.error(message)
@@ -108,6 +107,11 @@ def view_panel(state: APPState):
     # | Reference Images (Cardwall)                       | 
     # +---------------------------------------------------+
 
+    def set_image(locator: str):
+        panel.image = locator
+        storage.update_panel(panel)
+
+
     details.clear()
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
@@ -127,10 +131,22 @@ def view_panel(state: APPState):
             full_width_image_selector_grid(
                 state=state,
                 kind=f"panel-image",
-                images_path=panel.image_path(),
+                upload_image=lambda name, data, mime_type: storage.upload_panel_reference_image(
+                    series_id=series_id, 
+                    issue_id=issue_id, 
+                    scene_id=scene_id, 
+                    panel_id=panel_id, 
+                    name=name, 
+                    data=data, 
+                    mime_type=mime_type),
                 get_selection=lambda : panel.image,
-                set_selection=lambda img_id: panel.set_image(id=img_id),
-                get_images=lambda: panel.all_images(),
+                set_selection=set_image,
+                get_images=lambda: storage.find_panel_images(
+                    series_id=series_id, 
+                    issue_id=issue_id, 
+                    scene_id=scene_id, 
+                    panel_id=panel_id),
+
                 aspect_ratio={aspect},
                 columns=4,
                 header_size=2,
@@ -144,6 +160,20 @@ def view_panel(state: APPState):
         view_reference_images(
             state=state, 
             parent=panel,
+            get_images=lambda: storage.find_panel_reference_images(
+                series_id=series_id, 
+                issue_id=issue_id, 
+                scene_id=scene_id, 
+                panel_id=panel_id),
+            upload_image=lambda name, data, mime_type: storage.upload_panel_reference_image(
+                series_id=series_id, 
+                issue_id=issue_id, 
+                scene_id=scene_id, 
+                panel_id=panel_id, 
+                name=name, 
+                data=data, 
+                mime_type=mime_type)
+
         )
     
 

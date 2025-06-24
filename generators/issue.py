@@ -2,8 +2,8 @@ from typing import Tuple, Optional, List
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
-from models.issue import Issue
-from models.panel import TitleBoardModel, CoverLocation, FrameLayout, CharacterRef
+from schema.issue import Issue
+from schema.panel import TitleBoardModel, CoverLocation, FrameLayout, CharacterRef
 from gui.selection import SelectionItem
 
 def issue_agent(state: APPState) -> Agent:

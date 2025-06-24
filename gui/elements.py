@@ -1,15 +1,15 @@
 import os
-from typing import Optional, TypedDict
-from loguru import logger
-from typing import Callable
+from typing import Optional, TypedDict, Callable, BinaryIO
 from nicegui import ui
 from nicegui.events import UploadEventArguments
 from gui.constants import TAILWIND_CARD
 from gui.messaging import post_user_message
 from gui.state import APPState
 from gui.selection import SelectionItem
-from models.panel import FrameLayout
+from schema.panel import FrameLayout
 from pydantic import BaseModel
+from loguru import logger
+from storage.generic import GenericStorage
 
 HEADER_STYLES = {
     0: 'font-size: 3rem; font-weight: bold;',
@@ -121,10 +121,10 @@ def markdown(body: str) -> None:
 def full_width_image_selector_grid(
     state: APPState,
     kind: str,
-    images_path: str,
-    get_images,
-    get_selection,
-    set_selection,
+    upload_image: Callable,
+    get_images: Callable[[], list[str]],
+    get_selection: Callable[[], str],
+    set_selection: Callable[[str], None],
     aspect_ratio="1/1",
     caption: str = "Images",
     columns: int = 4,
@@ -139,23 +139,18 @@ def full_width_image_selector_grid(
     Args:
         state: The GUI elements containing the details and selection.
         kind: The kind of images (e.g., 'publisher', 'series', 'logo').
-        images_path: The path where the images are stored.
-        get_images: A function to get the list of images.
-        get_selection: A function to get the current selection.
+        get_images: A function to get the list of image locators.
+        get_selection: A function to get image locator of the current selection.
         set_selection: A function to set the current selection.
         title: The title for the image selector grid.
     """
     def on_upload(e: UploadEventArguments):
             if e.name and e.type.startswith('image/'):
-                file_name = e.name
-                save_filepath = os.path.join(images_path, file_name)
-                # recursively create the directory if it doesn't exist
-                os.makedirs(images_path, exist_ok=True)
-                
-                with open(save_filepath, 'wb') as f:
-                    f.write(e.content.read())
-                logger.debug(f"Saved uploaded file to {save_filepath}")
-                set_selection(file_name[:-4])  # Remove file extension for selection
+                name = e.name
+                data = e.content
+                mime_type = e.type
+                locator = upload_image(name, data, mime_type)
+                set_selection(locator)
                 cardwall.clear()
                 render_image_cards(state, get_images=get_images, get_selection=get_selection, set_selection=set_selection, cardwall=cardwall, aspect_ratio=aspect_ratio)
 
@@ -176,15 +171,9 @@ def full_width_image_selector_grid(
                 card.classes('relative overflow-visible')
                 with card:
                     # if it is a full path, then use it as, else construct a filepath
-                    if image.startswith(images_path):
-                        image_filepath = image
-                    else:
-                        image_filepath = os.path.join(images_path, f"{image}.jpg")
-                    logger.critical(f"image_filepath: {image_filepath}")
                     current_selection = get_selection()
-                    if os.path.exists(image_filepath):
-                        logger.debug(f"Image {image} exists at {image_filepath}")
-                        ui.image(source=image_filepath).style(f'top-padding: 0; bottom-padding:0; aspect-ratio: {aspect_ratio};')
+                    if os.path.exists(image):
+                        ui.image(source=image).style(f'top-padding: 0; bottom-padding:0; aspect-ratio: {aspect_ratio};')
                         if image == current_selection:
                             ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10').style('aspect-ratio: 1/1;')
                     else:
@@ -258,7 +247,16 @@ def image_field_editor(
 
         return row
 
-def render_object_choices(state, instances, get_selection, set_selection, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda i,x: x.name, number_of_columns: int = 4):    
+def render_object_choices(
+        state: APPState, 
+        instances: list[BaseModel], 
+        get_image_locator: Callable[[BaseModel], Optional[str]],
+        get_selection: Callable[[],str], 
+        set_selection: Callable[[str],None], 
+        cardwall: ui.element, 
+        aspect_ratio: str = "1/1",
+        get_name: Callable = lambda i,x: x.name,
+        number_of_columns: int = 4):    
     """
     Render a list of choices for a given object type.   Clicking on a choice will set the selection to that choice.
 
@@ -277,7 +275,16 @@ def render_object_choices(state, instances, get_selection, set_selection, cardwa
         # set the selection to the clicked item
         set_selection(id)
         cardwall.clear()
-        render_object_choices(state, instances=instances, get_selection=get_selection, set_selection=set_selection, cardwall=cardwall)
+        render_object_choices(
+            state=state, 
+            instances=instances, 
+            get_image_locator=get_image_locator,
+            get_selection=get_selection, 
+            set_selection=set_selection,
+            cardwall=cardwall,
+            aspect_ratio=aspect_ratio,
+            number_of_columns=number_of_columns,
+            )
 
     logger.debug([instance.name for instance in instances])
     with cardwall:
@@ -287,7 +294,7 @@ def render_object_choices(state, instances, get_selection, set_selection, cardwa
                 logger.debug(f"Creating card for {instance.id}")
                 card.classes('relative overflow-visible')
                 header(get_name(i,instance),4)
-                image_filepath = instance.image_filepath()
+                image_filepath = get_image_locator(instance)
                 if image_filepath is not None and os.path.exists(image_filepath):
                     logger.debug(f"Image {image_filepath} exists.")
                     ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')
@@ -304,7 +311,17 @@ def render_object_choices(state, instances, get_selection, set_selection, cardwa
     return cardwall
 
 
-def render_object_cards(state: APPState, instances, kind: str | Callable, cardwall, aspect_ratio: str = "1/1", get_name: Callable = lambda i,x: x.name, get_markdown: Optional[Callable] = None, number_of_columns: int = 4):
+def render_object_cards(
+        state: APPState, 
+        instances: list[BaseModel], 
+        kind: str | Callable, 
+        cardwall: ui.element, 
+        aspect_ratio: str = "1/1",
+        get_image_locator: Callable[[BaseModel], Optional[str]] = lambda x: x.image_filepath(),
+        get_name: Callable[[int,BaseModel], str] = lambda i,x: x.name, 
+        get_markdown: Optional[Callable] = None, 
+        number_of_columns: int = 4):
+    
     selection = state.selection
     with ui.element().classes(f'grid grid-cols-{number_of_columns} gap-2 w-full') as grid:
         for i,instance in enumerate(instances):
@@ -320,7 +337,7 @@ def render_object_cards(state: APPState, instances, kind: str | Callable, cardwa
                     kind_value = kind
                 sel_itm = SelectionItem(name=name, id=id, kind=kind_value)
                 new_sel = [s for s in selection]+[sel_itm]
-                image = instance.image_filepath()
+                image = get_image_locator(instance)
                 header(name,4)
                 if image:
                     ui.image(source=image).style('top-padding: 0; bottom-padding:0')
@@ -340,6 +357,7 @@ def view_all_instances(
         get_instances, 
         kind: str | Callable,  
         get_name = lambda i,x: x.name, 
+        get_image_locator: Callable[[BaseModel], Optional[str]] = lambda x: x.image_filepath(),
         get_choice: Optional[Callable] = None, 
         set_choice: Optional[Callable] = None, 
         get_markdown: Optional[Callable] = None,
@@ -366,6 +384,7 @@ def view_all_instances(
         - image_filepath: A function that returns the file path of the instance's image.
 
     """
+
     logger.debug("view_all_instances")
 
     # Sanity checks
@@ -390,6 +409,7 @@ def view_all_instances(
             state=state, 
             instances=instances, 
             get_name=get_name,
+            get_image_locator=get_image_locator,
             get_selection=get_choice, 
             set_selection=set_choice, 
             cardwall=init_cardwall(), 
@@ -402,7 +422,8 @@ def view_all_instances(
             get_name=get_name,
             get_markdown=get_markdown,
             kind=kind, 
-            cardwall=init_cardwall(), 
+            cardwall=init_cardwall(),
+            get_image_locator=get_image_locator, 
             number_of_columns=number_of_columns,
             aspect_ratio=aspect_ratio
         )
@@ -505,6 +526,7 @@ def aspect_ratio_picker(state: APPState, parent: ui.element, caption: str, get_a
         get_aspect_ratio: A function to get the current aspect ratio.
         set_aspect_ratio: A function to set the current aspect ratio.
     """
+
     raw_value:FrameLayout = get_aspect_ratio()
     text = raw_value.value.lower().replace("_", " ")
     logger.debug(f"value={text}")
@@ -526,6 +548,8 @@ def aspect_ratio_picker(state: APPState, parent: ui.element, caption: str, get_a
     
     
 def view_character_references(state: APPState, parent: BaseModel):
+    storage: GenericStorage = state.storage
+
     with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
         with expansion.add_slot('header'):
             header("Characters", 2)
@@ -536,24 +560,18 @@ def view_character_references(state: APPState, parent: BaseModel):
             state=state, 
             kind="character-reference",
             get_instances=lambda: parent.characters,
+            get_image_locator=lambda x: storage.find_variant_image(series_id=x.series, character_id=x.character, variant_id=x.variant),
             get_name= lambda _, x: x.name, 
         )
     expansion.open()
     return expansion
 
-def view_reference_images(state: APPState, parent: BaseModel, images_path: str | None = "data/uploads"):
+def view_reference_images(state: APPState, parent: BaseModel, get_images: Callable[[], list[str]], upload_image: Callable[[str, BinaryIO, str], str]  ):
 
     def on_upload(e: UploadEventArguments):
-        if e.name and e.type.startswith('image/'):
-            file_name = e.name
-            save_filepath = os.path.join(images_path, file_name)
-            # recursively create the directory if it doesn't exist
-            os.makedirs(images_path, exist_ok=True)
-            
-            with open(save_filepath, 'wb') as f:
-                f.write(e.content.read())
-            logger.debug(f"Saved uploaded file to {save_filepath}")
-            redraw()
+        save_filepath = upload_image(e.name, e.content, e.type)
+        logger.debug(f"Saved uploaded file to {save_filepath}")
+        redraw()
 
     def redraw():
         with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
@@ -566,13 +584,10 @@ def view_reference_images(state: APPState, parent: BaseModel, images_path: str |
             with view_all_instances(
                 state=state, 
                 kind="reference-image",
-                get_instances=lambda: parent.reference_images,
+                get_instances=lambda: get_images(),
                 get_name= lambda _, x: x.relation.value + " image"
             ):
-                if images_path:
-                    uploader_card(state, on_upload=on_upload )
-                else:
-                    pass
+                uploader_card(state, on_upload=on_upload )
         expansion.open()
         return expansion
     return redraw()

@@ -10,6 +10,7 @@ data/publishers/**
 data/characters/**
 data/comics/**
 data/uploads/**
+data/series/**
 state.json
 *.log
 

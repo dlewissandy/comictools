@@ -43,7 +43,7 @@
     },
     "shout": {
       "shape": "Bold, jagged outline to convey urgency and excitement.",
-      "border": "Thicker ink outline to emphasize the shout’s intensity.",
+      "border": "Thicker ink outline to emphasize the shout\u2019s intensity.",
       "fill_color": "Bright, contrasting color that stands out against the backgrounds.",
       "font": "Dynamic, bold font that captures the energy of shouting."
     },
@@ -67,7 +67,7 @@
     }
   },
   "image": {
-    "art": "watercolor",
-    "character": "ab4ec837-f9cd-4b4f-a3aa-3029c5591d74"
+    "art": "data/styles/watercolor/images/art-style/watercolor.jpg",
+    "character": "data/styles/watercolor/images/character-style/1a3b1026-707f-4f72-9169-2487cbde55ba.jpg"
   }
 }

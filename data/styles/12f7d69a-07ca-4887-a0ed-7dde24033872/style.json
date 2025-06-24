@@ -1,0 +1,70 @@
+{
+  "id": "12f7d69a-07ca-4887-a0ed-7dde24033872",
+  "name": "Dada Disruption",
+  "description": "Dada Disruption is a chaotic and playful artistic style that encapsulates the essence of the Dada movement. This style embraces found objects, absurdity, and randomness, inviting viewers to question the very nature of art and meaning. Dadaism emerged as a reaction against the horrors of World War I, aiming to challenge the established norms of art and society through anti-art sentiments. Influenced by chance and spontaneity, Dadaists employed absurd humor and illogical themes, often incorporating nonsensical elements that reflect the irrationality of the world. This style embodies the spirit of rebellion, encouraging artists to break boundaries and explore the intersection of art and life, creating works that provoke dialogue and introspection.",
+  "art_style": {
+    "line_styles": "Erratic and spontaneous with varied stroke thickness; embraces chaos with seemingly haphazard lines that don't conform to traditional structures.",
+    "inking_tools": "Mixed media approach including traditional brushes, markers, and unconventional tools like sponges or fingers for application.",
+    "shading_style": "Flat colors and rough textures combined with random splashes and drips; minimal shading that allows colors to clash rather than harmonize.",
+    "color_palette": "Bold, clashing colors like bright reds, yellows, and blues, used alongside muted earth tones; colors that evoke strong emotional responses.",
+    "spot_colors": "Occasional neon hues for emphasis, creating visual disruptions and modern contrasts against more muted backgrounds.",
+    "registration": "Intentional misalignment of color layers to emphasize a sense of chaos; registration varies widely to enhance the fragmented aesthetic.",
+    "lettering_style": "Eclectic typefaces and hand-written styles combined haphazardly; sizes and fonts vary dramatically, mimicking the chaotic nature of thought."
+  },
+  "character_style": {
+    "head_to_body_ratio": "Varied; sometimes exaggerated heads on disproportionate bodies to enhance absurdity.",
+    "limb_proportions": "Irregular lengths that defy anatomical norms, with exaggerated features contributing to a sense of whimsy.",
+    "anatomy_detail": "Minimal anatomical detailing, embracing a cartoonish or abstract approach; features may be simplified or distorted.",
+    "eye_style": "Wide, exaggerated eyes to convey absurdity, varying from simplistic dots to detailed expressions depending on the character's context.",
+    "nose_style": "Quirky and whimsical, ranging from simple lines to fragmented forms that break from realistic portrayals.",
+    "mouth_style": "Expressive and exaggerated; combines simple lines with abstract shapes to convey a range of emotions dramatically.",
+    "expression_exaggeration": "High; embraces flamboyant expressions that are often exaggerated to the point of absurdity, adding to the humor and chaos.",
+    "silhouette_clarity": "High; characters stand out against chaotic backgrounds with bold outlines contrasting with busy visuals.",
+    "silhouette_shape_language": "Irregular, combining angular and rounded shapes to create a sense of playful disarray.",
+    "detail_complexity": "Minimal; focuses on essential features while leaving room for viewer interpretation and imagination.",
+    "texture_accents": "Utilizes mixed media textures such as fabric swatches, newspaper cuttings, and rough papers to create depth and interest.",
+    "motion_line_style": "Fluid, spontaneous lines that suggest erratic movement; reflects the unpredictable nature of the subject matter.",
+    "expression_line_style": "Emphasizes absurd expressions; may include sweat drops, exaggerated pulses, or other humorous accents.",
+    "signature_motifs": "Random geometric shapes or playful icons that recur throughout pieces, symbolizing the irreverent spirit of Dadaism.",
+    "recurring_flourishes": "Unexpected flourishes, such as drips or splatters, enhancing the overall chaotic aesthetic."
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Asymmetrical; perhaps resembling a jagged cut-out.",
+      "border": "Uneven and thick, suggesting a rough hand to the edges.",
+      "fill_color": "Bright white with chaotic patterns or textures throughout.",
+      "font": "A mix of different hand-written and machine fonts, layering text for visual impact."
+    },
+    "whisper": {
+      "shape": "Cloud-like, irregular with small flares.",
+      "border": "Thin and delicate, almost vanishing at edges.",
+      "fill_color": "Soft gray with subtle texturing to indicate secrecy.",
+      "font": "Stylized cursive, flowing to mimic a hushed tone."
+    },
+    "shout": {
+      "shape": "Exploding starburst or jagged shape for energy.",
+      "border": "Thick and bold with a distressed feel, amplifying urgency.",
+      "fill_color": "Bright red or electric colors suggesting loudness.",
+      "font": "Large, sans-serif with heavy weight to convey shouting."
+    },
+    "thought": {
+      "shape": "Bubble-like but with erratic, spiky edges.",
+      "border": "Faded and inconsistent, hinting at fragility.",
+      "fill_color": "Pale blue or green, with abstract patterns.",
+      "font": "Light, whimsical font with fluctuating sizes."
+    },
+    "sound_effect": {
+      "shape": "Fluid and exaggerated, shaped like a shock wave.",
+      "border": "Bold, with a vibrant, comic-like quality.",
+      "fill_color": "Electric colors, drawing attention to the action.",
+      "font": "Dynamic and expressive, enhancing the sound's impact."
+    },
+    "narration": {
+      "shape": "Simple rectangular but textured, resembling torn paper.",
+      "border": "Light and uneven, fitting with the hand-made aesthetic.",
+      "fill_color": "Off-white with a rough paper texture.",
+      "font": "Typewriter-style or irregular fonts, resembling an artist's notes."
+    }
+  },
+  "image": null
+}

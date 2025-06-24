@@ -2,30 +2,16 @@ import os
 from typing import Optional
 from loguru import logger
 from pydantic import BaseModel, Field
-from models.character import CharacterModel
-from models.publisher import Publisher
-from models.issue import Issue
+from schema.character import CharacterModel
+from schema.publisher import Publisher
+from schema.issue import Issue
 from helpers.constants import COMICS_FOLDER
 
 class Series(BaseModel):
-
-    series_title: str = Field(..., description="The series title of the comic book")
+    id: str = Field(..., description="The unique identifier for the comic book series.  This is usually the series title in lowercase with spaces replaced by dashes.")
+    name: str = Field(..., description="The series title of the comic book")
     description: str | None = Field(..., description="A short paragraph describing the comic book series")
     publisher: Optional[str] = Field(..., description="The publisher of the comic book.  Optional.  Default to None")
-
-    @property
-    def name(self) -> str:
-        """
-        return the name of the series.   Synonym for the series_title
-        """
-        return self.series_title
-
-    @property
-    def id(self) -> str:
-        """
-        return the series id of the comic book
-        """
-        return self.series_title.lower().replace(" ", "-")
     
     @property
     def issues(self) -> list[int]:
@@ -73,49 +59,7 @@ class Series(BaseModel):
                 characters[character_id] = character_model
         return characters
     
-    def get_issue(self, issue_number: int) -> Optional[Issue]:
-        """
-        Get an issue from the series.
-        """
-        issue = Issue.read(series_title=self.series_title, issue_number=issue_number)
-        return issue
-    
-    def get_issues(self) -> dict[int, Issue]:
-        """
-        Get all the issues in the series.
-        """
-        return { issue.id: issue for issue in Issue.read_all(series_id = self.id)}
         
-    def image_filepath(self) -> Optional[str]:
-        """
-        Get the filepath to a representative image for the series.   This will be the first cover image of any issue in the series.
-        If there are no issues with cover images, or there are no issues in the series, then return None.
-        """    
-
-        issues = self.get_issues()
-        if not issues:
-            return None
-        # sort the issues by issue number
-        issues_list = sorted(issues.values(), key=lambda x: x.issue_number)
-        for issue in issues_list:
-            if issue.covers and issue.covers != []:
-                image = issue.covers[0].image
-                if not image:
-                    return None
-                if image:
-                    filepath = os.path.join(issue.path(), "covers", "front", "images", f"{image}.jpg")
-                    if os.path.exists(filepath):
-                        return filepath
-        return None
-
-    def delete(self):
-        """
-        Delete the series and all its issues and characters.
-        """
-        import shutil
-        path = self.path()
-        if os.path.exists(path):
-            shutil.rmtree(path)
 
     def path(self) -> str:
         """
@@ -203,48 +147,6 @@ class Series(BaseModel):
         revised = character.revise(feedback=feedback)
         return revised
 
-    
-    def write(self):
-        """
-        Save the series to a file.
-        """
-        path = self.path()
-        if not os.path.exists(path):
-            os.makedirs(path)
-        with open(self.filepath(), "w") as f:
-            f.write(self.model_dump_json(indent=2))  
-
-    @classmethod
-    def read(cls, series_title: Optional[str]=None, id: Optional[str] = None) -> Optional["Series"]:
-        """
-        Load the comic series from a file.
-
-        Args:
-            series_title (str): The title of the comic book.  Optional.  Default to None
-            issue_number (int): The issue number.  Optional.  default to 1
-            id (str): The id of the comic book.  Optional.  Default to None
-        NOTE: You must provide either the id or the series_title and issue_number
-
-        Returns:
-            Either a ComicBookModel object or None if the comic book does not exist.
-        """
-        logger.debug(f"series_title: {series_title}, id: {id}")
-        if id is None and series_title is None:
-            msg = "Either id or series_title must be provided"
-            logger.error(msg)
-            raise ValueError(msg)
-        if series_title is not None:
-            id = series_title.lower().replace(" ", "-")
-        filepath = os.path.join(COMICS_FOLDER, id, "series.json")
-        logger.debug(f"filepath: {filepath}")
-        if not os.path.exists(filepath):
-            logger.error(f"File {filepath} does not exist")
-            return None
-        with open(filepath, "r") as f:
-            data = f.read()
-            logger.debug(f"data: {data}")
-            return cls.model_validate_json(data)
-        
     def get_next_issue_number(self) -> int:
         """
         Get the next issue number for the series.  This is the max issue number + 1.
@@ -263,22 +165,6 @@ class Series(BaseModel):
             if value is None or value == "":
                 continue
             result += f"* **{key.replace('_', ' ').capitalize()}**: {value}\n\n"
-        return result
-
-    @classmethod
-    def read_all(cls) -> list["Series"]:
-        """
-        Read all the series from the series folder.
-        """
-        result = []
-        for item in os.listdir(COMICS_FOLDER):
-            # if it is a directory and does not start with a dot then it may contain a
-            # series
-            path = os.path.join(COMICS_FOLDER, item)
-            if os.path.isdir(path) and not item.startswith("."):
-                series = cls.read(id=item)
-                if series is not None:
-                    result.append(series)
         return result
     
     def get_publisher(self) -> str:

@@ -67,7 +67,7 @@
     }
   },
   "image": {
-    "art": "modern-anime",
-    "character": "rugor copy 5"
+    "art": "data/styles/modern-anime/images/art-style/modern-anime.jpg",
+    "character": "data/styles/modern-anime/images/character-style/rugor copy 4.jpg"
   }
 }

@@ -3,13 +3,18 @@ from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
-from style.comic import ComicStyle
-from models.publisher import Publisher
+from schema.style.comic import ComicStyle
+from schema.publisher import Publisher
+from storage.generic import GenericStorage
+from logger.generic import Logger
 
 
 def all_publishers_agent(state: APPState) -> Agent:
-    from models.series import Series
+    from schema.series import Series
     from gui.selection import SelectionItem
+    storage: GenericStorage = state.storage
+    logger: Logger = state.logger
+
 
     @function_tool
     def get_publisher_names() -> list[str]:
@@ -19,8 +24,8 @@ def all_publishers_agent(state: APPState) -> Agent:
         Returns:
             A list of publisher names.
         """
-        from models.publisher import Publisher
-        publishers = Publisher.read_all()
+        from schema.publisher import Publisher
+        publishers = storage.read_all_publishers()
         return [publisher.name for publisher in publishers]
     
     @function_tool
@@ -31,8 +36,8 @@ def all_publishers_agent(state: APPState) -> Agent:
         Returns:
             A list of publisher names.
         """
-        from models.publisher import Publisher
-        return Publisher.read_all()
+        from schema.publisher import Publisher
+        return storage.read_all_publishers()
 
     @function_tool
     def get_publisher_by_name(name: str) -> Publisher | None:
@@ -45,10 +50,7 @@ def all_publishers_agent(state: APPState) -> Agent:
         Returns:
             The Publisher object if found, otherwise None.
         """
-        from models.publisher import Publisher
-        id = name.replace(" ", "-").lower()
-        publisher = Publisher.read(id)
-        return publisher
+        return storage.find_publisher(name=name)
 
     @function_tool
     def create_publisher(name: str, description: Optional[str]) -> Publisher | str | None:
@@ -63,20 +65,20 @@ def all_publishers_agent(state: APPState) -> Agent:
         Returns:
             The created Publisher object or an error message if the publisher already exists.
         """
-        from models.publisher import Publisher
+        from schema.publisher import Publisher
         # check to see if the publisher already exists.
-        if Publisher.read(name=name) is not None:
+        if storage.find_publisher(name=name) is not None:
             logger.error(f"Publisher with name '{name}' already exists.")
             return f"Publisher with name '{name}' already exists."
         
         logger.info(f"The name '{name}' is available.")
-        publisher = Publisher(name=name, logo=None, description=description, image=None)
-        publisher.write()
+        publisher = Publisher(name=name, logo=None, description=description, image=None, id=name.lower().replace(" ", "-"))
+        storage.create_publisher(publisher)
         selection = state.selection
         new_itm = SelectionItem(name=publisher.name, id=publisher.id, kind='publisher')
         new_sel = [s for s in selection]+[new_itm]
         state.change_selection(new=new_sel, clear_history=False)
-        state["is_dirty"] = True
+        state.is_dirty = True
         return publisher
     
     @function_tool
@@ -91,8 +93,8 @@ def all_publishers_agent(state: APPState) -> Agent:
         Returns:
             A status message indicating the result of the selection.
         """
-        from models.publisher import Publisher
-        publisher = Publisher.read(name=name.lower().replace(" ", "-"))
+        from schema.publisher import Publisher
+        publisher = storage.find_publisher(name=name)
         if publisher is None:
             return f"Publisher '{name}' not found.  Maybe try looking at the list of publishers first?"
         sel_itm = SelectionItem(
@@ -100,14 +102,14 @@ def all_publishers_agent(state: APPState) -> Agent:
             name=publisher.name,
             kind="publisher",
         )
-        state["selection"].append(sel_itm)
-        state["is_dirty"] = True
+        new_selection = state.selection + [sel_itm]
+        state.change_selection(new=new_selection, clear_history=False)
         return f"Selected publisher: {publisher.name}"
 
     @function_tool
     def delete_publisher(name: str) -> str:
         """
-        Delete a publisher by name.   You MUST ask for confirmation before using this tool.
+        Delete a publisher by name.   YOU MUST CONFIRM THIS ACTION AS IT WILL DELETE ALL ASSOCIATED DATA.
         
         Args:
             name: The name of the publisher to delete.
@@ -115,23 +117,14 @@ def all_publishers_agent(state: APPState) -> Agent:
         Returns:
             A status message indicating the result of the deletion.
         """
-        pub = Publisher.read(id=name.lower().replace(" ", "-"))
+        pub = storage.find_publisher(name=name)
         if pub is None:
-            return f"Publisher '{name}' not found."
-        path = pub.path()
-        if path is None:
-            return f"Publisher '{name}' has no associated file to delete."
-        # REMOVE THE FOLDER THAT THE SERIES IS STORED IN.
-        import shutil
-        try:
-            shutil.rmtree(path)
-        except Exception as e:
-            logger.error(f"Failed to delete publisher folder '{path}': {e}")
-            return f"Failed to delete publisher folder '{path}': {e}"
+            return f"Publisher '{name}' not found.  Maybe try looking at the list of publishers first?"
+        storage.delete_publisher(pub.id)
 
         # The selection does not need to change, but we do need to refresh the display to 
         # remove the deleted series from the list.
-        state["is_dirty"] = True
+        state.is_dirty = True
         return f"Deleted publisher: {pub.name}"
 
 

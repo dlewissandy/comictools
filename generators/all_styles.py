@@ -2,14 +2,18 @@ from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
-from style.comic import ComicStyle
-from style.art import ArtStyle
-from style.character import CharacterStyle
-from style.bubble import BubbleStyles
+from schema.style.comic import ComicStyle
+from schema.style.art import ArtStyle
+from schema.style.character import CharacterStyle
+from schema.style.dialog import BubbleStyles
 
 
 def all_styles_agent(state: APPState) -> Agent:
     from gui.selection import SelectionItem
+    from storage.generic import GenericStorage
+    from logger.generic import Logger
+    logger: Logger = state.logger
+    storage: GenericStorage = state.storage
 
     @function_tool
     def create_style(
@@ -37,27 +41,25 @@ def all_styles_agent(state: APPState) -> Agent:
             The created Style object or an error message if the style already exists.
         """
         # check to see if the publisher already exists.
-        name = name.strip().title().replace("-", " ")
-        id = name.lower().replace(" ", "-")
-        if ComicStyle.read(id=id) is not None:
-            logger.error(f"Style with name '{name}' already exists.")
-            return f"Style with name '{name}' already exists."
-        
+        style = storage.find_style(name = name)
+        if style is not None:
+            logger.warning(f"The name '{name}' is already in use by another style.")
+            return f"The name '{name}' is already in use by another style.  Please choose a different name."
+
         logger.info(f"The name '{name}' is available.")
         style = ComicStyle(
             name=name, 
-            id=id, 
+            id=name.lower().replace(" ", "-"),
             description=description, 
             art_style=art_style, 
             character_style=character_style, 
             bubble_styles=bubble_styles,
             image=None
         )
-        style.write()
+        style_id = storage.create_style(style)
         selection = state.selection
-        new_itm = SelectionItem(name=style.name, id=style.id, kind='style')
+        new_itm = SelectionItem(name=style.name, id=style_id, kind='style')
         new_sel = [s for s in selection]+[new_itm]
-        state["is_dirty"] = True
         state.change_selection(new=new_sel, clear_history=False)
         return style
         
@@ -69,8 +71,7 @@ def all_styles_agent(state: APPState) -> Agent:
         Returns:
             A list of comic style names.
         """
-        from style.comic import ComicStyle
-        styles = ComicStyle.read_all()
+        styles = storage.read_all_styles()
         return [style.name for style in styles]
     
     @function_tool
@@ -81,8 +82,7 @@ def all_styles_agent(state: APPState) -> Agent:
         Returns:
             A list of comic styles.
         """
-        from style.comic import ComicStyle
-        return ComicStyle.read_all()
+        return storage.read_all_styles()
 
     @function_tool
     def get_comic_style_by_name(name: str) -> ComicStyle | None:
@@ -97,9 +97,7 @@ def all_styles_agent(state: APPState) -> Agent:
             The ComicStyle object if found, otherwise None.   If this function returns None,
             you may want to check for similar names using `get_comic_style_names()`.
         """
-        from style.comic import ComicStyle
-        id = name.replace(" ", "-").lower()
-        return ComicStyle.read(id)
+        return storage.find_style(name=name)
 
     @function_tool
     def select_comic_style(name: str) -> str:
@@ -113,7 +111,7 @@ def all_styles_agent(state: APPState) -> Agent:
         Returns:
             A status message indicating the result of the selection.
         """
-        style = ComicStyle.read(id=name.lower().replace(" ", "-"))
+        style = storage.find_style(name=name)
         if style is None:
             return f"Comic style '{name}' not found.  Maybve try looking at the list of comic styles first?"
         sel_itm = SelectionItem(
@@ -121,8 +119,7 @@ def all_styles_agent(state: APPState) -> Agent:
             name=style.name,
             kind="style",
         )
-        state["selection"].append(sel_itm)
-        state["is_dirty"] = True
+        state.change_selection(new=[s for s in state.selection] + [sel_itm], clear_history=False)
         return f"Selected comic style: {style.name}"
 
     @function_tool
@@ -136,23 +133,11 @@ def all_styles_agent(state: APPState) -> Agent:
         Returns:
             A status message indicating the result of the deletion.
         """
-        style = ComicStyle.read(id=name.lower().replace(" ", "-"))
+        style = storage.find_style(name=name)
         if style is None:
             return f"Style '{name}' not found."
-        path = style.path()
-        if path is None:
-            return f"Style '{name}' has no associated file to delete."
-        # REMOVE THE FOLDER THAT THE SERIES IS STORED IN.
-        import shutil
-        try:
-            shutil.rmtree(path)
-        except Exception as e:
-            logger.error(f"Failed to delete style folder '{path}': {e}")
-            return f"Failed to delete style folder '{path}': {e}"
-
-        # The selection does not need to change, but we do need to refresh the display to 
-        # remove the deleted series from the list.
-        state["is_dirty"] = True
+        storage.delete_style(style)
+        state.is_dirty = True
         return f"Deleted style: {style.name}"
 
     return Agent(

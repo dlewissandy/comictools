@@ -67,7 +67,7 @@
     }
   },
   "image": {
-    "art": "saturday-morning",
-    "character": "ec6d8b30-d0d0-4726-9282-a2c7d1caa14a"
+    "art": "data/styles/saturday-morning/images/art-style/saturday-morning.jpg",
+    "character": "data/styles/saturday-morning/images/character-style/ec6d8b30-d0d0-4726-9282-a2c7d1caa14a.jpg"
   }
 }

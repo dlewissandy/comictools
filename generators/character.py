@@ -2,7 +2,7 @@ from typing import Tuple, Optional, List
 from gui.state import APPState
 from agents import Agent, function_tool
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from models.character import CharacterModel, CharacterVariant, CharacterVariantMinimal
+from schema.character import CharacterModel, CharacterVariant, CharacterVariantMinimal
 from gui.selection import SelectionItem
 
 

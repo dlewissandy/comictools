@@ -67,7 +67,7 @@
     }
   },
   "image": {
-    "art": "concept-sketch",
-    "character": "64194cb8-e254-441e-a227-589b4c1aa549"
+    "art": "data/styles/concept-sketch/images/art-style/concept-sketch.jpg",
+    "character": "data/styles/concept-sketch/images/character-style/99c031a8-0e32-47ac-b2d9-01a4e0f28f3d.jpg"
   }
 }

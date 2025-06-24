@@ -5,8 +5,9 @@ from nicegui import ui, app
 from gui.state import APPState, STATE_FILEPATH, set_dark_mode
 from dotenv import load_dotenv
 from gui.selection import (SelectionItem)
-from loguru import logger
+from logger.default import DefaultLogger
 from messaging import send
+from storage.local import LocalStorage
 load_dotenv()
 
 # ---------------------------------------------------------
@@ -18,14 +19,7 @@ HEADFOOT_STYLING_CLASSES = "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text
 MIDDLE_STYLING_CLASSES = "text-gray-900 dark:text-gray-300"
 # Default selection to initialize the breadcrumbs
 DEFAULT_SELECTION = [{"kind":"all_series", "name":"Series", "id":None}]
-
-def init_logger(logger):
-    from sys import stderr
-    # Set the logger so that it saves all logs to file, and only error or above to console
-    logger.remove()  # Remove the default logger
-    logger.add(stderr, level="ERROR", backtrace=True, diagnose=True)
-    logger.add("app.log", rotation="10 MB", level="DEBUG", backtrace=True, diagnose=True)
-
+    
 def init_layout(logger):
     """
     Initializes the UI layout with the main components.
@@ -80,7 +74,7 @@ def init_layout(logger):
 @ui.page('/')
 def main_page(client):
     # INITIALIZE THE LOGGER
-    init_logger(logger)
+    logger = DefaultLogger()
 
     # INITIALIZE THE UI LAYOUT WITH BASIC ELEMENTS
     breadcrumbs, details, history, user_input, send_button, darkswitch = init_layout(logger)
@@ -101,6 +95,8 @@ def main_page(client):
         user_input = user_input,
         send_button = send_button,
         selection = [] ,  # Initially set selection to empty
+        storage = LocalStorage(base_path="data", logger=logger),
+        logger = logger
      )
     
     state.dark_mode = dark_value

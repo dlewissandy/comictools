@@ -8,7 +8,7 @@ MAX_SHORTEST_SIDE = 768
 
 # Paths to the folders where the data is stored
 CHARACTERS_FOLDER = os.path.join(DATA_FOLDER, "characters")
-COMICS_FOLDER = os.path.join(DATA_FOLDER, "comics")
+COMICS_FOLDER = os.path.join(DATA_FOLDER, "series")
 PANELS_FOLDER = os.path.join(DATA_FOLDER, "panels")
 SCENES_FOLDER = os.path.join(DATA_FOLDER, "scenes")
 STYLES_FOLDER = os.path.join(DATA_FOLDER, "styles")

@@ -1,13 +1,16 @@
 from typing import Tuple, Optional, List
-from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
+from storage.generic import GenericStorage
+from logger.generic import Logger
 
 
 def all_series_agent(state: APPState) -> Agent:
-    from models.series import Series
+    from schema.series import Series
     from gui.selection import SelectionItem
+    storage: GenericStorage = state.storage
+    logger: Logger = state.logger
 
     @function_tool
     def get_all_comic_series_names() -> list[str]:
@@ -17,7 +20,7 @@ def all_series_agent(state: APPState) -> Agent:
         Returns:
             A list of comic series names.
         """
-        series = Series.read_all()
+        series = storage.read_all_series()
         return [s.series_title for s in series]
 
     @function_tool
@@ -28,7 +31,7 @@ def all_series_agent(state: APPState) -> Agent:
         Returns:
             A list of comic series names.
         """
-        return Series.read_all()
+        return storage.read_all_series()
 
     @function_tool
     def find_comic_series_by_name(name: str) -> Series:
@@ -41,7 +44,7 @@ def all_series_agent(state: APPState) -> Agent:
         Returns:
             The Series object if found, otherwise None.
         """
-        return Series.read(series_title=name)
+        return storage.find_series(name=name)
 
    
     @function_tool
@@ -56,18 +59,18 @@ def all_series_agent(state: APPState) -> Agent:
             The created Series object.
         """
         # check to see if the series already exists.
-        if Series.read(series_title=series_title) is not None:
+        if storage.find_series(name=series_title) is not None:
             logger.error(f"Series with title '{series_title}' already exists.")
             return f"Series with title '{series_title}' already exists."
         else:
             logger.info(f"The title '{series_title}' is available.")
         series = Series(series_title=series_title, description=description, publisher=publisher)
-        series.write()
+        new_id = storage.create_series(series)
         selection = state.selection
-        new_itm = SelectionItem(name=series.series_title, id=series.id, kind='series')
+        new_itm = SelectionItem(name=series.series_title, id=new_id, kind='series')
         new_sel = [s for s in selection]+[new_itm]
         state.change_selection(new=new_sel, clear_history=False)
-        state["is_dirty"] = True
+        state.is_dirty = True
         return series
 
     @function_tool
@@ -82,7 +85,7 @@ def all_series_agent(state: APPState) -> Agent:
         Returns:
             A status message indicating the result of the selection.
         """
-        series = Series.read(name=name.lower().replace(" ", "-"))
+        series = storage.find_series(name=name)
         if series is None:
             return f"Comic series '{name}' not found.  Maybe try looking at the list of comic series first?"
         sel_itm = SelectionItem(
@@ -90,8 +93,8 @@ def all_series_agent(state: APPState) -> Agent:
             name=series.name,
             kind="series",
         )
-        state["selection"].append(sel_itm)
-        state["is_dirty"] = True
+        state.selection.append(sel_itm)
+        state.is_dirty = True
         return f"Selected comic series: {series.name}"
 
     @function_tool
@@ -105,23 +108,11 @@ def all_series_agent(state: APPState) -> Agent:
         Returns:
             A status message indicating the result of the deletion.
         """
-        series = Series.read(id=name.lower().replace(" ", "-"))
+        series = storage.find_series(name=name)
         if series is None:
             return f"Comic series '{name}' not found."
-        path = series.path()
-        if path is None:
-            return f"Comic series '{name}' has no associated file to delete."
-        # REMOVE THE FOLDER THAT THE SERIES IS STORED IN.
-        import shutil
-        try:
-            shutil.rmtree(path)
-        except Exception as e:
-            logger.error(f"Failed to delete series folder '{path}': {e}")
-            return f"Failed to delete series folder '{path}': {e}"
-
-        # The selection does not need to change, but we do need to refresh the display to 
-        # remove the deleted series from the list.
-        state["is_dirty"] = True
+        storage.delete_series(id = series.id)
+        state.is_dirty = True
         return f"Deleted comic series: {series.name}"
 
 

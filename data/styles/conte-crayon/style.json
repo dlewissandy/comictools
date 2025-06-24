@@ -67,8 +67,8 @@
     }
   },
   "image": {
-    "art": "conte-crayon",
-    "character": "5118f02f-1551-4f5a-b02a-6e8a3a62b048",
+    "art": "data/styles/conte-crayon/images/art-style/conte-crayon.jpg",
+    "character": "data/styles/conte-crayon/images/character-style/5118f02f-1551-4f5a-b02a-6e8a3a62b048.jpg",
     "chat": "cc68071e-865f-4df3-a3e3-030fbc9d1a13",
     "whisper": "ce60f034-3a2d-4912-a8d0-8d91ab2876e8",
     "thought": "8bc25031-5f96-490a-8f77-c2dbcb2aa76f",

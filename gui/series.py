@@ -1,33 +1,32 @@
 import os
 from loguru import logger
 from nicegui.events import UploadEventArguments
-from models.series import Series
+from schema.series import Series
 from gui.elements import markdown, header, uploader_card, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message, view_attributes
-from models.publisher import Publisher
+from schema.publisher import Publisher
 from nicegui import ui
 from gui.state import APPState
-
-
-
+from storage.generic import GenericStorage
+from gui.selection import SelectionItem
 
 def view_series(state: APPState):
     from gui.messaging import new_item_messager
 
     # Dereference the state to get the selection and detials.
-    selection = state.selection
-    series = Series.read(id=selection[-1].id)
+    selection: list[SelectionItem] = state.selection
+    storage: GenericStorage = state.storage
+    series = storage.read_series(id=selection[-1].id) if selection else None
     details = state.details
     details.clear()
 
     # Create safe accessors for the publisher's name, id and image filepath.
-    pub = None if series.publisher is None else Publisher.read(id=series.publisher)
+    pub = None if series.publisher is None else storage.read_publisher(id=series.publisher)
     get_name = lambda i, x : None if pub is None else pub.name
     get_id = lambda : None if pub is None else pub.id
     get_image_filepath = lambda : None if pub is None else pub.image_filepath()
 
     def on_upload(e: UploadEventArguments):
         # dereference the series
-        series = Series.read(id=state.selection[-1].id)
         images_path = os.path.join(series.path(), 'uploads')
         # Save the uploaded image to the uploads folder.
         if not e.name:
@@ -63,19 +62,32 @@ def view_series(state: APPState):
                 markdown_field_editor(state, "Description", series.description)
             with ui.column().classes('w-1/4'):
                 # The second column is 1/4 of the width and has a cardwall displaying the publisher info.
-                image_field_editor(state, "pick-publisher", lambda: "Publisher", get_id, get_image_filepath, caption_size=2)
+                image_field_editor(state, "pick-publisher", lambda: "Publisher", get_id, lambda: storage.find_publisher_image(publisher_id=pub.id), caption_size=2)
         
         # A cardwall for viewing and adding issues of the comic.
         with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Issues", "I would like to create a new issue")
-            view_all_instances(state, series.get_issues().values, kind="issue", aspect_ratio="16/27").style('margin-top: 0px; margin-bottom: 0px')
+            view_all_instances(
+                state=state, 
+                get_instances=lambda: storage.find_issues(series.id), 
+                get_image_locator=lambda x: storage.find_issue_image(series_id=series.id, issue_id=x.id),
+                kind="issue",
+                aspect_ratio="16/27"
+                ).style('margin-top: 0px; margin-bottom: 0px')
 
         # A cardwall for viewing and adding characters to the comic series.
         with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Characters", "I would like to create a new character")
-            with view_all_instances(state, series.get_characters().values, kind="character", aspect_ratio="6/5", get_name=lambda _,x: x.name):
+            with view_all_instances(
+                state=state, 
+                get_instances = lambda: storage.find_characters(series_id=series.id), 
+                get_image_locator=lambda x: storage.find_character_image(series_id=series.id, character_id=x.id),
+                kind="character", 
+                aspect_ratio="6/5",
+                get_name=lambda _,x: x.name
+                ):
                 uploader_card(
                     state=state,
                     on_upload=lambda e: on_upload(e),

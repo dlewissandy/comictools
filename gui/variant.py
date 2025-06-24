@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from nicegui import ui
-from models.character import CharacterModel, CharacterVariant, StyledImage
+from schema.character import CharacterModel, CharacterVariant, StyledImage
 from gui.elements import (
     header, 
     crud_button, 
@@ -16,7 +16,7 @@ from gui.elements import (
 from gui.messaging import new_item_messager
 from gui.messaging import post_user_message
 from gui.state import APPState
-
+from storage.generic import GenericStorage
 
 
 
@@ -31,11 +31,14 @@ def view_character_variant(state:APPState):
     """
     # Read the state to get the selection and ui elements
     selection = state.selection
+    storage: GenericStorage = state.storage
+
     variant_id = selection[-1].id
     character_id = selection[-2].id
     series_id = selection[-3].id
-    character = CharacterModel.read(series=series_id, id=character_id)
-    variant = CharacterVariant.read(series=series_id, character=character_id, id=variant_id)
+
+    character = storage.find_character(series_id=series_id, character_id=character_id)
+    variant = storage.find_character_variant(series_id=series_id, character_id=character_id, variant_id=variant_id)
     details = state.details
 
     
@@ -82,6 +85,7 @@ def view_character_variant(state:APPState):
             view_all_instances(
                 state=state,
                 get_instances=lambda: [StyledImage(style_id=style_id, series_id=series_id, character_id=character_id, variant_id=variant_id, image_id=image_id) for style_id, image_id in variant.images.items()],
+                get_image_locator=lambda styled_image: storage.find_styled_image(series_id=styled_image.series_id, character_id=styled_image.character_id, variant_id= styled_image.variant_id, style_id=styled_image.style_id, name=styled_image.image_id),
                 kind="styled-image",
                 aspect_ratio="3/2",
                 get_name=lambda _,img: img.name
@@ -101,7 +105,7 @@ def view_character_reference(state: APPState):
     View the details of a character reference.    Here we should show all the variants for a 
     particular character so that the user can select from them.
     """
-    from models.panel import Panel, CharacterRef
+    from schema.panel import Panel, CharacterRef
     # DEREFERENCE THE DATA
     panel_id = state.selection[-2].id
     scene_id = state.selection[-3].id

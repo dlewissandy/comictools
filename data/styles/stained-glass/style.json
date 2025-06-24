@@ -67,7 +67,7 @@
     }
   },
   "image": {
-    "art": "f20a9dfa-570c-46ba-b678-d80a94d7024a",
-    "character": "4e41e3b0-6b48-4e86-811e-7cc4444fbf0d"
+    "art": "data/styles/stained-glass/images/art-style/f20a9dfa-570c-46ba-b678-d80a94d7024a.jpg",
+    "character": "data/styles/stained-glass/images/character-style/4e41e3b0-6b48-4e86-811e-7cc4444fbf0d.jpg"
   }
 }

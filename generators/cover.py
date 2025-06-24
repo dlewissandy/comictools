@@ -3,14 +3,14 @@ from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
-from models.series import Series
-from models.issue import Issue
-from models.publisher import Publisher
-from style.comic import ComicStyle
+from schema.series import Series
+from schema.issue import Issue
+from schema.publisher import Publisher
+from schema.style.comic import ComicStyle
 
 
 def cover_agent(state: APPState) -> Agent:
-    from models.panel import TitleBoardModel, CoverLocation, FrameLayout, CharacterRef
+    from schema.panel import TitleBoardModel, CoverLocation, FrameLayout, CharacterRef
     from generators.tools import dereference_cover as _get_cover
     from generators.tools import delete_cover as _delete_cover
     from generators.tools import dereference_series as _get_series

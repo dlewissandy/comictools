@@ -4,12 +4,14 @@ from PIL import Image
 from typing import Optional
 from loguru import logger
 from pydantic import BaseModel, Field
-from style.art import ArtStyle
-from style.character import CharacterStyle
-from style.bubble import BubbleStyles
+from schema.style.art import ArtStyle
+from schema.style.character import CharacterStyle
+from schema.style.dialog import BubbleStyles
 from helpers.generator import invoke_generate_api
 from helpers.constants import STYLES_FOLDER
 from helpers.file import generate_unique_id
+
+# TODO: Move these to models/style.py
 
 BUBBLE_TEXT = {
     "chat": "Nice day, isn't it?",
@@ -27,6 +29,7 @@ def render_dialog_example(style_description: str, bubble_style_description: str,
     Returns:
         A message indicating the result of the operation.
     """
+    # TODO: Move this to generators!   This is not a crud operatation.
     from helpers.generator import invoke_generate_image_api, IMAGE_QUALITY
     import os
 
@@ -71,10 +74,6 @@ def render_dialog_example(style_description: str, bubble_style_description: str,
     logger.debug(f"Saved dialog bubble image to {output_filepath}")
     return unique_id
 
-
-
-
-
 class ComicStyle(BaseModel):
     """
     Comic style guidelines for a comic series or title.
@@ -116,6 +115,7 @@ class ComicStyle(BaseModel):
         the style consistently, but no more than that.
         """
 
+        # TODO: Move this.   Not CRUD operation.
         # Invoke the OpenAI API to generate a character description
         response = invoke_generate_api(prompt, text_format=cls)
         name=response.name
@@ -123,73 +123,61 @@ class ComicStyle(BaseModel):
         response.write()
         return response
     
-    def filepath(self) -> str:
-        return f"{self.path()}/style.json"
+    # # TODO: Convert to property - this is static!
+    # def filepath(self) -> str:
+    #     return f"{self.path()}/style.json"
     
-    def path(self) -> str:
-        return f"{STYLES_FOLDER}/{self.id}"
+    # # TODO: Convert to property - this is static!
+    # def path(self) -> str:
+    #     return f"{STYLES_FOLDER}/{self.id}"
     
-    @classmethod
-    def read_all(cls) -> list["ComicStyle"]:
-        """
-        read all comic styles from the styles folder
-        """
-        styles = []
-        for item in os.listdir(STYLES_FOLDER):
-            logger.debug(f"item: {item}")
-            if item.startswith('.'):
-                continue
-            if os.path.isdir(os.path.join(STYLES_FOLDER, item)):
-                # if it is a file then it is a style
-                style = cls.read(id=item)
-                if style:
-                    styles.append(style)
-        return styles
 
-    def image_path(self, img_type: str = "art") -> str:
-        """
-        return the path to the image
-        """
-        if img_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
-            raise ValueError(f"Invalid image type: {img_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'.")
-        return os.path.join(self.path(), "images", f"{img_type.lower()}-style")
+    # # TODO: Convert list to enum
+    # def image_path(self, img_type: str = "art") -> str:
+    #     """
+    #     return the path to the image
+    #     """
+    #     if img_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
+    #         raise ValueError(f"Invalid image type: {img_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'.")
+    #     return os.path.join(self.path(), "images", f"{img_type.lower()}-style")
 
-    def image_filepath(self, img_type: str = "art") -> str:
-        """
-        return the filepath to the image
-        """
-        image_path = self.image_path(img_type)
-        if not isinstance(self.image, dict):
-            return None
-        img_id = self.image.get(img_type, None)
-        if img_id is None:
-            return None
-        return os.path.join(image_path, f"{img_id}.jpg")
+    # def image_filepath(self, img_type: str = "art") -> str:
+    #     """
+    #     return the filepath to the image
+    #     """
+    #     image_path = self.image_path(img_type)
+    #     if not isinstance(self.image, dict):
+    #         return None
+    #     img_id = self.image.get(img_type, None)
+    #     if img_id is None:
+    #         return None
+    #     return os.path.join(image_path, f"{img_id}.jpg")
         
-    def write_image(self, image: Image, type: str = "art") -> str | None:
-        """
-        write the image to the comic style folder.   Returns the id of the image
-        if successful or None on failure.
-        """
-        is_dirty = False
-        if self.image is None:
-            self.image = {}
-            is_dirty = True
-        if type == "art":
-            path = os.path.join(self.path(), "images")
-        else:
-            path = os.path.join(self.path(), "images", type.lower().replace("-", "_"))
+    # def write_image(self, image: Image, type: str = "art") -> str | None:
+    #     """
+    #     write the image to the comic style folder.   Returns the id of the image
+    #     if successful or None on failure.
+    #     """
+    #     is_dirty = False
+    #     if self.image is None:
+    #         self.image = {}
+    #         is_dirty = True
+    #     if type == "art":
+    #         path = os.path.join(self.path(), "images")
+    #     else:
+    #         path = os.path.join(self.path(), "images", type.lower().replace("-", "_"))
         
-        id = generate_unique_id(path, create_folder=True)
-        filepath = os.path.join(path, f"{id}.jpg")
-        image.save(filepath, "JPEG")
+    #     id = generate_unique_id(path, create_folder=True)
+    #     filepath = os.path.join(path, f"{id}.jpg")
+    #     image.save(filepath, "JPEG")
 
-        if self.image_filepath(type) is None:
-            # There is already an image for this style, so we are done.
-            self.image[type] = id
-            self.write()
-        return id
+    #     if self.image_filepath(type) is None:
+    #         # There is already an image for this style, so we are done.
+    #         self.image[type] = id
+    #         self.write()
+    #     return id
 
+    # Todo: Move this to generators!   This is not a crud operatation.
     def render_art_style(self) -> str:
         """
         Render the art style as an image.
@@ -197,6 +185,7 @@ class ComicStyle(BaseModel):
         Returns:
             A message indicating the result of the operation.
         """
+        # TODO: Move this to generators!   This is not a crud operatation.
         import os
         from helpers.generator import invoke_edit_image_api, IMAGE_QUALITY
         from helpers.file import generate_unique_id
@@ -248,6 +237,7 @@ the original image as possible so that it can serve as a visual reference for th
 
         return f"Art style image saved to {output_filepath}."
 
+    # Todo: Move this to generators!   This is not a crud operatation.
     def render_character_style_example(self) -> str:
         """
         Render an example of the character style as an image.
@@ -255,7 +245,7 @@ the original image as possible so that it can serve as a visual reference for th
         Returns:
             A message indicating the result of the operation.
         """
-        from models.character import render_character_image
+        from schema.character import render_character_image
         from generators.constants import RUGOR_DESCRIPTION
         import os
 
@@ -276,55 +266,28 @@ the original image as possible so that it can serve as a visual reference for th
         return "Character style image could not be rendered."
 
 
-    def set_image(self, image_type: str, id: str):
-        """
-        set the image for the comic style
-        """
-        if image_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
-            msg = f"Invalid image type: {image_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'."
-            logger.error(msg)
-            return
+    # def set_image(self, image_type: str, id: str):
+    #     """
+    #     set the image for the comic style
+    #     """
+    #     if image_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
+    #         msg = f"Invalid image type: {image_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'."
+    #         logger.error(msg)
+    #         return
     
-        if self.image is None:
-            self.image = {}
-            self.image[image_type] = id
-        elif isinstance(self.image, str):
-            # if the image is a string, it is a path to the art style image
-            self.image = {"art": self.image}
-            self.image[image_type] = id
-        elif isinstance(self.image, dict):
-            # if the image is a dict, it is a path to the character style image
-            self.image[image_type] = id
+    #     if self.image is None:
+    #         self.image = {}
+    #         self.image[image_type] = id
+    #     elif isinstance(self.image, str):
+    #         # if the image is a string, it is a path to the art style image
+    #         self.image = {"art": self.image}
+    #         self.image[image_type] = id
+    #     elif isinstance(self.image, dict):
+    #         # if the image is a dict, it is a path to the character style image
+    #         self.image[image_type] = id
         
-        self.write()
+    #     self.write()
 
-    def write(self):
-        """
-        write the comic style to a file
-        """
-        # create the directory if it doesn't exist
-        os.makedirs(self.path(), exist_ok=True)
-        # write the comic style to a file
-        logger.debug(f"writing {self.filepath()}")
-        with open(self.filepath(), "w") as f:
-            f.write(self.model_dump_json(indent=2))
-
-    @classmethod
-    def read(cls, id: str):
-        """
-        read the comic style from a file
-        """
-        # read the comic style from a file
-        filepath = f"{STYLES_FOLDER}/{id}/style.json"
-        if not os.path.exists(filepath):
-            logger.error(f"Comic style {id} not found in {STYLES_FOLDER}.")
-            return None
-        with open(f"{STYLES_FOLDER}/{id}/style.json", "r") as f:
-            logger.debug(f"reading {f.name}")
-            data = json.load(f)
-            if not data.get("image", None):
-                data["image"] = None
-            return cls.model_validate(data)
         
     def format(self, include_bubble_styles: bool = True, include_character_style: bool = True, heading_level: int = 1) -> str:
         """
@@ -340,6 +303,7 @@ the original image as possible so that it can serve as a visual reference for th
             result += f"\n{self.bubble_styles.format()}"
         return result
     
+    # TODO: Move this to generators!   This is not a crud operatation.
     @classmethod
     def fromImage(cls, imagepaths: list[str] | str):
         """
@@ -361,33 +325,26 @@ the original image as possible so that it can serve as a visual reference for th
         response.write()
         return response
 
-    def all_images(self, img_type: str = "art") -> list[str]:
-        """
-        return all the identifiers for the images for the comic style
-        """
-        if img_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
-            raise ValueError(f"Invalid image type: {img_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'.")
+    # def all_images(self, img_type: str = "art") -> list[str]:
+    #     """
+    #     return all the identifiers for the images for the comic style
+    #     """
+    #     if img_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
+    #         raise ValueError(f"Invalid image type: {img_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'.")
         
-        image_path = self.image_path(img_type)
-        if not os.path.exists(image_path):
-            return []
+    #     image_path = self.image_path(img_type)
+    #     if not os.path.exists(image_path):
+    #         return []
         
-        result = []
-        for item in os.listdir(image_path):
-            if item.endswith(".jpg"):
-                result.append(item[:-4])
+    #     result = []
+    #     for item in os.listdir(image_path):
+    #         if item.endswith(".jpg"):
+    #             result.append(item[:-4])
         
-        return result
+    #     return result
     
-    def delete(self):
-        """
-        delete the comic style
-        """
-        from shutil import rmtree
-        # delete the comic style directory and all its contents, 
-        # ignore errors.   
-        rmtree(self.path(), ignore_errors=True)
 
+    # TODO: Move this to generators!   This is not a crud operatation.
     def render_dialog_example(self, bubble_type: str) -> str:
         """
         Render an example of a dialog bubble as an image.

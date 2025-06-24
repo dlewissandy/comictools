@@ -10,7 +10,7 @@ def publisher_agent(state: APPState) -> Agent:
     """
     Create an agent for the publisher assistant.
     """
-    from models.publisher import Publisher
+    from schema.publisher import Publisher
 
     def _get_publisher() -> Optional[Publisher]:
         """
@@ -112,7 +112,7 @@ def publisher_agent(state: APPState) -> Agent:
         Returns:
             A status message indicating the result of the rendering.
         """
-        from models.publisher import Publisher
+        from schema.publisher import Publisher
         selection = state.selection
         kind = selection[-1].kind
         if kind != "publisher":

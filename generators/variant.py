@@ -4,8 +4,8 @@ from gui.state import APPState
 from helpers.constants import COMICS_FOLDER
 from agents import Agent, function_tool
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from models.character import CharacterVariant, render_character_image
-from style.comic import ComicStyle
+from schema.character import CharacterVariant, render_character_image
+from schema.style.comic import ComicStyle
 
 
 def variant_agent(state: APPState) -> Agent | str:

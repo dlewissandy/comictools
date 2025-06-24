@@ -2,24 +2,31 @@ from typing import Tuple, Optional, List
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
-from models.series import Series
+from schema.series import Series
 from gui.selection import SelectionItem
-from models.character import CharacterModel
-from models.publisher import Publisher
-from models.issue import Issue
+from schema.character import CharacterModel
+from schema.publisher import Publisher
+from schema.issue import Issue
+from storage.generic import GenericStorage
 
 
 def series_agent(state: APPState) -> Agent:
+    storage: GenericStorage = state.storage
+    logger = state.logger
 
-    def _get_series() -> Optional[Series]:
+    def _get_series_id() -> str:
         """
-        Get the currently selected comic series.
+        Get the ID of the currently selected comic series.
+        
+        Returns:
+            The ID of the selected series, or None if no series is selected.
         """
-        selection = state.selection
-        if selection and selection[-1].kind == "series":
-            return Series.read(id=selection[-1].id)
-        return None
-    
+        series_id = state.selection[-1].id if state.selection else None
+        if not series_id:
+            logger.error("No comic series selected. Please select a series to perform this action.")
+            raise ValueError("No comic series selected.")
+        return series_id
+
     @function_tool
     def get_details() -> str | Series:
         """
@@ -28,15 +35,7 @@ def series_agent(state: APPState) -> Agent:
         Returns:
             A string containing the details of the current comic series.
         """
-        selection = state.selection
-        sel_item = selection[-1] if selection else None
-        if not sel_item or sel_item.kind != "series":
-            return "No comic series selected. Please select a series to view details."
-        
-        series_id = sel_item.id
-        
-        series = Series.read(id=series_id)
-        return series
+        return storage.read_series(id=_get_series_id())
 
     @function_tool
     def update_description(
@@ -52,17 +51,9 @@ def series_agent(state: APPState) -> Agent:
         Returns:
             A confirmation message indicating the update was successful.
         """
-        from models.series import Series
-        selection = state.selection
-        series_id = selection[-1].id if selection else None
-        if not series_id:
-            return "No series selected. Please select a series to update."
-        series = Series.read(id=series_id)
-        if not series:
-            return f"Series with ID '{series_id}' not found."
-        
+        series = storage.read_series(id=_get_series_id())        
         series.description = description
-        series.write()
+        storage.update_series(data=series)
         state.is_dirty = True
         return f"Description for series '{series.series_title}' updated successfully."
     
@@ -80,7 +71,7 @@ def series_agent(state: APPState) -> Agent:
             return ["No comic series selected. Please select a series to view issues."]
         
         series_id = sel_item.id
-        series = Series.read(id=series_id)
+        series = storage.read_series(id=series_id)
         if not series:
             return [f"Series with ID '{series_id}' not found."]
         
@@ -95,13 +86,11 @@ def series_agent(state: APPState) -> Agent:
         Delete the currently selected series.
         NOTE: YOU MUST ASK FOR CONFIRMATION BEFORE YOU DO THIS.  IT IS DESTRUCTIVE AND IRREVERSIBLE.
         """
-        selection = state.selection
-        series = _get_series()
-        if not series:
-            return "Something odd happened.  No series is currently selected."  
-        series.delete()
-        state.change_selection(selection[:-1])
+        
+        series = storage.delete_series(id=_get_series_id())
+        state.selection = state.selection[:-1]  # Remove the last selection item
         state.write()
+        state.is_dirty = True
         return f"Series {series.name} deleted."
 
     @function_tool
@@ -113,15 +102,9 @@ def series_agent(state: APPState) -> Agent:
             A list of character in the current comic series or a descriptive message
             indicating why the operation has failed.
         """
-        selection = state.selection
-        sel_item = selection[-1] if selection else None
-        if not sel_item or sel_item.kind != "series":
-            return "No comic series selected. Please select a series to view characters."
-        
-        series_id = sel_item.id
-        series = Series.read(id=series_id)
+        series = storage.read_series(id=_get_series_id())
         if not series:
-            return f"Series with ID '{series_id}' not found."
+            return f"Series with ID '{_get_series_id()}' not found."
         
         characters = series.get_characters()
         if not characters:
@@ -137,7 +120,7 @@ def series_agent(state: APPState) -> Agent:
         Returns:
             Either the publisher's details or a descriptive message indicating why the operation has failed.
         """
-        series = _get_series()
+        series = storage.read_series(id=_get_series_id())
         if not series:
             return "No comic series selected. Please select a series to view publisher details."
         
@@ -177,12 +160,12 @@ def series_agent(state: APPState) -> Agent:
             A confirmation message indicating the character was deleted successfully.
         """
         selection = state.selection
-        series = _get_series()
+        series = storage.read_series(id=_get_series_id())
         if not series:
             return "No comic series selected. Please select a series to delete a character."
         
         series_id = series.id
-        character = CharacterModel.read(series=series_id, name=name)
+        character = CharacterModel.read(series=series.id, name=name)
         if not character:
             return f"Character with name '{name}' not found in series '{series.series_title}'."
         
@@ -204,7 +187,7 @@ def series_agent(state: APPState) -> Agent:
             A confirmation message indicating the character was created successfully.
         """
         # Normalize the identifiers
-        series = _get_series()
+        series = storage.read_series(id=_get_series_id())
         if not series:
             return "No comic series selected. Please select a series to add a character."
         
@@ -232,11 +215,7 @@ def series_agent(state: APPState) -> Agent:
         Returns:
             A confirmation message indicating the issue was created successfully.
         """
-        series = _get_series()
-        if not series:
-            return "No comic series selected. Please select a series to add an issue."
-        
-        series 
+        series = storage.read_series(id=_get_series_id())
 
         issue = Issue(
             id = title.lower().replace(" ", "-"),
@@ -278,9 +257,7 @@ def series_agent(state: APPState) -> Agent:
         """
         from helpers.generator import invoke_generate_api
         # Normalize the identifiers
-        series = _get_series()
-        if not series:
-            return "No comic series selected. Please select a series to add a character."
+        series = storage.read_series(id=_get_series_id())
 
         prompt = f"""Create a new CharacterModel for {character_name} in the {series.id} comic series using the reference image as a starting point."""
         character:CharacterModel = invoke_generate_api(

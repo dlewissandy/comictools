@@ -67,6 +67,6 @@
     }
   },
   "image": {
-    "art": "van-gogh"
+    "art": "data/styles/van-gogh/images/art-style/van-gogh.jpg"
   }
 }
