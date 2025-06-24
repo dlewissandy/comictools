@@ -20,7 +20,7 @@ def all_series_agent(state: APPState) -> Agent:
             A list of comic series names.
         """
         series = storage.read_all_series()
-        return [s.series_title for s in series]
+        return [s.name for s in series]
 
     @function_tool
     def get_all_comic_series() -> list[Series]:
@@ -45,7 +45,24 @@ def all_series_agent(state: APPState) -> Agent:
         """
         return storage.find_series(name=name)
 
-   
+    @function_tool
+    def verify_publisher_exists(publisher_name: str) -> str:
+        """
+        Verify that a publisher exists in the database.
+        
+        Args:
+            publisher_name: The name of the publisher to verify.
+        
+        Returns:
+            A string indicating if the publisher exists.
+        """
+        publisher = storage.find_publisher(name=publisher_name)
+        if publisher is None:
+            publishers = storage.read_all_publishers()
+            names = [p.name for p in publishers]
+            return f"Publisher '{publisher_name}' not found.  It should be one of the following: {', '.join(names)}"
+        return "Publisher exists."
+
     @function_tool
     def create_comic_series(series_title: str, description: Optional[str], publisher: Optional[str]) -> Series:
         """
@@ -53,6 +70,8 @@ def all_series_agent(state: APPState) -> Agent:
         
         Args:
             series_title: The title of the new comic series.
+            description: An optional description of the comic series.   This should be 2-5 paragraphs about the series, its themes, characters and setting.  This is intended for writers and artists to understand the series and generate content for it.   IT IS NOT INTENDED FOR THE READER, OR MARKETING.
+            publisher: An optional name of the publisher for the comic series.   If povided, YOU MUST verify that the publisher exists in the database.
         
         Returns:
             The created Series object.
@@ -131,7 +150,9 @@ def all_series_agent(state: APPState) -> Agent:
             get_all_comic_series_names,
             get_all_comic_series,
             create_comic_series,
-            delete_comic_series
+            delete_comic_series,
+
+            verify_publisher_exists
                     ]
     )
 

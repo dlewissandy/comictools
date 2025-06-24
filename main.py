@@ -2,6 +2,7 @@
 import os
 import json
 from loguru import logger
+from loguru._defaults import LOGURU_FORMAT
 from nicegui import ui, app
 from gui.state import APPState, STATE_FILEPATH, set_dark_mode
 from dotenv import load_dotenv
@@ -25,15 +26,15 @@ DEFAULT_SELECTION = [{"kind":"all_series", "name":"Series", "id":None}]
 # ---------------------------------------------------------
 def ellipsis(record):
     msg = record["message"]
-    record["message"] = msg if len(msg) <= 100 else msg[:97] + "..."
-    return "{time} {level.name}: {message}".format(**record)
+    if len(msg) > 100:
+        record["message"] = msg[:97] + "..."
 
 def init_logger():
     from sys import stderr
 
     logger.remove()  # Remove the default logger
-    logger.add(stderr, level="ERROR", format=ellipsis, backtrace=True, diagnose=True)
-    logger.add("app.log", rotation="10 MB", level="DEBUG", format=ellipsis, backtrace=True, diagnose=True)
+    logger.add(stderr, level="WARNING", format=LOGURU_FORMAT, backtrace=True, diagnose=True, filter=ellipsis)
+    logger.add("app.log", rotation="10 MB", level="DEBUG", format=LOGURU_FORMAT, backtrace=True, diagnose=True, filter=ellipsis)
     
 
 # ---------------------------------------------------------
