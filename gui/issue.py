@@ -16,7 +16,6 @@ def view_issue(state:APPState):
     """
     from gui.messaging import new_item_messager
     selection = state.selection
-    logger = state.logger
     storage = state.storage
 
     series_id = selection[-2].id if len(selection) > 1 else None

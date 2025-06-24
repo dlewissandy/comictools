@@ -11,7 +11,6 @@ from schema.panel import FrameLayout
 from helpers.file import generate_unique_id
 from gui.state import APPState
 from storage.generic import GenericStorage
-from logger.generic import Logger
 
 
 def view_scene(state: APPState):

@@ -1,20 +1,16 @@
-from typing import Tuple, Optional, List
+from typing import Optional
 from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
-from schema.style.comic import ComicStyle
-from schema.publisher import Publisher
+from schema import Publisher
 from storage.generic import GenericStorage
-from logger.generic import Logger
 
 
 def all_publishers_agent(state: APPState) -> Agent:
     from schema.series import Series
     from gui.selection import SelectionItem
     storage: GenericStorage = state.storage
-    logger: Logger = state.logger
-
 
     @function_tool
     def get_publisher_names() -> list[str]:

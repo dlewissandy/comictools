@@ -1,4 +1,5 @@
 import os
+from loguru import logger
 from typing import BinaryIO
 from nicegui import ui
 from schema.publisher import Publisher
@@ -6,7 +7,6 @@ from gui.elements import header, crud_button, markdown_field_editor, full_width_
 from gui.messaging import post_user_message
 from gui.state import APPState
 from storage.generic import GenericStorage
-from logger.generic import Logger
 
 
 def view_publisher(state: APPState):
@@ -16,7 +16,6 @@ def view_publisher(state: APPState):
     Args:
         state: The GUI elements containing the details and selection.
     """
-    logger = state.logger
     storage = state.storage
     logger.debug("view_publisher")
     selection = state.selection
@@ -101,7 +100,6 @@ def view_pick_publisher(state:APPState):
     Args:
         state: The GUI elements containing the details and selection.
     """
-    logger: Logger = state.logger
     storage: GenericStorage = state.storage
     logger.debug("view_pick_publisher")
 

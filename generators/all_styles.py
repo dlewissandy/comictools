@@ -11,8 +11,6 @@ from schema.style.dialog import BubbleStyles
 def all_styles_agent(state: APPState) -> Agent:
     from gui.selection import SelectionItem
     from storage.generic import GenericStorage
-    from logger.generic import Logger
-    logger: Logger = state.logger
     storage: GenericStorage = state.storage
 
     @function_tool

@@ -1,11 +1,10 @@
 from nicegui import ui
+from loguru import logger
 from gui.selection import SelectionItem
 from schema import TitleBoardModel, CoverLocation, ComicStyle
 from gui.state import APPState
-from schema.panel import CoverLocation
 from gui.elements import header, crud_button, view_reference_images, view_character_references, Attribute, markdown_field_editor, image_field_editor, full_width_image_selector_grid, aspect_ratio_picker, TAILWIND_CARD
 from gui.messaging import post_user_message
-from logger.generic import Logger
 from storage.generic import GenericStorage
 
 def view_cover(state: APPState, location: CoverLocation):
@@ -15,7 +14,6 @@ def view_cover(state: APPState, location: CoverLocation):
     Args:
         state: The GUI elements containing the details and selection.
     """
-    logger: Logger = state.logger
     storage: GenericStorage = state.storage
     details = state.details
    

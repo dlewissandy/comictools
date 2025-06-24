@@ -99,83 +99,15 @@ class ComicStyle(BaseModel):
     )
     image: Optional[str] | dict[str, Optional[str]]= Field(..., description="A reference image for the comic style.  default to None")
 
-    @classmethod
-    def generate(cls, description: str):     
+    @property
+    def primary_key(self) -> dict[str, str]:
         """
-        generate new comic style using generative AI
+        return the primary key for the comic style
         """
-        prompt = f"""Generate a comic style description from the following user description:
+        return {
+            "style_id": self.id,
+        }
 
-        # user description
-        {description}
-
-        Focus on sylistic details that would help a comic book artist maintain a consistent and
-        recognizable style throughout a title, series or universe, and distinguish it from other styles.
-        Be as concise as possible -- the summary should be in enough detail to allow the artist to reproduce
-        the style consistently, but no more than that.
-        """
-
-        # TODO: Move this.   Not CRUD operation.
-        # Invoke the OpenAI API to generate a character description
-        response = invoke_generate_api(prompt, text_format=cls)
-        name=response.name
-        response.id = generate_unique_id(STYLES_FOLDER, create_folder=False, name=name)
-        response.write()
-        return response
-    
-    # # TODO: Convert to property - this is static!
-    # def filepath(self) -> str:
-    #     return f"{self.path()}/style.json"
-    
-    # # TODO: Convert to property - this is static!
-    # def path(self) -> str:
-    #     return f"{STYLES_FOLDER}/{self.id}"
-    
-
-    # # TODO: Convert list to enum
-    # def image_path(self, img_type: str = "art") -> str:
-    #     """
-    #     return the path to the image
-    #     """
-    #     if img_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
-    #         raise ValueError(f"Invalid image type: {img_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'.")
-    #     return os.path.join(self.path(), "images", f"{img_type.lower()}-style")
-
-    # def image_filepath(self, img_type: str = "art") -> str:
-    #     """
-    #     return the filepath to the image
-    #     """
-    #     image_path = self.image_path(img_type)
-    #     if not isinstance(self.image, dict):
-    #         return None
-    #     img_id = self.image.get(img_type, None)
-    #     if img_id is None:
-    #         return None
-    #     return os.path.join(image_path, f"{img_id}.jpg")
-        
-    # def write_image(self, image: Image, type: str = "art") -> str | None:
-    #     """
-    #     write the image to the comic style folder.   Returns the id of the image
-    #     if successful or None on failure.
-    #     """
-    #     is_dirty = False
-    #     if self.image is None:
-    #         self.image = {}
-    #         is_dirty = True
-    #     if type == "art":
-    #         path = os.path.join(self.path(), "images")
-    #     else:
-    #         path = os.path.join(self.path(), "images", type.lower().replace("-", "_"))
-        
-    #     id = generate_unique_id(path, create_folder=True)
-    #     filepath = os.path.join(path, f"{id}.jpg")
-    #     image.save(filepath, "JPEG")
-
-    #     if self.image_filepath(type) is None:
-    #         # There is already an image for this style, so we are done.
-    #         self.image[type] = id
-    #         self.write()
-    #     return id
 
     # Todo: Move this to generators!   This is not a crud operatation.
     def render_art_style(self) -> str:
@@ -264,30 +196,6 @@ the original image as possible so that it can serve as a visual reference for th
             self.set_image("character", img_id)
             return "success.  The new character style image has been saved."
         return "Character style image could not be rendered."
-
-
-    # def set_image(self, image_type: str, id: str):
-    #     """
-    #     set the image for the comic style
-    #     """
-    #     if image_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
-    #         msg = f"Invalid image type: {image_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'."
-    #         logger.error(msg)
-    #         return
-    
-    #     if self.image is None:
-    #         self.image = {}
-    #         self.image[image_type] = id
-    #     elif isinstance(self.image, str):
-    #         # if the image is a string, it is a path to the art style image
-    #         self.image = {"art": self.image}
-    #         self.image[image_type] = id
-    #     elif isinstance(self.image, dict):
-    #         # if the image is a dict, it is a path to the character style image
-    #         self.image[image_type] = id
-        
-    #     self.write()
-
         
     def format(self, include_bubble_styles: bool = True, include_character_style: bool = True, heading_level: int = 1) -> str:
         """
@@ -302,46 +210,6 @@ the original image as possible so that it can serve as a visual reference for th
         if self.bubble_styles is not None and include_bubble_styles:
             result += f"\n{self.bubble_styles.format()}"
         return result
-    
-    # TODO: Move this to generators!   This is not a crud operatation.
-    @classmethod
-    def fromImage(cls, imagepaths: list[str] | str):
-        """
-        create a comic style from an image or list of images
-        """
-        prompt = """
-        Generate a comic style description from the following example images.  Focus
-        on stylistic details that would help a comic book artist maintain a consistent and
-        recognizable style throughout a title, series or universe, and distinguish it from other styles.
-        Be as concise as possible -- the summary should be in enough detail to allow the artist to reproduce
-        the style consistently, but no more than that.
-        """
-        if isinstance(imagepaths, str):
-            imagepaths = [imagepaths]
-        
-        # Invoke the OpenAI API to generate a character description
-        response = invoke_generate_api(prompt, images=imagepaths, text_format=cls)
-        response.id = generate_unique_id(STYLES_FOLDER, create_folder=True)
-        response.write()
-        return response
-
-    # def all_images(self, img_type: str = "art") -> list[str]:
-    #     """
-    #     return all the identifiers for the images for the comic style
-    #     """
-    #     if img_type not in ["art", "character", "chat", "narration", "whisper", "thought", "shout", "sound-effect"]:
-    #         raise ValueError(f"Invalid image type: {img_type}. Must be one of 'art', 'character', 'chat', 'narration', 'whisper', 'thought', 'shout', or 'sound-effect'.")
-        
-    #     image_path = self.image_path(img_type)
-    #     if not os.path.exists(image_path):
-    #         return []
-        
-    #     result = []
-    #     for item in os.listdir(image_path):
-    #         if item.endswith(".jpg"):
-    #             result.append(item[:-4])
-        
-    #     return result
     
 
     # TODO: Move this to generators!   This is not a crud operatation.

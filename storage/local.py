@@ -11,9 +11,8 @@ from schema import *
 
 class LocalStorage(GenericStorage):
 
-    def __init__(self, base_path: str, logger: Logger):
+    def __init__(self, base_path: str):
         super().__init__()
-        self._logger = logger
         self.base_path = base_path
         if not os.path.exists(self.base_path):
             os.makedirs(self.base_path)
@@ -22,7 +21,7 @@ class LocalStorage(GenericStorage):
         """
         Get all files and folders in a folder, excluding hidden folders.
         """
-        self._logger.trace(f"Getting basenames from path: {path}")
+        logger.trace(f"Getting basenames from path: {path}")
         if not os.path.exists(path):
             msg = f"Path {path} does not exist."
             logger.error(msg)
@@ -37,10 +36,10 @@ class LocalStorage(GenericStorage):
         for item in os.listdir(path):
             # skip hidden folders
             if item.startswith("."):
-                self._logger.debug(f"Skipping hidden item: {item}")
+                logger.debug(f"Skipping hidden item: {item}")
                 continue
             if exts is not None and not any(item.endswith(ext) for ext in exts):
-                self._logger.debug(f"Skipping item {item} with unsupported extension.")
+                logger.debug(f"Skipping item {item} with unsupported extension.")
                 continue
             item_path = os.path.join(path, item)
             if os.path.isdir(item_path):
@@ -49,7 +48,7 @@ class LocalStorage(GenericStorage):
                 # strip the file extension
                 item = os.path.splitext(item)[0]
                 contents.append(item)
-        self._logger.debug(f"Found {len(contents)} items in {path}")
+        logger.debug(f"Found {len(contents)} items in {path}")
         return contents
 
     def _generate_unique_id(self, path: str, create_folder: bool = True) -> str:
@@ -63,10 +62,10 @@ class LocalStorage(GenericStorage):
                 name is not unique, a UUID4 will be used.  The name will be converted to lowercase
                 snake-case. 
         """
-        self._logger.trace(f"Generating unique ID in path")
+        logger.trace(f"Generating unique ID in path")
         # verify that the path is a directory
         if not os.path.isdir(path):
-            self._logger.error(f"Path {path} is not a directory.")
+            logger.error(f"Path {path} is not a directory.")
             raise NotADirectoryError(f"Path {path} is not a directory.")
 
         # verify that the path exists
@@ -88,7 +87,7 @@ class LocalStorage(GenericStorage):
         """
         Create a new object in the specified path with the given data.
         """
-        self._logger.trace(f"creating {data.__class__.__name__} with data: {data.model_dump()}")
+        logger.trace(f"creating {data.__class__.__name__} with data: {data.model_dump()}")
         if not os.path.exists(path):
             os.makedirs(path)
         
@@ -114,11 +113,11 @@ class LocalStorage(GenericStorage):
         Read an object from a file and return it as an instance of the specified class.
         """
         if not os.path.exists(filepath):
-            self._logger.warning(f"File {filepath} does not exist. Returning None.")
+            logger.warning(f"File {filepath} does not exist. Returning None.")
             return None
         
         if not os.path.isfile(filepath):
-            self._logger.error(f"Path {filepath} is not a file.")
+            logger.error(f"Path {filepath} is not a file.")
             raise FileNotFoundError(f"Path {filepath} is not a file.")
         
         with open(filepath, 'r') as f:
@@ -127,7 +126,7 @@ class LocalStorage(GenericStorage):
             return cls.model_validate(data)
         except Exception as e:
             msg = f"Failed to validate: {e}"
-            self._logger.error(msg)
+            logger.error(msg)
             raise
             
     def _read_all_objects(self, path: str, cls: BaseModel, filename: Optional[str] = None) -> list[BaseModel]:
@@ -141,14 +140,14 @@ class LocalStorage(GenericStorage):
               then it is assumed that the path contains multiple folders, each containing
               a single file with the given filename.
         """
-        self._logger.trace(f"Reading all {cls.__class__.__name__} objects from {path}")
+        logger.trace(f"Reading all {cls.__class__.__name__} objects from {path}")
         if not os.path.exists(path):
-            self._logger.warning(f"Path {path} does not exist. Returning empty list.")
+            logger.warning(f"Path {path} does not exist. Returning empty list.")
             return []
         
         if not os.path.isdir(path):
             msg = f"Path {path} is not a directory."
-            self._logger.error(msg)
+            logger.error(msg)
             raise NotADirectoryError(msg)
         
         
@@ -160,7 +159,7 @@ class LocalStorage(GenericStorage):
             for folder in subfolders:
                 folder_path = os.path.join(path, folder)
                 if not os.path.isdir(folder_path):
-                    self._logger.warning(f"Path {folder_path} is not a directory. Skipping.")
+                    logger.warning(f"Path {folder_path} is not a directory. Skipping.")
                     continue
                 filepath = os.path.join(folder_path, filename)
                 obj = self._read_object(filepath, cls)
@@ -170,19 +169,19 @@ class LocalStorage(GenericStorage):
             # Read all the json files in the directory
             for item in os.listdir(path):
                 if item.startswith("."):
-                    self._logger.debug(f"Skipping hidden item: {item}")
+                    logger.debug(f"Skipping hidden item: {item}")
                     continue
                 if not item.endswith('.json'):
-                    self._logger.debug(f"Skipping non-json item: {item}")
+                    logger.debug(f"Skipping non-json item: {item}")
                     continue
                 if not os.path.isfile(os.path.join(path, item)):
-                    self._logger.debug(f"Skipping non-file item: {item}")
+                    logger.debug(f"Skipping non-file item: {item}")
                     continue
                 filepath = os.path.join(path, item)
                 obj = self._read_object(filepath, cls)
                 if obj:                    
                     objects.append(obj)
-        self._logger.debug(f"Read {len(objects)} objects from {path}")
+        logger.debug(f"Read {len(objects)} objects from {path}")
         return objects
         
 
@@ -194,13 +193,13 @@ class LocalStorage(GenericStorage):
             filepath (str): The path to the file containing the object.
             data (BaseModel): The data to update the object with.
         """
-        self._logger.trace(f"Updating {data.__class__.__name__} in {filepath} with data: {data.model_dump()}")
+        logger.trace(f"Updating {data.__class__.__name__} in {filepath} with data: {data.model_dump()}")
         if not os.path.exists(filepath):
-            self._logger.error(f"File {filepath} does not exist. Cannot update.")
+            logger.error(f"File {filepath} does not exist. Cannot update.")
             raise FileNotFoundError(f"File {filepath} does not exist.")
         
         if not os.path.isfile(filepath):
-            self._logger.error(f"Path {filepath} is not a file.")
+            logger.error(f"Path {filepath} is not a file.")
             raise NotADirectoryError(f"Path {filepath} is not a file.")
         
         with open(filepath, 'w') as f:
@@ -217,10 +216,10 @@ class LocalStorage(GenericStorage):
             cls (BaseModel): The class of the object to be deleted.
         """
 
-        self._logger.trace(f"Deleting {cls.__class__.__name__} from {filepath}")
+        logger.trace(f"Deleting {cls.__class__.__name__} from {filepath}")
         instance = self._read_object(filepath, cls)
         if instance is None:
-            self._logger.warning(f"File {filepath} does not exist. Cannot delete.")
+            logger.warning(f"File {filepath} does not exist. Cannot delete.")
             return None
         
 
@@ -365,7 +364,7 @@ class LocalStorage(GenericStorage):
         """
         issue = self.find_issue(series_id = series_id, id = id)
         if issue is None:
-            self._logger.warning(f"Issue {id} in series {series_id} not found.")
+            logger.warning(f"Issue {id} in series {series_id} not found.")
             return None
         return self.read_style(id=issue.style_id)
         
@@ -719,11 +718,11 @@ class LocalStorage(GenericStorage):
         filepath = name
 
         if not os.path.exists(filepath):
-            self._logger.warning(f"Styled image {name} for character {character_id} in series {series_id} with variant {variant_id} and style {style_id} not found.")
+            logger.warning(f"Styled image {name} for character {character_id} in series {series_id} with variant {variant_id} and style {style_id} not found.")
             return None
         
         if not os.path.isfile(filepath):
-            self._logger.error(f"Path {filepath} is not a file.")
+            logger.error(f"Path {filepath} is not a file.")
             raise NotADirectoryError(f"Path {filepath} is not a file.")
         
 
@@ -743,11 +742,11 @@ class LocalStorage(GenericStorage):
         styled_images = []
         for basename in basenames:
             if basename.startswith(".") or os.path.isdir(os.path.join(path, basename)):
-                self._logger.debug(f"Skipping hidden or directory item: {basename}")
+                logger.debug(f"Skipping hidden or directory item: {basename}")
                 continue
             ext = os.path.splitext(basename)[1]
             if ext.lower() not in ['.jpg', '.jpeg', '.png']:
-                self._logger.debug(f"Skipping non-image file: {basename}")
+                logger.debug(f"Skipping non-image file: {basename}")
                 continue
             styled_images.append(StyledImage(
                 style_id=style_id,
@@ -827,13 +826,13 @@ class LocalStorage(GenericStorage):
         """
         panels = self.find_panels(scene_id=scene_id, issue_id=issue_id, series_id=series_id)
         if not panels:
-            self._logger.warning(f"No panels found for scene {scene_id} in issue {issue_id} of series {series_id}.")
+            logger.warning(f"No panels found for scene {scene_id} in issue {issue_id} of series {series_id}.")
             return None
         
         # Sort the panels by their order
         for panel in panels:
             if panel.image is None:
-                self._logger.warning(f"Panel {panel.id} in scene {scene_id} has no image.")
+                logger.warning(f"Panel {panel.id} in scene {scene_id} has no image.")
                 continue
             filepath = self._panel_image_filepath(
                 series_id=series_id,
@@ -914,19 +913,19 @@ class LocalStorage(GenericStorage):
         images_path = os.path.join(panel_path, 'images')
 
         if not os.path.exists(panel_path):
-            self._logger.warning(f"Panel path {panel_path} does not exist.")
+            logger.warning(f"Panel path {panel_path} does not exist.")
             return []
         images = []
         if not os.path.exists(images_path):
             os.makedirs(images_path, exist_ok=True)
         for img in os.listdir(images_path):
             if img.startswith("."):
-                self._logger.debug(f"Skipping hidden image: {img}")
+                logger.debug(f"Skipping hidden image: {img}")
                 continue
             
             img_filepath = os.path.join(panel_path, img)
             if not os.path.isfile(img_filepath):
-                self._logger.debug(f"Skipping non-file item: {img}")
+                logger.debug(f"Skipping non-file item: {img}")
                 continue
             
             images.append(img_filepath)
@@ -943,7 +942,7 @@ class LocalStorage(GenericStorage):
             panel_id=panel_id
         )
         if panel is None:
-            self._logger.warning(f"Panel {panel_id} in scene {scene_id} of issue {issue_id} in series {series_id} not found.")
+            logger.warning(f"Panel {panel_id} in scene {scene_id} of issue {issue_id} in series {series_id} not found.")
             return []
 
         panel: Panel = panel
@@ -1116,11 +1115,11 @@ class LocalStorage(GenericStorage):
         """
         style = self.read_style(id=style_id)
         if style is None:
-            self._logger.warning(f"Style {style_id} not found.")
+            logger.warning(f"Style {style_id} not found.")
             return None
         # Check if the style has an image
         if style.image is None:
-            self._logger.warning(f"Style {style_id} has no image.")
+            logger.warning(f"Style {style_id} has no image.")
             return None
         
         # Get the image file path
@@ -1133,16 +1132,16 @@ class LocalStorage(GenericStorage):
         images = []
         images_path = self._style_image_path(style_id=style_id, example_type=example_type)
         if not os.path.exists(images_path):
-            self._logger.warning(f"Style image path {images_path} does not exist.")
+            logger.warning(f"Style image path {images_path} does not exist.")
             return images
         for img in os.listdir(images_path):
             if img.startswith("."):
-                self._logger.debug(f"Skipping hidden image: {img}")
+                logger.debug(f"Skipping hidden image: {img}")
                 continue
             
             img_filepath = os.path.join(images_path, img)
             if not os.path.isfile(img_filepath):
-                self._logger.debug(f"Skipping non-file item: {img}")
+                logger.debug(f"Skipping non-file item: {img}")
                 continue
             
             images.append(img_filepath)
@@ -1271,11 +1270,11 @@ class LocalStorage(GenericStorage):
         """
         publisher = self.read_publisher(id=publisher_id)
         if publisher is None:
-            self._logger.warning(f"Publisher {publisher_id} not found.")
+            logger.warning(f"Publisher {publisher_id} not found.")
             return None
         # Check if the publisher has an image
         if publisher.image is None:
-            self._logger.warning(f"Publisher {publisher_id} has no image.")
+            logger.warning(f"Publisher {publisher_id} has no image.")
             return None
         
         # Get the image file path
@@ -1289,16 +1288,16 @@ class LocalStorage(GenericStorage):
         images_path = os.path.join(publisher_path, 'images')
         images = []
         if not os.path.exists(images_path):
-            self._logger.warning(f"Publisher image path {images_path} does not exist.")
+            logger.warning(f"Publisher image path {images_path} does not exist.")
             return images
         for img in os.listdir(images_path):
             if img.startswith("."):
-                self._logger.debug(f"Skipping hidden image: {img}")
+                logger.debug(f"Skipping hidden image: {img}")
                 continue
             
             img_filepath = os.path.join(images_path, img)
             if not os.path.isfile(img_filepath):
-                self._logger.debug(f"Skipping non-file item: {img}")
+                logger.debug(f"Skipping non-file item: {img}")
                 continue
             
             images.append(img_filepath)
@@ -1320,7 +1319,7 @@ class LocalStorage(GenericStorage):
         with open(filepath, 'wb') as f:
             f.write(image_data.read())
         
-        self._logger.info(f"Uploaded publisher image to {filepath}")
+        logger.info(f"Uploaded publisher image to {filepath}")
         return filepath 
 
     # -------------------------------------------------------------------------

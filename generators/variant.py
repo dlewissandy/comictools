@@ -4,7 +4,8 @@ from gui.state import APPState
 from helpers.constants import COMICS_FOLDER
 from agents import Agent, function_tool
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from schema.character import CharacterVariant, render_character_image
+from schema import CharacterVariant
+from generators.character import render_character_image
 from schema.style.comic import ComicStyle
 
 

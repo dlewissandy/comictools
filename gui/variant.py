@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from nicegui import ui
-from schema.character import CharacterModel, CharacterVariant, StyledImage
+from schema import CharacterModel, CharacterVariant, StyledImage
 from gui.elements import (
     header, 
     crud_button, 

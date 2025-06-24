@@ -1,13 +1,5 @@
-import os
 from typing import Optional
-from loguru import logger
 from pydantic import BaseModel, Field
-from schema.character import CharacterModel
-from schema.scene import SceneModel
-from schema.panel import TitleBoardModel, CoverLocation
-from schema.scene import SceneModel
-from helpers.constants import COMICS_FOLDER
-from helpers.generator import invoke_generate_api
 
         
 
@@ -30,7 +22,15 @@ class Issue(BaseModel):
     characters: list[str] = Field(..., description="The characters in the issue.  Default to empty string")
     style: Optional[str]  = Field(..., description="The style of the comic book.   Default to 'vintage-four-color'")
 
-    
+    @property
+    def primary_key(self) -> dict[str, str]:
+        """
+        return the primary key for the issue
+        """
+        return {
+            "issue_id": self.id,
+            "series_id": self.series,
+        }
 
     def format(self, heading_level: int=1) -> str:
         """

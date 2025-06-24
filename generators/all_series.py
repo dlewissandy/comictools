@@ -1,17 +1,16 @@
 from typing import Tuple, Optional, List
+from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
 from storage.generic import GenericStorage
-from logger.generic import Logger
 
 
 def all_series_agent(state: APPState) -> Agent:
     from schema.series import Series
     from gui.selection import SelectionItem
     storage: GenericStorage = state.storage
-    logger: Logger = state.logger
-
+    
     @function_tool
     def get_all_comic_series_names() -> list[str]:
         """

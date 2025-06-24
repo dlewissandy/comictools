@@ -1,11 +1,11 @@
 
 import os
 import json
+from loguru import logger
 from nicegui import ui, app
 from gui.state import APPState, STATE_FILEPATH, set_dark_mode
 from dotenv import load_dotenv
 from gui.selection import (SelectionItem)
-from logger.default import DefaultLogger
 from messaging import send
 from storage.local import LocalStorage
 load_dotenv()
@@ -19,7 +19,26 @@ HEADFOOT_STYLING_CLASSES = "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text
 MIDDLE_STYLING_CLASSES = "text-gray-900 dark:text-gray-300"
 # Default selection to initialize the breadcrumbs
 DEFAULT_SELECTION = [{"kind":"all_series", "name":"Series", "id":None}]
+
+# ---------------------------------------------------------
+# LOGGER INITIALIZATION
+# ---------------------------------------------------------
+def ellipsis(record):
+    msg = record["message"]
+    record["message"] = msg if len(msg) <= 100 else msg[:97] + "..."
+    return "{time} {level.name}: {message}".format(**record)
+
+def init_logger():
+    from sys import stderr
+
+    logger.remove()  # Remove the default logger
+    logger.add(stderr, level="ERROR", format=ellipsis, backtrace=True, diagnose=True)
+    logger.add("app.log", rotation="10 MB", level="DEBUG", format=ellipsis, backtrace=True, diagnose=True)
     
+
+# ---------------------------------------------------------
+# UI LAYOUT INITIALIZATION
+# ---------------------------------------------------------
 def init_layout(logger):
     """
     Initializes the UI layout with the main components.
@@ -74,7 +93,7 @@ def init_layout(logger):
 @ui.page('/')
 def main_page(client):
     # INITIALIZE THE LOGGER
-    logger = DefaultLogger()
+    init_logger()
 
     # INITIALIZE THE UI LAYOUT WITH BASIC ELEMENTS
     breadcrumbs, details, history, user_input, send_button, darkswitch = init_layout(logger)
@@ -95,8 +114,7 @@ def main_page(client):
         user_input = user_input,
         send_button = send_button,
         selection = [] ,  # Initially set selection to empty
-        storage = LocalStorage(base_path="data", logger=logger),
-        logger = logger
+        storage = LocalStorage(base_path="data"),
      )
     
     state.dark_mode = dark_value

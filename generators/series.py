@@ -1,4 +1,5 @@
 from typing import Tuple, Optional, List
+from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
@@ -12,7 +13,6 @@ from storage.generic import GenericStorage
 
 def series_agent(state: APPState) -> Agent:
     storage: GenericStorage = state.storage
-    logger = state.logger
 
     def _get_series_id() -> str:
         """

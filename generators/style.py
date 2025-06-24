@@ -1,17 +1,16 @@
 
+import os
+
 from typing import Tuple
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool
 from gui.state import APPState
-from schema.style.comic import ComicStyle
-from schema.style.art import ArtStyle
-from schema.style.dialog import DialogType
-from schema.style.character import CharacterStyle
-from schema.style.dialog import BubbleStyles, BubbleStyle
-import os
+from schema import ComicStyle, ArtStyle, DialogType, BubbleStyle, BubbleStyles, CharacterStyle
 from loguru import logger
+from storage.generic import GenericStorage
 
 def style_agent(state: APPState) -> Agent:
+    storage: GenericStorage = state.storage
     
     def get_comic_style() -> ComicStyle:
         """
@@ -22,7 +21,7 @@ def style_agent(state: APPState) -> Agent:
         """
         selection = state.selection
         if selection and selection[-1].kind == "style":
-            return ComicStyle.read(id=selection[-1].id)
+            return storage.read_style(id=selection[-1].id)
         return None
     
     @function_tool
@@ -52,7 +51,7 @@ def style_agent(state: APPState) -> Agent:
         style = get_comic_style()
         if style:
             style.description = new_description
-            style.write()
+            storage.update_style(style)
             state.is_dirty = True
             return f"Description for {style.name} updated."
         return "No comic style selected."
@@ -119,7 +118,7 @@ def style_agent(state: APPState) -> Agent:
         if lettering_style is not None:
             art_style.lettering_style = lettering_style
         if any([line_styles, inking_tools, shading_style, color_palette, spot_colors, registration, lettering_style]):
-            style.write()
+            storage.update_style(style)
             state.is_dirty = True
             return f"Art style for {style.name} updated."
         return "No comic style selected."
@@ -202,7 +201,7 @@ def style_agent(state: APPState) -> Agent:
         if not os.path.exists(image_filepath):
             return "The file does not exist.  Nothing to delete."
         os.remove(image_filepath)
-        style.write()
+        storage.update_style(style)
         state.is_dirty = True
         return f"Art style example for {style.name} deleted."
     
@@ -233,7 +232,7 @@ def style_agent(state: APPState) -> Agent:
         if not os.path.exists(image_filepath):
             return "The file does not exist.  Nothing to delete."
         os.remove(image_filepath)
-        style.write()
+        storage.update_style(style)
         state.is_dirty = True
         return f"Character style example for {style.name} deleted."
     
@@ -265,7 +264,7 @@ def style_agent(state: APPState) -> Agent:
         if not os.path.exists(image_filepath):
             return "The file does not exist.  Nothing to delete."
         os.remove(image_filepath)
-        style.write()
+        storage.update_style(style)
         state.is_dirty = True
         return f"Character style example for {style.name} deleted."
         
@@ -298,7 +297,7 @@ def style_agent(state: APPState) -> Agent:
         if not style:
             logger.error("No style is currently selected.")
             return "Something odd happened.  No style is currently selected."  
-        style.delete()
+        storage.delete_style(style.id)
         state.is_dirty = True
         state.change_selection(selection[:-1])
         return f"Style {style.name} deleted."
@@ -394,7 +393,7 @@ def style_agent(state: APPState) -> Agent:
         bubble_styles = style.bubble_styles
         setattr(bubble_styles, dialog_type, dialog_style)
         logger.debug(f"Updated dialog style for {dialog_type}: {dialog_style}")
-        style.write()
+        storage.update_style(style)
         state.is_dirty = True
         return f"Dialog style for {style.name} updated."
 
