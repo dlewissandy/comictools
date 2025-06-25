@@ -1,17 +1,17 @@
 from typing import Tuple, Optional, List
 from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from agents import Agent, function_tool
+from agents import Agent, function_tool, Tool
 from gui.state import APPState
 from schema.series import Series
-from gui.selection import SelectionItem
+from gui.selection import SelectionItem, SelectedKind
 from schema.character import CharacterModel
 from schema.publisher import Publisher
 from schema.issue import Issue
 from storage.generic import GenericStorage
 
 
-def series_agent(state: APPState) -> Agent:
+def series_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
     storage: GenericStorage = state.storage
 
     def _get_series_id() -> str:
@@ -198,8 +198,8 @@ def series_agent(state: APPState) -> Agent:
         )
 
         character.write()
-        state.change_selection(new=state.selection + [SelectionItem(kind="character", id=character.id, name=character.name)])
-        return f"Character '{character.name}' created successfully in series '{series.series_title}'."
+        state.change_selection(new=state.selection + [SelectionItem(kind=SelectedKind.CHARACTER, id=character.id, name=character.name)])
+        return f"Character '{character.name}' created successfully in series '{series.name}'."
 
 
     @function_tool
@@ -268,7 +268,7 @@ def series_agent(state: APPState) -> Agent:
         )
 
         character.write()
-        state.change_selection(new=state.selection + [SelectionItem(kind="character", id=character.id, name=character.name)])
+        state.change_selection(new=state.selection + [SelectionItem(kind=SelectedKind.CHARACTER, id=character.id, name=character.name)])
 
         
         return f"Character '{character.name}' created successfully in series '{series.series_title}'."
@@ -281,22 +281,31 @@ def series_agent(state: APPState) -> Agent:
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,
         tools = [
-            get_details, 
-            get_issues,
-            get_characters,
-            get_publisher,
+            # Selection and Navigation Tools
+            tools.get("get_current_selection", None),
 
+            # Query Tools
+            tools.get("find_series", None),
+            tools.get("find_publisher", None),
+
+            tools.get("get_all_publishers", None),
+            tools.get("find_all_characters", None),
+            tools.get("get_all_series", None),
+
+            get_issues,
+
+            # Creation Tools
             create_character,
             create_character_from_reference_image,
             create_issue,
 
-            
+            # Update Tools
             update_description, 
             
-
-            delete_series,
+            # Deletion Tools
+            tools.get("delete_series", None),
             delete_issue,
-            delete_character,
+            tools.get("delete_character", None),
 
             ],)
                    

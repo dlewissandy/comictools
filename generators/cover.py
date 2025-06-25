@@ -1,18 +1,14 @@
 from typing import Tuple, Optional, List
 from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from agents import Agent, function_tool
+from agents import Agent, function_tool, Tool
 from gui.state import APPState
 from schema import TitleBoardModel
 
 
-def cover_agent(state: APPState) -> Agent:
+def cover_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
     from generators.tools import dereference_cover as _get_cover
     from generators.tools import delete_cover as _delete_cover
-    from generators.tools import dereference_series as _get_series
-    from generators.tools import dereference_issue as _get_issue
-    from generators.tools import get_publisher as _get_publisher
-    from generators.tools import get_style as _get_style
     
     @function_tool
     def get_cover() -> TitleBoardModel:

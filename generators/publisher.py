@@ -1,12 +1,13 @@
 from typing import Tuple, Optional, List
 from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from agents import Agent, function_tool
+from agents import Agent, function_tool, Tool
 from gui.state import APPState
 import os
+from gui.selection import SelectionItem, SelectedKind
 
 
-def publisher_agent(state: APPState) -> Agent:
+def publisher_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
     """
     Create an agent for the publisher assistant.
     """
@@ -17,7 +18,7 @@ def publisher_agent(state: APPState) -> Agent:
         Get the currently selected publisher.
         """
         selection = state.selection
-        if selection and selection[-1].kind == "publisher":
+        if selection and selection[-1].kind == SelectedKind.PUBLISHER:
             return Publisher.read(id=selection[-1].id)
         return None
 

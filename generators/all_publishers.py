@@ -1,52 +1,16 @@
 from typing import Optional
 from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from agents import Agent, function_tool
+from agents import Agent, function_tool, Tool
 from gui.state import APPState
 from schema import Publisher
 from storage.generic import GenericStorage
 
 
-def all_publishers_agent(state: APPState) -> Agent:
+def all_publishers_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
     from schema.series import Series
-    from gui.selection import SelectionItem
+    from gui.selection import SelectionItem, SelectedKind
     storage: GenericStorage = state.storage
-
-    @function_tool
-    def get_publisher_names() -> list[str]:
-        """
-        Get a list of all publisher names.
-        
-        Returns:
-            A list of publisher names.
-        """
-        from schema.publisher import Publisher
-        publishers = storage.read_all_publishers()
-        return [publisher.name for publisher in publishers]
-    
-    @function_tool
-    def get_publishers() -> list[Publisher]:
-        """
-        Get a list of all publisher the publishers in the database.
-        
-        Returns:
-            A list of publisher names.
-        """
-        from schema.publisher import Publisher
-        return storage.read_all_publishers()
-
-    @function_tool
-    def get_publisher_by_name(name: str) -> Publisher | None:
-        """
-        Get a publisher's definition by its name.
-        
-        Args:
-            name: The name of the publisher.
-        
-        Returns:
-            The Publisher object if found, otherwise None.
-        """
-        return storage.find_publisher(name=name)
 
     @function_tool
     def create_publisher(name: str, description: Optional[str]) -> Publisher | str | None:
@@ -71,7 +35,7 @@ def all_publishers_agent(state: APPState) -> Agent:
         publisher = Publisher(name=name, logo=None, description=description, image=None, id=name.lower().replace(" ", "-"))
         storage.create_publisher(publisher)
         selection = state.selection
-        new_itm = SelectionItem(name=publisher.name, id=publisher.id, kind='publisher')
+        new_itm = SelectionItem(name=publisher.name, id=publisher.id, kind=SelectedKind.PUBLISHER)
         new_sel = [s for s in selection]+[new_itm]
         state.change_selection(new=new_sel, clear_history=False)
         state.is_dirty = True
@@ -96,7 +60,7 @@ def all_publishers_agent(state: APPState) -> Agent:
         sel_itm = SelectionItem(
             id=publisher.id,
             name=publisher.name,
-            kind="publisher",
+            kind=SelectedKind.PUBLISHER,
         )
         new_selection = state.selection + [sel_itm]
         state.change_selection(new=new_selection, clear_history=False)
@@ -122,34 +86,23 @@ def all_publishers_agent(state: APPState) -> Agent:
         # remove the deleted series from the list.
         state.is_dirty = True
         return f"Deleted publisher: {pub.name}"
-
-
+    
     return Agent(
-        name="Home Screen Assistant",
+        name="All Publishers Agent",
         instructions="""
         You are an interactive artistic assistant who helps human artists and creators manage
-        comic book assests.  There are 3 top level concepts that you are concerned with:
+        comic book assests.  You are a specialist on comic book publishers.   You can help users
+        understand, and modify your extensive database of comic book publishers.   
         
-        * Publishers:  These are the companies that publish comic books.   They often have specializations
-            in terms of audience, artistic style and genera.  Real world examples of publishers include
-            Marvel, DC, Image, Dark Horse, and many others.
-        * Comic Series:  These are the series of comic books that are published by a publisher.   They
-            frequently tell a story about a specific charaacter ( e.g. Spider man, Batman, etc. ) or groups
-            of characters ( e.g. The Avengers, Justice League, etc. ).
-        * Comic Styles:  These are the artistic styles that are used in a comic book series.   They
-            define the visual language of the comic book, such as line style, inking tools, shading style,
-            color palette, and more.   They are used by artists to ensure that the visual language of the
-            comic is consistent throughout the series.
-
-        You are capable of searching for, updating, deleting or creating any of these assets.   
+        You will always use your tools to perform actions when an appropriate tool is available.
 
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,
         tools = [
             select_publisher,
-            get_publisher_by_name,
-            get_publishers,
-            get_publisher_names,
+            tools.get("get_all_publishers"),
+            tools.get("find_publisher"),
+
             create_publisher,
             delete_publisher,
         ]

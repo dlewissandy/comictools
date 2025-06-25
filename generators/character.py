@@ -1,12 +1,14 @@
 from loguru import logger
 from typing import Tuple, Optional, List
 from gui.state import APPState
-from agents import Agent, function_tool
+from agents import Agent, function_tool, Tool
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from schema import CharacterModel, CharacterVariant, CharacterVariantMinimal
 from helpers.generator import invoke_generate_image_api
 from helpers.file import generate_unique_id
 from gui.selection import SelectionItem
+from storage.generic import GenericStorage
+from generators.tools import normalize_id
 
 def render_character_image(character_name: str, character_description: str, style_description: str, save_path: str):
     """
@@ -61,54 +63,12 @@ def render_character_image(character_name: str, character_description: str, styl
     return image_id
 
 
-def character_agent(state: APPState) -> Agent:
-
-    def _get_character() -> Optional[CharacterModel]:
-        """
-        Get the currently selected character.   On failure, this function will
-        return a string indicating the error.
-        """
-        selection = state.selection
-        character_id = selection[-1].id if len(selection) > 0 else None
-        series_id = selection[-2].id if len(selection) > 1 else None
-        if character_id is None or series_id is None:
-            return None
-        return CharacterModel.read(series=series_id, id=character_id)
-        
-    @function_tool
-    def get_current_character() -> CharacterModel:
-        """
-        Get the currently selected character.
-        
-        Returns:
-            The currently selected character.
-        """
-        character = _get_character()
-        if isinstance(character, str):
-            raise ValueError(character)
-        return character
+def character_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
+    storage: GenericStorage = state.storage
 
 
-    @function_tool
-    def delete_current_character() -> str:
-        """
-        Delete the currently selected character.   NOTE: YOU MUST ASK FOR
-        CONFIRMATION BEFORE DELETING A CHARACTER.   THIS OPERATION CANNOT BE UNDONE.
-        
-        Returns:
-            A message indicating the result of the deletion operation.
-        """
-        import shutil
-        character = _get_character()
-        if character is None:
-            return None
-        
-        character: CharacterModel = character
-        character.delete()  # Delete the character from the database
-        state.change_selection(new=state.selection[:-1])  # Remove the deleted character from selection
-        state.write()
-        state.is_dirty = True
-        return f"Character {character.name} deleted successfully."
+
+
     
     @function_tool
     def update_character_description(description: str) -> str:
@@ -121,28 +81,18 @@ def character_agent(state: APPState) -> Agent:
         Returns:
             A message indicating the result of the update operation.
         """
-        character = _get_character()
+        series_id = state.selection[-2].id  # Assuming the second last item is the series
+        character_id = state.selection[-1].id  # Assuming the last item is the character
+
+        character = storage.find_character(series_id=series_id, character_id=character_id)
         if character is None:
-            return "No character selected."
+            return "Can't update the current character.  Is one selected?"
         
         character.description = description
-        character.write()
+        storage.update_character(data = character)
         state.is_dirty = True
         return f"Character {character.name} updated successfully with new description."
 
-    @function_tool
-    def get_variants() -> List[str]:
-        """
-        Get the list of character variants for the currently selected character.
-        
-        Returns:
-            A list of variant names for the character.
-        """
-        character = _get_character()
-        if character is None:
-            return []
-        
-        return CharacterVariant.read_all(series=character.series, character=character.id)
     
     @function_tool
     def create_variant(name: str, race: str, gender: str, age: str, height: str, general_description: str, physical_appearance: str, attire: str, behavior: str) -> CharacterVariant:
@@ -167,11 +117,19 @@ def character_agent(state: APPState) -> Agent:
         Returns:
             The newly created CharacterVariant object.
         """
-        character = _get_character()
+        character_id = state.selection[-1].id  # Assuming the last item is the character
+        series_id = state.selection[-2].id  # Assuming the second last item is the
+
+        series = storage.read_series(id=series_id)
+        if series is None:
+            raise ValueError("The series {series_id} does not exist.  Try checking the list of series first to see if maybe you misspelled it?")
+        character = storage.find_character(series_id=series_id, character_id=character_id)
         if character is None:
-            raise ValueError("No character selected.")
+            raise ValueError(f"The character {character_id} does not exist in series {series_id}.  Try checking the list of characters first to see if maybe you misspelled it?")
         
+        character: CharacterModel = character
         variant = CharacterVariant(
+            id=normalize_id(name),
             series=character.series,
             character=character.id,
             name=name,
@@ -185,7 +143,7 @@ def character_agent(state: APPState) -> Agent:
             behavior=behavior,
             images = {}
         )
-        variant.write()
+        storage.create_character_variant(variant)
         sel_item = SelectionItem( id = variant.id, name=variant.name, kind="variant")
         state.selection.append(sel_item)  # Add the new variant to the selection
         state.write()
@@ -193,76 +151,76 @@ def character_agent(state: APPState) -> Agent:
         return variant
 
 
-    @function_tool
-    def create_variant_from_image(variant_name: str, image_path: str) -> CharacterVariant | str:
-        """
-        Create a new character variant from a reference image.
+    # @function_tool
+    # def create_variant_from_image(variant_name: str, image_path: str) -> CharacterVariant | str:
+    #     """
+    #     Create a new character variant from a reference image.
         
-        Args:
-            variant_name: The name of the variant.   This should be unique within the character's variants and should be short (1-3 words).
-            image_path: The path to the image file to use as a reference for the variant.
+    #     Args:
+    #         variant_name: The name of the variant.   This should be unique within the character's variants and should be short (1-3 words).
+    #         image_path: The path to the image file to use as a reference for the variant.
         
-        Returns:
-            The newly created CharacterVariant object or an error message if the image could not be processed.
-        """
-        from helpers.generator import invoke_generate_api
-        character = _get_character()
-        if character is None:
-            return "No character selected."
+    #     Returns:
+    #         The newly created CharacterVariant object or an error message if the image could not be processed.
+    #     """
+    #     from helpers.generator import invoke_generate_api
+    #     character = _get_character()
+    #     if character is None:
+    #         return "No character selected."
                 
-        prompt = f"""Create a variant of the character {character.name} in the {character.series} comic sereis using the provided image as a reference."""
-        minimal:CharacterVariantMinimal = invoke_generate_api(
-            prompt=prompt,
-            image=image_path,
-            model=LANGUAGE_MODEL,
-            text_format=CharacterVariantMinimal
-        )
-        variant = CharacterVariant(
-            series=character.series,
-            character=character.id,
-            name=variant_name,
-            race=minimal.race,
-            gender=minimal.gender,
-            age=minimal.age,
-            height=minimal.height,
-            description=minimal.description,
-            appearance=minimal.appearance,
-            attire=minimal.attire,
-            behavior=minimal.behavior,
-            images = {}
-            )
+    #     prompt = f"""Create a variant of the character {character.name} in the {character.series} comic sereis using the provided image as a reference."""
+    #     minimal:CharacterVariantMinimal = invoke_generate_api(
+    #         prompt=prompt,
+    #         image=image_path,
+    #         model=LANGUAGE_MODEL,
+    #         text_format=CharacterVariantMinimal
+    #     )
+    #     variant = CharacterVariant(
+    #         series=character.series,
+    #         character=character.id,
+    #         name=variant_name,
+    #         race=minimal.race,
+    #         gender=minimal.gender,
+    #         age=minimal.age,
+    #         height=minimal.height,
+    #         description=minimal.description,
+    #         appearance=minimal.appearance,
+    #         attire=minimal.attire,
+    #         behavior=minimal.behavior,
+    #         images = {}
+    #         )
 
-        variant.write()
-        sel_item = SelectionItem( id = variant.id, name=variant.name, kind="variant")
-        state.selection.append(sel_item)  # Add the new variant to the selection
-        state.write()
-        state.is_dirty = True
-        return variant
+    #     variant.write()
+    #     sel_item = SelectionItem( id = variant.id, name=variant.name, kind="variant")
+    #     state.selection.append(sel_item)  # Add the new variant to the selection
+    #     state.write()
+    #     state.is_dirty = True
+    #     return variant
     
-    @function_tool
-    def describe_image(image_path: str) -> str:
-        """
-        Describe the provided image in sufficient detail that it could be used
-        to create a character variant.
+    # @function_tool
+    # def describe_image(image_path: str) -> str:
+    #     """
+    #     Describe the provided image in sufficient detail that it could be used
+    #     to create a character variant.
         
-        Args:
-            image_path: The path to the image file to describe.
+    #     Args:
+    #         image_path: The path to the image file to describe.
         
-        Returns:
-            A description of the image.
-        """
-        from helpers.generator import invoke_generate_api
-        prompt = f"""Describe character in the given image in detail.  Your description
-           should focus on visual elements that would be necessary for an artist to recreate
-           the character.   For example, what is their physical appearance, age, stature, 
-           attire.   Do they have any defining features, accessories or mannerisms.  Your 
-           description should be exhaustive."""
-        description = invoke_generate_api(
-            prompt=prompt,
-            image=image_path,
-            model=LANGUAGE_MODEL
-        )
-        return description
+    #     Returns:
+    #         A description of the image.
+    #     """
+    #     from helpers.generator import invoke_generate_api
+    #     prompt = f"""Describe character in the given image in detail.  Your description
+    #        should focus on visual elements that would be necessary for an artist to recreate
+    #        the character.   For example, what is their physical appearance, age, stature, 
+    #        attire.   Do they have any defining features, accessories or mannerisms.  Your 
+    #        description should be exhaustive."""
+    #     description = invoke_generate_api(
+    #         prompt=prompt,
+    #         image=image_path,
+    #         model=LANGUAGE_MODEL
+    #     )
+    #     return description
 
     return Agent(
         name="Character Assistant",
@@ -274,14 +232,21 @@ def character_agent(state: APPState) -> Agent:
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,
         tools=[
-            get_current_character,
-            describe_image,
+            # Navigation tools
+            tools.get("get_current_selection", None),
+
+            # Query Tools
+            tools.get("find_character", None),
+            tools.get("find_series", None),
+            tools.get("find_all_characters", None),
+            tools.get("find_all_variants", None),
+        
+            # describe_image,
             update_character_description,
 
-            delete_current_character,
-            get_variants,
+            tools.get("delete_character", None),
             create_variant,
-            create_variant_from_image
+            # create_variant_from_image
             ],
     )
 

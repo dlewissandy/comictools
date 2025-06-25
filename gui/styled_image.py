@@ -17,7 +17,7 @@ def view_styled_image(
     state: APPState
 ):
     from gui.elements import full_width_image_selector_grid
-    from schema.character import CharacterModel, CharacterVariant, StyledImage
+    from schema import CharacterModel, CharacterVariant, StyledImage
     selection = state.selection
     storage: GenericStorage = state.storage
 
@@ -69,7 +69,7 @@ def view_styled_image(
     with state.details:
         full_width_image_selector_grid(
             state=state,
-            kind ="reference-image",
+            image_kind_name ="reference image",
             get_selection=get_selection,
             set_selection=set_selection,
             get_images=get_images,

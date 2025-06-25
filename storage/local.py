@@ -283,6 +283,16 @@ class LocalStorage(GenericStorage):
                 return series
         return None
     
+    def get_series(self, series_id: str) -> Optional[Series]:
+        """
+        Get a series by its ID.
+        """
+        series = self.read_series(series_id)
+        if series is None:
+            logger.warning(f"Series with ID {series_id} not found.")
+            return None
+        return series   
+    
     def find_series_image(self, series_id: str) -> Optional[str]:
         issues: list[Issue] = self.find_issues(series_id=series_id)
         # sort the issues by issue number
@@ -576,8 +586,11 @@ class LocalStorage(GenericStorage):
         )
 
     
-    def update_character(self, character_id, character_data):
-        raise NotImplemented("Not yet implemented")
+    def update_character(self, data: CharacterModel) -> None:
+        return self._update_object(
+            filepath=self._character_filepath(series_id=data.series, character_id=data.id),
+            data=data
+        )
 
     
     def delete_character(self, character_id):
@@ -656,8 +669,13 @@ class LocalStorage(GenericStorage):
         """
         return os.path.join(self._character_variant_styled_image_path(series_id=series_id, character_id=character_id, variant_id=variant_id, style_id=style_id), image_name)   
 
-    def create_character_variant(self, variant_data):
-        raise NotImplemented("Not yet implemented")
+    def create_character_variant(self, data: CharacterVariant):
+        return self._create_object(
+            path=self._all_character_variants_path(series_id=data.series, character_id=data.character),
+            data=data,
+            create_folder=True,
+            filename='variant.json'
+        )
 
     
     def find_character_variant(self, series_id: str, character_id: str, variant_id: str) -> Optional[CharacterVariant]:

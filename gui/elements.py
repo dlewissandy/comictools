@@ -5,11 +5,12 @@ from nicegui.events import UploadEventArguments
 from gui.constants import TAILWIND_CARD
 from gui.messaging import post_user_message
 from gui.state import APPState
-from gui.selection import SelectionItem
+from gui.selection import SelectionItem, SelectedKind
 from schema.panel import FrameLayout
 from pydantic import BaseModel
 from loguru import logger
 from storage.generic import GenericStorage
+from enum import StrEnum
 
 HEADER_STYLES = {
     0: 'font-size: 3rem; font-weight: bold;',
@@ -19,6 +20,14 @@ HEADER_STYLES = {
     4: 'font-size: 1rem; font-weight: bold;',
     5: 'font-size: 0.75rem; font-weight: bold;',
 }
+
+class CrudButtonKind(StrEnum):
+    """Enum for the kinds of CRUD buttons."""
+    CREATE = 'create'
+    READ = 'read'
+    UPDATE = 'update'
+    DELETE = 'delete'
+    RENDER = 'render'
 
 CRUD_ICON = {
     'create': 'add',
@@ -39,7 +48,7 @@ CRUD_BUTTON_STYLES = {
 def init_cardwall(columns: int = 4):
     return ui.element('div').classes(f'columns-{columns} w-full gap-2 ')
 
-def crud_button(kind: str, action: Callable, size: int = 2):
+def crud_button(kind: CrudButtonKind, action: Callable, size: int = 2):
     """Create a button with a specific style and action.
 
     Args:
@@ -49,10 +58,8 @@ def crud_button(kind: str, action: Callable, size: int = 2):
     """
     if size not in [1, 2]:
         raise ValueError("Size must be 1 or 2.")
-    if kind not in CRUD_ICON.keys():
-        raise ValueError("Kind must be one of: create, read, update, delete.")
     
-    button = ui.button(icon=CRUD_ICON[kind]).classes('text-base rounded-md').style(CRUD_BUTTON_STYLES[str(size)])
+    button = ui.button(icon=CRUD_ICON[kind.value]).classes('text-base rounded-md').style(CRUD_BUTTON_STYLES[str(size)])
     button.on('click', action)
     return button
 
@@ -61,9 +68,9 @@ def markdown_field_editor(state: APPState, name: str, value: str | None, header_
         header(name.title(),header_size)
         ui.space()
         if value is not None:
-            crud_button(kind="update", action=lambda _: post_user_message(state, f"I would like to edit the {name}"))
+            crud_button(kind=CrudButtonKind.UPDATE, action=lambda _: post_user_message(state, f"I would like to edit the {name}"))
         else:
-            crud_button(kind="create", action = lambda _: post_user_message(state, f"I would like to add a {name}."))
+            crud_button(kind=CrudButtonKind.CREATE, action = lambda _: post_user_message(state, f"I would like to add a {name}."))
 
     if value is not None and value !="":
         markdown(value)
@@ -120,7 +127,7 @@ def markdown(body: str) -> None:
 
 def full_width_image_selector_grid(
     state: APPState,
-    kind: str,
+    image_kind_name: str,
     upload_image: Callable,
     get_images: Callable[[], list[str]],
     get_selection: Callable[[], str],
@@ -188,9 +195,9 @@ def full_width_image_selector_grid(
         header(caption,header_size)
         ui.space()
         if include_render_button:
-            crud_button(kind="render", action = lambda _: post_user_message(state, f"I would like to render the {kind}."))
+            crud_button(kind=CrudButtonKind.RENDER, action = lambda _: post_user_message(state, f"I would like to render the {image_kind_name}."))
         if include_delete_button:
-            crud_button(kind="delete", action=lambda _: post_user_message(state, f"I would like to delete the currently selected {kind}."))
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, f"I would like to delete the currently selected {image_kind_name}."))
 
     all_images = get_images()
     logger.debug(f"all_images: {all_images}")
@@ -207,7 +214,7 @@ def full_width_image_selector_grid(
 
 def image_field_editor(
         state: APPState, 
-        kind: str, 
+        kind: SelectedKind, 
         get_caption: Callable[[], str|None], 
         get_id: Callable[[], str|None], 
         get_image_filepath: Callable[[], str|None], 
@@ -241,7 +248,8 @@ def image_field_editor(
                 ui.label(f"Image for {caption} not found.").style('color: red;')
             else:
                 ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')
-        new_itm = SelectionItem(name=kind.replace('-',' ').title(), id=id, kind=kind)
+        itm_name = kind.value.replace('-',' ').title()
+        new_itm = SelectionItem(name=itm_name, id=id, kind=kind)
         new_sel = [s for s in state.selection]+[new_itm]
         card.on('click', lambda _, new_sel=new_sel: state.change_selection(new=new_sel))
 
@@ -314,7 +322,7 @@ def render_object_choices(
 def render_object_cards(
         state: APPState, 
         instances: list[BaseModel], 
-        kind: str | Callable, 
+        kind: SelectedKind | Callable, # TODO: Do I use both Callable and literal?   Simplify?
         cardwall: ui.element, 
         aspect_ratio: str = "1/1",
         get_image_locator: Callable[[BaseModel], Optional[str]] = lambda x: x.image_filepath(),
@@ -355,7 +363,7 @@ def render_object_cards(
 def view_all_instances(
         state, 
         get_instances, 
-        kind: str | Callable,  
+        kind: SelectedKind | Callable,  # DO I use both Callable and literal?   Simplify?
         get_name = lambda i,x: x.name, 
         get_image_locator: Callable[[BaseModel], Optional[str]] = lambda x: x.image_filepath(),
         get_choice: Optional[Callable] = None, 
@@ -440,7 +448,7 @@ def view_attributes(state: APPState, caption: str, attributes: list[Attribute], 
                 header(caption, header_size)
                 if not individual_icons:
                     ui.space()
-                    crud_button(kind="update", action=lambda _: post_user_message(state, f"I would like to edit the {caption}."))
+                    crud_button(kind=CrudButtonKind.UPDATE, action=lambda _: post_user_message(state, f"I would like to edit the {caption}."))
                     cols = 2
                     col_style = 'grid-template-columns: auto auto;'
                 else:
@@ -463,7 +471,7 @@ def view_attributes(state: APPState, caption: str, attributes: list[Attribute], 
 def image_drop_field_editor(
         state: APPState,
         caption: str, 
-        kind: str,
+        kind: SelectedKind,
         get_image_filepath: Callable[[], str | None] = lambda: None,
         on_upload: Callable[[UploadEventArguments], None] = lambda _: None,
         aspect_ratio: str = "3/2",
@@ -490,7 +498,7 @@ def image_drop_field_editor(
 
 def view_image_choices(
     state: APPState,
-    kind: str,
+    kind: SelectedKind,
     images_path: str,
     get_images: Callable[[], list[str]],
     get_selection: Callable[[], list[str]],
@@ -507,7 +515,7 @@ def view_image_choices(
             ui.button(icon="add").tooltip("Generate a new image")
         full_width_image_selector_grid(
             state=state,
-            kind=kind,
+            image_kind_name=kind,
             images_path=images_path,
             get_images=get_images,
             get_selection=get_selection,
@@ -517,7 +525,12 @@ def view_image_choices(
 
     
 
-def aspect_ratio_picker(state: APPState, parent: ui.element, caption: str, get_aspect_ratio: Callable[[], str], set_aspect_ratio: Callable[[FrameLayout], None]):
+def aspect_ratio_picker(
+        state: APPState, 
+        parent: ui.element, 
+        caption: str, 
+        get_aspect_ratio: Callable[[], str],
+        set_aspect_ratio: Callable[[FrameLayout], None]):
     """
     A field editor for selecting an aspect ratio.
     Args:
@@ -554,11 +567,11 @@ def view_character_references(state: APPState, parent: BaseModel):
         with expansion.add_slot('header'):
             header("Characters", 2)
             ui.space()
-            crud_button("create", lambda: post_user_message(state, "I would like to add a new character reference."))
+            crud_button(CrudButtonKind.CREATE, lambda: post_user_message(state, "I would like to add a new character reference."))
 
         view_all_instances(
             state=state, 
-            kind="character-reference",
+            kind=SelectedKind.CHARACTER_REFERENCE,
             get_instances=lambda: parent.characters,
             get_image_locator=lambda x: storage.find_variant_image(series_id=x.series, character_id=x.character, variant_id=x.variant),
             get_name= lambda _, x: x.name, 
@@ -578,14 +591,15 @@ def view_reference_images(state: APPState, parent: BaseModel, get_images: Callab
             with expansion.add_slot('header'):
                 header("Reference Images", 2)
                 ui.space()
-                crud_button("create", lambda: post_user_message(state, "I would like to add a new reference image."))
+                crud_button(CrudButtonKind.CREATE, lambda: post_user_message(state, "I would like to add a new reference image."))
 
             # TODO: Add drop region to add new reference image
             with view_all_instances(
                 state=state, 
-                kind="reference-image",
+                kind=SelectedKind.REFERENCE_IMAGE,
                 get_instances=lambda: get_images(),
-                get_name= lambda _, x: x.relation.value + " image"
+                get_name= lambda _, x: x.relation.value + " image",
+                get_image_locator=lambda x: x.image
             ):
                 uploader_card(state, on_upload=on_upload )
         expansion.open()

@@ -11,6 +11,7 @@ from nicegui import ui
 from gui.state import APPState
 from gui.elements import header
 from storage.generic import GenericStorage
+from gui.selection import SelectedKind
 
 
 def view_reference_image(
@@ -23,7 +24,7 @@ def view_reference_image(
     this_sel = selection[-1]
     parent_sel = selection[-2]
 
-    if parent_sel.kind == "panel":
+    if parent_sel.kind == SelectedKind.PANEL:
         primary_key = {
             "series_id": selection[-5].id,
             "issue_id": selection[-4].id,
@@ -100,7 +101,7 @@ def view_reference_image(
     with state.details:
         full_width_image_selector_grid(
             state=state,
-            kind ="reference-image",
+            image_kind_name = "reference image",
             upload_image=upload_image,
             get_selection=get_selection,
             set_selection=set_selection,

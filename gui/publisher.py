@@ -2,8 +2,7 @@ import os
 from loguru import logger
 from typing import BinaryIO
 from nicegui import ui
-from schema.publisher import Publisher
-from gui.elements import header, crud_button, markdown_field_editor, full_width_image_selector_grid, view_all_instances, view_attributes, Attribute
+from gui.elements import header, crud_button, markdown_field_editor, full_width_image_selector_grid, view_all_instances, view_attributes, Attribute, CrudButtonKind
 from gui.messaging import post_user_message
 from gui.state import APPState
 from storage.generic import GenericStorage
@@ -62,7 +61,7 @@ def view_publisher(state: APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(publisher.name.title(), 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current publisher."),size=1)
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current publisher."),size=1)
 
 
         # Below that we have a full width row for editing the publisher's description
@@ -86,7 +85,7 @@ def view_publisher(state: APPState):
             # preferred image for the publisher's logo.
             full_width_image_selector_grid(
                 state=state,
-                kind="logo image",
+                image_kind_name="logo image",
                 get_images=lambda: storage.find_publisher_images(publisher_id=publisher.id),
                 get_selection=lambda : publisher.image,
                 set_selection=set_image,

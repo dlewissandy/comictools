@@ -2,9 +2,9 @@ import os
 from nicegui import ui
 from loguru import logger
 from nicegui.events import UploadEventArguments
-from gui.selection import SelectionItem
+from gui.selection import SelectionItem, SelectedKind
 from gui.elements import init_cardwall
-from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button
+from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button, CrudButtonKind
 from gui.messaging import post_user_message
 from schema.scene import SceneModel
 from schema.panel import FrameLayout
@@ -67,7 +67,7 @@ def view_scene(state: APPState):
             with ui.column().classes('w-1/4'):
                 image_field_editor(
                     state=state, 
-                    kind="pick-style", 
+                    kind=SelectedKind.PICK_STYLE, 
                     get_caption = lambda: "Style", 
                     get_id = lambda: style.id if style else None, 
                     get_image_filepath = lambda: storage.find_style_image(style.id) if style else None
@@ -77,7 +77,7 @@ def view_scene(state: APPState):
             with expansion.add_slot('header'):
                 header("Panels", 2)
                 ui.space()
-                crud_button("create", lambda: post_user_message(state, "I would like to add a new panel to the scene."))
+                crud_button(CrudButtonKind.CREATE, lambda: post_user_message(state, "I would like to add a new panel to the scene."))
             expansion.value = True
 
             panels = storage.find_panels(

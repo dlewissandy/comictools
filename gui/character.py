@@ -6,7 +6,8 @@ from gui.elements import (
     header, 
     crud_button, 
     markdown_field_editor, 
-    view_all_instances
+    view_all_instances,
+    CrudButtonKind
     )
 
 from gui.messaging import new_item_messager
@@ -46,7 +47,7 @@ def view_character(state:APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(character.name.title(), 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current character."),size=1)
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current character."),size=1)
 
         markdown_field_editor(state, "Description", character.description)        
 
@@ -120,7 +121,7 @@ def view_character_reference(state: APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"{character.name}", 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current character reference."),size=1)
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current character reference."),size=1)
 
         view_all_instances(
             state,

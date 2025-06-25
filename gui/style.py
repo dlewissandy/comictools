@@ -1,12 +1,15 @@
 from loguru import logger
 from gui.state import APPState
-from gui.elements import header, view_all_instances, markdown_field_editor, view_attributes, Attribute, image_drop_field_editor, full_width_image_selector_grid, crud_button
+from gui.elements import (
+    header, view_all_instances, markdown_field_editor, view_attributes, Attribute, image_drop_field_editor, full_width_image_selector_grid, crud_button,
+    CrudButtonKind)
 from gui.messaging import post_user_message
 from schema.style.comic import ComicStyle
 from gui.constants import TAILWIND_CARD
 from nicegui import ui
 from gui.state import APPState
 from storage.generic import GenericStorage
+from gui.selection import SelectedKind
 
 def view_style(state: APPState):
     """
@@ -31,7 +34,7 @@ def view_style(state: APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(style.name.title(), 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current style."),size=1)
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current style."),size=1)
 
         markdown_field_editor(
             state=state,
@@ -61,7 +64,7 @@ def view_style(state: APPState):
             ], individual_icons=False, header_size=2):
             full_width_image_selector_grid(
                 state=state,
-                kind="art-style-image",
+                image_kind_name="art style image",
                 get_images = lambda: storage.find_style_images(style_id=style.id, example_type="art"),
                 get_selection=lambda: style.image["art"] if isinstance(style.image, dict) else None,
                 set_selection=lambda img_id: set_image(image_locator=img_id, example_type="art"),
@@ -90,7 +93,7 @@ def view_style(state: APPState):
         ],individual_icons=False, header_size=2):
             full_width_image_selector_grid(
                 state=state,
-                kind="character-style-image",
+                image_kind_name="character style image",
                 get_images=lambda: storage.find_style_images(style_id=style.id, example_type="character"),
                 get_selection=lambda: style.image.get("character",None) if isinstance(style.image, dict) else None,
                 set_selection=lambda img_id: set_image(image_locator=img_id, example_type="character"),
@@ -121,7 +124,7 @@ def view_style(state: APPState):
                         k = key.replace('_','-')
                         full_width_image_selector_grid(
                             state=state,
-                            kind=f"{k}-style-example-image",
+                            image_kind_name=f"{k} style example image",
                             
                             get_selection=lambda k=k: style.image.get(k.lower().replace("_", "-"),None),
                             set_selection=lambda img_id, k=k: set_image(image_locator=img_id, example_type=k.lower().replace("_", "-")),
@@ -154,18 +157,18 @@ def view_pick_style(state: APPState):
     storage: GenericStorage = state.storage
     
     parent_kind = selection[-2].kind
-    if parent_kind == "issue":
+    if parent_kind == SelectedKind.ISSUE:
         issue_id = selection[-2].id
         series_id = selection[-3].id
         parent = storage.find_issue(series_id=series_id, id=issue_id)
         writer = lambda: storage.update_issue(data=parent)
-    elif parent_kind == "scene":
+    elif parent_kind == SelectedKind.SCENE:
         scene_id = selection[-2].id
         issue_id = selection[-3].id
         series_id = selection[-4].id
         parent = storage.find_scene(series_id=series_id, issue_id=issue_id, scene_id=scene_id)
         writer = lambda: storage.update_scene(data=parent)
-    elif parent_kind in ["front-cover", "back-cover", "inside-front-cover", "inside-back-cover"]:
+    elif parent_kind == SelectedKind.COVER:
         issue_id = selection[-3].id
         series_id = selection[-4].id
         location = CoverLocation(parent_kind[:-6].replace("-", " "))
@@ -195,44 +198,45 @@ def view_pick_style(state: APPState):
         )           
 
 
-def view_pick_art_style_image(
-    state: APPState
-):
-    from gui.elements import full_width_image_selector_grid
-    selection = state.selection
-    style_id = selection[-2].id
-    style = ComicStyle.read(id=style_id)
-    if style is None:
-        msg = f"Style with ID {style_id} not found."
-        logger.error(msg)
-        header("Error", 0)
-        header(msg, 2).style("color: red;")
-        return
+# TODO: I think that this is no longer used - picker is inline.
+# def view_pick_art_style_image(
+#     state: APPState
+# ):
+#     from gui.elements import full_width_image_selector_grid
+#     selection = state.selection
+#     style_id = selection[-2].id
+#     style = ComicStyle.read(id=style_id)
+#     if style is None:
+#         msg = f"Style with ID {style_id} not found."
+#         logger.error(msg)
+#         header("Error", 0)
+#         header(msg, 2).style("color: red;")
+#         return
 
-    def get_selection():
-        style = ComicStyle.read(id=style_id)
-        return style.image_filepath(img_type="art")
+#     def get_selection():
+#         style = ComicStyle.read(id=style_id)
+#         return style.image_filepath(img_type="art")
     
-    def set_selection(id: str):
-        style = ComicStyle.read(id=style_id)
-        style.set_image(img_type="art", image_id=id)
-        style.write()
-        state["is_dirty"] = True
+#     def set_selection(id: str):
+#         style = ComicStyle.read(id=style_id)
+#         style.set_image(img_type="art", image_id=id)
+#         style.write()
+#         state["is_dirty"] = True
 
-    def get_images():
-        style = ComicStyle.read(id=style_id)
-        return style.all_images(img_type="art")
+#     def get_images():
+#         style = ComicStyle.read(id=style_id)
+#         return style.all_images(img_type="art")
     
-    image_path = style.image_path(img_type="art")
+#     image_path = style.image_path(img_type="art")
 
-    with state.details:
-        header(f"Art Style Image for {style.name}", 1)
-    full_width_image_selector_grid(
-        state=state,
-        kind ="art-style-image",
-        images_path = image_path,
-        get_selection=get_selection,
-        set_selection=set_selection,
-        get_images=get_images,
-    )
+#     with state.details:
+#         header(f"Art Style Image for {style.name}", 1)
+#     full_width_image_selector_grid(
+#         state=state,
+#         kind ="art-style-image",
+#         images_path = image_path,
+#         get_selection=get_selection,
+#         set_selection=set_selection,
+#         get_images=get_images,
+#     )
     

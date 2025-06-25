@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from schema.dialog import Naration, Dialogue
+from schema.dialog import Naration, Dialogue, NarationLocation
 from schema.enums import FrameLayout
 from schema.reference_image import ReferenceImage
 from schema.character_reference import CharacterRef
@@ -49,21 +49,21 @@ class Panel(BaseModel):
 # """
 #         return text
     
-#     def format_dialogue(self) -> str:
-#         """
-#         format the dialogue for display
-#         """
-#         text = ""
-#         top = "\n\n".join([n.format() for n in self.narration if n.location == NarationLocation.TOP])
-#         bottom = "\n\n".join([n.format() for n in self.narration if n.location == NarationLocation.BOTTOM])
-#         dialogue = "\n\n".join([d.format() for d in self.dialogue])
-#         if top:
-#             text += top + f"\n\n"
-#         if dialogue:
-#             text += dialogue + "\n\n"
-#         if bottom:
-#             text += bottom
-#         return text
+    def format_dialogue(self) -> str:
+        """
+        format the dialogue for display
+        """
+        text = ""
+        top = "\n\n".join([n.format() for n in self.narration if n.location == NarationLocation.TOP])
+        bottom = "\n\n".join([n.format() for n in self.narration if n.location == NarationLocation.BOTTOM])
+        dialogue = "\n\n".join([d.format() for d in self.dialogue])
+        if top:
+            text += top + f"\n\n"
+        if dialogue:
+            text += dialogue + "\n\n"
+        if bottom:
+            text += bottom
+        return text
 
     
 

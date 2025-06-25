@@ -2,14 +2,14 @@ import os
 from typing import Tuple, Optional, List
 from gui.state import APPState
 from helpers.constants import COMICS_FOLDER
-from agents import Agent, function_tool
+from agents import Agent, function_tool, Tool
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from schema import CharacterVariant
 from generators.character import render_character_image
 from schema.style.comic import ComicStyle
 
 
-def variant_agent(state: APPState) -> Agent | str:
+def variant_agent(state: APPState, tools: dict[str, Tool]) -> Agent | str:
 
     @function_tool
     def all_style_names() -> List[str]:

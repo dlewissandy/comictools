@@ -1,9 +1,13 @@
 from nicegui import ui
 from loguru import logger
-from gui.selection import SelectionItem
+from gui.selection import SelectionItem, SelectedKind
 from schema import TitleBoardModel, CoverLocation, ComicStyle
 from gui.state import APPState
-from gui.elements import header, crud_button, view_reference_images, view_character_references, Attribute, markdown_field_editor, image_field_editor, full_width_image_selector_grid, aspect_ratio_picker, TAILWIND_CARD
+from gui.elements import (
+    header, crud_button, 
+    view_reference_images, view_character_references, Attribute, markdown_field_editor, image_field_editor, full_width_image_selector_grid, aspect_ratio_picker, TAILWIND_CARD,
+    CrudButtonKind
+)
 from gui.messaging import post_user_message
 from storage.generic import GenericStorage
 
@@ -38,7 +42,7 @@ def view_cover(state: APPState, location: CoverLocation):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(cover.location.value.title()+ " Cover", 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current publisher."),size=1)    
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current publisher."),size=1)    
         with ui.row().classes('w-full flex-nowrap'):
             with ui.column().classes('w-3/4'):
                 markdown_field_editor(state, "description", cover.foreground)
@@ -55,7 +59,7 @@ def view_cover(state: APPState, location: CoverLocation):
                 
                 image_field_editor(
                     state=state, 
-                    kind="pick-style", 
+                    kind=SelectedKind.PICK_STYLE, 
                     get_caption=lambda: "Style", 
                     get_id =lambda: style.id if style else None, 
                     get_image_filepath=lambda: storage.find_style_image(style.id) if style else None
@@ -70,7 +74,7 @@ def view_cover(state: APPState, location: CoverLocation):
         with ui.card().classes(TAILWIND_CARD).style('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800'):
             full_width_image_selector_grid(
                 state=state,
-                kind=f"{k}-cover-image",
+                image_kind_name="cover image",
                 upload_image=lambda name, data, mime_type: storage.upload_cover_image(series_id=series_id, issue_id=issue_id, location=location, image_name=name, image_data=data, mime_type=mime_type),
                 get_images=lambda k=k: storage.find_cover_images(series_id=series_id, issue_id=issue_id, location=location),
                 get_selection=lambda k=k: cover.image,

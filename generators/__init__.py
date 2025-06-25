@@ -11,10 +11,10 @@ from .series import series_agent
 from .style import style_agent
 from .variant import variant_agent
 from gui.state import APPState
-from agents import Agent
+from agents import Agent, Tool
 
 
-def init_agents(state: APPState) -> dict[str, Agent]:
+def init_agents(state: APPState, tools: dict[str, Tool]) -> dict[str, Agent]:
     """
     Initialize the agents for the application.
     
@@ -25,22 +25,22 @@ def init_agents(state: APPState) -> dict[str, Agent]:
         A dictionary of initialized agents.
     """
     agents = {
-        "all_publishers": all_publishers_agent(state),
-        "all_series": all_series_agent(state),
-        "all_styles": all_styles_agent(state),
-        "character": character_agent(state),
-        "style": style_agent(state),
-        "series": series_agent(state),
-        "issue": issue_agent(state),
-        "scene": scene_agent(state),
-        "cover": cover_agent(state),
-        "panel": panel_agent(state),
-        "publisher": publisher_agent(state),
-        "variant": variant_agent(state),
-        "front-cover": cover_agent(state),
-        "back-cover": cover_agent(state),
-        "inside-front-cover": cover_agent(state),
-        "inside-back-cover": cover_agent(state),
+        "all_publishers": all_publishers_agent(state=state, tools=tools),
+        "all_series": all_series_agent(state=state, tools=tools),
+        "all_styles": all_styles_agent(state=state, tools=tools),
+        "character": character_agent(state=state, tools=tools),
+        "style": style_agent(state=state, tools=tools),
+        "series": series_agent(state=state, tools=tools),
+        "issue": issue_agent(state=state, tools=tools),
+        "scene": scene_agent(state=state, tools=tools),
+        "cover": cover_agent(state=state, tools=tools),
+        "panel": panel_agent(state=state, tools=tools),
+        "publisher": publisher_agent(state=state, tools=tools),
+        "variant": variant_agent(state=state, tools=tools),
+        "front-cover": cover_agent(state=state, tools=tools),
+        "back-cover": cover_agent(state=state, tools=tools),
+        "inside-front-cover": cover_agent(state=state, tools=tools),
+        "inside-back-cover": cover_agent(state=state, tools=tools),
     }
     return agents
 

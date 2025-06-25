@@ -3,13 +3,13 @@ import os
 
 from typing import Tuple
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from agents import Agent, function_tool
+from agents import Agent, function_tool, Tool
 from gui.state import APPState
 from schema import ComicStyle, ArtStyle, DialogType, BubbleStyle, BubbleStyles, CharacterStyle
 from loguru import logger
 from storage.generic import GenericStorage
 
-def style_agent(state: APPState) -> Agent:
+def style_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
     storage: GenericStorage = state.storage
     
     def get_comic_style() -> ComicStyle:
@@ -20,7 +20,7 @@ def style_agent(state: APPState) -> Agent:
             The ComicStyle object if found, otherwise None.
         """
         selection = state.selection
-        if selection and selection[-1].kind == "style":
+        if selection and selection[-1].kind == SelectedKind.STYLE:
             return storage.read_style(id=selection[-1].id)
         return None
     

@@ -1,11 +1,15 @@
 import os
 from loguru import logger
 from nicegui import ui
-from gui.elements import markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes, crud_button, post_user_message
+from gui.elements import (
+    markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes, crud_button, post_user_message,
+    CrudButtonKind
+    )
 from schema.issue import Issue
 from schema.style.comic import ComicStyle
 from gui.state import APPState
 from gui.messaging import post_user_message
+from gui.selection import SelectionItem, SelectedKind
 
 def view_issue(state:APPState):
     """
@@ -43,7 +47,7 @@ def view_issue(state:APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message("I would like to delete the current issue."))
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message("I would like to delete the current issue."))
 
         
         with ui.row().classes('w-full flex-nowrap'):
@@ -54,7 +58,7 @@ def view_issue(state:APPState):
             with ui.column().classes('w-1/4'):
                 image_field_editor(
                     state=state, 
-                    kind="pick-style", 
+                    kind=SelectedKind.PICK_STYLE, 
                     get_caption=lambda: "Style", 
                     get_id =lambda: style.id if style else None, 
                     get_image_filepath=lambda: storage.find_style_image(style_id=style.id) if style else None
@@ -82,7 +86,7 @@ def view_issue(state:APPState):
                 state=state,
                 get_instances = lambda: storage.find_covers(series_id=series_id, issue_id=issue_id),
                 get_image_locator=lambda _: storage.find_issue_image(series_id=series_id, issue_id=issue_id),
-                kind=lambda cover: cover.location.replace("_", "-").lower() + "-cover",
+                kind=SelectedKind.COVER,
                 get_name=lambda _,cover: f"{cover.location.replace('_', ' ').title()} Cover",
                 aspect_ratio="6/9"
             )
@@ -94,7 +98,7 @@ def view_issue(state:APPState):
                 state=state,
                 get_instances = lambda: storage.find_scenes(series_id=series_id, issue_id=issue_id),
                 get_image_locator=lambda scene: storage.find_scene_image(series_id=series_id, issue_id=issue_id, scene_id=scene.id),
-                kind="scene",
+                kind=SelectedKind.SCENE,
                 aspect_ratio="16/9",
                 get_name=lambda i,scene: f"Scene {i+1}:{scene.name}",
                 get_markdown=lambda scene: scene.story,

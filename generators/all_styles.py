@@ -1,6 +1,6 @@
 from loguru import logger
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from agents import Agent, function_tool
+from agents import Agent, function_tool,Tool
 from gui.state import APPState
 from schema.style.comic import ComicStyle
 from schema.style.art import ArtStyle
@@ -8,8 +8,8 @@ from schema.style.character import CharacterStyle
 from schema.style.dialog import BubbleStyles
 
 
-def all_styles_agent(state: APPState) -> Agent:
-    from gui.selection import SelectionItem
+def all_styles_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
+    from gui.selection import SelectionItem, SelectedKind
     from storage.generic import GenericStorage
     storage: GenericStorage = state.storage
 
@@ -56,46 +56,11 @@ def all_styles_agent(state: APPState) -> Agent:
         )
         style_id = storage.create_style(style)
         selection = state.selection
-        new_itm = SelectionItem(name=style.name, id=style_id, kind='style')
+        new_itm = SelectionItem(name=style.name, id=style_id, kind=SelectedKind.STYLE)
         new_sel = [s for s in selection]+[new_itm]
         state.change_selection(new=new_sel, clear_history=False)
         return style
         
-    @function_tool
-    def get_comic_style_names() -> list[str]:
-        """
-        Get a list of all comic style names.
-        
-        Returns:
-            A list of comic style names.
-        """
-        styles = storage.read_all_styles()
-        return [style.name for style in styles]
-    
-    @function_tool
-    def get_comic_styles() -> list[str]:
-        """
-        Get a list of all the comic styles.
-        
-        Returns:
-            A list of comic styles.
-        """
-        return storage.read_all_styles()
-
-    @function_tool
-    def get_comic_style_by_name(name: str) -> ComicStyle | None:
-        """
-        Get the detialed information about a comic book style given its name.   Note:
-        you may need to check the name of the style first using `get_comic_style_names()`
-        
-        Args:
-            name: The name of the comic style.
-        
-        Returns:
-            The ComicStyle object if found, otherwise None.   If this function returns None,
-            you may want to check for similar names using `get_comic_style_names()`.
-        """
-        return storage.find_style(name=name)
 
     @function_tool
     def select_comic_style(name: str) -> str:
@@ -115,28 +80,12 @@ def all_styles_agent(state: APPState) -> Agent:
         sel_itm = SelectionItem(
             id=style.id,
             name=style.name,
-            kind="style",
+            kind=SelectedKind.STYLE,
         )
         state.change_selection(new=[s for s in state.selection] + [sel_itm], clear_history=False)
         return f"Selected comic style: {style.name}"
 
-    @function_tool
-    def delete_style(name: str) -> str:
-        """
-        Delete a style by name.   You MUST ask for confirmation before using this tool.
-        
-        Args:
-            name: The name of the style to delete.
-        
-        Returns:
-            A status message indicating the result of the deletion.
-        """
-        style = storage.find_style(name=name)
-        if style is None:
-            return f"Style '{name}' not found."
-        storage.delete_style(style)
-        state.is_dirty = True
-        return f"Deleted style: {style.name}"
+
 
     return Agent(
         name="Home Screen Assistant",
@@ -147,12 +96,15 @@ def all_styles_agent(state: APPState) -> Agent:
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,
         tools = [
+            tools.get('get_current_selection', None),
+            
             select_comic_style,
-            get_comic_styles,
-            get_comic_style_by_name,
-            get_comic_style_names,
+
+            tools.get('get_all_styles', None),
+            tools.get('find_style', None),
+
             create_style,
-            delete_style
+            tools.get('delete_style', None),
         ]
     )
 

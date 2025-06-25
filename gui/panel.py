@@ -15,8 +15,10 @@ from gui.elements import (
     TAILWIND_CARD, 
     full_width_image_selector_grid, 
     view_reference_images,
-    view_character_references )
-from gui.selection import SelectionItem
+    view_character_references,
+    CrudButtonKind
+      )
+from gui.selection import SelectionItem, SelectedKind
 from gui.state import APPState
 from gui.messaging import post_user_message
 from storage.generic import GenericStorage
@@ -117,7 +119,7 @@ def view_panel(state: APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header("Panel " +  str(panel_number), 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current panel."),size=1)    
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current panel."),size=1)    
         with ui.row().classes('w-full flex-nowrap'):
             with ui.column().classes('w-3/4'):
                 markdown_field_editor(state, "Description", panel.description)
@@ -130,7 +132,7 @@ def view_panel(state: APPState):
             # TODO: Add ability to reorder (drag?) the cards.
             full_width_image_selector_grid(
                 state=state,
-                kind=f"panel-image",
+                image_kind_name="panel image",
                 upload_image=lambda name, data, mime_type: storage.upload_panel_reference_image(
                     series_id=series_id, 
                     issue_id=issue_id, 

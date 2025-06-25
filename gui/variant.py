@@ -10,7 +10,8 @@ from gui.elements import (
     view_all_instances,
     full_width_image_selector_grid,
     view_attributes,
-    Attribute
+    Attribute,
+    CrudButtonKind
     )
 
 from gui.messaging import new_item_messager
@@ -65,7 +66,7 @@ def view_character_variant(state:APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"{character.name.title()} ({variant.name.title()})", 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current character variant."), size=1)
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current character variant."), size=1)
 
 
         with view_attributes(state,caption="Description", attributes=[
@@ -81,7 +82,7 @@ def view_character_variant(state:APPState):
             with ui.row().classes('w-full flex-nowrap'):
                 header("Styled Images", 2).classes('ml-4')
                 ui.space()
-                crud_button(kind="create", action=lambda _: post_user_message(state, "I would like a new styled image for the current character variant."))
+                crud_button(kind=CrudButtonKind.CREATE, action=lambda _: post_user_message(state, "I would like a new styled image for the current character variant."))
             view_all_instances(
                 state=state,
                 get_instances=lambda: [StyledImage(style_id=style_id, series_id=series_id, character_id=character_id, variant_id=variant_id, image_id=image_id) for style_id, image_id in variant.images.items()],
@@ -152,7 +153,7 @@ def view_character_reference(state: APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"{character.name}", 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current character reference."),size=1)
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current character reference."),size=1)
 
         view_all_instances(
             state,

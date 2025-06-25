@@ -2,12 +2,13 @@ import os
 from loguru import logger
 from nicegui.events import UploadEventArguments
 from schema.series import Series
-from gui.elements import markdown, header, uploader_card, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message, view_attributes
+from gui.elements import (
+    markdown, header, uploader_card, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message, view_attributes, CrudButtonKind)
 from schema.publisher import Publisher
 from nicegui import ui
 from gui.state import APPState
 from storage.generic import GenericStorage
-from gui.selection import SelectionItem
+from gui.selection import SelectionItem, SelectedKind
 
 def view_series(state: APPState):
     from gui.messaging import new_item_messager
@@ -53,7 +54,7 @@ def view_series(state: APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(series.name.title(), 0)
             ui.space()
-            crud_button(kind="delete", action=lambda _: post_user_message(state, "I would like to delete the current series."),size=1)
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current series."),size=1)
             
         # create a row with two colunms.
         with ui.row().classes('w-full flex-nowrap'):
@@ -62,7 +63,13 @@ def view_series(state: APPState):
                 markdown_field_editor(state, "Description", series.description)
             with ui.column().classes('w-1/4'):
                 # The second column is 1/4 of the width and has a cardwall displaying the publisher info.
-                image_field_editor(state, "pick-publisher", lambda: "Publisher", get_id, lambda: storage.find_publisher_image(publisher_id=pub.id), caption_size=2)
+                image_field_editor(
+                    state=state, 
+                    kind = SelectedKind.PICK_PUBLISHER, 
+                    get_caption=lambda: "Publisher", 
+                    get_id=get_id, 
+                    get_image_filepath=lambda: storage.find_publisher_image(publisher_id=pub.id) if pub else None,
+                    caption_size=2)
         
         # A cardwall for viewing and adding issues of the comic.
         with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:

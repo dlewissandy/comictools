@@ -4,6 +4,21 @@ from uuid import uuid4
 
 from helpers.constants import IMAGE_EXTENSIONS, STYLES_FOLDER
 
+def normalize_id(text: str) -> str:
+    """
+    Normalize a string to be used as an ID.
+    
+    This function converts the string to lowercase, replaces spaces with hyphens,
+    and removes any non-alphanumeric characters except for hyphens.
+    
+    Args:
+        text (str): The string to normalize.
+        
+    Returns:
+        str: The normalized string.
+    """
+    return ''.join(c if c.isalnum() or c == '-' else '' for c in text.lower().replace(' ', '-'))    
+
 def subfolders(path: str) -> list[str]:
   """Lists all subfolders within a given folder path.
 

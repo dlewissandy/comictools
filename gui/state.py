@@ -20,7 +20,7 @@ def elipsis(text: str, max_length: int = 50) -> str:
 
 
 class APPState:
-    from gui.selection import SelectionItem
+    from gui.selection import SelectionItem, SelectedKind
     # GUI CONTROLS
     breadcrumbs: ui.button_group
     details: ui.scroll_area
@@ -30,6 +30,7 @@ class APPState:
     
     def __init__(self, breadcrumbs, details, history, user_input, send_button, storage: GenericStorage, dark_mode: bool = False, selection: list[SelectionItem] = []):
         from generators import init_agents
+        from generators.tools import init_tools
         # GUI ELEMENTS
         self.breadcrumbs = breadcrumbs
         self.details = details
@@ -47,7 +48,8 @@ class APPState:
         self._storage = storage
 
         # AGENTS
-        self._agents = init_agents(self)
+        tools = init_tools(self)
+        self._agents = init_agents(self, tools=tools)
         
 
         
@@ -312,7 +314,6 @@ class APPState:
         from gui.panel import view_panel
         from gui.cover import view_cover
         from gui.publisher import view_publisher, view_pick_publisher
-        from gui.style import view_pick_art_style_image
         from gui.reference_image import view_reference_image
         from gui.variant import view_character_variant
         from gui.styled_image import view_styled_image
@@ -324,18 +325,19 @@ class APPState:
             raise ValueError("Selection cannot be empty.  Please select an item first.")
 
         kind = selection[-1].kind
+        identifier = selection[-1].id
         
-        match kind:
-            case "all_series":
+        match kind.value:
+            case "all-series":
                 return view_all_series(self)
-            case "all_publishers":
+            case "all-publishers":
                 return view_all_publishers(self)
-            case "all_styles":
+            case "all=styles":
                 return view_all_styles(self)
             case "style":
                 return view_style(self)
-            case "art-style-image":
-                return view_pick_art_style_image(self)
+            # case "art-style-image":
+            #     return view_pick_art_style_image(self)
             case "series":
                 return view_series(self)
             case "character":
@@ -346,14 +348,8 @@ class APPState:
                 return view_scene(self)
             case "panel":
                 return view_panel(self)
-            case "front-cover":
-                return view_cover(self, location=CoverLocation.FRONT)
-            case "back-cover":
-                return view_cover(self, location=CoverLocation.BACK)
-            case "inside-front-cover":
-                return view_cover(self, location=CoverLocation.INSIDE_FRONT)
-            case "inside-back-cover":
-                return view_cover(self, location=CoverLocation.INSIDE_BACK)
+            case "cover" if identifier in CoverLocation._value2member_map_:
+                return view_cover(self, location=CoverLocation(identifier))
             case "publisher":
                 return view_publisher(self)
             case "pick-publisher":
@@ -405,7 +401,7 @@ class APPState:
 
 
 def breadcrumb_selector(state: APPState):
-    from gui.selection import SelectionItem
+    from gui.selection import SelectionItem, SelectedKind
 
     selection = state.selection
     if selection == []:
@@ -418,9 +414,9 @@ def breadcrumb_selector(state: APPState):
 
     
     new_sel = [selection[0]]
-    series_sel = [SelectionItem(kind="all_series", name="Series", id=None)]
-    publishers_sel = [SelectionItem(kind="all_publishers", name="Publishers", id=None)]
-    styles_sel = [SelectionItem(kind="all_styles", name="Styles", id=None)]
+    series_sel = [SelectionItem(kind=SelectedKind.ALL_SERIES, name="Series", id=None)]
+    publishers_sel = [SelectionItem(kind=SelectedKind.ALL_PUBLISHERS, name="Publishers", id=None)]
+    styles_sel = [SelectionItem(kind=SelectedKind.ALL_STYLES, name="Styles", id=None)]
 
     primary_selection.on("click", lambda _, new_sel=new_sel: state.change_selection( new=new_sel, clear_history=True))
     all_series.on_click(lambda _, new_sel=series_sel: state.change_selection( new=new_sel, clear_history=True))

@@ -1,14 +1,12 @@
 from typing import Tuple, Optional, List
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from agents import Agent, function_tool
+from agents import Agent, function_tool, Tool
 from gui.state import APPState
 from schema import TitleBoardModel, CoverLocation, FrameLayout, CharacterRef, Issue
-from gui.selection import SelectionItem
+from gui.selection import SelectionItem, SelectedKind
 
-def issue_agent(state: APPState) -> Agent:
+def issue_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
     from generators.tools import dereference_issue as _get_issue
-    from generators.tools import delete_issue as _delete_issue
-    from generators.tools import get_style as _get_style
     from generators.tools import normalize_id, normalize_name
         
     @function_tool
@@ -20,33 +18,6 @@ def issue_agent(state: APPState) -> Agent:
             The currently selected issue.
         """
         return _get_issue(state, index=-2)
-
-    @function_tool
-    def delete_current_issue() -> str:
-        """
-        Delete the currently selected comic book issue.   NOTE: YOU MUST ASK FOR
-        CONFIRMATION BEFORE DELETING AN ISSUE.   THIS OPERATION CANNOT BE UNDONE.
-        
-        Returns:
-            A message indicating the result of the deletion operation.
-        """
-        issue = _get_issue(state, index=-2)
-        if isinstance(issue, str):
-            return issue
-        return _delete_issue(state=state, issue_id=issue.id, series_id=issue.series_id)
-
-    @function_tool
-    def get_issue_style() -> str:
-        """
-        Get the style of the currently selected comic book issue.
-        
-        Returns:
-            The style of the currently selected issue.
-        """
-        issue = _get_issue(state, index=-2)
-        if isinstance(issue, str):
-            return issue
-        return _get_style(state=state, style_id=issue.style)
 
     @function_tool
     def create_cover(location: CoverLocation, characters: list[str], foreground: str, background: str) -> str:
@@ -91,7 +62,7 @@ def issue_agent(state: APPState) -> Agent:
 
         )
 
-        kind = normalize_id(location.value + "-cover")
+        kind = SelectedKind.COVER
         name = normalize_name(kind)
         new_sel = SelectionItem(id=cover.id, kind=kind, name=name,)
         cover.write()
@@ -107,7 +78,8 @@ def issue_agent(state: APPState) -> Agent:
         model=LANGUAGE_MODEL,
         
         tools=[
-            delete_current_issue,
+            tools.get('delete_issue', None),
+            tools.get('find_issue_by_name', None),
             get_current_issue,
 
             create_cover,

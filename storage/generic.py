@@ -70,6 +70,19 @@ class GenericStorage(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_series(self, series_id: str) -> Optional[Series]:
+        """
+        Find a series by its name.
+        
+        Args:
+            name: The series_id of the series to find.
+        
+        Returns:
+            The Series object if found, otherwise None.
+        """
+        pass
+
     # -------------------------------------------------------------------------
     # Issue CRUD Operations
     # -------------------------------------------------------------------------
@@ -234,7 +247,7 @@ class GenericStorage(ABC):
     # CharacterVariant CRUD Operations
     # -------------------------------------------------------------------------
     @abstractmethod
-    def create_character_variant(self, variant_data):
+    def create_character_variant(self, data: CharacterVariant) -> str:
         pass
 
     @abstractmethod
