@@ -10,7 +10,9 @@ from loguru import logger
 from storage.generic import GenericStorage
 
 def style_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
+    from gui.selection import SelectedKind
     storage: GenericStorage = state.storage
+
     
     def get_comic_style() -> ComicStyle:
         """
@@ -21,7 +23,7 @@ def style_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         """
         selection = state.selection
         if selection and selection[-1].kind == SelectedKind.STYLE:
-            return storage.read_style(id=selection[-1].id)
+            return storage.read_object(cls=ComicStyle, primary_key={"style_id": selection[-1].id})
         return None
     
     @function_tool
@@ -407,6 +409,8 @@ def style_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,
         tools=[
+            tools.get('get_current_selection', None),
+
             # UPDATERS
             update_description,
             update_art_style,

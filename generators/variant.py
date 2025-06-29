@@ -10,17 +10,8 @@ from schema.style.comic import ComicStyle
 
 
 def variant_agent(state: APPState, tools: dict[str, Tool]) -> Agent | str:
+    storage = state.storage
 
-    @function_tool
-    def all_style_names() -> List[str]:
-        """
-        Get all available comic style names.
-        
-        Returns:
-            A list of all comic style names.
-        """
-        styles = ComicStyle.read_all()
-        return [style.name for style in styles]
 
     @function_tool
     def render_styled_image(style_name: str):
@@ -60,20 +51,37 @@ def variant_agent(state: APPState, tools: dict[str, Tool]) -> Agent | str:
         style: ComicStyle = style
 
 
-        character_name = variant.character.replace('-', ' ').title()
+        character_name = variant.character_id.replace('-', ' ').title()
         save_path = os.path.join(
             COMICS_FOLDER,
             series_id,
             "characters",
             character_id,
-            variant.id,
+            variant.variant_id,
             "images",
             style_id
         )
 
+        def format(variant: CharacterVariant, heading_level: int = 3) -> str:
+            result = f"""{'#'*heading_level} Character Model ({variant.name})
+    * **Name**: {variant.name}
+    * **Race**: {variant.race}
+    * **Age**: {variant.age}
+    * **Height**: {variant.height}
+    * **Gender**: {variant.gender}
+    * **Description**: {variant.description}
+    * **Attire**: {variant.attire}
+            """.strip()
+            if variant.appearance is not None and variant.appearance != "":
+                result += f"\n* **Appearance**: {variant.appearance}"
+            if variant.behavior is not None and variant.behavior != "":
+                result += f"\n* **Behavior**: {variant.behavior}"
+            return result + "\n\n            """
+
+
         image_id = render_character_image(
             character_name=character_name,
-            character_description = variant.format(),
+            character_description = format(variant),
             style_description = style.format(include_bubble_styles=False),
             save_path=save_path
         )
@@ -108,14 +116,6 @@ def variant_agent(state: APPState, tools: dict[str, Tool]) -> Agent | str:
         
         return variant
 
-
-    @function_tool
-    def get_character_variant() -> Optional[CharacterVariant]:
-        """
-        Get the currently selected character variant.   On failure, this function will
-        return a string indicating the error.
-        """
-        return _get_character_variant()
 
     @function_tool
     def delete_variant() -> str:
@@ -307,12 +307,17 @@ def variant_agent(state: APPState, tools: dict[str, Tool]) -> Agent | str:
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,
         tools=[
-            all_style_names,
+            # Context
+            tools.get('get_current_selection', None),
 
-            get_character_variant,
+            # Getters
+            tools.get('find_variant', None),
+
+            
             render_styled_image,
             delete_variant,
             
+            # Updaters
             update_general_description,
             update_physical_appearance,
             update_attire,

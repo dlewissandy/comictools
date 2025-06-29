@@ -26,13 +26,14 @@ def all_series_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
             The created Series object.
         """
         # check to see if the series already exists.
-        if storage.find_series(name=series_title) is not None:
+        series_id = normalize_id(series_title)
+        if storage.read_object(Series, {"series_id": series_id}) is not None:
             logger.error(f"Series with title '{series_title}' already exists.")
             return f"Series with title '{series_title}' already exists."
         else:
             logger.info(f"The title '{series_title}' is available.")
-        series = Series(id=normalize_id(series_title), name=series_title, description=description, publisher=publisher)
-        new_id = storage.create_series(series)
+        series = Series(series_id=series_id, name=series_title, description=description, publisher_id=publisher)
+        new_id = storage.create_object(data=series)
         selection = state.selection
         new_itm = SelectionItem(name=series.name, id=new_id, kind=SelectedKind.SERIES)
         new_sel = [s for s in selection]+[new_itm]
@@ -41,22 +42,22 @@ def all_series_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         return series
 
     @function_tool
-    def select_comic_series(name: str) -> str:
+    def select_comic_series(series_id: str) -> str:
         """
-        Select a comic series by name.   This is a precursor for editing its 
+        Select a comic series by ID.   This is a precursor for editing its
         properties.
         
         Args:
-            name: The name of the comic series to select.
-        
+            series_id: The ID of the comic series to select.
+
         Returns:
             A status message indicating the result of the selection.
         """
-        series = storage.find_series(name=name)
+        series = storage.read_object(Series, {"series_id": series_id})
         if series is None:
-            return f"Comic series '{name}' not found.  Maybe try looking at the list of comic series first?"
+            return f"Comic series '{series_id}' not found.  Maybe try looking at the list of comic series first?"
         sel_itm = SelectionItem(
-            id=series.id,
+            id=series.series_id,
             name=series.name,
             kind=SelectedKind.SERIES,
         )
@@ -77,9 +78,11 @@ def all_series_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,
         tools = [
+            tools.get('get_current_selection', None),
+
+            # Getters
             select_comic_series,
 
-            tools.get('get_current_selection', None),
             
             tools.get('find_series', None),
             tools.get('find_publisher', None),

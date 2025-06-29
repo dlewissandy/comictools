@@ -3,7 +3,7 @@ from typing import Tuple, Optional, List
 from gui.state import APPState
 from agents import Agent, function_tool, Tool
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
-from schema import CharacterModel, CharacterVariant, CharacterVariantMinimal
+from schema import CharacterModel, CharacterVariant, CharacterVariantMinimal, Series
 from helpers.generator import invoke_generate_image_api
 from helpers.file import generate_unique_id
 from gui.selection import SelectionItem
@@ -84,12 +84,12 @@ def character_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         series_id = state.selection[-2].id  # Assuming the second last item is the series
         character_id = state.selection[-1].id  # Assuming the last item is the character
 
-        character = storage.find_character(series_id=series_id, character_id=character_id)
+        character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
         if character is None:
             return "Can't update the current character.  Is one selected?"
         
         character.description = description
-        storage.update_character(data = character)
+        storage.update_object(character)
         state.is_dirty = True
         return f"Character {character.name} updated successfully with new description."
 
@@ -120,18 +120,18 @@ def character_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         character_id = state.selection[-1].id  # Assuming the last item is the character
         series_id = state.selection[-2].id  # Assuming the second last item is the
 
-        series = storage.read_series(id=series_id)
+        series = storage.read_object(cls=Series,primary_key = {"series_id": _get_series_id()})
         if series is None:
             raise ValueError("The series {series_id} does not exist.  Try checking the list of series first to see if maybe you misspelled it?")
-        character = storage.find_character(series_id=series_id, character_id=character_id)
+        character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
         if character is None:
             raise ValueError(f"The character {character_id} does not exist in series {series_id}.  Try checking the list of characters first to see if maybe you misspelled it?")
         
         character: CharacterModel = character
         variant = CharacterVariant(
-            id=normalize_id(name),
-            series=character.series,
-            character=character.id,
+            variant_id=normalize_id(name),
+            series_id=character.series_id,
+            character_id=character.character_id,
             name=name,
             race=race,
             gender=gender,
@@ -144,7 +144,7 @@ def character_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
             images = {}
         )
         storage.create_character_variant(variant)
-        sel_item = SelectionItem( id = variant.id, name=variant.name, kind="variant")
+        sel_item = SelectionItem( id = variant.variant_id, name=variant.name, kind="variant")
         state.selection.append(sel_item)  # Add the new variant to the selection
         state.write()
         state.is_dirty = True

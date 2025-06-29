@@ -18,7 +18,7 @@ def view_reference_image(
     state: APPState
 ):
     from gui.elements import full_width_image_selector_grid
-    from schema.panel import Panel, TitleBoardModel, CoverLocation
+    from schema import Panel, CoverLocation, Cover
     selection = state.selection
     storage: GenericStorage = state.storage
     this_sel = selection[-1]
@@ -31,7 +31,7 @@ def view_reference_image(
             "scene_id": selection[-3].id,
             "panel_id": parent_sel.id
         }
-        parent = storage.find_panel(**primary_key)
+        parent = storage.read_object(Panel, primary_key=primary_key)
         if parent is None:
             logger.error(f"No panel found for {primary_key}")
             return
@@ -54,7 +54,7 @@ def view_reference_image(
             "issue_id": selection[-2].id,
             "location": CoverLocation(parent_sel.id)
         }
-        parent = storage.find_cover(**primary_key)
+        parent = storage.read_object(Cover, primary_key)
         if parent is None:
             logger.error(f"No cover found for {primary_key}")
             return

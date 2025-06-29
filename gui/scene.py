@@ -6,8 +6,7 @@ from gui.selection import SelectionItem, SelectedKind
 from gui.elements import init_cardwall
 from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button, CrudButtonKind
 from gui.messaging import post_user_message
-from schema.scene import SceneModel
-from schema.panel import FrameLayout
+from schema import SceneModel, Panel, FrameLayout
 from helpers.file import generate_unique_id
 from gui.state import APPState
 from storage.generic import GenericStorage
@@ -29,7 +28,7 @@ def view_scene(state: APPState):
     scene_id = selection[-1].id
     issue_id = selection[-2].id
     series_id = selection[-3].id if len(selection) > 2 else None
-    scene = storage.find_scene(series_id=series_id, issue_id=issue_id, scene_id=scene_id)
+    scene = storage.read_object(cls=SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
     if scene is None:
         state.clear_details()
         message = f"Scene with ID {scene_id} not found in issue {issue_id}."
@@ -37,7 +36,7 @@ def view_scene(state: APPState):
             ui.markdown(message)
         return
     
-    style = storage.read_style(id=scene.style) if scene.style else None
+    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": scene.style_id}) if scene.style_id else None
     
     # Draw the detials window.   It will have a row with the story and style, and then
     # cardwall with the panels.   Unlike other cardwalls, this one will try to match each
@@ -80,10 +79,11 @@ def view_scene(state: APPState):
                 crud_button(CrudButtonKind.CREATE, lambda: post_user_message(state, "I would like to add a new panel to the scene."))
             expansion.value = True
 
-            panels = storage.find_panels(
-                series_id=series_id, 
-                issue_id=issue_id, 
-                scene_id=scene_id)
+            panels = storage.read_all_objects(Panel, primary_key={
+                "series_id": series_id,
+                "issue_id": issue_id,
+                "scene_id": scene_id
+            })
             if not panels or panels == []:
                 ui.markdown("No panels available for this scene.")
             else:
@@ -115,7 +115,7 @@ def view_scene(state: APPState):
                                 with ui.scroll_area().classes('w-full h-full').style('overflow: auto;'):
                                     header(f"Panel {panel.id}", 3)
                                     markdown(panel.description)
-                        new_itm = SelectionItem(name=f"panel {panel.id}", id=str(panel.id), kind='panel')
+                        new_itm = SelectionItem(name=f"panel {panel.panel_number}", id=panel.panel_id, kind='panel')
                         new_sel = [s for s in selection]+[new_itm]
                         card.on('click', lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
                 # Add a card for uploading an image to create a new panel

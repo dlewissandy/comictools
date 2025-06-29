@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from schema.enums import Relation
 
 class ReferenceImage(BaseModel):
-    id: str = Field(..., description="A unique identifier for the reference image")
+    image_id: str = Field(..., description="A unique identifier for the reference image")
     image: str = Field(..., description="The filepath of the reference image")
     relation: Relation = Field(..., description="The relation of the reference image to the panel")
 
@@ -12,6 +12,18 @@ class ReferenceImage(BaseModel):
         return the primary key for the reference image
         """
         return {
-            "image_id": self.id,
+            "image_id": self.image_id,
             "relation": self.relation.value
         }
+
+    @property
+    def parent_key(self) -> dict[str, str]:
+        # TODO: This needs work!
+        return {}
+    
+    @property
+    def id(self) -> str:
+        """
+        return the id of the reference image
+        """
+        return self.relation.value

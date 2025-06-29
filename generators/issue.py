@@ -2,7 +2,7 @@ from typing import Tuple, Optional, List
 from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from agents import Agent, function_tool, Tool
 from gui.state import APPState
-from schema import TitleBoardModel, CoverLocation, FrameLayout, CharacterRef, Issue
+from schema import Cover, CoverLocation, FrameLayout, CharacterRef, Issue
 from gui.selection import SelectionItem, SelectedKind
 
 def issue_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
@@ -40,20 +40,20 @@ def issue_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
             return issue_or_str
         
         issue: Issue = issue_or_str
-        issue_id = issue.id
+        issue_id = issue.issue_id
         series_id = issue.series_id
 
         for cover in issue.covers:
             if cover.location == location.value:
                 cover.delete()
 
-        cover = TitleBoardModel(
-            id=normalize_id(location.value),
+        cover = Cover(
+            cover_id=normalize_id(location.value),
             location = location,
-            issue=issue_id,
-            series=series_id,
-            characters=[CharacterRef(series=series_id, character=char, variant="base") for char in characters],
-            style=issue.style,
+            issue_id=issue_id,
+            series_id=series_id,
+            character_references=[CharacterRef(series_id=series_id, character_id=char, variant_id="base") for char in characters],
+            style_id=issue.style_id,
             aspect=FrameLayout.PORTRAIT,
             foreground=foreground,
             background=background,
@@ -64,7 +64,7 @@ def issue_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
 
         kind = SelectedKind.COVER
         name = normalize_name(kind)
-        new_sel = SelectionItem(id=cover.id, kind=kind, name=name,)
+        new_sel = SelectionItem(id=cover.cover_id, kind=kind, name=name,)
         cover.write()
         new_sel = state.selection + [new_sel]
         state.change_selection(new_sel)
@@ -78,9 +78,10 @@ def issue_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         model=LANGUAGE_MODEL,
         
         tools=[
+            tools.get('get_current_selection', None),
+
             tools.get('delete_issue', None),
-            tools.get('find_issue_by_name', None),
-            get_current_issue,
+            tools.get('find_issue', None),
 
             create_cover,
         ]

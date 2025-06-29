@@ -3,7 +3,7 @@ from agents import function_tool, Tool
 from typing import Callable, Optional, Union
 from pydantic import BaseModel
 from gui.state import APPState
-from gui.selection import SelectionItem, SelectedKind
+from gui.selection import SelectionItem, SelectedKind, selection_to_context
 from storage.generic import GenericStorage
 from schema import (
     ComicStyle,
@@ -11,15 +11,123 @@ from schema import (
     CharacterModel,
     CharacterVariant,
     Panel,
-    TitleBoardModel,
+    Cover,
     CoverLocation,
     SceneModel,
     Series,
     Issue,
 )
 
+def read_context( state: APPState) -> list[BaseModel]:
+    """
+    Reads the context from the selection and returns a list of BaseModel objects.
+    
+    Args:
+        selection: A list of SelectionItem objects representing the current selection.
+    
+    Returns:
+        A list of BaseModel objects representing the context of the selection.
+    """
+    selection = state.selection
+    storage = state.storage
+    context = selection_to_context(selection)
+    objects = []
+    for item in context:
+        cls, pk = item
+        obj = storage.read_object(cls, pk)
+        if obj is None:
+            msg = f"Object of type {cls.__name__} with primary key {pk} not found in the database."
+            logger.error(msg)
+            raise ValueError(msg)
+        objects.insert(0, obj)  # Insert at the beginning to have the most specific object first
+    return objects
+
 def init_tools(state: APPState) -> dict[str, Tool]:
     storage = state.storage
+
+    def find(cls: type[BaseModel],pk: dict[str,str]) -> BaseModel:
+        """
+        Find an object in the storage by its primary key.
+        
+        Args:
+            pk: The primary key of the object to find.
+        
+        Returns:
+            The object if found, otherwise a status message.
+        """
+        logger.trace(f"Finding object with key = {pk}")
+        context = selection_to_context(state.selection)
+
+        CONTEXT_ERROR_MSG = f"Cannot find object with key = {pk}.   It is not in the context of the current selection.  You may need to change the current selection."
+        NOT_FOUND_ERROR_MSG = f"Cannot find object with key = {pk}.   It is not in the database.   You may want to verify the primary key(s)"
+
+        if len(pk.keys())>len(context)+1:
+            logger.error(CONTEXT_ERROR_MSG)
+            raise ValueError(CONTEXT_ERROR_MSG)
+
+        if len(context) == 0 and any(pk.keys(), lambda k: k not in ["series_id", "publisher_id", "style_id"]):
+            logger.error(CONTEXT_ERROR_MSG)
+            raise ValueError(CONTEXT_ERROR_MSG)
+
+        if len(context) == 0:
+            obj = storage.read_object(cls=cls, primary_key=pk)
+            if obj is None:
+                logger.error(NOT_FOUND_ERROR_MSG)
+                raise ValueError(NOT_FOUND_ERROR_MSG)
+            return obj
+
+        if len(context) > 0 and context[0][1] == pk:
+            # The last item in the hierarchy is the requested object
+            obj = storage.read_object(cls=context[0][0], primary_key=context[0][1])
+            if obj is None:
+                logger.error(NOT_FOUND_ERROR_MSG)
+                raise ValueError(NOT_FOUND_ERROR_MSG)
+            return obj
+        
+        # The requested object should be a child of the last item in the hierarchy
+        parent_pk = context[0][1]
+        parent_keys = list(parent_pk.keys())
+        child_keys = pk.keys()
+        while len(parent_keys) > 0:
+           k = parent_keys.pop()
+           if k not in child_keys:
+               logger.error(CONTEXT_ERROR_MSG)
+               raise ValueError(CONTEXT_ERROR_MSG)
+           if pk[k] != parent_pk[k]:
+               logger.error(CONTEXT_ERROR_MSG)
+               raise ValueError(CONTEXT_ERROR_MSG)
+        # If we reach here, the requested object is a child of the last item in the hierarchy
+        obj = storage.read_object(cls=cls, primary_key=pk)
+        if obj is None:
+            logger.error(NOT_FOUND_ERROR_MSG)
+            raise ValueError(NOT_FOUND_ERROR_MSG)
+        return obj
+    
+    def find_all(cls: type[BaseModel]) -> list[BaseModel]:
+        """
+        Find an object in the storage by its primary key.
+        
+        Args:
+            pk: The primary key of the object to find.
+        
+        Returns:
+            The object if found, otherwise a status message.
+        """
+        logger.trace(f"Finding all objects of type {cls.__name__} in selection")
+        context = selection_to_context(state.selection)
+
+        CONTEXT_ERROR_MSG = f"Cannot find {cls.__name__} instances.   They are not in the context of the current selection.  You may need to change the current selection."
+
+        if len(context) == 0 and cls.__name__ not in ["Series", "Publisher", "ComicStyle"]:
+            logger.error(CONTEXT_ERROR_MSG)
+            raise ValueError(CONTEXT_ERROR_MSG)
+
+        if len(context) == 0:
+            return storage.read_all_objects(cls=cls)
+
+        # If we reach here, the requested object is a child of the last item in the hierarchy
+        parent_pk = context[0][1]
+        return storage.read_all_objects(cls=cls, primary_key=parent_pk)
 
     @function_tool
     def get_current_selection() -> list[SelectionItem]:
@@ -31,6 +139,10 @@ def init_tools(state: APPState) -> dict[str, Tool]:
             object hierarchy/path to the item that the user is inspecting.
         """
         return state.selection
+    
+    # -------------------------------------------------------------------------
+    # TOOLS TO FIND ALL TYPED CHILD OBJECTS OF THE SELECTION
+    # -------------------------------------------------------------------------
 
     @function_tool
     def get_all_publishers() -> list[Publisher]:
@@ -40,7 +152,7 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         Returns:
             A list of publisher names.
         """
-        return storage.read_all_publishers()
+        return storage.read_all_objects(Publisher)
     
     @function_tool
     def get_all_styles() -> list[ComicStyle]:
@@ -50,7 +162,7 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         Returns:
             A list of comic styles.
         """
-        return storage.read_all_styles()
+        return storage.read_all_objects(ComicStyle)
     
     @function_tool
     def get_all_series() -> list[Series]:
@@ -60,27 +172,7 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         Returns:
             A list of comic series.
         """
-        return storage.read_all_series()
-
-    @function_tool
-    def find_character(series_id: str, character_id: str) -> CharacterModel | str:
-        """
-        Look up a character by its series and character identifiers.   
-
-        Args:
-            series_id: The identifier of the series the character belongs to.
-            character_id: The identifier of the character to look up.
-        
-        Returns:
-            The specifically requested character details if found, otherwise a status message.
-        """
-        series = storage.read_series(series_id)
-        if series is None:
-            raise ValueError(f"Series with id '{series_id}' not found.   You might want to look at the list of all series first.")
-        character = storage.find_character(series_id=series_id, character_id=character_id)
-        if character is None:
-            raise ValueError(f"Character with id '{character_id}' not found in series '{series_id}'.   You might want to look at the list of all characters in the series first.")
-        return character
+        return storage.read_all_objects(Series)
     
     @function_tool
     def find_all_variants(series_id: str, character_id: str) -> list[CharacterVariant]:
@@ -93,14 +185,14 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         Returns:
             A list of all variants for the character.
         """
-        series = storage.get_series(series_id=series_id)
+        series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
         if series is None:
             raise ValueError(f"Series with id '{series_id}' not found.   You might want to look at the list of all series first.")
-        character = storage.find_character(series_id=series_id, character_id=character_id)
+        character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
         if character is None:
             raise ValueError(f"Character with id '{character_id}' not found in series '{series_id}'.   You might want to look at the list of all characters in the series first.")
-        return storage.find_character_variants(series_id=series_id, character_id=character_id)
-    
+        return storage.read_all_objects(cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id})
+
     @function_tool
     def find_all_characters(series_id: str) -> list[CharacterModel]:
         """
@@ -112,13 +204,32 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         Returns:
             The list of details about the characters in the series.
         """
-        series = storage.get_series(series_id=series_id)
+        series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
         if series is None:
             raise ValueError(f"Series with id '{series_id}' not found.   You might want to look at the list of all series first.")
-        return storage.find_characters(series_id=series_id)
+        return storage.read_all_objects(cls=CharacterModel, primary_key={"series_id": series_id})
+
+    # -------------------------------------------------------------------------
+    # FIND A SPECIFIC CHILD OBJECT OF THE CURRENT SELECTION
+    # -------------------------------------------------------------------------
 
     @function_tool
-    def find_publisher(publisher_id: str) -> Publisher | str:
+    def find_character(series_id: str, character_id: str) -> CharacterModel | str:
+        """
+        Look up a character by its series and character identifiers.   
+
+        Args:
+            series_id: The identifier of the series the character belongs to.
+            character_id: The identifier of the character to look up.
+        
+        Returns:
+            The character object if found, otherwise a status message.
+        """
+        pk = {"series_id": series_id, "character_id": character_id}
+        return find(CharacterModel, pk=pk)
+
+    @function_tool
+    def find_publisher(publisher_id: str) -> Publisher:
         """
         Find a publisher by its ID.
         
@@ -126,15 +237,13 @@ def init_tools(state: APPState) -> dict[str, Tool]:
             publisher_id: The ID of the publisher.
         
         Returns:
-            The Publisher object if found, otherwise a statius message.
+            The Publisher object if found, otherwise a status message.
         """
-        publisher = storage.read_publisher(id=publisher_id)
-        if publisher is None:
-            return f"Publisher '{publisher_id}' not found.  Maybe try looking at the list of publishers first?"
-        return publisher
-    
+        pk = {"publisher_id": publisher_id}
+        return find(Publisher, pk=pk)
+
     @function_tool
-    def find_series(series_id: str) -> Series | str:
+    def find_series(series_id: str) -> Series:
         """
         Get a comic series by its ID.
         Args:
@@ -143,12 +252,8 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         Returns:
             The Series object if found, otherwise a status message.
         """
-        series = storage.read_series(id=series_id)
-        if series is None:
-            return f"Comic series with ID '{series_id}' not found.  Maybe try looking at the list of comic series first?"
-        return series
-    
-
+        pk = {"series_id": series_id}
+        return find(Series, pk=pk)
 
     @function_tool
     def find_style(style_id: str) -> ComicStyle | str:
@@ -161,13 +266,93 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         Returns:
             The ComicStyle object if found, otherwise a status message.
         """
-        style = storage.read_style(id=style_id)
-        if style is None:
-            return f"Comic style '{style_id}' not found.  Maybe try looking at the list of comic styles first?"
-
+        pk = {"style_id": style_id}
+        return find(ComicStyle, pk=pk)
 
     @function_tool
-    def delete_series(name: str) -> str:
+    def find_variant(series_id: str, character_id: str, variant_id: str) -> CharacterVariant:
+        """
+        Look up a variant of a character.
+
+        Args:
+            series_id: The identifier of the series the character belongs to.
+            character_id: The identifier of the character for which to look up variants.
+            variant_id: The identifier of the variant to look up.
+
+        Returns:
+            The CharacterVariant object if found, otherwise a status message.
+        """
+        pk = {"series_id": series_id, "character_id": character_id, "variant_id": variant_id}
+        return find(CharacterVariant, pk=pk)
+
+    @function_tool
+    def find_issue(series_id: str, issue_id: str) -> Issue:
+        """
+        Look up an issue of a comic book given its series and issue identifiers.   
+
+        Args:
+            series_id: The identifier of the series the issue belongs to.
+            issue_id: The identifier of the comic book issue to look up.
+        
+        Returns:
+            The Issue object if found, otherwise a status message.
+        """
+        pk = {"series_id": series_id, "issue_id": issue_id}
+        return find(Issue, pk=pk)
+
+    @function_tool
+    def find_cover(series_id: str, issue_id: str, location: CoverLocation) -> Cover:
+        """
+        Look up a cover of a comic book given its series and issue identifiers.
+
+        Args:
+            series_id: The identifier of the series the cover belongs to.
+            issue_id: The identifier of the comic book issue the cover belongs to.
+            location: The location of the cover.
+        Returns:
+            The Cover object if found, otherwise a status message.
+        """
+        pk = dict(locals())
+        pk['location'] = location.value
+        return find(Cover, pk=pk)
+    
+    @function_tool
+    def find_scene(series_id: str, issue_id: str, scene_id: str) -> SceneModel:
+        """
+        Look up a scene of a comic book given its series and issue identifiers.
+
+        Args:
+            series_id: The identifier of the series the scene belongs to.
+            issue_id: The identifier of the comic book issue the scene belongs to.
+            scene_id: The identifier of the scene to look up.
+
+        Returns:
+            The SceneModel object if found, otherwise a status message.
+        """
+        pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
+        return find(SceneModel, pk=pk)
+    
+    @function_tool
+    def find_panel(series_id: str, issue_id: str, scene_id: str, panel_id: str) -> Panel:
+        """
+        Look up a panel of a comic book given its series, issue, and scene identifiers.
+        Args:
+            series_id: The identifier of the series the panel belongs to.
+            issue_id: The identifier of the comic book issue the panel belongs to.
+            scene_id: The identifier of the scene the panel belongs to.
+            panel_id: The identifier of the panel to look up.
+        Returns:
+            The Panel object if found, otherwise a status message.
+        """
+        pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id}
+        return find(Panel, pk=pk)
+
+    # -------------------------------------------------------------------------
+    # TOOLS TO DELETE OBJECTS FROM THE DATABASE
+    # -------------------------------------------------------------------------
+
+    @function_tool
+    def delete_series(series_id: str) -> str:
         """
         Delete a comic series by name.   You MUST ask for confirmation before using this tool.
         
@@ -177,10 +362,7 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         Returns:
             A status message indicating the result of the deletion.
         """
-        series = storage.find_series(name=name)
-        if series is None:
-            return f"Comic series '{name}' not found."
-        storage.delete_series(id = series.id)
+        series = storage.delete_object(cls=Series, primary_key={"series_id": series_id})
         
         selection = state.selection
         sel_itm = selection[-1]
@@ -193,7 +375,7 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         return f"Deleted comic series: {series.name}"
 
     @function_tool
-    def delete_style(name: str) -> str:
+    def delete_style(style_id: str) -> str:
         """
         Delete a comic style by name.   You MUST ask for confirmation before using this tool.
         
@@ -202,10 +384,7 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         Returns:
             A status message indicating the result of the deletion.
         """
-        style = storage.find_style(name=name)
-        if style is None:
-            return f"Comic style '{name}' not found."
-        storage.delete_style(id = style.id)
+        style = storage.delete_object(cls=ComicStyle, primary_key={"style_id": style_id})
         selection = state.selection
         sel_itm = selection[-1]
         if sel_itm.kind == SelectedKind.STYLE:
@@ -215,39 +394,28 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         else:
             state.is_dirty = True
         return f"Deleted comic style: {style.name}"
-
+    
     @function_tool
     def delete_character(series_id: str, character_id: str) -> str:
         """
         Delete a character from a comic book series.   NOTE: YOU MUST ASK FOR
         CONFIRMATION BEFORE DELETING A CHARACTER.   THIS OPERATION CANNOT BE UNDONE.
+
+        Args:
+            series_id: The identifier of the series the character belongs to.
+            character_id: The identifier of the character to delete.
+
+        NOTES: You may be able to get the series_id or charcter_id from the current selection
         
         Returns:
             A message indicating the result of the deletion operation.
         """
-        selection = state.selection
-        selection_kind = selection.kind
-        selection_id = selection.id if selection else None
-        if selection_kind == SelectedKind.CHARACTER:
-            if selection_id != character_id:
-                return f"Cannot delete character '{character_id}' because it is not currently selected.  Please select the character first."
-        elif selection_kind == SelectedKind.SERIES:
-            if selection_id != series_id:
-                return f"Cannot delete character '{character_id}' form series '{series_id}' because a different series is currently selected.  Please select the series first."
-        else:
-            return f"Cannot delete character '{character_id}' because the current selection is neither a series nor character."
-
-        series = storage.find_series(name=series_id)
-        if series is None:
-            return f"Series '{series_id}' not found.  Cannot delete character."
-        character = storage.find_character(series=series_id, character=character_id)
-        if character is None:
-            return f"Character '{character_id}' not found in series '{series_id}'.  Cannot delete character."
-        
-        storage.delete_character(series=series_id, character=character_id) 
+        pk = locals()
+        context = read_context(state)
+        old = storage.delete_object(cls=CharacterModel, primary_key=pk)
         
         # Change the selection if the character is currently selected
-        if selection.kind == SelectedKind.CHARACTER:
+        if this_sel.kind == SelectedKind.CHARACTER:
             new_selection = selection[:-1]  # Remove the last item (the character)
             state.change_selection(new=new_selection, clear_history=False)
         state.is_dirty = True
@@ -256,19 +424,19 @@ def init_tools(state: APPState) -> dict[str, Tool]:
 
 
     @function_tool
-    def delete_publisher(name: str) -> str:
+    def delete_publisher(publisher_id: str) -> str:
         """
-        Delete a publisher by name.  You MUST ask for confirmation before using this tool.
+        Delete a publisher by identifier.  You MUST ask for confirmation before using this tool.
         Args:
-            name: The name of the publisher to delete.
+            publisher_id: The identifier of the publisher to delete.
         Returns:
             A status message indicating the result of the deletion.
         """
-        publisher = storage.find_publisher(name=name)
+        publisher = storage.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
         if publisher is None:
-            return f"Publisher '{name}' not found."
-        storage.delete_publisher(id = publisher.id)
-        
+            return f"Publisher '{publisher_id}' not found."
+        storage.delete_publisher(id=publisher.publisher_id)
+
         selection = state.selection
         sel_itm = selection[-1]
         if sel_itm.kind == SelectedKind.PUBLISHER:
@@ -280,12 +448,12 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         return f"Deleted publisher: {publisher.name}"
 
     @function_tool
-    def delete_issue(issue_name: str) -> str:
+    def delete_issue(issue_id: str) -> str:
         """
-        Delete a comic book issue by its name.   You MUST ask for confirmation before using this tool.
+        Delete a comic book issue by its id.   You MUST ask for confirmation before using this tool.
         
         Args:
-            issue_name: The name of the comic book issue to delete.
+            issue_id: The unique identifier for the issue
         
         Returns:
             A status message indicating the result of the deletion.
@@ -297,17 +465,16 @@ def init_tools(state: APPState) -> dict[str, Tool]:
 
         if selection_kind == SelectedKind.ISSUE:
             series_id = state.selection[-2].id
-            issue_id = selection_id
-            if selection_name != issue_name: 
-                return f"Can't delete issue '{issue_name}.   The name does not match the currently selected issue."
+            if issue_id != selection_id: 
+                return f"Can't delete issue '{issue_id}.   The name does not match the currently selected issue."
         elif selection_kind == SelectedKind.SERIES:
             series_id = selection_id
-            issue = storage.find_issue(name=issue_name)
+            issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
             if issue is None:
-                return f"Can't delete issue '{issue_name}'.   The issue does not exist in the series '{selection_name}'"
+                return f"Can't delete issue '{issue_id}'.   The issue does not exist in the series '{selection_name}'"
             issue_id = issue.id
         else:
-            return f"Can't delete issue '{issue_name}'.   The selection is not a series or issue: {selection_kind}"
+            return f"Can't delete issue '{issue_id}'.   The selection is not a series or issue: {selection_kind}"
     
         storage.delete_issue(series_id=series_id, issue_id=issue_id)
         
@@ -317,7 +484,7 @@ def init_tools(state: APPState) -> dict[str, Tool]:
             state.change_selection(new=new_selection, clear_history=True)
         else:
             state.is_dirty = True
-        return f"Deleted comic book issue: {issue_name}"
+        return f"Deleted comic book issue: {issue_id}"
 
 
 
@@ -325,23 +492,32 @@ def init_tools(state: APPState) -> dict[str, Tool]:
     return {
         "get_current_selection": get_current_selection,
 
+        # FIND ALL
         "get_all_publishers": get_all_publishers,
         "get_all_series": get_all_series,
         "get_all_styles": get_all_styles,
+        "find_all_characters": find_all_characters,
+        "find_all_variants": find_all_variants,
         
+        # FIND SINGULAR
         "find_publisher": find_publisher,
         "find_style": find_style,
         "find_series": find_series,
         "find_character": find_character,
-        "find_all_characters": find_all_characters,
-        "find_all_variants": find_all_variants,
+        "find_variant": find_variant,
+        "find_issue": find_issue,
+        "find_cover": find_cover,
+        "find_scene": find_scene,
+        "find_panel": find_panel,
 
-
+        # DELETE 
         "delete_series": delete_series,
         "delete_style": delete_style,
         "delete_publisher": delete_publisher,
         "delete_issue": delete_issue,
         "delete_character": delete_character,
+
+        # UPDATE
     }
 
 def normalize_name(name: str) -> str:
@@ -411,7 +587,7 @@ def dereference_issue(state: APPState, index: int) -> Union[Issue, str]:
     
     return get_issue(state=state, series_id=ser_sel.id, issue_id=iss_sel.id)
 
-def dereference_cover(state: APPState, index: int) -> Union[TitleBoardModel, str]:
+def dereference_cover(state: APPState, index: int) -> Union[Cover, str]:
     """
     Dereference a cover from the state selection.
     

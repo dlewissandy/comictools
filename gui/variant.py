@@ -38,8 +38,8 @@ def view_character_variant(state:APPState):
     character_id = selection[-2].id
     series_id = selection[-3].id
 
-    character = storage.find_character(series_id=series_id, character_id=character_id)
-    variant = storage.find_character_variant(series_id=series_id, character_id=character_id, variant_id=variant_id)
+    character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
+    variant = storage.read_object(cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id, "variant_id": variant_id})
     details = state.details
 
     
@@ -123,7 +123,7 @@ def view_character_reference(state: APPState):
     
     panel: Panel = panel
     panel_character_refs = panel.characters
-    char_refs = [cv for cv in panel_character_refs if cv.character ==character_id]
+    char_refs = [cv for cv in panel_character_refs if cv.character_id ==character_id]
     if len(char_refs) == 0:
         state.clear_details()
         message = f"Character with ID {character_id} not found in panel {panel_id}."
@@ -142,10 +142,10 @@ def view_character_reference(state: APPState):
     
     
     def get_choice():
-        return char_ref.variant
+        return char_ref.variant_id
 
     def set_choice(id: str):
-        char_ref.variant = id
+        char_ref.variant_id = id
         panel.write()
         state.is_dirty = True
 

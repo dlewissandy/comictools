@@ -26,9 +26,9 @@ def view_styled_image(
     character_id = selection[-3].id
     series_id = selection[-4].id
 
-    character = storage.find_character(series_id=series_id, character_id=character_id)
-    variant = storage.find_character_variant(
-        series_id=series_id, character_id=character_id, variant_id=variant_id
+    character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
+    variant = storage.read_object(
+        cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id, "variant_id": variant_id}
     )
 
     if character is None:

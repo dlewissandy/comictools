@@ -4,22 +4,22 @@ from gui.elements import (
     header, view_all_instances, markdown_field_editor, view_attributes, Attribute, image_drop_field_editor, full_width_image_selector_grid, crud_button,
     CrudButtonKind)
 from gui.messaging import post_user_message
-from schema.style.comic import ComicStyle
 from gui.constants import TAILWIND_CARD
 from nicegui import ui
 from gui.state import APPState
 from storage.generic import GenericStorage
 from gui.selection import SelectedKind
+from schema import ComicStyle
 
 def view_style(state: APPState):
     """
     Editor for comic styles.
     """
-    
+
     # Read in the state
     selection = state.selection
     storage: GenericStorage = state.storage
-    style = storage.read_style(id=selection[-1].id) if selection else None
+    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": selection[-1].id}) if selection and selection[-1].id else None
 
     # Sanity check
     if style is None:
@@ -149,7 +149,7 @@ def view_pick_style(state: APPState):
         state: The GUI elements containing the details and selection.
     """
 
-    from schema import TitleBoardModel,CoverLocation, SceneModel, Series, Issue
+    from schema import Cover,CoverLocation, SceneModel, Series, Issue
     logger.debug("view_pick_style")
 
     # Dereference the state to get the selection and details.
@@ -160,28 +160,28 @@ def view_pick_style(state: APPState):
     if parent_kind == SelectedKind.ISSUE:
         issue_id = selection[-2].id
         series_id = selection[-3].id
-        parent = storage.find_issue(series_id=series_id, id=issue_id)
+        parent = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "id": issue_id})
         writer = lambda: storage.update_issue(data=parent)
     elif parent_kind == SelectedKind.SCENE:
         scene_id = selection[-2].id
         issue_id = selection[-3].id
         series_id = selection[-4].id
-        parent = storage.find_scene(series_id=series_id, issue_id=issue_id, scene_id=scene_id)
+        parent = storage.read_object(cls=SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})(series_id=series_id, issue_id=issue_id, scene_id=scene_id)
         writer = lambda: storage.update_scene(data=parent)
     elif parent_kind == SelectedKind.COVER:
         issue_id = selection[-3].id
         series_id = selection[-4].id
         location = CoverLocation(parent_kind[:-6].replace("-", " "))
-        parent = storage.find_cover(series_id=series_id, issue_id=issue_id, location=location)
+        parent = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "location": location})
         writer = lambda: storage.update_cover(data=parent)
     
     style_id = selection[-1].id
-    style = storage.read_style(id=style_id)
+    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
 
     # Create a setter function for the publisher choice
     def set_style(style_id):
         if parent is not None:
-            parent.style = style_id
+            parent.style_id = style_id
             writer()
 
     with state.details:
@@ -193,7 +193,7 @@ def view_pick_style(state: APPState):
             kind="style",
             aspect_ratio="1/1",
             get_name=lambda _,x: x.name,
-            get_choice=lambda : parent.style if parent else None,
+            get_choice=lambda : parent.style_id if parent else None,
             set_choice=set_style,
         )           
 

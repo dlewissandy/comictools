@@ -27,7 +27,8 @@ def all_publishers_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         """
         from schema.publisher import Publisher
         # check to see if the publisher already exists.
-        if storage.find_publisher(name=name) is not None:
+        publisher_id = name.lower().replace(" ", "-")
+        if storage.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id}) is not None:
             logger.error(f"Publisher with name '{name}' already exists.")
             return f"Publisher with name '{name}' already exists."
         
@@ -42,23 +43,23 @@ def all_publishers_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         return publisher
     
     @function_tool
-    def select_publisher(name: str) -> str:
+    def select_publisher(publisher_id: str) -> str:
         """
-        Select a publisher by name.   This is a precursor for editing its 
+        Select a publisher by identifier.   This is a precursor for editing its 
         properties.
         
         Args:
-            name: The name of the publisher to select.
-        
+            publisher_id: The identifier of the publisher to select.
+
         Returns:
             A status message indicating the result of the selection.
         """
         from schema.publisher import Publisher
-        publisher = storage.find_publisher(name=name)
+        publisher = storage.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
         if publisher is None:
-            return f"Publisher '{name}' not found.  Maybe try looking at the list of publishers first?"
+            return f"Publisher '{publisher_id}' not found.  Maybe try looking at the list of publishers first?"
         sel_itm = SelectionItem(
-            id=publisher.id,
+            id=publisher.publisher_id,
             name=publisher.name,
             kind=SelectedKind.PUBLISHER,
         )
@@ -67,17 +68,17 @@ def all_publishers_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         return f"Selected publisher: {publisher.name}"
 
     @function_tool
-    def delete_publisher(name: str) -> str:
+    def delete_publisher(publisher_id: str) -> str:
         """
-        Delete a publisher by name.   YOU MUST CONFIRM THIS ACTION AS IT WILL DELETE ALL ASSOCIATED DATA.
-        
+        Delete a publisher by identifier.   YOU MUST CONFIRM THIS ACTION AS IT WILL DELETE ALL ASSOCIATED DATA.
+
         Args:
-            name: The name of the publisher to delete.
+            publisher_id: The identifier of the publisher to delete.
         
         Returns:
             A status message indicating the result of the deletion.
         """
-        pub = storage.find_publisher(name=name)
+        pub = storage.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
         if pub is None:
             return f"Publisher '{name}' not found.  Maybe try looking at the list of publishers first?"
         storage.delete_publisher(pub.id)
@@ -99,6 +100,9 @@ def all_publishers_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,
         tools = [
+            tools.get('get_current_selection', None),
+
+            # Getters
             select_publisher,
             tools.get("get_all_publishers"),
             tools.get("find_publisher"),

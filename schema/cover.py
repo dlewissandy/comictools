@@ -4,29 +4,48 @@ from schema.enums import CoverLocation, FrameLayout
 from schema.character_reference import CharacterRef
 from schema.reference_image import ReferenceImage
 
-class TitleBoardModel(BaseModel):
-    id: str = Field(..., description="A unique identifier for the panel.   Default '<location>-cover'")
+class Cover(BaseModel):
+    cover_id: str = Field(..., description="A unique identifier for the panel.   Default '<location>-cover'")
     location: CoverLocation = Field(..., description="The location of the cover.  front, inside-front, inside-back or back.  Default to front")
-    issue: str = Field(..., description="The parent issue of the panel.   Default to empty string")
-    series: str = Field(..., description="The parent series of the panel.   Default to empty string")
-    characters: list[CharacterRef]  = Field(..., description="The names of the characters in the panel")
-    style: str = Field(..., description="The art style of the panel.  Default to 'vintage-4-color'")
+    issue_id: str = Field(..., description="The parent issue of the panel.   Default to empty string")
+    series_id: str = Field(..., description="The parent series of the panel.   Default to empty string")
+    character_references: list[CharacterRef]  = Field(..., description="The names of the characters in the panel")
+    style_id: str = Field(..., description="The art style of the panel.  Default to 'vintage-4-color'")
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to portrait")
     reference_images: list[ReferenceImage] = Field(..., description="The reference images for the panel")
     foreground: str = Field(..., description="The foreground of the panel")
     background: str | None = Field(None, description="The background of the panel")
     image: str | None = Field(None, description="The selected image for this panel")
 
+    @property
     def primary_key(self) -> dict[str, str]:
         """
         return the primary key for the title board model
         """
         return {
-            "series_id": self.series,
-            "issue_id": self.issue,
+            "series_id": self.series_id,
+            "issue_id": self.issue_id,
             "location": self.location.value
         }
 
+    @property
+    def parent_key(self) -> dict[str, str]:
+        """
+        return the parent key for the title board model
+        """
+        return {
+            "series_id": self.series_id,
+            "issue_id": self.issue_id,
+        }
+    
+    @property
+    def id(self) -> str:
+        """
+        return the id of the cover
+        """
+        if self.cover_id is None or self.cover_id == "":
+            return f"{self.location.value}-cover"
+        return self.cover_id
 
 #     def format(self, heading_level: int = 1) -> str:
 #         """

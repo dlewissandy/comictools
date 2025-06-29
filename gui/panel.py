@@ -1,9 +1,7 @@
 import os
 from loguru import logger
 from nicegui import ui
-from nicegui.events import UploadEventArguments
-from schema.scene import SceneModel
-from schema.panel import Panel, FrameLayout
+from schema import Panel, FrameLayout, Naration, BubbleStyle, NarationPosition
 from helpers.constants  import DATA_FOLDER
 from gui.elements import (
     DARK_MODE_STYLES, 
@@ -61,20 +59,20 @@ def view_panel(state: APPState):
     
     selection = state.selection
     panel_id = selection[-1].id
-    panel_number = int(panel_id)
 
     scene_id = selection[-2].id
     issue_id = selection[-3].id
     series_id = selection[-4].id
-    logger.debug(f"series: {series_id} issue: {issue_id} scene: {scene_id} panel: {panel_number}")
+    logger.debug(f"series: {series_id} issue: {issue_id} scene: {scene_id} panel: {panel_id}")
     
-    panel: Panel = storage.find_panel(
-        series_id=series_id, 
-        issue_id=issue_id, 
-        scene_id=scene_id, 
-        panel_id = panel_id)
+    panel: Panel = storage.read_object(Panel, primary_key={
+        "series_id": series_id,
+        "issue_id": issue_id,
+        "scene_id": scene_id,
+        "panel_id": panel_id
+    })
     if panel is None:
-        message = f"Panel with number {panel_number} not found in scene {scene_id}."
+        message = f"Panel with {panel_id} not found in scene {scene_id}."
         logger.error(message)
         details.clear()
         with details:
@@ -113,11 +111,36 @@ def view_panel(state: APPState):
         panel.image = locator
         storage.update_panel(panel)
 
+    def format_bubble_style(dialogue: BubbleStyle):
+        return f"**{dialogue.character_id}** ({dialogue.emphasis.value}): {dialogue.text}"
+    
+    def format_narration(narration: Naration) -> str:
+        """
+        format the narration for display
+        """
+        return f"**Naration [{narration.position.value}]** : {narration.text}"
+
+    def format_dialogue(panel: Panel) -> str:
+        """
+        format the dialogue for display
+        """
+        text = ""
+        top = "\n\n".join([format_narration(n) for n in panel.narration if n.position == NarationPosition.TOP])
+        bottom = "\n\n".join([ format_narration(n) for n in panel.narration if n.position == NarationPosition.BOTTOM])
+        dialogue = "\n\n".join([format_bubble_style(d) for d in panel.dialogue])
+        if top:
+            text += top + f"\n\n"
+        if dialogue:
+            text += dialogue + "\n\n"
+        if bottom:
+            text += bottom
+        return text
+
 
     details.clear()
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
-            header("Panel " +  str(panel_number), 0)
+            header("Panel " +  str(panel.panel_number), 0)
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current panel."),size=1)    
         with ui.row().classes('w-full flex-nowrap'):
@@ -125,7 +148,7 @@ def view_panel(state: APPState):
                 markdown_field_editor(state, "Description", panel.description)
             with ui.card().classes('mb-2 p-2 w-1/4 bg-blue-100 dark:bg-gray-800 break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
                 aspect_ratio_picker(state,parent=col2, caption="Aspect Ratio",set_aspect_ratio=lambda x: panel.set_aspect(x), get_aspect_ratio  = lambda: panel.aspect,)    
-        markdown_field_editor(state, "Narration and Dialogue", panel.format_dialogue())
+        markdown_field_editor(state, "Narration and Dialogue", format_dialogue(panel))
 
         with ui.card().classes(TAILWIND_CARD).style('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800'):
             # TODO: When there are no images, the drop field has wrong aspect ratio

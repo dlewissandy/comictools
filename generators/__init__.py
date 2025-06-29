@@ -25,9 +25,9 @@ def init_agents(state: APPState, tools: dict[str, Tool]) -> dict[str, Agent]:
         A dictionary of initialized agents.
     """
     agents = {
-        "all_publishers": all_publishers_agent(state=state, tools=tools),
-        "all_series": all_series_agent(state=state, tools=tools),
-        "all_styles": all_styles_agent(state=state, tools=tools),
+        "all-publishers": all_publishers_agent(state=state, tools=tools),
+        "all-series": all_series_agent(state=state, tools=tools),
+        "all-styles": all_styles_agent(state=state, tools=tools),
         "character": character_agent(state=state, tools=tools),
         "style": style_agent(state=state, tools=tools),
         "series": series_agent(state=state, tools=tools),

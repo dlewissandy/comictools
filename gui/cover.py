@@ -1,7 +1,7 @@
 from nicegui import ui
 from loguru import logger
 from gui.selection import SelectionItem, SelectedKind
-from schema import TitleBoardModel, CoverLocation, ComicStyle
+from schema import Cover, CoverLocation, ComicStyle
 from gui.state import APPState
 from gui.elements import (
     header, crud_button, 
@@ -27,13 +27,13 @@ def view_cover(state: APPState, location: CoverLocation):
     series_id = selection[-3].id if len(selection) > 2 else None
     logger.debug(f"series: {series_id} issue: {issue_id} cover: {location}")
 
-    cover  = storage.find_cover(series_id=series_id, issue_id=issue_id, location=location)
+    cover:Cover  = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "location": location})
 
-    if cover.style is None:
+    if cover.style_id is None:
         logger.debug(f"Issue {cover.id} has no style set.")
         style = None
     else:
-        style: ComicStyle | None= storage.read_style(id=cover.style) if cover.style else None
+        style: ComicStyle | None= storage.read_object(cls=ComicStyle, primary_key={"style_id": cover.style_id}) if cover.style_id  else None
         if style is None:
             logger.warning(f"Issue {cover.id} has style set to {cover.style} but style not found.")
 

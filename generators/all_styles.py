@@ -39,7 +39,8 @@ def all_styles_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
             The created Style object or an error message if the style already exists.
         """
         # check to see if the publisher already exists.
-        style = storage.find_style(name = name)
+        style_id = name.lower().replace(" ", "-")
+        style = storage.read_object(ComicStyle, {"style_id": style_id })
         if style is not None:
             logger.warning(f"The name '{name}' is already in use by another style.")
             return f"The name '{name}' is already in use by another style.  Please choose a different name."
@@ -47,14 +48,14 @@ def all_styles_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         logger.info(f"The name '{name}' is available.")
         style = ComicStyle(
             name=name, 
-            id=name.lower().replace(" ", "-"),
+            id=style_id,
             description=description, 
             art_style=art_style, 
             character_style=character_style, 
             bubble_styles=bubble_styles,
             image=None
         )
-        style_id = storage.create_style(style)
+        style_id = storage.create_object(style)
         selection = state.selection
         new_itm = SelectionItem(name=style.name, id=style_id, kind=SelectedKind.STYLE)
         new_sel = [s for s in selection]+[new_itm]
@@ -102,6 +103,7 @@ def all_styles_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
 
             tools.get('get_all_styles', None),
             tools.get('find_style', None),
+            # tools.get('update_style', None),
 
             create_style,
             tools.get('delete_style', None),

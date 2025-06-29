@@ -1,6 +1,6 @@
 from schema.character import CharacterModel
 from schema.character_variant import CharacterVariant, CharacterVariantMinimal
-from schema.dialog import Naration, NarationLocation, Dialogue, DialogueEmphasis
+from schema.dialog import Naration, NarationPosition, Dialogue, DialogueEmphasis
 from schema.issue import Issue
 from schema.panel import Panel
 from schema.scene import SceneModel
@@ -13,7 +13,7 @@ from schema.style.character import CharacterStyle
 from schema.styled_image import StyledImage
 from schema.character_reference import CharacterRef
 from schema.reference_image import ReferenceImage
-from schema.cover import TitleBoardModel
+from schema.cover import Cover
 from schema.enums import FrameLayout, CoverLocation, Relation, frame_dimensions, frame_layout_to_dims
 
 # Re-exporting the models for easier access
@@ -34,7 +34,7 @@ __all__ = [
     "FrameLayout",
     "Issue",
     "Naration",
-    "NarationLocation",
+    "NarationPosition",
     "Panel",
     "Publisher",
     "ReferenceImage",
@@ -42,7 +42,7 @@ __all__ = [
     "SceneModel",
     "Series",
     "StyledImage",
-    "TitleBoardModel",
+    "Cover",
     # Functions
     "frame_dimensions",
     "frame_layout_to_dims",

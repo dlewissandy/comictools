@@ -30,14 +30,7 @@ class BubbleStyle(BaseModel):
         description="Description of the font used for the text inside the bubble."
     )
 
-    def format(self):
-        self_json = self.model_dump()
-        result = ""
-        for key, value in self_json.items():
-            if value is None or value == "":
-                continue
-            result += f"* **{key.replace('_', ' ').capitalize()}**: {value}\n"
-        return result.strip()
+
     
     
     
@@ -70,22 +63,4 @@ class BubbleStyles(BaseModel):
         ...,
         description="Bubble style for narration text."
     )
-    def format(self):
-        self_json = self.model_dump()
-        result = f"""## Bubble Styles\nBubble styles define how text is presented in the comic, including dialogue, narration, and sound effects.
-
-### CHAT BUBBLE STYLE\n{self.chat.format()}
-
-### WHISPER BUBBLE STYLE\n{self.whisper.format()}
-
-### SHOUT BUBBLE STYLE\n{self.shout.format()}
-
-### THOUGHT BUBBLE STYLE\n{self.thought.format()}
-
-### SOUND EFFECT BUBBLE STYLE\n{self.sound_effect.format()}
-
-### NARRATION BOX STYLE\n{self.narration.format()}
-""".strip()
-        
-        return result
 

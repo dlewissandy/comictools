@@ -19,6 +19,18 @@ class StyledImage(BaseModel):
             "variant_id": self.variant_id,
             "image_id": self.image_id,
         }
+    
+    @property
+    def parent_key(self) -> dict[str, str]:
+        """
+        return the parent key for the styled image
+        """
+        return {
+            "style_id": self.style_id,
+            "series_id": self.series_id,
+            "character_id": self.character_id,
+            "variant_id": self.variant_id,
+        }
 
     @property
     def id(self) -> str:

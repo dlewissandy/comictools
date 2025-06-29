@@ -169,8 +169,10 @@ def publisher_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         """ + BOILERPLATE_INSTRUCTIONS,
         model=LANGUAGE_MODEL,
         tools=[
-            get_publisher_id,
-            get_publisher_name,
+            tools.get('get_current_selection', None),
+
+            tools.get('find_publisher', None),
+            
             get_publisher_description,
             get_logo_description,
             delete_logo_image,

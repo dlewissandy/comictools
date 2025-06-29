@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from nicegui import ui
-from schema.character import CharacterModel
+from schema import CharacterModel, CharacterVariant
 from gui.elements import (
     header, 
     crud_button, 
@@ -31,7 +31,7 @@ def view_character(state:APPState):
     character_id = selection[-1].id
     series_id = selection[-2].id
     
-    character = storage.find_character(series_id=series_id, character_id =character_id)
+    character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
     details = state.details
 
     # If the character is not found, clear the details and show an error message
@@ -57,7 +57,7 @@ def view_character(state:APPState):
                 new_item_messager(state=state, caption="Variants", message="I would like to create a new variant for this character.")
             view_all_instances(
                 state=state,
-                get_instances=lambda: storage.find_character_variants(series_id=series_id, character_id=character_id), 
+                get_instances=lambda: storage.read_all_objects(CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id}), 
                 get_image_locator=lambda variant: storage.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant.id),
                 kind="variant", 
                 aspect_ratio="3:2"
@@ -91,7 +91,7 @@ def view_character_reference(state: APPState):
     
     panel: Panel = panel
     panel_character_refs = panel.characters
-    char_refs = [cv for cv in panel_character_refs if cv.character ==character_id]
+    char_refs = [cv for cv in panel_character_refs if cv.character_id ==character_id]
     if len(char_refs) == 0:
         state.clear_details()
         message = f"Character with ID {character_id} not found in panel {panel_id}."
@@ -110,10 +110,10 @@ def view_character_reference(state: APPState):
     
     
     def get_choice():
-        return char_ref.variant
+        return char_ref.variant_id
 
     def set_choice(id: str):
-        char_ref.variant = id
+        char_ref.variant_id = id
         panel.write()
         state.is_dirty = True
 
@@ -125,7 +125,7 @@ def view_character_reference(state: APPState):
 
         view_all_instances(
             state,
-            get_instances= lambda: storage.find_character_variants(series_id=series_id, character_id=character_id),
+            get_instances= lambda: storage.read_all_objects(cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id}),
             get_image_locator=lambda variant: storage.find_variant_image(series_id= series_id, character_id= character_id, variant_id=variant.id),
             kind="variant",
             aspect_ratio="3/2",

@@ -572,8 +572,8 @@ def view_character_references(state: APPState, parent: BaseModel):
         view_all_instances(
             state=state, 
             kind=SelectedKind.CHARACTER_REFERENCE,
-            get_instances=lambda: parent.characters,
-            get_image_locator=lambda x: storage.find_variant_image(series_id=x.series, character_id=x.character, variant_id=x.variant),
+            get_instances=lambda: parent.character_references,
+            get_image_locator=lambda x: storage.find_variant_image(series_id=x.series_id, character_id=x.character_id, variant_id=x.variant_id),
             get_name= lambda _, x: x.name, 
         )
     expansion.open()

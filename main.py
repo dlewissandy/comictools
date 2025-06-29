@@ -19,7 +19,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 HEADFOOT_STYLING_CLASSES = "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300"
 MIDDLE_STYLING_CLASSES = "text-gray-900 dark:text-gray-300"
 # Default selection to initialize the breadcrumbs
-DEFAULT_SELECTION = [{"kind":"all_series", "name":"Series", "id":None}]
+DEFAULT_SELECTION = [{"kind":"all-series", "name":"Series", "id":None}]
 
 # ---------------------------------------------------------
 # LOGGER INITIALIZATION
@@ -33,8 +33,8 @@ def init_logger():
     from sys import stderr
 
     logger.remove()  # Remove the default logger
-    logger.add(stderr, level="WARNING", format=LOGURU_FORMAT, backtrace=True, diagnose=True, filter=ellipsis)
-    logger.add("app.log", rotation="10 MB", level="DEBUG", format=LOGURU_FORMAT, backtrace=True, diagnose=True, filter=ellipsis)
+    logger.add(stderr, level="WARNING", backtrace=True, diagnose=True)
+    logger.add("app.log", rotation="10 MB", level="DEBUG", backtrace=True, diagnose=True)
     
 
 # ---------------------------------------------------------

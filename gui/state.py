@@ -173,7 +173,6 @@ class APPState:
             A list of openai messages.
         """
         def _get_transcript(elem: ui.element, name: str | None, sent = bool | None, indent:int= 0) -> list[dict]: 
-            logger.debug(" "*indent +f"Processing message: {elem.tag}")
             name = name or elem.props.get( 'name', None)
             sent = sent if sent is not None else elem.props.get('sent', None)
 
@@ -181,7 +180,6 @@ class APPState:
             text_html = text_html if text_html is not None else elem.props.get('content', text_html)
             text_html = text_html if text_html is not None else elem.props.get('innerHTML', text_html)
             if text_html is not None and name is not None:
-                logger.debug(" "*indent +f"Found message: {name} - {elipsis(text_html)}")
                 return [{
                     'name': name,
                     'text_html': text_html,
@@ -189,11 +187,9 @@ class APPState:
                 }]
             
             if elem.default_slot.children is None:
-                logger.debug(" "*indent +"No children in element: {elem.tag}")
                 return []
             
             if len(elem.default_slot.children) == 0:
-                logger.debug(" "*indent +f"zero children in element: {elem.tag}" )
                 return []
             
             result = []
@@ -332,7 +328,7 @@ class APPState:
                 return view_all_series(self)
             case "all-publishers":
                 return view_all_publishers(self)
-            case "all=styles":
+            case "all-styles":
                 return view_all_styles(self)
             case "style":
                 return view_style(self)

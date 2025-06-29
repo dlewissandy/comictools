@@ -9,10 +9,10 @@ from helpers.image import IMAGE_QUALITY
 
 from schema.style.comic import ComicStyle
 
-class CharacterModel(BaseModel):
+class CharacterModel( BaseModel):
     # Note: The character name:variant is used as the key in the characters dictionary and must be unique
-    id : str = Field(..., description="The unique identifier for the character model.  This is usually the character name in lowercase with spaces replaced by dashes.  defaults to null")
-    series: str = Field(..., description="The comic book series (title) that the character belongs to.  Default to empty string")
+    character_id : str = Field(..., description="The unique identifier for the character model.  This is usually the character name in lowercase with spaces replaced by dashes.  defaults to null")
+    series_id: str = Field(..., description="The comic book series (title) that the character belongs to.  Default to empty string")
     description: str = Field(..., description="A 1-2 sentence description of the character.  This should be sufficient to distinguish the character from others.")
     name: str = Field(..., description="The name of the character")
     
@@ -22,10 +22,26 @@ class CharacterModel(BaseModel):
         return the primary key for the character model
         """
         return {
-            "character_id": self.id,
-            "series_id": self.series,
+            "character_id": self.character_id,
+            "series_id": self.series_id,
         }
     
+    @property
+    def parent_key(self) -> dict[str, str]:
+        """
+        return the parent key for the character model
+        """
+        return {
+            "series_id": self.series_id,
+        }
+    
+    @property
+    def id(self) -> str:
+        """
+        return the id of the character model
+        """
+        # Normalize the id:
+        return self.character_id
 
 
     def format(self):

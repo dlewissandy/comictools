@@ -15,7 +15,7 @@ def view_all_styles(state: APPState):
         view_all_instances(
             state=state,
             get_image_locator=lambda style: style.image.get('art', None) if style.image else None,
-            get_instances=storage.read_all_styles,
+            get_instances=lambda: storage.read_all_objects(ComicStyle),
             kind="style",
             aspect_ratio="1/1")
         
@@ -26,8 +26,8 @@ def view_all_publishers(state: APPState):
         new_item_messager(state, "PUBLISHERS", "I would like to create a new comic book publisher.")
         view_all_instances(
             state=state,
-            get_image_locator=lambda publisher: storage.find_publisher_image(publisher_id=publisher.id),
-            get_instances=storage.read_all_publishers,
+            get_image_locator=lambda publisher: storage.find_publisher_image(publisher_id=publisher.publisher_id),
+            get_instances=lambda: storage.read_all_objects(Publisher),
             kind="publisher",
             aspect_ratio="1/1")
         
@@ -38,7 +38,7 @@ def view_all_series(state: APPState):
         new_item_messager(state, "SERIES", "I would like to create a new comic book series.")
         view_all_instances(
             state=state,
-            get_image_locator=lambda x: storage.find_series_image(series_id=x.id),
-            get_instances=storage.read_all_series,
+            get_image_locator=lambda x: storage.find_series_image(series_id=x.series_id),
+            get_instances=lambda: storage.read_all_objects(Series),
             kind="series",
             aspect_ratio="16/27")

@@ -6,6 +6,7 @@ from gui.elements import header, crud_button, markdown_field_editor, full_width_
 from gui.messaging import post_user_message
 from gui.state import APPState
 from storage.generic import GenericStorage
+from schema import Publisher, Series
 
 
 def view_publisher(state: APPState):
@@ -19,11 +20,12 @@ def view_publisher(state: APPState):
     logger.debug("view_publisher")
     selection = state.selection
     publisher_id = selection[-1].id
-    publisher = storage.read_publisher(id=publisher_id)
+    publisher = storage.read_object(Publisher, primary_key={"publisher_id": publisher_id}) if publisher_id else None
     details = state.details
 
     if publisher is None:
-        header("Publisher not found", 0).style('text-red-500')
+        details.clear()
+        header(f"Publisher {publisher_id} not found", 0)
         return
     
     def set_image(image_id: str):
@@ -47,7 +49,7 @@ def view_publisher(state: APPState):
         """
         # Create a new image in the storage
         file_locator = storage.upload_publisher_image(
-            publisher_id=publisher.id, 
+            publisher_id=publisher.publisher_id, 
             name=name, 
             data=data, 
             mime_type=mime_type
@@ -86,7 +88,7 @@ def view_publisher(state: APPState):
             full_width_image_selector_grid(
                 state=state,
                 image_kind_name="logo image",
-                get_images=lambda: storage.find_publisher_images(publisher_id=publisher.id),
+                get_images=lambda: storage.find_publisher_images(publisher_id=publisher.publisher_id),
                 get_selection=lambda : publisher.image,
                 set_selection=set_image,
                 upload_image=upload_image
@@ -105,14 +107,14 @@ def view_pick_publisher(state:APPState):
     # Dereference the state to get the selection and details.
     selection = state.selection
     series_id = selection[-2].id
-    series = storage.read_series(id=series_id) if series_id else None
+    series = storage.read_object(cls=Series, primary_key={"series_id": series_id}) if series_id else None
     pub_id = selection[-1].id
-    pub = storage.read_publisher(id=pub_id) if pub_id else None
+    pub = storage.read_object(cls=Publisher, primary_key={"publisher_id": pub_id}) if pub_id else None
 
     # Create a setter function for the publisher choice
     def set_publisher(publisher_id):
         if series is not None:
-            series.publisher = publisher_id
+            series.publisher_id = publisher_id
             storage.update_series(series)
 
     with state.details:
@@ -124,9 +126,9 @@ def view_pick_publisher(state:APPState):
             kind="publisher",
             aspect_ratio="1/1",
             get_name=lambda i,x: x.name,
-            get_choice=lambda : series.publisher if series else None,
+            get_choice=lambda : series.publisher_id if series else None,
             set_choice=set_publisher,
-            get_image_locator=lambda publisher: storage.find_publisher_image(publisher_id=publisher.id),
+            get_image_locator=lambda publisher: storage.find_publisher_image(publisher_id=publisher.publisher_id),
         )            
 
             

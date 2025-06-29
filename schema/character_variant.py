@@ -13,9 +13,9 @@ class CharacterVariantMinimal(BaseModel):
 
 
 class CharacterVariant(BaseModel):
-    id: str = Field(..., description="The unique identifier for the character variant.  This is usually the character name in lowercase with spaces replaced by dashes.  defaults to null")
-    series: str = Field(..., description="The comic book series (title) that the character belongs to.  Default to empty string")
-    character: str = Field(..., description="The identifier of the character for which this is a variant.  e.g. '<name>'")
+    variant_id: str = Field(..., description="The unique identifier for the character variant.  This is usually the character name in lowercase with spaces replaced by dashes.  defaults to null")
+    series_id: str = Field(..., description="The comic book series (title) that the character belongs to.  Default to empty string")
+    character_id: str = Field(..., description="The identifier of the character for which this is a variant.  e.g. '<name>'")
     description: str = Field(..., description="A 3-5 sentence description of the character.  This should be sufficient to distinguish the character from others.")
     name: str = Field(None, description="The variant of the variant. E.g 'young', 'armored', etc.")
     race: str = Field(..., description="The race of the character.  Default to 'human'")
@@ -33,31 +33,30 @@ class CharacterVariant(BaseModel):
         return the primary key for the character variant
         """
         return {
-            "character_id": self.character,
-            "variant_id": self.id,
-            "series_id": self.series,
+            "character_id": self.character_id,
+            "variant_id": self.variant_id,
+            "series_id": self.series_id,
+        }
+    
+    @property
+    def parent_key(self) -> dict[str, str]:
+        """
+        return the parent key for the character variant
+        """
+        return {
+            "series_id": self.series_id,
+            "character_id": self.character_id,
         }
 
+    @property
+    def id(self) -> str:
+        """
+        return the id of the character variant
+        """
+        # Normalize the id:
+        return self.variant_id
 
-#     def format(self, heading_level: int = 2) -> str:
-#         """
-#         format the character model for display
-#         """
-#         from schema.style.comic import ComicStyle
-#         result = f"""{'#'*heading_level} Character Model ({self.name})
-# * **Name**: {self.name}
-# * **Race**: {self.race}
-# * **Age**: {self.age}
-# * **Height**: {self.height}
-# * **Gender**: {self.gender}
-# * **Description**: {self.description}
-# * **Attire**: {self.attire}
-#         """.strip()
-#         if self.appearance is not None and self.appearance != "":
-#             result += f"\n* **Appearance**: {self.appearance}"
-#         if self.behavior is not None and self.behavior != "":
-#             result += f"\n* **Behavior**: {self.behavior}"
-#         return result
+
 
 #     def render(self, style: ComicStyle):
 #         """

@@ -4,12 +4,12 @@ class SceneModel(BaseModel):
     """
     A scene is a collection of pannels that tell a story.   For example, a scene could be a page in a comic book.
     """
-    id: str = Field(..., description="The unique identifier of the scene.  This is the same as the title, but with spaces replaced by underscores.")
-    issue: str = Field(..., description="The identifier of the issue comic book or project that this scene belongs to. default to empty string")
-    series: str = Field(..., description="The identifier of the series that this scene belongs to. default to empty string")
+    scene_id: str = Field(..., description="The unique identifier of the scene.  This is the same as the title, but with spaces replaced by underscores.")
+    issue_id: str = Field(..., description="The identifier of the issue comic book or project that this scene belongs to. default to empty string")
+    series_id: str = Field(..., description="The identifier of the series that this scene belongs to. default to empty string")
     name: str = Field(..., description="A short title for the scene.   Default to a short (5 words or less) description of the scene'")
     story: str = Field(..., description="The story or narrative arc of the scene")
-    style: str = Field(..., description="The art style of the scene.   Default to 'vintage-four-color'")
+    style_id: str = Field(..., description="The art style of the scene.   Default to 'vintage-four-color'")
 
     @property
     def primary_key(self) -> dict[str, str]:
@@ -17,10 +17,27 @@ class SceneModel(BaseModel):
         return the primary key for the scene
         """
         return {
-            "scene_id": self.id,
-            "issue_id": self.issue,
-            "series_id": self.series,
+            "scene_id": self.scene_id,
+            "issue_id": self.issue_id,
+            "series_id": self.series_id,
         }
+    
+    @property
+    def parent_key(self) -> dict[str, str]:
+        """
+        return the parent key for the scene
+        """
+        return {
+            "issue_id": self.issue_id,
+            "series_id": self.series_id,
+        }
+    
+    @property
+    def id(self) -> str:
+        """
+        return the id of the scene
+        """
+        return self.scene_id
 
     def format(self, heading_level: int=1, no_panels: bool=False):
         """
@@ -29,10 +46,10 @@ class SceneModel(BaseModel):
         
         text = f"""
 {'#' * heading_level} SCENE
-* **id**: {self.id}
+* **id**: {self.scene_id}
 * **story**: {self.story}
-* **issue**: {self.issue}
-* **style**: {self.style}
+* **issue**: {self.issue_id}
+* **style**: {self.style_id}
 """
         if not no_panels:
             text += f"""
