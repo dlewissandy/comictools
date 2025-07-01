@@ -67,7 +67,7 @@
     }
   },
   "image": {
-    "art": "data/styles/watercolor/images/art-style/watercolor.jpg",
-    "character": "data/styles/watercolor/images/character-style/1a3b1026-707f-4f72-9169-2487cbde55ba.jpg"
+    "art": "data/styles/watercolor/images/art/watercolor.jpg",
+    "character": "data/styles/watercolor/images/character/1a3b1026-707f-4f72-9169-2487cbde55ba.jpg"
   }
 }

@@ -67,7 +67,7 @@
     }
   },
   "image": {
-    "art": "data/styles/hyper-realism/images/art-style/hyper-realism.jpg",
-    "character": "data/styles/hyper-realism/images/character-style/rugor copy.jpg"
+    "art": "data/styles/hyper-realism/images/art/hyper-realism.jpg",
+    "character": "data/styles/hyper-realism/images/character/280dd457-fa89-48de-8c20-6bd149ac20c1.jpg"
   }
 }

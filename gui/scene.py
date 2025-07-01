@@ -3,11 +3,9 @@ from nicegui import ui
 from loguru import logger
 from nicegui.events import UploadEventArguments
 from gui.selection import SelectionItem, SelectedKind
-from gui.elements import init_cardwall
 from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button, CrudButtonKind
 from gui.messaging import post_user_message
 from schema import SceneModel, Panel, FrameLayout
-from helpers.file import generate_unique_id
 from gui.state import APPState
 from storage.generic import GenericStorage
 
@@ -54,6 +52,11 @@ def view_scene(state: APPState):
     #   |           |              |           |           |
     #   +--------------------------------------------------+ 
     with details:
+        with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
+            header(f"Scene: {scene.name.title()}", 0)
+            ui.space()
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current scene."), size=1)
+
         with ui.row().classes('w-full flex-nowrap'):
             with ui.column().classes('w-3/4'):
                 # TODO: Add button to convert story into multiple panels

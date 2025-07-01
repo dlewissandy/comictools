@@ -67,13 +67,13 @@
     }
   },
   "image": {
-    "art": "data/styles/conte-crayon/images/art-style/conte-crayon.jpg",
+    "art": "data/styles/conte-crayon/images/art/conte-crayon.jpg",
     "character": "data/styles/conte-crayon/images/character-style/5118f02f-1551-4f5a-b02a-6e8a3a62b048.jpg",
-    "chat": "cc68071e-865f-4df3-a3e3-030fbc9d1a13",
-    "whisper": "ce60f034-3a2d-4912-a8d0-8d91ab2876e8",
-    "thought": "8bc25031-5f96-490a-8f77-c2dbcb2aa76f",
-    "shout": "00719dfe-76f2-4f40-8d4c-035a4d99d605",
-    "sound-effect": "f4043f74-844e-43e0-bdaa-b7c2eda6c33f",
-    "narration": "58c67d39-3573-49ce-a97b-2b06082e38dc"
+    "chat": "data/styles/conte-crayon/images/chat/cc68071e-865f-4df3-a3e3-030fbc9d1a13.jpg",
+    "whisper": "data/styles/conte-crayon/images/whisper/ce60f034-3a2d-4912-a8d0-8d91ab2876e8.jpg",
+    "thought": "data/styles/conte-crayon/images/thought/8bc25031-5f96-490a-8f77-c2dbcb2aa76f.jpg",
+    "shout": "data/styles/conte-crayon/images/shout/00719dfe-76f2-4f40-8d4c-035a4d99d605.jpg",
+    "sound-effect": "data/styles/conte-crayon/images/sound-effect/f4043f74-844e-43e0-bdaa-b7c2eda6c33f.jpg",
+    "narration": "data/styles/conte-crayon/images/narration/58c67d39-3573-49ce-a97b-2b06082e38dc.jpg"
   }
 }

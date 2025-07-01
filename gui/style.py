@@ -161,7 +161,7 @@ def view_pick_style(state: APPState):
     if parent_kind == SelectedKind.ISSUE:
         issue_id = selection[-2].id
         series_id = selection[-3].id
-        parent = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "id": issue_id})
+        parent = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
         writer = lambda: storage.update_object(data=parent)
     elif parent_kind == SelectedKind.SCENE:
         scene_id = selection[-2].id
@@ -189,8 +189,8 @@ def view_pick_style(state: APPState):
         header("Pick a Style", 1)
         view_all_instances(
             state=state,
-            get_instances=storage.read_all_styles,
-            get_image_locator=lambda x: storage.find_image(StyleExample(style_id=x.id, example_id="art"), x.image) if x.image else None,
+            get_instances=lambda: storage.read_all_objects(ComicStyle),
+            get_image_locator=lambda x: storage.find_image(StyleExample(style_id=x.style_id, example_id="art"), x.image.get('art',None)) if x.image.get('art', None) else None,
             kind="style",
             aspect_ratio="1/1",
             get_name=lambda _,x: x.name,

@@ -67,7 +67,7 @@
     }
   },
   "image": {
-    "art": "data/styles/origami/images/art-style/origami.jpg",
-    "character": "data/styles/origami/images/character-style/554df779-d93e-4a15-8296-080973deb7f8.jpg"
+    "art": "data/styles/origami/images/art/origami.jpg",
+    "character": "data/styles/origami/images/character/554df779-d93e-4a15-8296-080973deb7f8.jpg"
   }
 }
