@@ -1,6 +1,6 @@
 from schema.character import CharacterModel
 from schema.character_variant import CharacterVariant, CharacterVariantMinimal
-from schema.dialog import Naration, NarationPosition, Dialogue, DialogueEmphasis
+from schema.dialog import Narration, NarrationPosition, Dialogue, DialogueEmphasis
 from schema.issue import Issue
 from schema.panel import Panel
 from schema.scene import SceneModel
@@ -10,7 +10,8 @@ from schema.style.art import ArtStyle
 from schema.style.dialog import BubbleStyle, DialogType, BubbleStyles
 from schema.style.comic import ComicStyle
 from schema.style.character import CharacterStyle
-from schema.styled_image import StyledImage
+from schema.style.style_example import StyleExample, ExampleKind
+from schema.styled_variant import StyledVariant
 from schema.character_reference import CharacterRef
 from schema.reference_image import ReferenceImage
 from schema.cover import Cover
@@ -31,17 +32,19 @@ __all__ = [
     "Dialogue",
     "DialogueEmphasis",
     "DialogType",
+    "ExampleKind",
     "FrameLayout",
     "Issue",
-    "Naration",
-    "NarationPosition",
+    "Narration",
+    "NarrationPosition",
     "Panel",
     "Publisher",
     "ReferenceImage",
     "Relation",
     "SceneModel",
     "Series",
-    "StyledImage",
+    "StyledVariant",
+    "StyleExample",
     "Cover",
     # Functions
     "frame_dimensions",

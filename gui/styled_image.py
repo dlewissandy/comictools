@@ -17,37 +17,39 @@ def view_styled_image(
     state: APPState
 ):
     from gui.elements import full_width_image_selector_grid
-    from schema import CharacterModel, CharacterVariant, StyledImage
+    from schema import CharacterModel, CharacterVariant, StyledVariant, ComicStyle
     selection = state.selection
     storage: GenericStorage = state.storage
 
-    style_id = selection[-1].name.lower().replace(" ", "-")
-    variant_id = selection[-2].id
+    style_id = selection[-1].id
+    variant_id = selection[-2].id 
     character_id = selection[-3].id
     series_id = selection[-4].id
 
-    character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
     variant = storage.read_object(
         cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id, "variant_id": variant_id}
     )
+    style = storage.read_object(
+        cls=ComicStyle, primary_key={"style_id": style_id}
+    )
 
-    if character is None:
+
+    if variant is None or style is None:
+        # Missing data, clear the details and show an error message.
         state.clear_details()
-        header("Character Not Found", 2).style('color: red;')
-        message = f"Character with ID {character_id} not found in series {series_id}."
-        header(message, 4)
-        logger.error(message)
-        return
-    
-    if variant is None:
-        state.clear_details()
-        header("Variant Not Found", 2).style('color: red;')
-        message = f"Variant with ID {variant_id} not found for character {character_id} in series {series_id}."
-        header(message, 4)
+        primary_key = {
+            "series_id": series_id,
+            "character_id": character_id,
+            "variant_id": variant_id,
+            "style_id": style_id
+        }
+        header("Not Found", 2).style('color: red;')
+        message = f"Styled images for {primary_key} not found."
         logger.error(message)
         return
     
     variant: CharacterVariant = variant
+    style: ComicStyle = style
     
     def get_selection():
         img = variant.images[style_id]
@@ -55,16 +57,16 @@ def view_styled_image(
     
     def set_selection(id: str):
         variant.images[style_id] = id
-        storage.update_character_variant(data = variant)
+        storage.update_object(data = variant)
         state.is_dirty = True
 
     def get_images():
-        return [ x.image_id for x in storage.find_styled_images(
+        return storage.find_styled_images(
             series_id=series_id,
             character_id=character_id,
             variant_id=variant_id,
             style_id=style_id
-        )  ]
+        )
     
     with state.details:
         full_width_image_selector_grid(
@@ -73,7 +75,7 @@ def view_styled_image(
             get_selection=get_selection,
             set_selection=set_selection,
             get_images=get_images,
-            upload_image=lambda name, data, mime_type: storage.upload_styled_variant_image(series_id=series_id, character_id=character_id, variant_id=variant_id, style_id=style_id, name=name, data=data, mime_type=mime_type),
+            upload_image=lambda name, data, mime_type: storage.upload_image(StyledVariant(style_id=style_id,series_id=series_id, character_id=character_id, variant_id=variant_id), name=name, data=data, mime_type=mime_type),
             include_render_button=False,
             aspect_ratio="3/2"
         )

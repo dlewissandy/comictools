@@ -34,7 +34,7 @@ def all_publishers_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         
         logger.info(f"The name '{name}' is available.")
         publisher = Publisher(name=name, logo=None, description=description, image=None, id=name.lower().replace(" ", "-"))
-        storage.create_publisher(publisher)
+        storage.create_object(data=publisher)
         selection = state.selection
         new_itm = SelectionItem(name=publisher.name, id=publisher.id, kind=SelectedKind.PUBLISHER)
         new_sel = [s for s in selection]+[new_itm]
@@ -55,7 +55,7 @@ def all_publishers_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
             A status message indicating the result of the selection.
         """
         from schema.publisher import Publisher
-        publisher = storage.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
+        publisher: Publisher = storage.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
         if publisher is None:
             return f"Publisher '{publisher_id}' not found.  Maybe try looking at the list of publishers first?"
         sel_itm = SelectionItem(
@@ -65,7 +65,7 @@ def all_publishers_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         )
         new_selection = state.selection + [sel_itm]
         state.change_selection(new=new_selection, clear_history=False)
-        return f"Selected publisher: {publisher.name}"
+        return f"Selected publisher: {publisher.publisher_id}"
 
     @function_tool
     def delete_publisher(publisher_id: str) -> str:
@@ -78,10 +78,10 @@ def all_publishers_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         Returns:
             A status message indicating the result of the deletion.
         """
-        pub = storage.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
+        pub: Publisher = storage.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
         if pub is None:
-            return f"Publisher '{name}' not found.  Maybe try looking at the list of publishers first?"
-        storage.delete_publisher(pub.id)
+            return f"Publisher '{publisher_id}' not found.  Maybe try looking at the list of publishers first?"
+        storage.delete_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
 
         # The selection does not need to change, but we do need to refresh the display to 
         # remove the deleted series from the list.

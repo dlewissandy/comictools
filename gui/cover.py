@@ -1,7 +1,7 @@
 from nicegui import ui
 from loguru import logger
 from gui.selection import SelectionItem, SelectedKind
-from schema import Cover, CoverLocation, ComicStyle
+from schema import Cover, CoverLocation, ComicStyle, StyleExample
 from gui.state import APPState
 from gui.elements import (
     header, crud_button, 
@@ -61,22 +61,22 @@ def view_cover(state: APPState, location: CoverLocation):
                     state=state, 
                     kind=SelectedKind.PICK_STYLE, 
                     get_caption=lambda: "Style", 
-                    get_id =lambda: style.id if style else None, 
-                    get_image_filepath=lambda: storage.find_style_image(style.id) if style else None
+                    get_id =lambda: style.style_id if style else None, 
+                    get_image_filepath=lambda: storage.find_image(StyleExample(style_id=style.style_id, example_id="art"), style.image.get("art", None)) if style else None
                 )
             
 
         def set_image(image_locator: str):
             cover.image = image_locator
-            storage.update_cover(cover)
+            storage.update_object(cover)
 
         k = cover.location.value.lower().replace(" ", "-")
         with ui.card().classes(TAILWIND_CARD).style('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800'):
             full_width_image_selector_grid(
                 state=state,
                 image_kind_name="cover image",
-                upload_image=lambda name, data, mime_type: storage.upload_cover_image(series_id=series_id, issue_id=issue_id, location=location, image_name=name, image_data=data, mime_type=mime_type),
-                get_images=lambda k=k: storage.find_cover_images(series_id=series_id, issue_id=issue_id, location=location),
+                upload_image=lambda name, data, mime_type: storage.upload_image(cover, name=name, data=data, mime_type=mime_type),
+                get_images=lambda k=k: storage.list_images(cover),
                 get_selection=lambda k=k: cover.image,
                 set_selection=lambda img_id, k=k: set_image(img_id),
                 
@@ -99,10 +99,8 @@ def view_cover(state: APPState, location: CoverLocation):
                 data: The binary data of the image.
                 mime_type: The MIME type of the image.
             """
-            filepath = storage.upload_cover_reference_image(
-                series_id=series_id, 
-                issue_id=issue_id, 
-                location=location, 
+            filepath = storage.upload_reference_image(
+                cover, 
                 name=name, 
                 data=data, 
                 mime_type=mime_type
@@ -112,10 +110,7 @@ def view_cover(state: APPState, location: CoverLocation):
 
         view_reference_images(
             state=state,
-            get_images=lambda: storage.find_cover_reference_images(
-                series_id=series_id,
-                issue_id=issue_id,
-                location=location),
+            get_images=lambda: cover.reference_images,
             upload_image=upload_image,
             parent=cover,
         )

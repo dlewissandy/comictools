@@ -6,7 +6,7 @@ from gui.constants import TAILWIND_CARD
 from gui.messaging import post_user_message
 from gui.state import APPState
 from gui.selection import SelectionItem, SelectedKind
-from schema.panel import FrameLayout
+from schema import FrameLayout, ReferenceImage
 from pydantic import BaseModel
 from loguru import logger
 from storage.generic import GenericStorage
@@ -343,6 +343,7 @@ def render_object_cards(
                     kind_value = kind(instance)
                 else:
                     kind_value = kind
+                logger.critical(f"kind_value={kind_value}, instance={instance}")
                 sel_itm = SelectionItem(name=name, id=id, kind=kind_value)
                 new_sel = [s for s in selection]+[sel_itm]
                 image = get_image_locator(instance)
@@ -579,7 +580,7 @@ def view_character_references(state: APPState, parent: BaseModel):
     expansion.open()
     return expansion
 
-def view_reference_images(state: APPState, parent: BaseModel, get_images: Callable[[], list[str]], upload_image: Callable[[str, BinaryIO, str], str]  ):
+def view_reference_images(state: APPState, parent: BaseModel, get_images: Callable[[], list[ReferenceImage]], upload_image: Callable[[str, BinaryIO, str], str]  ):
 
     def on_upload(e: UploadEventArguments):
         save_filepath = upload_image(e.name, e.content, e.type)

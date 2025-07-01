@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from schema.dialog import Naration, Dialogue, NarationPosition
+from schema.dialog import Narration, Dialogue, NarrationPosition
 from schema.enums import FrameLayout
 from schema.reference_image import ReferenceImage
 from schema.character_reference import CharacterRef
@@ -17,8 +17,8 @@ class Panel(BaseModel):
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to square")
     character_references: list[CharacterRef] = Field(..., description="A dictionary mapping the names of the characters that appear in the panel to the visual variant that should be used as reference.   Default to empty dict")
 
-    # DIALOGUE AND NARATION
-    narration: list[Naration] = Field(..., description="The narration of the panel.  default to empty list")
+    # DIALOGUE AND NARRATION
+    narration: list[Narration] = Field(..., description="The narration of the panel.  default to empty list")
     dialogue: list[Dialogue] = Field(..., description="The dialogue of the panel, default to empty list")
     
     # IMAGES
@@ -32,9 +32,9 @@ class Panel(BaseModel):
         """
         return {
             "panel_id": self.id,
-            "issue_id": self.issue,
-            "scene_id": self.scene,
-            "series_id": self.series,
+            "issue_id": self.issue_id,
+            "scene_id": self.scene_id,
+            "series_id": self.series_id,
         }
 
     @property

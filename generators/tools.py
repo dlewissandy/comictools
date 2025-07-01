@@ -435,7 +435,7 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         publisher = storage.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
         if publisher is None:
             return f"Publisher '{publisher_id}' not found."
-        storage.delete_publisher(id=publisher.publisher_id)
+        storage.delete_object(Publisher, primary_key={"publisher_id": publisher_id})
 
         selection = state.selection
         sel_itm = selection[-1]
@@ -476,8 +476,8 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         else:
             return f"Can't delete issue '{issue_id}'.   The selection is not a series or issue: {selection_kind}"
     
-        storage.delete_issue(series_id=series_id, issue_id=issue_id)
-        
+        storage.delete_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
+
         if selection_kind == SelectedKind.ISSUE:
             # Change the selection!  Move up a level.
             new_selection = selection[:-1]
@@ -518,6 +518,8 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         "delete_character": delete_character,
 
         # UPDATE
+
+        # IMAGES
     }
 
 def normalize_name(name: str) -> str:

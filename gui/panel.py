@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from nicegui import ui
-from schema import Panel, FrameLayout, Naration, BubbleStyle, NarationPosition
+from schema import Panel, FrameLayout, Narration, BubbleStyle, NarrationPosition
 from helpers.constants  import DATA_FOLDER
 from gui.elements import (
     DARK_MODE_STYLES, 
@@ -109,24 +109,24 @@ def view_panel(state: APPState):
 
     def set_image(locator: str):
         panel.image = locator
-        storage.update_panel(panel)
+        storage.update_object(panel)
 
     def format_bubble_style(dialogue: BubbleStyle):
         return f"**{dialogue.character_id}** ({dialogue.emphasis.value}): {dialogue.text}"
     
-    def format_narration(narration: Naration) -> str:
+    def format_narration(narration: Narration) -> str:
         """
         format the narration for display
         """
-        return f"**Naration [{narration.position.value}]** : {narration.text}"
+        return f"**Narration [{narration.position.value}]** : {narration.text}"
 
     def format_dialogue(panel: Panel) -> str:
         """
         format the dialogue for display
         """
         text = ""
-        top = "\n\n".join([format_narration(n) for n in panel.narration if n.position == NarationPosition.TOP])
-        bottom = "\n\n".join([ format_narration(n) for n in panel.narration if n.position == NarationPosition.BOTTOM])
+        top = "\n\n".join([format_narration(n) for n in panel.narration if n.position == NarrationPosition.TOP])
+        bottom = "\n\n".join([ format_narration(n) for n in panel.narration if n.position == NarrationPosition.BOTTOM])
         dialogue = "\n\n".join([format_bubble_style(d) for d in panel.dialogue])
         if top:
             text += top + f"\n\n"
@@ -156,22 +156,11 @@ def view_panel(state: APPState):
             full_width_image_selector_grid(
                 state=state,
                 image_kind_name="panel image",
-                upload_image=lambda name, data, mime_type: storage.upload_panel_reference_image(
-                    series_id=series_id, 
-                    issue_id=issue_id, 
-                    scene_id=scene_id, 
-                    panel_id=panel_id, 
-                    name=name, 
-                    data=data, 
-                    mime_type=mime_type),
+                upload_image=lambda name, data, mime_type: storage.upload_image(
+                    obj=panel, name=name, data=data, mime_type=mime_type),
                 get_selection=lambda : panel.image,
                 set_selection=set_image,
-                get_images=lambda: storage.find_panel_images(
-                    series_id=series_id, 
-                    issue_id=issue_id, 
-                    scene_id=scene_id, 
-                    panel_id=panel_id),
-
+                get_images=lambda: storage.list_images(panel),
                 aspect_ratio={aspect},
                 columns=4,
                 header_size=2,
@@ -185,20 +174,8 @@ def view_panel(state: APPState):
         view_reference_images(
             state=state, 
             parent=panel,
-            get_images=lambda: storage.find_panel_reference_images(
-                series_id=series_id, 
-                issue_id=issue_id, 
-                scene_id=scene_id, 
-                panel_id=panel_id),
-            upload_image=lambda name, data, mime_type: storage.upload_panel_reference_image(
-                series_id=series_id, 
-                issue_id=issue_id, 
-                scene_id=scene_id, 
-                panel_id=panel_id, 
-                name=name, 
-                data=data, 
-                mime_type=mime_type)
-
+            get_images=lambda: storage.list_uploads(panel),
+            upload_image=lambda name, data, mime_type: storage.upload_reference_image(panel, name, data, mime_type)
         )
     
 

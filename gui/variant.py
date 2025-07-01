@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from nicegui import ui
-from schema import CharacterModel, CharacterVariant, StyledImage
+from schema import CharacterModel, CharacterVariant, StyledVariant
 from gui.elements import (
     header, 
     crud_button, 
@@ -85,9 +85,9 @@ def view_character_variant(state:APPState):
                 crud_button(kind=CrudButtonKind.CREATE, action=lambda _: post_user_message(state, "I would like a new styled image for the current character variant."))
             view_all_instances(
                 state=state,
-                get_instances=lambda: [StyledImage(style_id=style_id, series_id=series_id, character_id=character_id, variant_id=variant_id, image_id=image_id) for style_id, image_id in variant.images.items()],
+                get_instances=lambda: [StyledVariant(style_id=style_id, series_id=series_id, character_id=character_id, variant_id=variant_id, image_id=image_id) for style_id, image_id in variant.images.items()],
                 get_image_locator=lambda styled_image: storage.find_styled_image(series_id=styled_image.series_id, character_id=styled_image.character_id, variant_id= styled_image.variant_id, style_id=styled_image.style_id, name=styled_image.image_id),
-                kind="styled-image",
+                kind="styled-variant",
                 aspect_ratio="3/2",
                 get_name=lambda _,img: img.name
             )           

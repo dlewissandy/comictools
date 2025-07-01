@@ -360,6 +360,8 @@ class APPState:
                 return view_character_variant(self)
             case "styled-image":
                 return view_styled_image(self)
+            case "styled-variant":
+                return view_styled_image(self)
             case _:        
                 # Handle other cases or return a default message
                 self.clear_details()

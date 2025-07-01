@@ -26,7 +26,7 @@ def view_all_publishers(state: APPState):
         new_item_messager(state, "PUBLISHERS", "I would like to create a new comic book publisher.")
         view_all_instances(
             state=state,
-            get_image_locator=lambda publisher: storage.find_publisher_image(publisher_id=publisher.publisher_id),
+            get_image_locator=lambda publisher: publisher.image,
             get_instances=lambda: storage.read_all_objects(Publisher),
             kind="publisher",
             aspect_ratio="1/1")

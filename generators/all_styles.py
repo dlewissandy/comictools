@@ -48,7 +48,7 @@ def all_styles_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         logger.info(f"The name '{name}' is available.")
         style = ComicStyle(
             name=name, 
-            id=style_id,
+            style_id=style_id,
             description=description, 
             art_style=art_style, 
             character_style=character_style, 

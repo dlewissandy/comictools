@@ -152,11 +152,11 @@ def series_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
             return "No comic series selected. Please select a series to delete a character."
         
         series_id = series.id
-        character = CharacterModel.read(series=series.id, name=name)
+        character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": name.lower().replace(" ", "-")})
         if not character:
             return f"Character with name '{name}' not found in series '{series.series_title}'."
         
-        character.delete()
+        storage.delete_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": name.lower().replace(" ", "-")})
         state.is_dirty = True
         return f"Character '{name}' deleted successfully from series '{series.series_title}'."
     

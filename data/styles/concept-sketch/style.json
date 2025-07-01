@@ -1,5 +1,5 @@
 {
-  "id": "concept-sketch",
+  "style_id": "concept-sketch",
   "name": "Concept Sketch",
   "description": "A stylistic approach emphasizing rough, expressive pencil sketches that capture dynamic movement and emotional nuances, suitable for conceptual storytelling.",
   "art_style": {
@@ -67,7 +67,7 @@
     }
   },
   "image": {
-    "art": "data/styles/concept-sketch/images/art-style/concept-sketch.jpg",
-    "character": "data/styles/concept-sketch/images/character-style/99c031a8-0e32-47ac-b2d9-01a4e0f28f3d.jpg"
+    "art": "data/styles/concept-sketch/images/art/concept-sketch.jpg",
+    "character": "data/styles/concept-sketch/images/character/99c031a8-0e32-47ac-b2d9-01a4e0f28f3d.jpg"
   }
 }

@@ -20,7 +20,7 @@ def view_scene(state: APPState):
         state: The GUI elements containing the details and selection.
     """
     # DEREFERENCE THE DATA
-    from schema.style.comic import ComicStyle
+    from schema import ComicStyle, StyleExample
     details = state.details
     storage: GenericStorage = state.storage
 
@@ -69,7 +69,7 @@ def view_scene(state: APPState):
                     kind=SelectedKind.PICK_STYLE, 
                     get_caption = lambda: "Style", 
                     get_id = lambda: style.id if style else None, 
-                    get_image_filepath = lambda: storage.find_style_image(style.id) if style else None
+                    get_image_filepath = lambda: storage.find_image(StyleExample(style_id=style.id, example_id="art"), style.image.get("art",None)) if style else None
                 )
                 
         with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
@@ -126,13 +126,12 @@ def view_scene(state: APPState):
                 with row:
                     def on_upload(e:UploadEventArguments):
                         # Save the uploaded file to the data/uploads directory with a unique name
-                        locator = storage.upload_scene_reference_image(
-                            series_id=series_id, 
-                            issue_id=issue_id, 
-                            scene_id=scene_id, 
-                            image_name=e.name, 
-                            image_data=e.content, 
-                            mime_type=e.type)
+                        locator = storage.upload_reference_image(
+                            obj=scene,
+                            name=e.name,
+                            data=e.content,
+                            mime_type=e.type
+                        )
 
                         post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
 

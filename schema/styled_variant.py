@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-class StyledImage(BaseModel):
+class StyledVariant(BaseModel):
     style_id: str = Field(..., description="The id of the style for which this image is generated.  e.g. 'vintage-four-color'")
     series_id: str = Field(..., description="The id of the comic book series for which this image is generated.  e.g. 'spiderman'")
     character_id: str = Field(..., description="The id of the character for which this image is generated.  e.g. 'spiderman'")

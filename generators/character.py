@@ -143,8 +143,8 @@ def character_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
             behavior=behavior,
             images = {}
         )
-        storage.create_character_variant(variant)
-        sel_item = SelectionItem( id = variant.variant_id, name=variant.name, kind="variant")
+        storage.create_object(data=variant)
+        sel_item = SelectionItem(id=variant.variant_id, name=variant.name, kind="variant")
         state.selection.append(sel_item)  # Add the new variant to the selection
         state.write()
         state.is_dirty = True

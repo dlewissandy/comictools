@@ -18,14 +18,16 @@ class SelectedKind(StrEnum):
     COVER = "cover"
     CHARACTER = "character"
     VARIANT = "variant"
-    STYLED_IMAGE = "styled-image"
+    STYLED_VARIANT = "styled-variant"
     PUBLISHER = "publisher"
-    STYLE = "style",
+    STYLE = "style"
+    STYLE_EXAMPLE = "style-example"
     # PICKERS
     PICK_PUBLISHER = "pick-publisher"
     PICK_STYLE = "pick-style"
     REFERENCE_IMAGE = "reference-image"
     CHARACTER_REFERENCE = "character-reference"
+
 
 class SelectionItem(BaseModel):
     name: str = Field(..., description="The name that will be displayed on the breadcrumbs")
@@ -44,7 +46,7 @@ def selection_to_context(
     Returns:
         A string that represents the primary key for the selection.
     """
-    from schema import Publisher, ComicStyle, Series, Issue, SceneModel, Panel, Cover, CharacterModel, CharacterVariant, StyledImage, ReferenceImage
+    from schema import Publisher, ComicStyle, Series, Issue, SceneModel, Panel, Cover, CharacterModel, CharacterVariant, StyledVariant, ReferenceImage
     i = 0
     accum  = {}
     context = []
@@ -80,9 +82,9 @@ def selection_to_context(
             case SelectedKind.VARIANT.value:
                 accum["variant_id"] = id
                 context.append((CharacterVariant, {k:v for k, v in accum.items()}))
-            case SelectedKind.STYLED_IMAGE.value:
+            case SelectedKind.STYLED_VARIANT.value:
                 accum["styled_image_id"] = id
-                context.append((StyledImage, {k:v for k, v in accum.items()}))
+                context.append((StyledVariant, {k:v for k, v in accum.items()}))
             case SelectedKind.REFERENCE_IMAGE.value:
                 accum["image_id"] = id
                 context.append((ReferenceImage, {k:v for k, v in accum.items()}))

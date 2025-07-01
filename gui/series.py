@@ -69,7 +69,7 @@ def view_series(state: APPState):
                     kind = SelectedKind.PICK_PUBLISHER, 
                     get_caption=lambda: "Publisher", 
                     get_id=get_id, 
-                    get_image_filepath=lambda: storage.find_publisher_image(publisher_id=pub.id) if pub else None,
+                    get_image_filepath=lambda: pub.image if pub else None,
                     caption_size=2)
         
         # A cardwall for viewing and adding issues of the comic.

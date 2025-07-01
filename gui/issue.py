@@ -5,7 +5,7 @@ from gui.elements import (
     markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes, crud_button, post_user_message,
     CrudButtonKind
     )
-from schema import ComicStyle, Issue, Cover, SceneModel
+from schema import ComicStyle, Issue, Cover, SceneModel, StyleExample
 from gui.state import APPState
 from gui.messaging import post_user_message
 from gui.selection import SelectionItem, SelectedKind
@@ -59,8 +59,8 @@ def view_issue(state:APPState):
                     state=state, 
                     kind=SelectedKind.PICK_STYLE, 
                     get_caption=lambda: "Style", 
-                    get_id =lambda: style.id if style else None, 
-                    get_image_filepath=lambda: storage.find_style_image(style_id=style.id) if style else None
+                    get_id =lambda: style.style_id if style else None, 
+                    get_image_filepath=lambda: storage.find_image(StyleExample(style_id=style.style_id, example_id="art"), style.image.get("art", None)) if style  else None
                 )
 
 

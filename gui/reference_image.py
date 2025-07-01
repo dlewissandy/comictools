@@ -45,8 +45,8 @@ def view_reference_image(
             return
         else:
             img_ref = image_refs[0]
-        upload_image = lambda name, data, mime_type: storage.upload_panel_reference_image(name=name, data=data,  mime_type=mime_type, **primary_key)
-        updater = lambda x: storage.update_panel(x)
+        upload_image = lambda name, data, mime_type: storage.upload_reference_image(parent, name=name, data=data,  mime_type=mime_type)
+        updater = lambda x: storage.update_object(x)
         name = "Panel {parent.panel_number}"
     elif parent_sel.kind in ["front-cover", "back-cover", "inside-front-cover", "inside-back-cover"]:
         primary_key = {
@@ -68,8 +68,8 @@ def view_reference_image(
         else:
             img_ref = img_refs[0]
         name = f"{primary_key["location"].value.title()} Cover"
-        upload_image = lambda name, data, mime_type: storage.upload_cover_reference_image(name=name, data=data, mime_type=mime_type, **primary_key)
-        updater = lambda x: storage.update_cover(x)
+        upload_image = lambda name, data, mime_type: storage.upload_reference_image(parent, name=name, data=data, mime_type=mime_type, **primary_key)
+        updater = lambda x: storage.update_object(x)
     else:
         logger.error(f"Unknown parent kind {parent_sel.kind}")
         return

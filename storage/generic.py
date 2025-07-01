@@ -63,3 +63,73 @@ class GenericStorage(ABC):
             cls (BaseModel): The class of the object to be deleted.
         """
         pass
+
+    @abstractmethod
+    def list_images(self, obj: BaseModel) -> list[str]:
+        """
+        List all images associated with a given object.
+
+        Args:
+            obj (BaseModel): The object for which to list images.
+
+        Returns:
+            list[str]: A list of image file paths.
+        """
+        pass
+
+    @abstractmethod
+    def find_image(self, obj: BaseModel, locator: str) -> Optional[str]:
+        """
+        Find an image associated with a given object.
+        Args:
+            obj (BaseModel): The object for which to find the image.
+            locator (str): The locator of the image.
+        Returns:
+            Optional[str]: The file path of the image if found, otherwise None.
+        """
+        pass
+
+    @abstractmethod
+    def list_uploads(self, obj: BaseModel) -> list[str]:
+        """
+        List all uploads associated with a given object.
+
+        Args:
+            obj (BaseModel): The object for which to list uploads.
+
+        Returns:
+            list[str]: A list of upload file paths.
+        """
+        pass
+
+    @abstractmethod
+    def upload_image(self, obj: BaseModel, name: str, data: BinaryIO, mime_type: str) -> str:
+        """
+        Upload an image for a given object.
+
+        Args:
+            obj (BaseModel): The object to which the image belongs.
+            name (str): The name of the image file.
+            data (BinaryIO): The binary data of the image.
+            mime_type (str): The MIME type of the image.
+
+        Returns:
+            str: The file locator of the uploaded image.
+        """
+        pass
+
+    @abstractmethod
+    def upload_reference_image(self, obj: BaseModel, name: str, data: BinaryIO, mime_type: str) -> str:
+        """
+        Upload a reference image for a given object.
+
+        Args:
+            obj (BaseModel): The object to which the image belongs.
+            name (str): The name of the image file.
+            data (BinaryIO): The binary data of the image.
+            mime_type (str): The MIME type of the image.
+
+        Returns:
+            str: The file locator of the uploaded image.
+        """
+        pass

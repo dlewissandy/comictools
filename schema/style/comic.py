@@ -78,7 +78,7 @@ class ComicStyle(BaseModel):
     """
     Comic style guidelines for a comic series or title.
     """
-    id: str = Field(
+    style_id: str = Field(
         ...,
         description="A unique identifier for the comic style.  e.g. 'vintage 4 color', etc.")
     name: str = Field(...,description="A short (1-5 word) name for the comic style.  e.g. 'vintage 4 color', etc.   It should not include the words 'comic' or 'style'.")
@@ -105,9 +105,23 @@ class ComicStyle(BaseModel):
         return the primary key for the comic style
         """
         return {
-            "style_id": self.id,
+            "style_id": self.style_id,
         }
 
+    @property
+    def parent_key(self) -> dict[str, str]:
+        """
+        return the parent key for the comic style
+        """
+        return {}
+    
+    @property
+    def id(self) -> str:
+        """
+        return the id of the comic style
+        """
+        # Normalize the id:
+        return self.style_id
 
     # Todo: Move this to generators!   This is not a crud operatation.
     def render_art_style(self) -> str:

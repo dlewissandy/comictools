@@ -9,7 +9,7 @@ from nicegui import ui
 from gui.state import APPState
 from storage.generic import GenericStorage
 from gui.selection import SelectedKind
-from schema import ComicStyle
+from schema import ComicStyle, StyleExample
 
 def view_style(state: APPState):
     """
@@ -50,7 +50,7 @@ def view_style(state: APPState):
             Set the image for the style.
             """
             style.image[example_type] = image_locator
-            storage.update_style(style)
+            storage.update_object(style)
 
         art_style = style.art_style
         with view_attributes(state,caption="Art Style", attributes=[
@@ -62,18 +62,19 @@ def view_style(state: APPState):
                 Attribute(caption="registration", get_value=lambda: art_style.registration),
                 Attribute(caption="lettering style", get_value=lambda: art_style.lettering_style),
             ], individual_icons=False, header_size=2):
+            example = StyleExample(style_id=style.id, example_id="art")
             full_width_image_selector_grid(
                 state=state,
                 image_kind_name="art style image",
-                get_images = lambda: storage.find_style_images(style_id=style.id, example_type="art"),
+                get_images = lambda: storage.list_images(example),
                 get_selection=lambda: style.image["art"] if isinstance(style.image, dict) else None,
                 set_selection=lambda img_id: set_image(image_locator=img_id, example_type="art"),
-                upload_image=lambda name, data, mime_type: storage.upload_style_image(
-                    style_id=style.id,
-                    example_type="art",
+                upload_image=lambda name, data, mime_type: storage.upload_image(
+                    obj=example,
                     name=name,
                     data=data,
-                    mime_type=mime_type),
+                    mime_type=mime_type
+                ),
                 aspect_ratio="3/2"
             )
         
@@ -91,15 +92,15 @@ def view_style(state: APPState):
             Attribute(caption="detail complexity", get_value=lambda: character_style.detail_complexity),
             Attribute(caption="texture accents", get_value=lambda: character_style.texture_accents),
         ],individual_icons=False, header_size=2):
+            example = StyleExample(style_id=style.id, example_id="character")
             full_width_image_selector_grid(
                 state=state,
                 image_kind_name="character style image",
-                get_images=lambda: storage.find_style_images(style_id=style.id, example_type="character"),
+                get_images=lambda: storage.list_images(example),
                 get_selection=lambda: style.image.get("character",None) if isinstance(style.image, dict) else None,
                 set_selection=lambda img_id: set_image(image_locator=img_id, example_type="character"),
-                upload_image=lambda name, data, mime_type: storage.upload_style_image(
-                    style_id=style.id,
-                    example_type="character",
+                upload_image=lambda name, data, mime_type: storage.upload_image(
+                    obj=example,
                     name=name,
                     data=data,
                     mime_type=mime_type),
@@ -128,10 +129,10 @@ def view_style(state: APPState):
                             
                             get_selection=lambda k=k: style.image.get(k.lower().replace("_", "-"),None),
                             set_selection=lambda img_id, k=k: set_image(image_locator=img_id, example_type=k.lower().replace("_", "-")),
-                            get_images=lambda k=k: storage.find_style_images(style_id=style.id, example_type=k.lower().replace("_", "-")),
-                            upload_image=lambda name, data, mime_type, k=k: storage.upload_style_image(
-                                style_id=style.id,
-                                example_type=k.lower().replace("_", "-"),
+                            get_images=lambda k=k: storage.list_images(
+                                StyleExample(style_id=style.style_id, example_id=k.lower())),
+                            upload_image=lambda name, data, mime_type, k=k: storage.upload_image(
+                                obj=StyleExample(style_id=style.id, example_id=k.lower()),
                                 name=name,
                                 data=data,
                                 mime_type=mime_type),
@@ -161,20 +162,20 @@ def view_pick_style(state: APPState):
         issue_id = selection[-2].id
         series_id = selection[-3].id
         parent = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "id": issue_id})
-        writer = lambda: storage.update_issue(data=parent)
+        writer = lambda: storage.update_object(data=parent)
     elif parent_kind == SelectedKind.SCENE:
         scene_id = selection[-2].id
         issue_id = selection[-3].id
         series_id = selection[-4].id
         parent = storage.read_object(cls=SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})(series_id=series_id, issue_id=issue_id, scene_id=scene_id)
-        writer = lambda: storage.update_scene(data=parent)
+        writer = lambda: storage.update_object(data=parent)
     elif parent_kind == SelectedKind.COVER:
         issue_id = selection[-3].id
         series_id = selection[-4].id
         location = CoverLocation(parent_kind[:-6].replace("-", " "))
         parent = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "location": location})
-        writer = lambda: storage.update_cover(data=parent)
-    
+        writer = lambda: storage.update_object(data=parent)
+
     style_id = selection[-1].id
     style = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
 
@@ -189,7 +190,7 @@ def view_pick_style(state: APPState):
         view_all_instances(
             state=state,
             get_instances=storage.read_all_styles,
-            get_image_locator=lambda x: storage.find_style_image(x.id),
+            get_image_locator=lambda x: storage.find_image(StyleExample(style_id=x.id, example_id="art"), x.image) if x.image else None,
             kind="style",
             aspect_ratio="1/1",
             get_name=lambda _,x: x.name,

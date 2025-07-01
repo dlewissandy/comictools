@@ -36,7 +36,7 @@ def view_publisher(state: APPState):
             image_id: The ID of the image to set.
         """
         publisher.image = image_id
-        storage.update_publisher(data=publisher)
+        storage.update_object(data=publisher)
 
     def upload_image(name: str, data: BinaryIO, mime_type: str):
         """
@@ -48,15 +48,10 @@ def view_publisher(state: APPState):
             mime_type: The MIME type of the image.
         """
         # Create a new image in the storage
-        file_locator = storage.upload_publisher_image(
-            publisher_id=publisher.publisher_id, 
-            name=name, 
-            data=data, 
-            mime_type=mime_type
-        )
+        file_locator = storage.upload_image(obj=publisher, name=name, data=data, mime_type=mime_type)
         # Set the image for the publisher
         publisher.image = file_locator
-        storage.update_publisher(data=publisher)
+        storage.update_object(data=publisher)
 
     with details:
         # The title for the viewer is the Publisher name
@@ -88,7 +83,7 @@ def view_publisher(state: APPState):
             full_width_image_selector_grid(
                 state=state,
                 image_kind_name="logo image",
-                get_images=lambda: storage.find_publisher_images(publisher_id=publisher.publisher_id),
+                get_images=lambda: storage.list_images(publisher),
                 get_selection=lambda : publisher.image,
                 set_selection=set_image,
                 upload_image=upload_image
@@ -115,7 +110,7 @@ def view_pick_publisher(state:APPState):
     def set_publisher(publisher_id):
         if series is not None:
             series.publisher_id = publisher_id
-            storage.update_series(series)
+            storage.update_object(series)
 
     with state.details:
         header("Pick a Publisher", 1)
@@ -128,7 +123,7 @@ def view_pick_publisher(state:APPState):
             get_name=lambda i,x: x.name,
             get_choice=lambda : series.publisher_id if series else None,
             set_choice=set_publisher,
-            get_image_locator=lambda publisher: storage.find_publisher_image(publisher_id=publisher.publisher_id),
+            get_image_locator=lambda publisher: publisher.image,
         )            
 
             
