@@ -95,7 +95,7 @@ def view_issue(state:APPState):
                 new_item_messager(state, "Scenes","I would like to create a new scene for this issue.")
             view_all_instances(
                 state=state,
-                get_instances = lambda: storage.read_all_objects(SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id}),
+                get_instances = lambda: storage.read_all_objects(SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id}, order_by="scene_number"),
                 get_image_locator=lambda scene: storage.find_scene_image(series_id=series_id, issue_id=issue_id, scene_id=scene.scene_id),
                 kind=SelectedKind.SCENE,
                 aspect_ratio="16/9",

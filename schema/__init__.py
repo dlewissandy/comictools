@@ -15,11 +15,15 @@ from schema.styled_variant import StyledVariant
 from schema.character_reference import CharacterRef
 from schema.reference_image import ReferenceImage
 from schema.cover import Cover
-from schema.enums import FrameLayout, CoverLocation, Relation, frame_dimensions, frame_layout_to_dims
+from schema.enums import FrameLayout, CoverLocation, Relation, frame_dimensions, frame_layout_to_dims, InsertionLocation, BeforeFirst, Before, After, AfterLast
 
 # Re-exporting the models for easier access
 __all__ = [
     "ArtStyle",
+    "After",
+    "AfterLast",
+    "Before",
+    "BeforeFirst",
     "BubbleStyle",
     "BubbleStyles",
     "CharacterModel",
@@ -34,6 +38,7 @@ __all__ = [
     "DialogType",
     "ExampleKind",
     "FrameLayout",
+    "InsertionLocation",
     "Issue",
     "Narration",
     "NarrationPosition",

@@ -10,6 +10,7 @@ class SceneModel(BaseModel):
     name: str = Field(..., description="A short title for the scene.   Default to a short (5 words or less) description of the scene'")
     story: str = Field(..., description="The story or narrative arc of the scene")
     style_id: str = Field(..., description="The art style of the scene.   Default to 'vintage-four-color'")
+    scene_number: int = Field(..., description="The scene number.   Default to 1")
 
     @property
     def primary_key(self) -> dict[str, str]:

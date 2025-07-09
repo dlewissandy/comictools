@@ -51,9 +51,20 @@ def view_scene(state: APPState):
     #   +--------------------------------------------------+
     #   |           |              |           |           |
     #   +--------------------------------------------------+ 
+    def on_upload(e: UploadEventArguments):
+        # Save the uploaded file to the data/uploads directory with a unique name
+        locator = storage.upload_reference_image(
+            obj=scene,
+            name=e.name,
+            data=e.content,
+            mime_type=e.type
+        )
+
+        post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
+
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
-            header(f"Scene: {scene.name.title()}", 0)
+            header(f"Scene {scene.scene_number}: {scene.name.title()}", 0)
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current scene."), size=1)
 
@@ -86,11 +97,11 @@ def view_scene(state: APPState):
                 "series_id": series_id,
                 "issue_id": issue_id,
                 "scene_id": scene_id
-            })
+            }, order_by='panel_number')
+            row = ui.row().classes("w-full")
             if not panels or panels == []:
                 ui.markdown("No panels available for this scene.")
             else:
-                row = ui.row().classes("w-full")
                 w = 0
                 for panel in panels:
                     if panel.aspect == FrameLayout.LANDSCAPE:
@@ -116,7 +127,7 @@ def view_scene(state: APPState):
                                 ui.image(source=os.path.join(scene.path, "panels", "images", f"image.py"))
                             else:
                                 with ui.scroll_area().classes('w-full h-full').style('overflow: auto;'):
-                                    header(f"Panel {panel.id}", 3)
+                                    header(f"Panel {panel.panel_number}: {panel.name}", 3)
                                     markdown(panel.description)
                         new_itm = SelectionItem(name=f"panel {panel.panel_number}", id=panel.panel_id, kind='panel')
                         new_sel = [s for s in selection]+[new_itm]
@@ -137,12 +148,12 @@ def view_scene(state: APPState):
                         )
 
                         post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
+            with row:
+                with ui.card().classes(DARK_MODE_STYLES).style('width: 24.5%; aspect-ratio: 1/1'):
+                    uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
+                    uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
 
-                    with ui.card().classes(DARK_MODE_STYLES).style('width: 24.5%; aspect-ratio: 1/1'):
-                        uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
-                        uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
-
-                        # Visible caption in center
-                        with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
-                            ui.label('Drop image to upload').classes('text-lg text-gray-600')
+                    # Visible caption in center
+                    with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
+                        ui.label('Drop image to upload').classes('text-lg text-gray-600')
 

@@ -13,6 +13,7 @@ class Panel(BaseModel):
     panel_number: int = Field(..., description="The number of the panel in the scene.   Default to 1")
 
     #PROPERTIES
+    name: str = Field(..., description="The name of the panel.   Should be a short (3-5 words) description of the panel.   This should be a short description of the panel that can be used to identify it in a list of panels.   Default to empty string")
     description: str = Field(..., description="A detailed description of the image in the panel.   This should describe the image in sufficient detail so that different artists could from this information alone reproduce the same image.   This should include the setting, foreground, background, characters, props, scenery and any other elements in the panel.")
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to square")
     character_references: list[CharacterRef] = Field(..., description="A dictionary mapping the names of the characters that appear in the panel to the visual variant that should be used as reference.   Default to empty dict")
@@ -43,9 +44,9 @@ class Panel(BaseModel):
         return the parent key for the panel model
         """
         return {
-            "issue_id": self.issue,
-            "scene_id": self.scene,
-            "series_id": self.series,
+            "issue_id": self.issue_id,
+            "scene_id": self.scene_id,
+            "series_id": self.series_id,
         }
 
     @property

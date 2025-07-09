@@ -29,7 +29,7 @@ class GenericStorage(ABC):
         pass
             
     @abstractmethod
-    def read_all_objects(self, cls: BaseModel, primary_key: dict[str,str] = {}) -> list[BaseModel]:
+    def read_all_objects(self, cls: BaseModel, primary_key: dict[str,str] = {}, order_by: Optional[str] = None) -> list[BaseModel]:
         """
         Read all objects from a directory and return them as a list of instances of the specified class.
         
@@ -37,6 +37,7 @@ class GenericStorage(ABC):
             cls (BaseModel): The class to which the objects should be converted.
             primary_key (dict[str,str]): The primary key of the parent object (if any).   This is used to
               construct the filepath to the object.
+            order_by: An optional key that represents the field in which the instances will be returned
         """
         pass
         

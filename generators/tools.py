@@ -60,48 +60,50 @@ def init_tools(state: APPState) -> dict[str, Tool]:
 
         CONTEXT_ERROR_MSG = f"Cannot find object with key = {pk}.   It is not in the context of the current selection.  You may need to change the current selection."
         NOT_FOUND_ERROR_MSG = f"Cannot find object with key = {pk}.   It is not in the database.   You may want to verify the primary key(s)"
+        TOP_LEVEL_IDS = ['series_id', 'publisher_id', 'style_id']
 
-        if len(pk.keys())>len(context)+1:
-            logger.error(CONTEXT_ERROR_MSG)
-            raise ValueError(CONTEXT_ERROR_MSG)
+        pk_keys = list(pk.keys())
 
-        if len(context) == 0 and any(pk.keys(), lambda k: k not in ["series_id", "publisher_id", "style_id"]):
-            logger.error(CONTEXT_ERROR_MSG)
-            raise ValueError(CONTEXT_ERROR_MSG)
+        if len(pk_keys)==1 and pk_keys[0] in TOP_LEVEL_IDS:
+            # Special case: Top level ids can be retrieved regardless of the current context.
+            logger.debug("Finding top level object with key = {pk}")
+        elif len(context) == 0:
+            # If the context is empty, we can still find series, publishers and styles (since they)
+            # are top level objects in the hierarchy.
+            if any(pk.keys(), lambda k: k not in TOP_LEVEL_IDS):
+                # However if the user selected something that is not at the top level of the hierarch, then
+                # We throw an error
+                logger.error(CONTEXT_ERROR_MSG)
+                raise ValueError(CONTEXT_ERROR_MSG)
+            logger.debug("Finding top level object with key = {pk}")
 
-        if len(context) == 0:
-            obj = storage.read_object(cls=cls, primary_key=pk)
-            if obj is None:
-                logger.error(NOT_FOUND_ERROR_MSG)
-                raise ValueError(NOT_FOUND_ERROR_MSG)
-            return obj
-
-        if len(context) > 0 and context[0][1] == pk:
-            # The last item in the hierarchy is the requested object
-            obj = storage.read_object(cls=context[0][0], primary_key=context[0][1])
-            if obj is None:
-                logger.error(NOT_FOUND_ERROR_MSG)
-                raise ValueError(NOT_FOUND_ERROR_MSG)
-            return obj
+        # Special case for when the context and the primary key of the current selection are the same
+        elif len(context) > 0 and context[0][1] == pk:
+            logger.debug(f"Finding current selection {pk}")
         
-        # The requested object should be a child of the last item in the hierarchy
-        parent_pk = context[0][1]
-        parent_keys = list(parent_pk.keys())
-        child_keys = pk.keys()
-        while len(parent_keys) > 0:
-           k = parent_keys.pop()
-           if k not in child_keys:
-               logger.error(CONTEXT_ERROR_MSG)
-               raise ValueError(CONTEXT_ERROR_MSG)
-           if pk[k] != parent_pk[k]:
-               logger.error(CONTEXT_ERROR_MSG)
-               raise ValueError(CONTEXT_ERROR_MSG)
-        # If we reach here, the requested object is a child of the last item in the hierarchy
+        # The requested object should be a child of the selected object
+        elif len(context) > 0 and len(pk) == len(context)+1:
+            parent_pk = context[0][1]
+            parent_keys = list(parent_pk.keys())
+            child_keys = pk.keys()
+            while len(parent_keys) > 0:
+                k = parent_keys.pop()
+                if k not in child_keys:
+                    logger.error(CONTEXT_ERROR_MSG)
+                    raise ValueError(CONTEXT_ERROR_MSG)
+                if pk[k] != parent_pk[k]:
+                    logger.error(CONTEXT_ERROR_MSG)
+                    raise ValueError(CONTEXT_ERROR_MSG)
+        else:
+            logger.error(CONTEXT_ERROR_MSG)
+            raise ValueError(CONTEXT_ERROR_MSG)
+
         obj = storage.read_object(cls=cls, primary_key=pk)
         if obj is None:
             logger.error(NOT_FOUND_ERROR_MSG)
             raise ValueError(NOT_FOUND_ERROR_MSG)
         return obj
+    
     
     def find_all(cls: type[BaseModel]) -> list[BaseModel]:
         """
@@ -208,6 +210,41 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         if series is None:
             raise ValueError(f"Series with id '{series_id}' not found.   You might want to look at the list of all series first.")
         return storage.read_all_objects(cls=CharacterModel, primary_key={"series_id": series_id})
+
+    @function_tool
+    def find_all_panels(series_id: str, issue_id: str, scene_id: str) -> list[Panel]:
+        """
+        look up all the panels in a scene
+
+        Args:
+            series_id: The identifier of the series the scene belongs to.
+            issue_id: The identifier of the comic book issue the scene belongs to.
+            scene_id: The identifier of the scene to look up panels for.
+        Returns:
+            A list of Panel objects representing the panels in the scene.
+        """
+        scene = storage.read_object(cls=SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
+        if scene is None:
+            raise ValueError(f"Scene with id '{scene_id}' not found in issue '{issue_id}' of series '{series_id}'.   You might want to look at the list of all scenes in the issue first.")
+        
+        return storage.read_all_objects(cls=Panel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})    
+
+    @function_tool
+    def find_all_scenes(series_id: str, issue_id: str) -> list[SceneModel]:
+        """
+        Look up all scenes in a comic book issue.
+        
+        Args:
+            series_id: The identifier of the series the issue belongs to.
+            issue_id: The identifier of the comic book issue.
+        
+        Returns:
+            A list of SceneModel objects representing the scenes in the issue.
+        """
+        issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
+        if issue is None:
+            raise ValueError(f"Issue with id '{issue_id}' not found in series '{series_id}'.   You might want to look at the list of all issues in the series first.")
+        return storage.read_all_objects(cls=SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id}  )
 
     # -------------------------------------------------------------------------
     # FIND A SPECIFIC CHILD OBJECT OF THE CURRENT SELECTION
@@ -487,6 +524,34 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         return f"Deleted comic book issue: {issue_id}"
 
 
+    @function_tool
+    def delete_scene(scene_id: str) -> str:
+        """
+        Delete a scene from a comic book issue.   You MUST ask for confirmation before using this tool.
+        
+        Args:
+            scene_id: The identifier of the scene to delete.
+        Returns:
+            A status message indicating the result of the deletion.
+        """
+        selection = state.selection
+        sel_itm = selection[-1]
+        if sel_itm.kind == SelectedKind.SCENE:
+            issue_id = selection[-2].id
+            if scene_id != sel_itm.id:
+                return f"Can't delete scene '{scene_id}'.   The id does not match the currently selected scene."
+        else:
+            return f"Can't delete scene '{scene_id}'.   The selection is not a scene: {sel_itm.kind}"
+
+        storage.delete_object(cls=SceneModel, primary_key={"issue_id": issue_id, "scene_id": scene_id})
+
+        if sel_itm.kind == SelectedKind.SCENE:
+            # Change the selection!  Move up a level.
+            new_selection = selection[:-1]
+            state.change_selection(new=new_selection, clear_history=True)
+        else:
+            state.is_dirty = True
+        return f"Deleted comic book scene: {scene_id}"
 
 
     return {
@@ -498,6 +563,8 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         "get_all_styles": get_all_styles,
         "find_all_characters": find_all_characters,
         "find_all_variants": find_all_variants,
+        "find_all_scenes": find_all_scenes,
+        "find_all_panels": find_all_panels,
         
         # FIND SINGULAR
         "find_publisher": find_publisher,
@@ -516,6 +583,7 @@ def init_tools(state: APPState) -> dict[str, Tool]:
         "delete_publisher": delete_publisher,
         "delete_issue": delete_issue,
         "delete_character": delete_character,
+        "delete_scene": delete_scene,
 
         # UPDATE
 

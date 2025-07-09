@@ -130,6 +130,11 @@ def get_basenames(path: str, exts: list[str] = None) -> list[str]:
         logger.error(msg)
         raise NotADirectoryError(msg)
     
+    # Sync the directory
+    dir_fd = os.open(path, os.O_DIRECTORY)
+    os.fsync(dir_fd)  # ensure directory entry is committed
+    os.close(dir_fd)
+    
     contents = []
     for item in os.listdir(path):
         # skip hidden folders

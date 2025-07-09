@@ -19,8 +19,26 @@ def all_publishers_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
         
         Args:
             name: The name of the new publisher.
-            description: An optional description of the publisher.
+            description: A detailed description of this publisher written so that prospective
+                comic book authors can evaluate their options. The summary should address the
+                types of work the publisher focuses on, including genres and formats they
+                typically accept. It should clearly explain the publisher’s policies on ownership and
+                rights, noting whether creators retain control of their intellectual property or if
+                the publisher requires full or partial rights. It should describe how the publisher
+                handles distribution, both in print and digital formats, and whether their reach
+                includes comic shops, bookstores, and international markets.
 
+                The summary should also explain what kind of marketing and promotional support the
+                publisher provides, including whether they expect creators to manage their own outreach.
+                Details about editorial involvement—such as the level of guidance, feedback, or creative
+                restrictions—should be included, along with any information about print quality and
+                available formats. Payment terms should be described, including whether the publisher
+                offers advances, royalties, or flat rates. Finally, the summary should include insight
+                into the publisher’s reputation within the comics community, including any known strengths,
+                weaknesses, or red flags that might influence an author’s decision.
+
+                The tone should be professional, informative, and oriented toward helping an author make
+                a well-informed choice.
         
         Returns:
             The created Publisher object or an error message if the publisher already exists.

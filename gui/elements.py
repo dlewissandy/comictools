@@ -343,7 +343,6 @@ def render_object_cards(
                     kind_value = kind(instance)
                 else:
                     kind_value = kind
-                logger.critical(f"kind_value={kind_value}, instance={instance}")
                 sel_itm = SelectionItem(name=name, id=id, kind=kind_value)
                 new_sel = [s for s in selection]+[sel_itm]
                 image = get_image_locator(instance)

@@ -1,5 +1,27 @@
 from enum import StrEnum
 
+from typing import Union, Literal, Annotated
+from pydantic import BaseModel, Field
+
+class BeforeFirst(BaseModel):
+    kind: Literal["before_first"] = Field(default="before_first", exclude=True, description="Insert the new item before the first item in the list.")
+
+class Before(BaseModel):
+    index: int
+    kind: Literal["before"] = Field(default="before", exclude=True, description="Insert the new item before the item at the specified list index.")
+
+class After(BaseModel):
+    index: int
+    kind: Literal["after"] = Field(default="after", exclude=True, description="Insert the new item after the item at the specified list index.")
+
+class AfterLast(BaseModel):
+    kind: Literal["after_last"] = Field(default="after_last", exclude=True, description="Insert the new item after the last item in the list.")
+
+InsertionLocation = Annotated[
+    Union[BeforeFirst, Before, After, AfterLast],
+    Field(discriminator="kind")
+]
+
 class FrameLayout(StrEnum):
     SQUARE = "square"
     LANDSCAPE = "landscape"
@@ -39,3 +61,4 @@ def frame_dimensions(aspect: FrameLayout) -> tuple[int, int]:
         return 2,3
     else:
         return 2,2
+    

@@ -46,6 +46,11 @@ def get_folder_contents(path: str) -> list[str]:
     """
     contents = []
     if os.path.exists(path) and os.path.isdir(path):
+        # Sync the directory
+        dir_fd = os.open(path, os.O_DIRECTORY)
+        os.fsync(dir_fd)  # ensure directory entry is committed
+        os.close(dir_fd)
+
         for item in os.listdir(path):
         # skip hidden folders
             if item.startswith("."):

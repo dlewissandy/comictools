@@ -25,6 +25,8 @@ from storage.filepath import (
     )
 
 
+
+
 class LocalStorage(GenericStorage):
 
     def __init__(self, base_path: str):
@@ -88,6 +90,13 @@ class LocalStorage(GenericStorage):
         logger.debug(f"Writing object {data.__class__.__name__} to file {filepath}")
         with open(filepath, 'w') as f:
             f.write(data.model_dump_json(indent=2))
+            f.flush()
+            os.fsync(f.fileno())
+
+        # sync the parent folder
+        fs_dir = os.open(parent_path, os.O_DIRECTORY)
+        os.fsync(fs_dir)
+        os.close(fs_dir)
 
         # Return the unique ID of the created object.
         return obj_id
@@ -106,7 +115,7 @@ class LocalStorage(GenericStorage):
 
 
         if not os.path.exists(filepath):
-            logger.warning(f"File {filepath} does not exist. Returning None.")
+            logger.debug(f"File {filepath} does not exist. Returning None.")
             return None
         
         if not os.path.isfile(filepath):
@@ -115,14 +124,23 @@ class LocalStorage(GenericStorage):
         
         with open(filepath, 'r') as f:
             data = json.load(f)
+            f.flush()
+            os.fsync(f.fileno())
+
+        # sync the parent folder
+        parent_path = os.path.dirname(filepath)
+        fs_dir = os.open(parent_path, os.O_DIRECTORY)
+        os.fsync(fs_dir)
+        os.close(fs_dir)
+
         try: 
             return cls.model_validate(data)
         except Exception as e:
             msg = f"Failed to validate: {e}"
             logger.error(msg)
             raise
-            
-    def read_all_objects(self, cls: BaseModel, primary_key: dict[str,str] = {}) -> list[BaseModel]:
+
+    def read_all_objects(self, cls: BaseModel, primary_key: dict[str,str] = {}, order_by: Optional[str] = None) -> list[BaseModel]:
         """
         Read all objects from a directory and return them as a list of instances of the specified class.
         
@@ -162,7 +180,7 @@ class LocalStorage(GenericStorage):
         rootpath = template_to_filepath(template=rootpath_template, pk=primary_key)
 
         if not os.path.exists(rootpath):
-            logger.warning(f"Path {rootpath} does not exist. Returning empty list.")
+            logger.debug(f"Path {rootpath} does not exist. Returning empty list.")
             return []
         
         if not os.path.isdir(rootpath):
@@ -179,6 +197,9 @@ class LocalStorage(GenericStorage):
             if obj:
                 objects.append(obj)
         logger.debug(f"Found {len(objects)} objects of type {cls.__name__} in {rootpath}")
+
+        if order_by is not None:
+            objects.sort(key=lambda x: getattr(x, order_by))
         return objects
         
 
@@ -203,6 +224,14 @@ class LocalStorage(GenericStorage):
         
         with open(filepath, 'w') as f:
             f.write(json.dumps(data.model_dump(), indent=2))
+            f.flush()
+            os.fsync(f.fileno())
+
+        # sync the parent folder
+        parent_path = os.path.dirname(filepath)
+        fs_dir = os.open(parent_path, os.O_DIRECTORY)
+        os.fsync(fs_dir)
+        os.close(fs_dir)
 
     def delete_object(self, cls: BaseModel, primary_key: dict[str,str]) -> Optional[BaseModel]:
         """
@@ -219,12 +248,19 @@ class LocalStorage(GenericStorage):
         instance = self.read_object(cls=cls, primary_key=primary_key)
         logger.debug(f"Instance to delete: {instance}")
         if instance is None:
-            logger.warning(f"File {cls.__name__} does not exist. Cannot delete.")
+            logger.debug(f"File {cls.__name__} does not exist. Cannot delete.")
             return None
         
         filepath = obj_to_filepath(instance)
         logger.debug(f"Deleting file at {filepath}")
         shutil.rmtree(os.path.dirname(filepath), ignore_errors=True)
+
+        # sync the parent folder
+        parent_path = os.path.dirname(filepath)
+        fs_dir = os.open(parent_path, os.O_DIRECTORY)
+        os.fsync(fs_dir)
+        os.close(fs_dir)
+
         return instance
     
     def _list_images(self, path: str) -> list[str]:
@@ -237,6 +273,12 @@ class LocalStorage(GenericStorage):
             logger.error(f"Path {path} is not a directory.")
             raise NotADirectoryError(f"Path {path} is not a directory.")
         # If the image exists, then return all the image files in the folder.
+
+        # Sync the directory
+        dir_fd = os.open(path, os.O_DIRECTORY)
+        os.fsync(dir_fd)  # ensure directory entry is committed
+        os.close(dir_fd)
+
         for item in os.listdir(path):
             if item.startswith("."):
                 logger.debug(f"Skipping hidden item: {item}")
@@ -265,7 +307,7 @@ class LocalStorage(GenericStorage):
             obj (BaseModel): The object to which the image is associated.
             image_locator (str): The file path of the image to find.
         """
-        logger.critical(f"Finding image for {obj.__class__.__name__} with primary key: {obj.primary_key} and image locator: {locator}")
+        logger.trace(f"Finding image for {obj.__class__.__name__} with primary key: {obj.primary_key} and image locator: {locator}")
         images = self.list_images(obj)
         logger.debug(f"Images found: {images}")
         for image in images:
@@ -307,6 +349,16 @@ class LocalStorage(GenericStorage):
         filepath = os.path.join(path, name)
         with open(filepath, 'wb') as f:
             f.write(data.read())
+            f.flush()
+            os.fsync(f.fileno())
+
+        # sync the parent folder
+        parent_path = os.path.dirname(filepath)
+        fs_dir = os.open(parent_path, os.O_DIRECTORY)
+        os.fsync(fs_dir)
+        os.close(fs_dir)
+
+
         logger.info(f"Uploaded panel reference image to {filepath}")
         return filepath
 
@@ -390,7 +442,7 @@ class LocalStorage(GenericStorage):
         # We are going to try to find an image using any of the styles
         variant = self.read_object(cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id, "variant_id": variant_id})
         if variant is None:
-            logger.warning(f"Variant {variant_id} for character {character_id} in series {series_id} not found.")
+            logger.debug(f"Variant {variant_id} for character {character_id} in series {series_id} not found.")
             return None
         variant: CharacterVariant = variant
         # We are going to try to find an image using any of the styles
@@ -400,7 +452,7 @@ class LocalStorage(GenericStorage):
             filepath = variant.images.get(style, None)
             if os.path.exists(filepath):
                     return filepath
-        logger.warning(f"No image found for character model {variant.character_id}({variant.name}).")
+        logger.debug(f"No image found for character model {variant.character_id}({variant.name}).")
         return None
 
     # -------------------------------------------------------------------------
@@ -411,7 +463,7 @@ class LocalStorage(GenericStorage):
         filepath = name
 
         if not os.path.exists(filepath):
-            logger.warning(f"Styled image {name} for character {character_id} in series {series_id} with variant {variant_id} and style {style_id} not found.")
+            logger.debug(f"Styled image {name} for character {character_id} in series {series_id} with variant {variant_id} and style {style_id} not found.")
             return None
         
         if not os.path.isfile(filepath):
@@ -435,10 +487,10 @@ class LocalStorage(GenericStorage):
             primary_key={"style_id": style_id}
         )
         if variant is None:
-            logger.warning(f"Variant {variant_id} for character {character_id} in series {series_id} not found.")
+            logger.debug(f"Variant {variant_id} for character {character_id} in series {series_id} not found.")
             return []
         if style is None:
-            logger.warning(f"Style {style_id} not found.")
+            logger.debug(f"Style {style_id} not found.")
             return []
         return self.list_images(StyledVariant(
             series_id=series_id,
