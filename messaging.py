@@ -111,7 +111,7 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
     agent = agents.get(kind, None)
     if agent is None:
         raise ValueError(f"Agent not found for kind: {kind}")
-    stream = Runner.run_streamed(agent, input=messages)
+    stream = Runner.run_streamed(agent, input=messages, context=state)
     streamed_events = stream.stream_events()
     async for event in streamed_events:
         # --- RAW TEXT TOKENS ---

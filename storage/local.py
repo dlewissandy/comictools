@@ -255,9 +255,9 @@ class LocalStorage(GenericStorage):
         logger.debug(f"Deleting file at {filepath}")
         shutil.rmtree(os.path.dirname(filepath), ignore_errors=True)
 
-        # sync the parent folder
-        parent_path = os.path.dirname(filepath)
-        fs_dir = os.open(parent_path, os.O_DIRECTORY)
+        # sync the grandparent folder
+        grandparent_path = os.path.dirname(os.path.dirname(filepath))
+        fs_dir = os.open(grandparent_path, os.O_DIRECTORY)
         os.fsync(fs_dir)
         os.close(fs_dir)
 

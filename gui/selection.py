@@ -28,7 +28,6 @@ class SelectedKind(StrEnum):
     REFERENCE_IMAGE = "reference-image"
     CHARACTER_REFERENCE = "character-reference"
 
-
 class SelectionItem(BaseModel):
     name: str = Field(..., description="The name that will be displayed on the breadcrumbs")
     id: str | None = Field(..., description="The id of the item.  This will be used to identify the item in the system.")

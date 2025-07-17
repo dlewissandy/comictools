@@ -192,7 +192,7 @@ the original image as possible so that it can serve as a visual reference for th
             A message indicating the result of the operation.
         """
         from schema.character import render_character_image
-        from generators.constants import RUGOR_DESCRIPTION
+        from agentic.constants import RUGOR_DESCRIPTION
         import os
 
         # Ensure the output path exists

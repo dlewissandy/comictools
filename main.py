@@ -120,7 +120,7 @@ def main_page(client):
     
     state.dark_mode = dark_value
     state.restore_history(messages)
-    state.change_selection(selection, clear_history=False)   # update the selection to force the redraw of the breadcrumbs
+    state.change_selection(selection)   # update the selection to force the redraw of the breadcrumbs
     state.refresh_details()             # Redraw the details based on the current selection
 
     # ENABLE THE EVENT HANDLERS

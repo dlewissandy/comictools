@@ -29,8 +29,7 @@ class APPState:
     send_button: ui.button
     
     def __init__(self, breadcrumbs, details, history, user_input, send_button, storage: GenericStorage, dark_mode: bool = False, selection: list[SelectionItem] = []):
-        from generators import init_agents
-        from generators.tools import init_tools
+        from agentic import init_agents
         # GUI ELEMENTS
         self.breadcrumbs = breadcrumbs
         self.details = details
@@ -48,8 +47,7 @@ class APPState:
         self._storage = storage
 
         # AGENTS
-        tools = init_tools(self)
-        self._agents = init_agents(self, tools=tools)
+        self._agents = init_agents(self)
         
 
         
@@ -256,16 +254,15 @@ class APPState:
         # scroll to the bottom of the history
         history.value = 100
 
-    def change_selection(self, new: list[SelectionItem], clear_history=True):
+    def change_selection(self, new: list[SelectionItem]):
         """
         Change the current selection in the GUI state.
         
         Args:
             state: The GUI elements containing the selection.
             new: The new selection to set.
-            clear_history: Whether to clear the history after changing the selection.
         """
-        logger.debug(f"Changing selection to {new} with clear_history={clear_history}")
+        logger.trace(f"Changing selection to {new}")
         old = self.selection
         if old == new:
             logger.debug("New selection is the same as the old selection. No changes made.")
@@ -274,16 +271,6 @@ class APPState:
         self._selection = new
 
         # If required (like moving up in the hierarchy), we may need to clear the history.
-        if clear_history and len(new) <= len(old):
-            # TODO: if returning from a lower level, we may want to add additional dialog.
-            # If we just are going up 1 level, and the last element in the old selection
-            # has a kind that starts with "pick-", then we can assume that the user
-            # has just picked an item, and we don't have to clear the history.
-            if len(new) == len(old) - 1 and old[-1].kind.startswith("pick-"):
-                logger.debug("Not clearing history because we are returning from a pick- selection.")
-            else:
-                logger.debug("Clearing history because we are moving up in the hierarchy.")
-                self.clear_history()
         self.write()
 
         # Update the breadcrumbs and details
@@ -313,12 +300,13 @@ class APPState:
         from gui.reference_image import view_reference_image
         from gui.variant import view_character_variant
         from gui.styled_image import view_styled_image
+        from gui.selection import SelectionItem, SelectedKind
 
         self.clear_details()
         selection = self.selection
         
         if selection == []:
-            raise ValueError("Selection cannot be empty.  Please select an item first.")
+            selection = [SelectionItem(kind=SelectedKind.ALL_SERIES, name="Series", id=None)]
 
         kind = selection[-1].kind
         identifier = selection[-1].id
@@ -332,8 +320,6 @@ class APPState:
                 return view_all_styles(self)
             case "style":
                 return view_style(self)
-            # case "art-style-image":
-            #     return view_pick_art_style_image(self)
             case "series":
                 return view_series(self)
             case "character":
@@ -416,10 +402,10 @@ def breadcrumb_selector(state: APPState):
     publishers_sel = [SelectionItem(kind=SelectedKind.ALL_PUBLISHERS, name="Publishers", id=None)]
     styles_sel = [SelectionItem(kind=SelectedKind.ALL_STYLES, name="Styles", id=None)]
 
-    primary_selection.on("click", lambda _, new_sel=new_sel: state.change_selection( new=new_sel, clear_history=True))
-    all_series.on_click(lambda _, new_sel=series_sel: state.change_selection( new=new_sel, clear_history=True))
-    all_publishers.on_click( lambda _, new_sel=publishers_sel: state.change_selection( new=new_sel, clear_history=True))
-    all_styles.on_click( lambda _, new_sel=styles_sel: state.change_selection( new=new_sel, clear_history=True))
+    primary_selection.on("click", lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
+    all_series.on_click(lambda _, new_sel=series_sel: state.change_selection( new=new_sel))
+    all_publishers.on_click( lambda _, new_sel=publishers_sel: state.change_selection( new=new_sel))
+    all_styles.on_click( lambda _, new_sel=styles_sel: state.change_selection( new=new_sel))
     return primary_selection
 
 

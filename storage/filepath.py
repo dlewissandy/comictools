@@ -19,7 +19,6 @@ TOPOSORT_ORDER = [
     "example_id",
     "image_id",
     "relation",
-
 ]
 
 BASE_PATH = "data"

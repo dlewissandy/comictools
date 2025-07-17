@@ -1,14 +1,15 @@
 from loguru import logger
 from typing import Tuple, Optional, List
 from gui.state import APPState
-from agents import Agent, function_tool, Tool
-from generators.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
+from agents import Agent, RunContextWrapper, function_tool, Tool
+from agentic.constants import LANGUAGE_MODEL, BOILERPLATE_INSTRUCTIONS
 from schema import CharacterModel, CharacterVariant, CharacterVariantMinimal, Series
 from helpers.generator import invoke_generate_image_api
 from helpers.file import generate_unique_id
 from gui.selection import SelectionItem
 from storage.generic import GenericStorage
-from generators.tools import normalize_id
+from agentic.tools import read_character, read_series, read_all_characters, read_all_variants, read_context, delete_character
+from agentic.instructions import instructions
 
 def render_character_image(character_name: str, character_description: str, style_description: str, save_path: str):
     """
@@ -62,93 +63,7 @@ def render_character_image(character_name: str, character_description: str, styl
     logger.debug(f"Image saved to {save_filepath} with id {image_id}")
     return image_id
 
-
-def character_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
-    storage: GenericStorage = state.storage
-
-
-
-
     
-    @function_tool
-    def update_character_description(description: str) -> str:
-        """
-        Update the description of the currently selected character.
-        
-        Args:
-            description: The new description for the character.
-        
-        Returns:
-            A message indicating the result of the update operation.
-        """
-        series_id = state.selection[-2].id  # Assuming the second last item is the series
-        character_id = state.selection[-1].id  # Assuming the last item is the character
-
-        character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
-        if character is None:
-            return "Can't update the current character.  Is one selected?"
-        
-        character.description = description
-        storage.update_object(character)
-        state.is_dirty = True
-        return f"Character {character.name} updated successfully with new description."
-
-    
-    @function_tool
-    def create_variant(name: str, race: str, gender: str, age: str, height: str, general_description: str, physical_appearance: str, attire: str, behavior: str) -> CharacterVariant:
-        """
-        Create a new character variant with the provided attributes.
-        
-        Args:
-            name: The name of the variant.   This should be unique within the character's variants and should be short (1-3 words).
-            general_description: A short 3-5 sentence description of the variant.   What does this variant represent?  How does it differ from other variants?  
-            race: 1-5 words describing the race of the character variant.
-            gender: 1-2 words describing the gender of the character variant.
-            age: 1-5 words describing the relative age of the character variant (e.g. 'child', 'teen', 'adult', 'middle age', 'old', "ancient", etc).
-            height: 1-5 words describing the height of the character variant. (e.g. 'short', 'average', 'tall', 'very tall', etc).  Alternatively, compare to size of another character or species.
-            physical_appearance: 1-2 paragraphs describing the physical appearance details this variant of the character.
-            attire: 1-2 paragraphs describing the attire of the character variant
-            behavior: 1-2 paragraphs describing the behavior of the character variant.
-            
-        NOTE: the descriptions should focus on attiributes that would help artists and writers accurately depict the character variant,
-        and will serve as a reference template for depicting the character variant in comic book panels.   Include enough detail so that
-        the character variant can be consistenlty represented, even by artists who have never seen the character before.
-        
-        Returns:
-            The newly created CharacterVariant object.
-        """
-        character_id = state.selection[-1].id  # Assuming the last item is the character
-        series_id = state.selection[-2].id  # Assuming the second last item is the
-
-        series = storage.read_object(cls=Series,primary_key = {"series_id": _get_series_id()})
-        if series is None:
-            raise ValueError("The series {series_id} does not exist.  Try checking the list of series first to see if maybe you misspelled it?")
-        character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
-        if character is None:
-            raise ValueError(f"The character {character_id} does not exist in series {series_id}.  Try checking the list of characters first to see if maybe you misspelled it?")
-        
-        character: CharacterModel = character
-        variant = CharacterVariant(
-            variant_id=normalize_id(name),
-            series_id=character.series_id,
-            character_id=character.character_id,
-            name=name,
-            race=race,
-            gender=gender,
-            age=age,
-            height=height,
-            description=general_description,
-            appearance=physical_appearance,
-            attire=attire,
-            behavior=behavior,
-            images = {}
-        )
-        storage.create_object(data=variant)
-        sel_item = SelectionItem(id=variant.variant_id, name=variant.name, kind="variant")
-        state.selection.append(sel_item)  # Add the new variant to the selection
-        state.write()
-        state.is_dirty = True
-        return variant
 
 
     # @function_tool
@@ -222,31 +137,4 @@ def character_agent(state: APPState, tools: dict[str, Tool]) -> Agent:
     #     )
     #     return description
 
-    return Agent(
-        name="Character Assistant",
-        instructions="""
-        You are an interactive artistic assistant who helps create, edit, and publish
-        comic books.   You specialize on creating detailed descriptions of characters
-        and their attributes to ensure that they are consistently represented regardless
-        of the artist or writer.
-        """ + BOILERPLATE_INSTRUCTIONS,
-        model=LANGUAGE_MODEL,
-        tools=[
-            # Navigation tools
-            tools.get("get_current_selection", None),
-
-            # Query Tools
-            tools.get("find_character", None),
-            tools.get("find_series", None),
-            tools.get("find_all_characters", None),
-            tools.get("find_all_variants", None),
-        
-            # describe_image,
-            update_character_description,
-
-            tools.get("delete_character", None),
-            create_variant,
-            # create_variant_from_image
-            ],
-    )
 

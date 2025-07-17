@@ -356,7 +356,7 @@ def render_object_cards(
                         markdown(get_markdown(instance))
                 
             # Fix lambda by creating a closure with the current value of new_sel
-            card.on('click', lambda _, new_sel=new_sel: state.change_selection( new_sel, clear_history=False))
+            card.on('click', lambda _, new_sel=new_sel: state.change_selection( new_sel))
     return grid
 
 
