@@ -27,6 +27,7 @@ from agentic.tools import (
     create_panel,
     create_character,
     create_issue,
+    create_cover,
 
     delete_publisher,
     delete_style,
@@ -53,8 +54,12 @@ from agentic.tools import (
     update_variant_height,
     update_variant_race,
 
+    generate_publisher_logo_image,  
+    generate_cover_image,
+    delete_cover_image
 )
 from agentic.tools.creator import create_variant
+from agentic.tools.imaging import delete_publisher_logo_image
 from agentic.tools.updater import (
     update_character_description,
     update_issue_story,
@@ -135,10 +140,12 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_cover,
         # Navigation
         # Imaging
+        generate_cover_image,
+        delete_cover_image
     ],
     "issue": [
         # Create
-        
+        create_cover,
         # Read
         read_issue,
         read_style,
@@ -185,6 +192,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Navigation
 
         # Imaging
+        generate_publisher_logo_image,
+        delete_publisher_logo_image
     ],
     "scene": [
         # Create

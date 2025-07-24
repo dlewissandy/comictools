@@ -10,9 +10,14 @@ class GenericStorage(ABC):
     """
 
     @abstractmethod
-    def create_object(self, data: BaseModel) -> str:
+    def create_object(self, data: BaseModel, overwrite: bool=False) -> str:
         """
         Create a new object in the specified path with the given data.
+
+        Args:
+            data (BaseModel): The data to create the object with.
+            overwrite (bool): Whether to overwrite an existing object with the same ID. Defaults to False.
+                If this is false, the ID will be replaced with a locally unique identifier.
         """
         pass
 
@@ -132,5 +137,30 @@ class GenericStorage(ABC):
 
         Returns:
             str: The file locator of the uploaded image.
+        """
+        pass
+
+    @abstractmethod
+    def upload_binary_image(self, obj: BaseModel, data: bytes) -> str:
+        """
+        Upload a binary image for a given object.
+
+        Args:
+            obj (BaseModel): The object to which the image belongs.
+            data (bytes): The binary data of the image.
+
+        Returns:
+            str: The file locator of the uploaded image.
+        """
+        pass
+
+    @abstractmethod
+    def delete_image(self, locator: str) -> None:
+        """
+        Delete an image given its locator
+
+        Args:
+            locator: The locator for the image
+
         """
         pass

@@ -78,12 +78,3 @@ class CharacterStyle(BaseModel):
         ...,
         description="Small, repeated stylistic details (e.g., 'Garfield’s half-lids', 'Blondie’s hair curls') for brand consistency.  Default to empty string."
     )
-
-    def format(self):
-        self_json = self.model_dump()
-        result = "## Character Style\n  The character style defines the visual language of the characters, including proportions, anatomy, and expressions.   It should apply to all characters unless specified otherwise.\n\n"
-        for key, value in self_json.items():
-            if value is None or value == "":
-                continue
-            result += f"* **{key.replace('_', ' ').capitalize()}**: {value}\n\n"
-        return result

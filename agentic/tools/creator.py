@@ -2,6 +2,7 @@ from loguru import logger
 from typing import Optional
 from agents import Agent, function_tool, Tool, RunContextWrapper
 from pydantic import BaseModel
+import traceback
 from schema import (
     Publisher,
     ComicStyle,
@@ -35,16 +36,15 @@ from agentic.tools.normalization import normalize_id, normalize_name
 
 
 
-def creator(wrapper: RunContextWrapper, obj: BaseModel) -> Agent | str:
+def creator(wrapper: RunContextWrapper, obj: BaseModel, overwrite: bool=False) -> Agent | str:
     """
     Create a new object in the database.   This function is used by all other creator tools
     to create objects in the database.
     
     Args:
         wrapper: The run context wrapper containing the application state.
-        cls: The class of the object to create.
-        name: The name of the object to create.
-        **kwargs: The attributes of the object to create.
+        obj: The object to create
+        overwrite: Overwrite the existing object?
     
     Returns:
         The created object or an error message if the object already exists.
@@ -53,11 +53,12 @@ def creator(wrapper: RunContextWrapper, obj: BaseModel) -> Agent | str:
     storage: GenericStorage = state.storage
 
     pk = obj.primary_key
-    if storage.read_object(cls=obj.__class__, primary_key=pk) is not None:
-        logger.error(f"{obj.__class__.__name__} with name '{obj.name}' already exists.")
-        return f"{obj.__class__.__name__} with name '{obj.name}' already exists."
-    
-    logger.info(f"The name '{obj.name}' is available.")
+
+    if storage.read_object(cls=obj.__class__, primary_key=pk) is not None and not overwrite:
+        logger.error(f"{obj.__class__.__name__} with key '{obj.primary_key}' already exists.")
+        return f"{obj.__class__.__name__} with key '{obj.primary_key}' already exists."
+
+    logger.info(f"The key '{obj.primary_key}' is available.")
     storage.create_object(data=obj)
     state.is_dirty = True
     return obj
@@ -466,3 +467,90 @@ def create_character(wrapper: RunContextWrapper[APPState], series_id: str, chara
         wrapper=wrapper,
         obj=character
     )
+
+@function_tool
+def create_cover(
+    wrapper: RunContextWrapper[APPState], 
+    series_id: str,
+    issue_id: str,
+    location: CoverLocation,
+    description: str,
+    characters: list[CharacterRef] = []
+) -> str:
+    """
+    Create a cover for the specified issue.    The foreground and optional background descriptions
+    will be used by artists to create the cover image, and should be detailed enough to ensure
+    that the cover could be faithfully rendered by an artist.   Focus on visual elements, composition,
+    and be specific.   Different artists given the same description should be able to produce
+    similar covers, even if they are not identical.
+
+    Args:
+        series_id: The ID of the comic series to create the cover for.
+        issue_id: The ID of the comic issue to create the cover for.
+        location: The location where the cover should be created. MUST BE ONE OF "front", "back", "inside-front", "inside-back".
+        description: A detailed description of the visual elements in the cover.
+        characters: A list of character references to include on the cover.   These references should
+            be characters that are in the series.   VERIFY that they exist to avoid errors.
+    Returns:
+        A confirmation message indicating the cover was created successfully.
+    """
+    try:
+        state: APPState = wrapper.context
+        storage: GenericStorage = state.storage
+
+        # Normalize the identifiers
+        series_id = normalize_id(series_id)
+        issue_id = normalize_id(issue_id)
+
+        series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
+        if not series:
+            return f"Comic series with ID '{series_id}' not found. Please select a valid series first."
+        series: Series = series
+
+        issue = storage.read_object(cls=Issue, primary_key={"issue_id": issue_id, "series_id": series_id})
+        if not issue:
+            return f"Issue with ID '{issue_id}' not found in series '{series.name}'."
+        issue: Issue = issue
+
+        # Verify the character references
+        for char in characters:
+            character_model = storage.read_object(cls=CharacterModel, primary_key={"character_id": char.character_id, "series_id": series_id})
+            if not character_model:
+                # Get the names of all the existing characters in the series
+                existing_characters = storage.read_all_objects(cls=CharacterModel, primary_key={"series_id": series_id})
+                existing_names_and_ids = [(c.id, c.name) for c in existing_characters]
+                return f"Character with ID '{char.character_id}' not found in series '{series.name}'.  The available characters (and their IDs) are: {existing_names_and_ids}."
+            # Verify the variant exists if specified
+            character_model: CharacterModel = character_model
+            variant = storage.read_object(cls=CharacterVariant, primary_key={"character_id": char.character_id, "series_id": series_id, "variant_id": char.variant_id})
+            if not variant:
+                # Get the names of all the existing variants for this character
+                existing_variants = storage.read_all_objects(cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": char.character_id})
+                existing_variant_names_and_ids = [(v.id, v.name) for v in existing_variants]
+                return f"Character with ID '{char.character_id}' with Variant ID '{char.variant_id}' not found in series '{series.name}'.  The available variants (and their IDs) are: {existing_variant_names_and_ids}."
+
+
+        cover = Cover(
+            cover_id=normalize_id(location.value),
+            location=location,
+            issue_id=issue_id,
+            series_id=series_id,
+            character_references=characters,
+            style_id=issue.style_id,
+            aspect=FrameLayout.PORTRAIT,
+            description=description,
+            image=None,  # Image will be set later if needed
+            reference_images=[]  # Reference images can be added later
+        )
+
+        return creator(
+            wrapper=wrapper,
+            obj=cover,
+            overwrite=True,
+        )
+    except Exception as e:
+         # Get the full traceback
+        tb = traceback.format_exc()
+        logger.error(f"Error creating cover: {tb}")
+        return f"Error creating cover: {str(e)}\n{tb}"
+

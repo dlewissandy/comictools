@@ -4,18 +4,18 @@ from typing import Union, Literal, Annotated
 from pydantic import BaseModel, Field
 
 class BeforeFirst(BaseModel):
-    kind: Literal["before_first"] = Field(default="before_first", exclude=True, description="Insert the new item before the first item in the list.")
+    kind: Literal["before_first"] = Field(..., exclude=True, description="Insert the new item before the first item in the list.")
 
 class Before(BaseModel):
     index: int
-    kind: Literal["before"] = Field(default="before", exclude=True, description="Insert the new item before the item at the specified list index.")
+    kind: Literal["before"] = Field(..., exclude=True, description="Insert the new item before the item at the specified list index.")
 
 class After(BaseModel):
     index: int
-    kind: Literal["after"] = Field(default="after", exclude=True, description="Insert the new item after the item at the specified list index.")
+    kind: Literal["after"] = Field(..., exclude=True, description="Insert the new item after the item at the specified list index.")
 
 class AfterLast(BaseModel):
-    kind: Literal["after_last"] = Field(default="after_last", exclude=True, description="Insert the new item after the last item in the list.")
+    kind: Literal["after_last"] = Field(...,exclude=True, description="Insert the new item after the last item in the list.")
 
 InsertionLocation = Annotated[
     Union[BeforeFirst, Before, After, AfterLast],

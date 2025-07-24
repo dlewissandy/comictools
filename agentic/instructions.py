@@ -80,7 +80,7 @@ PERSONAS = {
 
 SELECTION_INSTRUCTIONS = """
 # CURRENT SELECTION:
-    The current selection as a list of SelectionItems, representing the current
+    The current selection is a list of SelectionItems, representing the current
     object hierarchy/path to the item that the user is inspecting.  
     
     {wrapper.context.selection}

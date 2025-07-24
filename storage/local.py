@@ -35,7 +35,7 @@ class LocalStorage(GenericStorage):
         if not os.path.exists(self.base_path):
             os.makedirs(self.base_path)
 
-    def create_object(self, data: BaseModel) -> str:
+    def create_object(self, data: BaseModel, overwrite: bool=False) -> str:
         """
         Create a new object in the specified path with the given data.   This new object will
         be assigned a unique ID, and will be stored in a file using the object's 
@@ -76,8 +76,12 @@ class LocalStorage(GenericStorage):
         # If we get here, we know that the rootpath exists and is a directory, and that the
         # object has an identifier field.   We can now generate a unique ID for the object
         # and set the id field to that ID.   
-        obj_id = generate_unique_id(path=rootpath, create_folder=True)
-        setattr(data, id_field, obj_id)  # Set the id field to the generated unique ID
+        if not overwrite:
+            obj_id = generate_unique_id(path=rootpath, create_folder=True)
+            setattr(data, id_field, obj_id)  # Set the id field to the generated unique ID
+        else:
+            obj_id = getattr(data, id_field)
+        
         filepath = obj_to_filepath(data)  # This will raise an error if the object is not valid
         parent_path = os.path.dirname(filepath)
         # make sure that file's folder exists
@@ -288,8 +292,13 @@ class LocalStorage(GenericStorage):
                 logger.debug(f"Skipping non-file item: {item}")
                 continue
             ext = os.path.splitext(item)[1].lower()
+            # remove leading "." from extension
+            ext = ext[1:]
             if ext in IMAGE_FILE_EXTENSIONS:
                 images.append(item_path)
+            else:
+                logger.debug(ext)
+                logger.debug(f"Skipping non-image item {item}")
         return images
 
     def list_images(self, obj: BaseModel) -> list[str]:
@@ -385,11 +394,10 @@ class LocalStorage(GenericStorage):
         for issue in issues:
             issue_covers: list[Cover] = self.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue.issue_id})
             if issue_covers and issue_covers != []:
-                cover = issue_covers[0]
-                image = cover.image
-                if not image:
-                    return None
-                if image:
+                for cover in issue_covers:
+                    if not cover.image or cover.image == "":
+                        continue
+                    image: str = cover.image
                     if os.path.exists(image):
                         return image
         return None
@@ -405,7 +413,7 @@ class LocalStorage(GenericStorage):
         covers.sort(key=lambda x: priorities.index(x.location) if x in priorities else len(priorities))
         # Return the first cover that has an image
         for cover in covers:
-            if cover.image is not None:
+            if cover.image is not None and cover.image != "":
                 return cover.image
         return None
 
@@ -527,3 +535,49 @@ class LocalStorage(GenericStorage):
         # No image found in any of the panels
         return None
     
+    def find_cover_image(self, series_id: str, issue_id: str, cover_id: str) -> Optional[str]:
+        """
+        Find the image of a cover.   This will search all the covers in the issue,
+        and return the first image that exists.
+        If no image is found in any of the covers, then return None.
+        """
+        cover = self.read_object(
+            cls=Cover,
+            primary_key={
+                "series_id": series_id,
+                "issue_id": issue_id,
+                "cover_id": cover_id
+            }
+        )
+        if cover is None:
+            logger.debug(f"Cover for series {series_id}, issue {issue_id}, cover {cover_id} not found.")
+            return None
+        
+        return cover.image
+
+
+
+    def upload_binary_image(self, obj: BaseModel, data: bytes) -> str:
+        # Split the mime type to get the extension
+        ext = "jpg"
+       
+        root_path = obj_to_imagepath(obj=obj, base_path=self.base_path)
+        if not os.path.exists(root_path):
+            os.makedirs(root_path)
+        basename = generate_unique_id(path=root_path, create_folder=False) 
+        filepath = os.path.join(root_path, basename + f".{ext}")
+
+        with open(filepath, "wb") as f:
+            f.write(data)
+            logger.debug(f"Image saved to {filepath}")
+        return filepath
+
+    def delete_image(self, locator: str) -> None:
+        # if the file does not exist, then return gracefully.
+        if not os.path.exists(locator):
+            return
+        if not os.path.isfile(locator):
+            raise NotADirectoryError(f"Path {locator} is not a file.")
+        os.remove(locator)
+        logger.debug(f"Image {locator} deleted.")   
+        

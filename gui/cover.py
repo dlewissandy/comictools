@@ -45,8 +45,7 @@ def view_cover(state: APPState, location: CoverLocation):
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current publisher."),size=1)    
         with ui.row().classes('w-full flex-nowrap'):
             with ui.column().classes('w-3/4'):
-                markdown_field_editor(state, "description", cover.foreground)
-                markdown_field_editor(state, "background", cover.background)
+                markdown_field_editor(state, "Description", cover.description)
                 
 
             with ui.card().classes('mb-2 p-2 w-1/4 bg-blue-100 dark:bg-gray-800 break-inside-avoid text-gray-900 dark:text-gray-300') as col2:

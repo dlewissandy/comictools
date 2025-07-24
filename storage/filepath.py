@@ -10,7 +10,7 @@ TOPOSORT_ORDER = [
     "publisher_id",
     "series_id",
     "issue_id",
-    "location",
+    "cover_id",
     "character_id",
     "variant_id",
     "scene_id",
@@ -300,14 +300,14 @@ def get_object_id_field_name(item: BaseModel) -> str:
     raise ValueError("No identifier field found.")
 
 IMAGE_FILE_EXTENSIONS = [
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".bmp",
-    ".tiff",
-    ".webp",
-    ".svg",
-    ".heic",
-    ".avif",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "bmp",
+    "tiff",
+    "webp",
+    "svg",
+    "heic",
+    "avif",
 ]

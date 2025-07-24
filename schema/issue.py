@@ -46,24 +46,3 @@ class Issue(BaseModel):
         if self.issue_id is None or self.issue_id == "":
             return str(self.issue_number)
         return self.issue_id
-
-    def format(self, heading_level: int=1) -> str:
-        """
-        Format the comic book for display
-        """
-        text = f"{'#'* heading_level} ISSUE {self.issue_number}\n\n"
-        if self.title is not None:
-            text += f" * **title** {self.title}\n\n"
-        if self.publication_date is not None:
-            text += f" * **date** {self.publication_date}\n\n"
-        if self.writer is not None:
-            text += f" * **writer** {self.writer}\n\n"
-        if self.artist is not None:
-            text += f" * **artist** {self.artist}\n\n"
-        if self.colorist is not None:
-            text += f" * **colorist** {self.colorist}\n\n"
-        if self.creative_minds is not None:
-            text += f" * **creative minds** {self.creative_minds}\n\n"
-        if self.price is not None:
-            text += f" * **price** {self.price}\n\n"
-        return text

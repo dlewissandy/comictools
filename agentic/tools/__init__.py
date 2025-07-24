@@ -23,7 +23,8 @@ from .creator import (
     create_variant,
     create_panel,
     create_character,
-    create_issue
+    create_issue,
+    create_cover,
 )
 
 from .reader import (
@@ -69,6 +70,13 @@ from .navigation import (
     select_publisher,
     select_series,
     select_comic_style,
+)
+
+from .imaging import (
+    generate_publisher_logo_image,
+    delete_publisher_logo_image,
+    generate_cover_image,
+    delete_cover_image
 )
 
 
@@ -119,6 +127,14 @@ __all__ = [
     "update_logo_description",
     "update_publisher_description",
     "update_series_description",
+    "update_variant_age",
+    "update_variant_appearance",
+    "update_variant_attire",
+    "update_variant_behavior",
+    "update_variant_description",
+    "update_variant_gender",
+    "update_variant_height",
+    "update_variant_race",
 
     # DELETE
     "delete_publisher",
@@ -141,7 +157,9 @@ __all__ = [
     "normalize_name",
 
     # IMAGES
-
-
+    "generate_publisher_logo_image",
+    "delete_publisher_logo_image",
+    "generate_cover_image",
+    "delete_cover_image"
 
 ]

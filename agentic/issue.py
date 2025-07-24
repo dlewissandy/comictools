@@ -39,7 +39,7 @@ def _insertion_location_to_index(insertion_location: InsertionLocation) -> int:
 
 
 @function_tool
-def create_cover(wrapper: RunContextWrapper[APPState], location: CoverLocation, characters: list[str], foreground: str, background: str) -> str:
+def create_cover(wrapper: RunContextWrapper[APPState], location: CoverLocation, characters: list[str], description: str) -> str:
     """
     Create a cover for the currently selected comic book issue.   Returns the status
     of the cover creation operation.
@@ -49,8 +49,7 @@ def create_cover(wrapper: RunContextWrapper[APPState], location: CoverLocation, 
         characters (str): The names of the characters to include on the cover.  You should verify that these
             characters are in the series.   If they are not, but there are similar names, confirm with the user
             which character they meant.
-        foreground (str): A detailed description of the visual elements in the foreground of the cover.
-        background (str): A detailed description of the visual elements in the background of the cover.
+        description (str): A detailed description of the visual elements of the cover.   This should describe the visual elements, props, action, etc in enough detail that an artist could faithfully create the cover image from the description.
 
     """
     state: APPState = wrapper.context
@@ -74,8 +73,7 @@ def create_cover(wrapper: RunContextWrapper[APPState], location: CoverLocation, 
         character_references=[CharacterRef(series_id=series_id, character_id=char, variant_id="base") for char in characters],
         style_id=issue.style_id,
         aspect=FrameLayout.PORTRAIT,
-        foreground=foreground,
-        background=background,
+        description=description,
         image=None,
         reference_images=[]
 
@@ -83,7 +81,7 @@ def create_cover(wrapper: RunContextWrapper[APPState], location: CoverLocation, 
 
     kind = SelectedKind.COVER
     name = normalize_name(kind)
-    new_sel = SelectionItem(id=cover.cover_id, kind=kind, name=name,)
+    new_sel = SelectionItem(id=cover.location.value, kind=kind, name=name,)
     cover.write()
     new_sel = state.selection + [new_sel]
     state.change_selection(new_sel)

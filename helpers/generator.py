@@ -82,7 +82,13 @@ def invoke_generate_api(
         return response.output[0].content[0].text
     return response.output_parsed
 
-def invoke_generate_image_api(prompt: str, model: str = "gpt-image-1", size: str = "1024x1024", n: int = 1, quality: IMAGE_QUALITY = IMAGE_QUALITY.LOW):
+def invoke_generate_image_api(
+    prompt: str,
+    model: str = "gpt-image-1",
+    size: str = "1024x1024",
+    n: int = 1,
+    quality: IMAGE_QUALITY = IMAGE_QUALITY.LOW
+):
     """
     Invoke the OpenAI API to generate an image based on the prompt.
     """
@@ -103,7 +109,14 @@ def invoke_generate_image_api(prompt: str, model: str = "gpt-image-1", size: str
         raise e
 
 
-def invoke_edit_image_api( prompt: str, mask: str | None = None, n: int = 1, size: str = "1024x1024", quality: IMAGE_QUALITY = IMAGE_QUALITY.HIGH, reference_images: list[str] = []):
+def invoke_edit_image_api( 
+        prompt: str,
+        mask: str | None = None,
+        n: int = 1,
+        size: str = "1024x1024",
+        quality: IMAGE_QUALITY = IMAGE_QUALITY.HIGH,
+        reference_images: list[str] = []
+    ):
     """
     Invoke the OpenAI API to edit an image based on the prompt.
 

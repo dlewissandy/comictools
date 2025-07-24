@@ -211,19 +211,7 @@ the original image as possible so that it can serve as a visual reference for th
             return "success.  The new character style image has been saved."
         return "Character style image could not be rendered."
         
-    def format(self, include_bubble_styles: bool = True, include_character_style: bool = True, heading_level: int = 1) -> str:
-        """
-        format the comic style for display
-        """
-        result = f"""{'#'*heading_level} Comic Style ({self.name})
-    {self.description}""".strip()
-        if self.art_style is not None:
-            result += f"\n{self.art_style.format()}"
-        if self.character_style is not None and include_character_style:
-            result += f"\n{self.character_style.format()}"
-        if self.bubble_styles is not None and include_bubble_styles:
-            result += f"\n{self.bubble_styles.format()}"
-        return result
+
     
 
     # TODO: Move this to generators!   This is not a crud operatation.

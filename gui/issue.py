@@ -84,7 +84,7 @@ def view_issue(state:APPState):
             view_all_instances(
                 state=state,
                 get_instances = lambda: storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id}),
-                get_image_locator=lambda _: storage.find_issue_image(series_id=series_id, issue_id=issue_id),
+                get_image_locator=lambda cover: cover.image,
                 kind=SelectedKind.COVER,
                 get_name=lambda _,cover: f"{cover.location.replace('_', ' ').title()} Cover",
                 aspect_ratio="6/9"

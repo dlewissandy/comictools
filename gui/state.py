@@ -252,7 +252,7 @@ class APPState:
                 ui.chat_message(name=name, sent=sent, text=text_html, text_html=True).classes('w-full')
 
         # scroll to the bottom of the history
-        history.value = 100
+        history.scroll_to(percent=1)
 
     def change_selection(self, new: list[SelectionItem]):
         """
