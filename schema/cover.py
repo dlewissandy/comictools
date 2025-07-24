@@ -43,20 +43,3 @@ class Cover(BaseModel):
         return the id of the cover
         """
         return self.cover_id
-
-#     def format(self, heading_level: int = 1) -> str:
-#         """
-#         format the panel model for display
-#         """
-#         text = f"""
-# * **location**: {self.location}
-# * **style**: {self.style}
-# * **aspect**: {self.aspect}
-# * **characters**:
-# {"\n".join([f"  - {character}" for character in self.characters])}
-# * **foreground**: {self.foreground}
-# * **background**: {self.background}
-# """
-#         return text
-    
-

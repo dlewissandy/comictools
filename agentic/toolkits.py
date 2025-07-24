@@ -44,6 +44,7 @@ from agentic.tools import (
     select_comic_style,
 
     update_character_description,
+    update_cover_description,
 
     update_variant_age,
     update_variant_appearance,
@@ -136,6 +137,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Read
         read_cover,
         # Update
+        update_cover_description,
         # Delete
         delete_cover,
         # Navigation

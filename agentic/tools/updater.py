@@ -8,6 +8,7 @@ from schema import (
     CharacterModel,
     CharacterVariant,
     Issue,
+    Cover,
     Publisher,
     Series,
 )
@@ -51,6 +52,31 @@ def update_character_description(wrapper: RunContextWrapper[APPState], descripti
         A message indicating the result of the update operation.
     """
     state: APPState = wrapper.context
+    series_id = state.selection[-2].id  # Assuming the second last item is the series
+    character_id = state.selection[-1].id  # Assuming the last item is the character
+
+    primary_key = {'character_id': character_id, 'series_id': series_id}
+    return update_attribute(wrapper, CharacterModel, primary_key, 'description', description)
+
+@function_tool
+def update_cover_description(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, cover_id: str, description: str) -> str:
+    """
+    Update the description of the specified cover.
+
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the comic book issue.
+        cover_id: The ID of the cover to update.
+        description: The new description for the cover.
+    
+    Returns:
+        A message indicating the result of the update operation.
+    """
+    state: APPState = wrapper.context
+
+    primary_key = {'cover_id': cover_id, 'series_id': series_id, 'issue_id': issue_id}
+    return update_attribute(wrapper, Cover, primary_key, 'description', description)
+
     series_id = state.selection[-2].id  # Assuming the second last item is the series
     character_id = state.selection[-1].id  # Assuming the last item is the character
 

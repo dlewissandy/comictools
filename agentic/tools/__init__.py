@@ -13,6 +13,7 @@ from .updater import (
     update_variant_gender,
     update_variant_height,
     update_variant_race,
+    update_cover_description,
 
 )
 

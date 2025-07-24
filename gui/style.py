@@ -172,8 +172,8 @@ def view_pick_style(state: APPState):
     elif parent_kind == SelectedKind.COVER:
         issue_id = selection[-3].id
         series_id = selection[-4].id
-        location = CoverLocation(parent_kind[:-6].replace("-", " "))
-        parent = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "location": location})
+        cover_id = selection[-2].id
+        parent = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
         writer = lambda: storage.update_object(data=parent)
 
     style_id = selection[-1].id
