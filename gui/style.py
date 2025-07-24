@@ -198,46 +198,4 @@ def view_pick_style(state: APPState):
             set_choice=set_style,
         )           
 
-
-# TODO: I think that this is no longer used - picker is inline.
-# def view_pick_art_style_image(
-#     state: APPState
-# ):
-#     from gui.elements import full_width_image_selector_grid
-#     selection = state.selection
-#     style_id = selection[-2].id
-#     style = ComicStyle.read(id=style_id)
-#     if style is None:
-#         msg = f"Style with ID {style_id} not found."
-#         logger.error(msg)
-#         header("Error", 0)
-#         header(msg, 2).style("color: red;")
-#         return
-
-#     def get_selection():
-#         style = ComicStyle.read(id=style_id)
-#         return style.image_filepath(img_type="art")
-    
-#     def set_selection(id: str):
-#         style = ComicStyle.read(id=style_id)
-#         style.set_image(img_type="art", image_id=id)
-#         style.write()
-#         state["is_dirty"] = True
-
-#     def get_images():
-#         style = ComicStyle.read(id=style_id)
-#         return style.all_images(img_type="art")
-    
-#     image_path = style.image_path(img_type="art")
-
-#     with state.details:
-#         header(f"Art Style Image for {style.name}", 1)
-#     full_width_image_selector_grid(
-#         state=state,
-#         kind ="art-style-image",
-#         images_path = image_path,
-#         get_selection=get_selection,
-#         set_selection=set_selection,
-#         get_images=get_images,
-#     )
     

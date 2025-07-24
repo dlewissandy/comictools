@@ -55,23 +55,3 @@ class CharacterVariant(BaseModel):
         """
         # Normalize the id:
         return self.variant_id
-
-
-
-#     def render(self, style: ComicStyle):
-#         """
-#         render the character model using generative AI
-#         """
-
-#         style_description = style.format(include_bubble_styles=False)
-#         character_description = self.format()
-#         character_name = self.name
-#         if self.variant is not None and self.variant != "":
-#             character_name += f" ({self.variant})"
-#         savepath = f"{CHARACTERS_FOLDER}/{self.id}/{style.id}"
-#         image_id = render_character_image(character_name, character_description, style_description, savepath)
-#         if style.id not in self.image:
-#             self.image[style.id] = image_id
-#             self.write()
-#         return "success"
-

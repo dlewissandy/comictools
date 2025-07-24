@@ -144,7 +144,6 @@ class APPState:
         """
         logger.trace("Clearing history")
         self.history.clear()
-        # TODO: re-enable the send button
         return self.history
 
     def clear_details(self):

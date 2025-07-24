@@ -136,8 +136,11 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Create
         # Read
         read_cover,
+        read_all_styles,
         # Update
         update_cover_description,
+        # TODO update_cover_aspect_ratio
+        # TODO update_cover_style
         # Delete
         delete_cover,
         # Navigation

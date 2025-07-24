@@ -55,23 +55,3 @@ class Panel(BaseModel):
         return the id of the panel
         """
         return self.panel_id
-
-#     def format(self, heading_level: int = 1) -> str:
-#         """
-#         format the panel model for display
-#         """
-#         text = f"""
-# * **story**: {self.description}
-# * **characters**:
-# {"\n".join([f"  - {character}" for character in self.characters])}
-# * **aspect**: {self.aspect}
-# """
-#         return text
-    
-
-
-    
-
-        
-
-        

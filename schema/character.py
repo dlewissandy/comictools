@@ -42,18 +42,3 @@ class CharacterModel( BaseModel):
         """
         # Normalize the id:
         return self.character_id
-
-
-    def format(self):
-        """
-        format the character model for display
-        """
-        result = f"""# Character Model ({self.name})
-* **Name**: {self.name}
-* **Description**: {self.description}
-        """.strip()
-        return result
-    
-    
-    
-

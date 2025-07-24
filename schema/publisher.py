@@ -30,18 +30,3 @@ class Publisher(BaseModel):
         return the id of the publisher
         """
         return self.publisher_id
-
-
-    
-    # def format(self, heading_level: int = 1) -> str:
-    #     """
-    #     format the publisher model for display
-    #     """
-    #     heading = "#" * heading_level
-    #     output = f"{heading} Publisher\n"
-    #     output += f"* **Name:** {self.name}\n"
-    #     if self.description:
-    #         output += f"* ** Description ** {self.description}\n"
-    #     if self.logo:
-    #         output += f"* **Logo:** {self.logo}\n"
-    #     return output

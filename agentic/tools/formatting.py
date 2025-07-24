@@ -1,4 +1,4 @@
-
+from typing import Optional
 
 from agentic.tools.normalization import normalize_name
 from schema import (
@@ -10,6 +10,7 @@ from schema import (
     BubbleStyle,
     Issue
 )
+from schema.scene import SceneModel
 
 def format_character_variant(character_name, variant: CharacterVariant, heading_level: int) -> str:
     # Format the character text with the given heading level

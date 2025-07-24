@@ -30,13 +30,4 @@ class Series(BaseModel):
         return the id of the series
         """
         return self.series_id
-    
-    def format(self):
-        self_json = self.model_dump()
-        result = "## Series\n\n"
-        for key, value in self_json.items():
-            if value is None or value == "":
-                continue
-            result += f"* **{key.replace('_', ' ').capitalize()}**: {value}\n\n"
-        return result
-    
+        
