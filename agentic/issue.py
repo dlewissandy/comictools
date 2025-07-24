@@ -35,62 +35,6 @@ def _insertion_location_to_index(insertion_location: InsertionLocation) -> int:
         raise ValueError(f"Unknown insertion location type: {type(insertion_location)}")
 
 
-        
-
-
-@function_tool
-def create_cover(wrapper: RunContextWrapper[APPState], location: CoverLocation, characters: list[str], description: str) -> str:
-    """
-    Create a cover for the currently selected comic book issue.   Returns the status
-    of the cover creation operation.
-
-    Args:
-        location (CoverLocation): The location where the cover should be created.
-        characters (str): The names of the characters to include on the cover.  You should verify that these
-            characters are in the series.   If they are not, but there are similar names, confirm with the user
-            which character they meant.
-        description (str): A detailed description of the visual elements of the cover.   This should describe the visual elements, props, action, etc in enough detail that an artist could faithfully create the cover image from the description.
-
-    """
-    state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
-
-    context = read_context(state)
-    
-    issue: Issue = context[0]
-    issue_id = issue.issue_id
-    series_id = issue.series_id
-
-    for cover in issue.covers:
-        if cover.location == location.value:
-            cover.delete()
-
-    cover = Cover(
-        cover_id=normalize_id(location.value),
-        location = location,
-        issue_id=issue_id,
-        series_id=series_id,
-        character_references=[CharacterRef(series_id=series_id, character_id=char, variant_id="base") for char in characters],
-        style_id=issue.style_id,
-        aspect=FrameLayout.PORTRAIT,
-        description=description,
-        image=None,
-        reference_images=[]
-
-    )
-
-    kind = SelectedKind.COVER
-    name = normalize_name(kind)
-    new_sel = SelectionItem(id=cover.location.value, kind=kind, name=name,)
-    cover.write()
-    new_sel = state.selection + [new_sel]
-    state.change_selection(new_sel)
-    state.is_dirty = True
-    
-    return f"Cover created successfully for issue {issue.name} at location {location.name}."
-
-
-
 
 @function_tool
 def swap_scene_order(wrapper: RunContextWrapper[APPState], first_scene_number: int, second_scene_number: int) -> str:

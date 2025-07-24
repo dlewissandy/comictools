@@ -36,7 +36,7 @@ def deleter(wrapper: RunContextWrapper[APPState], cls: BaseModel, primary_key: d
     if obj is None:
         return f"Object with primary key {primary_key} not found."
 
-    if selection[-1].id == obj.id and selection[-1].kind == cls.__name__:
+    if selection[-1].id == obj.id and selection[-1].kind == cls.__name__.lower():
         new_selection = selection[:-1]
         state.change_selection(new=new_selection)
     state.is_dirty = True
@@ -132,7 +132,7 @@ def delete_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
     return deleter(wrapper=wrapper, cls=Panel, primary_key=pk)
 
 @function_tool
-def delete_cover(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, location: CoverLocation) -> str:
+def delete_cover(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, cover_id: str) -> str:
     """
     Delete a cover from a comic book issue.   You MUST ask for confirmation before using this tool.
     
@@ -144,7 +144,7 @@ def delete_cover(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
     Returns:
         A status message indicating the result of the deletion.
     """
-    pk = {"series_id": series_id, "issue_id": issue_id, "location": location.value}
+    pk = {"series_id": series_id, "issue_id": issue_id, "cover_id": cover_id}
     return deleter(wrapper=wrapper, cls=Cover, primary_key=pk)
 
 @function_tool

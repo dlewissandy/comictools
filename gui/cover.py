@@ -23,11 +23,12 @@ def view_cover(state: APPState, location: CoverLocation):
    
     selection = state.selection
     location = CoverLocation( selection[-1].id )
+    cover_id = location.value
     issue_id = selection[-2].id
     series_id = selection[-3].id if len(selection) > 2 else None
-    logger.debug(f"series: {series_id} issue: {issue_id} cover: {location}")
+    logger.debug(f"series: {series_id} issue: {issue_id} cover: {cover_id}")
 
-    cover:Cover  = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "location": location})
+    cover:Cover  = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
 
     if cover.style_id is None:
         logger.debug(f"Issue {cover.id} has no style set.")
@@ -42,7 +43,7 @@ def view_cover(state: APPState, location: CoverLocation):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(cover.location.value.title()+ " Cover", 0)
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current publisher."),size=1)    
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current cover."),size=1)    
         with ui.row().classes('w-full flex-nowrap'):
             with ui.column().classes('w-3/4'):
                 markdown_field_editor(state, "Description", cover.description)

@@ -59,7 +59,7 @@ def creator(wrapper: RunContextWrapper, obj: BaseModel, overwrite: bool=False) -
         return f"{obj.__class__.__name__} with key '{obj.primary_key}' already exists."
 
     logger.info(f"The key '{obj.primary_key}' is available.")
-    storage.create_object(data=obj)
+    storage.create_object(data=obj, overwrite=overwrite)
     state.is_dirty = True
     return obj
 

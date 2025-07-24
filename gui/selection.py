@@ -73,7 +73,7 @@ def selection_to_context(
                 accum["panel_id"] = id
                 context.append((Panel, {k:v for k, v in accum.items()}))
             case SelectedKind.COVER.value:
-                accum["location"] = id
+                accum["cover_id"] = id
                 context.append((Cover, {k:v for k, v in accum.items()}))
             case SelectedKind.CHARACTER.value:
                 accum["character_id"] = id
