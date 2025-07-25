@@ -131,6 +131,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_character,
         create_variant,
         # create_variant_from_image
+        # TODO: Create variant from image
     ],
     "cover": [
         # Create

@@ -22,7 +22,12 @@ from schema import (
 # Functions to read objects from the database.   These are used by the tools
 # To perform the file operations
 # -------------------------------------------------------------------------
-def read_all(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], parent_key: dict[str, str] | None = None) -> list[BaseModel]:
+def read_all(
+        wrapper: RunContextWrapper[APPState], 
+        cls: type[BaseModel], 
+        parent_key: dict[str, str] | None = None,
+        order_by: Optional[Union[str, Callable[[BaseModel], str]]] = None
+        ) -> list[BaseModel]:
     """
     Read all objects of a given class from the database.   
 
@@ -50,7 +55,17 @@ def read_all(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], parent_
 
     # If we reach here, the requested object is a child of the last item in the hierarchy
     pk_parent = context[0][1] if parent_key is None else parent_key
-    return storage.read_all_objects(cls=cls, primary_key=pk_parent)
+    objs = storage.read_all_objects(cls=cls, primary_key=pk_parent)
+
+    if order_by is None:
+        return objs
+    elif callable(order_by):
+        return sorted(objs, key=order_by)
+    elif isinstance(order_by, str):
+        return sorted(objs, key=lambda obj: getattr(obj, order_by))
+    else:
+        logger.error(f"Invalid order_by argument: {order_by}")
+        raise ValueError(f"Invalid order_by argument: {order_by}")
 
 
 def read_one(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], pk: dict[str, str]) -> BaseModel:
@@ -179,7 +194,7 @@ def read_all_variants(
         A list of all variants for the currently selected character.
     """
     parent_key = {"series_id": series_id, "character_id": character_id}
-    return read_all(wrapper=wrapper, cls=CharacterVariant, parent_key=parent_key)
+    return read_all(wrapper=wrapper, cls=CharacterVariant, parent_key=parent_key, order_by="name")
 
 @function_tool
 def read_all_covers(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> list[Cover]:
@@ -194,7 +209,15 @@ def read_all_covers(wrapper: RunContextWrapper[APPState], series_id: str, issue_
         A list of Cover objects representing the covers in the issue.
     """
     parent_key = {"series_id": series_id, "issue_id": issue_id}
-    return read_all(wrapper=wrapper, cls=Cover, parent_key=parent_key)
+
+    ORDER: list[str] = ["front", "inside-front", "inside-back", "back"]
+
+    return read_all(
+        wrapper=wrapper, 
+        cls=Cover, 
+        parent_key=parent_key,
+        order_by=lambda cover: ORDER.index(cover.location.value)
+    )
 
 @function_tool
 def read_all_issues(wrapper: RunContextWrapper[APPState], series_id: str) -> list[Issue]:

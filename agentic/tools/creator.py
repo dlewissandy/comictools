@@ -317,6 +317,7 @@ purposeful.
     scene = storage.read_object(cls=SceneModel, primary_key={'scene_id': scene_id, 'issue_id': issue_id, 'series_id': series_id})
     series = storage.read_object(cls=Series, primary_key={'series_id': series_id})
 
+
     if series is None:
         raise ValueError(f"Series with ID {series_id} not found.")
     elif issue is None:

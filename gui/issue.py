@@ -78,12 +78,15 @@ def view_issue(state:APPState):
                     individual_icons=False,
                 )
 
+        COVER_ORDER = ["front", "inside-front", "inside-back", "back"]
+        order_by = lambda cover: COVER_ORDER.index(cover.location.value) if cover.location.value in COVER_ORDER else -1
+
         with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Covers","I would like to create a new cover for this issue.")
             view_all_instances(
                 state=state,
-                get_instances = lambda: storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id}),
+                get_instances = lambda: storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id}, order_by=order_by),
                 get_image_locator=lambda cover: cover.image,
                 kind=SelectedKind.COVER,
                 get_name=lambda _,cover: f"{cover.location.replace('_', ' ').title()} Cover",

@@ -1,4 +1,4 @@
-from typing import Optional, BinaryIO
+from typing import Optional, BinaryIO, Union, Callable
 from abc import ABC, abstractmethod
 from pydantic import BaseModel
 from dataclasses import dataclass
@@ -34,7 +34,7 @@ class GenericStorage(ABC):
         pass
             
     @abstractmethod
-    def read_all_objects(self, cls: BaseModel, primary_key: dict[str,str] = {}, order_by: Optional[str] = None) -> list[BaseModel]:
+    def read_all_objects(self, cls: BaseModel, primary_key: dict[str,str] = {}, order_by: Optional[Union[str, Callable[[BaseModel], str]]] = None) -> list[BaseModel]:
         """
         Read all objects from a directory and return them as a list of instances of the specified class.
         
@@ -162,5 +162,15 @@ class GenericStorage(ABC):
         Args:
             locator: The locator for the image
 
+        """
+        pass
+
+    @abstractmethod
+    def find_issue_image(self, series_id: str, issue_id: str) -> str | None:
+        """
+        get the image locator for a representative image for an issue.  This will 
+        choose the front cover, if it exists, otherwise will return the first
+        of the inside_front, inside_back and back covers.   If none exist, it will
+        return none.
         """
         pass

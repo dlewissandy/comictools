@@ -3,7 +3,7 @@ import json
 import shutil
 from uuid import uuid4
 from loguru import logger
-from typing import Optional, BinaryIO
+from typing import Optional, BinaryIO, Union, Callable
 from pydantic import BaseModel
 from storage.generic import GenericStorage
 from schema import *
@@ -144,7 +144,7 @@ class LocalStorage(GenericStorage):
             logger.error(msg)
             raise
 
-    def read_all_objects(self, cls: BaseModel, primary_key: dict[str,str] = {}, order_by: Optional[str] = None) -> list[BaseModel]:
+    def read_all_objects(self, cls: BaseModel, primary_key: dict[str,str] = {}, order_by: Optional[Union[str, Callable[[BaseModel], str]]] = None) -> list[BaseModel]:
         """
         Read all objects from a directory and return them as a list of instances of the specified class.
         
@@ -202,8 +202,16 @@ class LocalStorage(GenericStorage):
                 objects.append(obj)
         logger.debug(f"Found {len(objects)} objects of type {cls.__name__} in {rootpath}")
 
-        if order_by is not None:
+        if order_by is None:
+            return objects
+        elif isinstance(order_by, str):
             objects.sort(key=lambda x: getattr(x, order_by))
+        elif callable(order_by):
+            objects.sort(key=order_by)
+        else:
+            msg = f"order_by must be a string or a callable, got {type(order_by)}"
+            logger.error(msg)
+            raise ValueError(msg)
         return objects
         
 
@@ -392,14 +400,10 @@ class LocalStorage(GenericStorage):
         # sort the issues by issue number
         issues.sort(key=lambda x: x.issue_number if x.issue_number is not None else float('inf'))
         for issue in issues:
-            issue_covers: list[Cover] = self.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue.issue_id})
-            if issue_covers and issue_covers != []:
-                for cover in issue_covers:
-                    if not cover.image or cover.image == "":
-                        continue
-                    image: str = cover.image
-                    if os.path.exists(image):
-                        return image
+            cover = self.find_issue_image(series_id=series_id, issue_id=issue.issue_id)
+            if cover is not None:
+                return cover
+        # If no cover is found, return None
         return None
 
     # -------------------------------------------------------------------------
@@ -409,8 +413,20 @@ class LocalStorage(GenericStorage):
     def find_issue_image(self, series_id: str, issue_id: str) -> Optional[str]:
         covers: list[Cover] = self.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id} )
         # Sort the covers in order Front, Back, Inside Front, Inside Back
-        priorities = [CoverLocation.FRONT, CoverLocation.BACK, CoverLocation.INSIDE_FRONT, CoverLocation.INSIDE_BACK]
-        covers.sort(key=lambda x: priorities.index(x.location) if x in priorities else len(priorities))
+        COVER_ORDER = ["front", "inside-front", "inside-back", "back"]
+
+        def order_by(cover: Cover) -> str:
+           value = cover.location.value
+           if value not in COVER_ORDER:
+               logger.critical(f"Cover {cover.location} not in COVER_ORDER.  This should never happen.")
+               return 4
+           idx = COVER_ORDER.index(value)
+           logger.critical(f"Cover {cover.location} has index {idx} in COVER_ORDER.")
+           return idx
+
+
+        covers.sort(key=order_by)
+        logger.critical(f"Sorted covers: {[cover.location for cover in covers]}")
         # Return the first cover that has an image
         for cover in covers:
             if cover.image is not None and cover.image != "":

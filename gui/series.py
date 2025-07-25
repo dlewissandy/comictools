@@ -78,7 +78,7 @@ def view_series(state: APPState):
                 new_item_messager(state, "Issues", "I would like to create a new issue")
             view_all_instances(
                 state=state, 
-                get_instances=lambda: storage.read_all_objects(Issue, primary_key={"series_id": series.series_id}), 
+                get_instances=lambda: storage.read_all_objects(Issue, primary_key={"series_id": series.series_id}, order_by="issue_number"), 
                 get_image_locator=lambda x: storage.find_issue_image(series_id=series.series_id, issue_id=x.issue_id),
                 kind="issue",
                 aspect_ratio="16/27"
