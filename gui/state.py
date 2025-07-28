@@ -253,7 +253,7 @@ class APPState:
         # scroll to the bottom of the history
         history.scroll_to(percent=1)
 
-    def change_selection(self, new: list[SelectionItem]):
+    def change_selection(self, new: list[SelectionItem], clear_history: bool = True):
         """
         Change the current selection in the GUI state.
         
@@ -270,6 +270,17 @@ class APPState:
         self._selection = new
 
         # If required (like moving up in the hierarchy), we may need to clear the history.
+        if clear_history and len(new) <= len(old):
+            # TODO: if returning from a lower level, we may want to add additional dialog.
+            # If we just are going up 1 level, and the last element in the old selection
+            # has a kind that starts with "pick-", then we can assume that the user
+            # has just picked an item, and we don't have to clear the history.
+            if len(new) == len(old) - 1 and old[-1].kind.startswith("pick-"):
+                logger.debug("Not clearing history because we are returning from a pick- selection.")
+            else:
+                logger.debug("Clearing history because we are moving up in the hierarchy.")
+                self.clear_history()
+
         self.write()
 
         # Update the breadcrumbs and details
@@ -346,6 +357,7 @@ class APPState:
             case "styled-image":
                 return view_styled_image(self)
             case "styled-variant":
+                logger.critical("Selecting styled variant gui")
                 return view_styled_image(self)
             case _:        
                 # Handle other cases or return a default message

@@ -82,7 +82,7 @@ def selection_to_context(
                 accum["variant_id"] = id
                 context.append((CharacterVariant, {k:v for k, v in accum.items()}))
             case SelectedKind.STYLED_VARIANT.value:
-                accum["styled_image_id"] = id
+                accum["style_id"] = id
                 context.append((StyledVariant, {k:v for k, v in accum.items()}))
             case SelectedKind.REFERENCE_IMAGE.value:
                 accum["image_id"] = id

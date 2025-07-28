@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from gui.state import APPState
 from schema.character import CharacterModel
 from schema.character_variant import CharacterVariant
+from schema.styled_variant import StyledVariant
 from storage.generic import GenericStorage
 from schema import (
     Cover,
@@ -348,3 +349,111 @@ def delete_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str
     storage.update_object(data=cover)
     state.is_dirty = True
     return f"{cover_id} image for {cover.name} deleted successfully."
+
+
+@function_tool
+def create_styled_image_for_character_variant(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    character_id: str,
+    variant_id: str,
+    style_id: str,
+) -> str:
+    """
+    Create a styled image for a character variant.   This image can be used as a reference image to help artists
+    faithfully represent the character in the comic book.
+
+    Args:
+        series_id: The ID of the comic book series.
+        character_id: The ID of the character.
+        variant_id: The ID of the character variant.
+        style_id: The ID of the comic style to use for the image.
+
+    Returns:
+        A locator for the generated image.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    # Read the series
+    series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
+    if not series:
+        return f"Series with ID {series_id} not found."
+    
+    # Read the character and variant from storage
+    character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
+    if not character:
+        return f"Character with ID {character_id} not found in series {series_id}."
+    character: CharacterModel = character
+
+    variant = storage.read_object(cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id, "variant_id": variant_id})
+    if not variant:
+        return f"Variant with ID {variant_id} for character {character.name} not found in series {series_id}."
+    variant: CharacterVariant = variant
+
+    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
+    if not style:
+        return f"Style with ID {style_id} not found."
+    style: ComicStyle = style
+    
+    character_name = character.name
+    # format the character variant for use
+    character_description = format_character_variant(character_name, variant, heading_level=2)
+
+    style_description = format_comic_style(style, heading_level=2)
+
+    # Generate the styled image
+    prompt = f"""
+    Render a multi-angle character model of {character_name} using the following information:
+
+    # Character Brief
+    {character_description}
+
+    # Artistic Style
+    {style_description}
+
+    # Guidelines
+    * The image must have a landscape aspect ratio.
+    * First row (75% of the image height), THREE poses of the character model:
+      - front view
+      - side view
+      - back view
+    * Maintain a neutral stance with neutral background, and ensure the character is fully visible in each pose without clipping
+    * Second row (25% of image height) from left to right:
+       - Face closeup view - joy
+       - Face closeup view - anger
+       - Face closeup view - fear
+       - face closeup view - sadness
+       - face closeup view - surprise
+       - THE IMAGE LABEL: "{character_name}"
+    * The facial closeup images should be BELOW the character model images, and should not overlap with the character model images.
+    * ensure consistent appearance (color, accessories, clothing, weapons, physical features, etc) across all views.  Pay special attention to the facial closeup images,
+       ensuring that the characters facial features (eyes, eye color, ears, teeth/tusks, hair, mouth, nose, etc) are consistent across all images.
+    """
+    
+    logger.debug(f"Generating character image with prompt: {prompt}")
+    raw_image = invoke_generate_image_api(prompt, n=1, size="1536x1024", quality=IMAGE_QUALITY.HIGH)
+    logger.debug(f"Image generation complete.  Generating unique id for image.")
+
+    styled_variant = StyledVariant(
+        style_id=style_id,
+        variant_id=variant_id,
+        series_id=series_id,
+        character_id=character_id,
+        image_id="{character.name}-{variant.name}-{style.name}-styled-image"
+    )
+
+    locator = generate_object_image(
+        wrapper=wrapper,
+        obj=styled_variant,
+        prompt=prompt,
+        aspect_ratio=FrameLayout.LANDSCAPE,
+        image_quality=IMAGE_QUALITY.HIGH,
+        name=f"{character.name}-{variant.name}-{style.name}-styled-image"
+    )
+
+    # Update the variant with the new image locator
+    variant.images[style.style_id] = locator
+    storage.update_object(data=variant)
+
+    return f"Styled image created successfully with locator: {locator}"

@@ -24,7 +24,7 @@ class Cover(BaseModel):
         return {
             "series_id": self.series_id,
             "issue_id": self.issue_id,
-            "cover_id": self.location
+            "cover_id": self.cover_id
         }
 
     @property

@@ -193,11 +193,25 @@ def create_style(
     return style
 
 @function_tool
-def create_variant(wrapper: RunContextWrapper[APPState], name: str, race: str, gender: str, age: str, height: str, general_description: str, physical_appearance: str, attire: str, behavior: str) -> CharacterVariant:
+def create_variant(wrapper: RunContextWrapper[APPState], 
+        series_id: str,
+        character_id: str,
+        name: str,
+        race: str,
+        gender: str,
+        age: str,
+        height: str,
+        general_description: str,
+        physical_appearance: str,
+        attire: str,
+        behavior: str
+    ) -> CharacterVariant:
     """
     Create a new character variant with the provided attributes.
     
     Args:
+        series_id: The id of the series to create the variant in.   This should be the currently selected series.
+        character_id: The id of the character to create the variant for.   This should be the currently selected character.
         name: The name of the variant.   This should be unique within the character's variants and should be short (1-3 words).
         general_description: A short 3-5 sentence description of the variant.   What does this variant represent?  How does it differ from other variants?  
         race: 1-5 words describing the race of the character variant.
@@ -218,10 +232,13 @@ def create_variant(wrapper: RunContextWrapper[APPState], name: str, race: str, g
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
 
-    context = read_context(state)
-    if context is None or len(context) == 0:
-        return "No character selected.  Please select a character to create a variant for."
-    character: CharacterModel = context[-1]
+    series: Series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
+    if series is None:
+        raise ValueError(f"Series with ID {series_id} not found.")
+
+    character: CharacterModel = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
+    if character is None:
+        raise ValueError(f"Character with ID {character_id} not found in series {series.name}.")
     
     variant = CharacterVariant(
         variant_id=normalize_id(name),
@@ -239,9 +256,6 @@ def create_variant(wrapper: RunContextWrapper[APPState], name: str, race: str, g
         images = {}
     )
     storage.create_object(data=variant)
-    sel_item = SelectionItem(id=variant.variant_id, name=variant.name, kind="variant")
-    state.selection.append(sel_item)  # Add the new variant to the selection
-    state.write()
     state.is_dirty = True
     return variant
 
@@ -453,7 +467,7 @@ def create_character(wrapper: RunContextWrapper[APPState], series_id: str, chara
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
     # Normalize the identifiers
-    series = storage.read_object(cls=Series,primary_key = {"series_id": _get_series_id()})
+    series = storage.read_object(cls=Series,primary_key = {"series_id": series_id})
     if not series:
         return "No comic series selected. Please select a series to add a character."
     

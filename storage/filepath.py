@@ -67,6 +67,8 @@ PATH_TEMPLATES[SceneModel.__name__] = PATH_TEMPLATES[SelectedKind.SCENE.value]
 PATH_TEMPLATES[Panel.__name__] = PATH_TEMPLATES[SelectedKind.PANEL.value]
 PATH_TEMPLATES[StyledVariant.__name__] = os.path.join(BASE_PATH, "styled_images", "{image_id}")
 PATH_TEMPLATES[StyleExample.__name__] = PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
+PATH_TEMPLATES[StyledVariant.__name__] = os.path.join(PATH_TEMPLATES[SelectedKind.VARIANT.value], "images", "{style_id}")
+PATH_TEMPLATES[SelectedKind.STYLED_VARIANT.value] = PATH_TEMPLATES[StyledVariant.__name__]
 
 FILEPATH_TEMPLATES = {}
 FILEPATH_TEMPLATES[SelectedKind.PUBLISHER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.PUBLISHER.value], "publisher.json")
@@ -78,6 +80,7 @@ FILEPATH_TEMPLATES[SelectedKind.ISSUE.value] = os.path.join(PATH_TEMPLATES[Selec
 FILEPATH_TEMPLATES[SelectedKind.COVER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.COVER.value], "cover.json")
 FILEPATH_TEMPLATES[SelectedKind.SCENE.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SCENE.value], "scene.json")
 FILEPATH_TEMPLATES[SelectedKind.PANEL.value] = os.path.join(PATH_TEMPLATES[SelectedKind.PANEL.value], "panel.json")
+FILEPATH_TEMPLATES[SelectedKind.STYLED_VARIANT.value] = os.path.join(PATH_TEMPLATES[SelectedKind.STYLED_VARIANT.value], "styled_variant.json")
 FILEPATH_TEMPLATES[Publisher.__name__] = FILEPATH_TEMPLATES[SelectedKind.PUBLISHER.value]
 FILEPATH_TEMPLATES[Series.__name__] = FILEPATH_TEMPLATES[SelectedKind.SERIES.value]
 FILEPATH_TEMPLATES[ComicStyle.__name__] = FILEPATH_TEMPLATES[SelectedKind.STYLE.value]
@@ -87,6 +90,7 @@ FILEPATH_TEMPLATES[Issue.__name__] = FILEPATH_TEMPLATES[SelectedKind.ISSUE.value
 FILEPATH_TEMPLATES[Cover.__name__] = FILEPATH_TEMPLATES[SelectedKind.COVER.value]
 FILEPATH_TEMPLATES[SceneModel.__name__] = FILEPATH_TEMPLATES[SelectedKind.SCENE.value]
 FILEPATH_TEMPLATES[Panel.__name__] = FILEPATH_TEMPLATES[SelectedKind.PANEL.value]
+FILEPATH_TEMPLATES[StyledVariant.__name__] = os.path.join(PATH_TEMPLATES[SelectedKind.STYLED_VARIANT.value], "styled_variant.json")
 
 IMAGE_PATH_TEMPLATES = {}
 IMAGE_PATH_TEMPLATES[SelectedKind.PANEL.value] = os.path.join(PATH_TEMPLATES[SelectedKind.PANEL.value], "images")

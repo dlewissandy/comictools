@@ -109,6 +109,7 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
     selection = state.selection
     kind = "home" if not selection else selection[-1].kind
     agent = agents.get(kind, None)
+    logger.debug("Handling agent events for kind: {kind}")
     if agent is None:
         raise ValueError(f"Agent not found for kind: {kind}")
     stream = Runner.run_streamed(agent, input=messages, context=state)

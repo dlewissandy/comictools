@@ -3,6 +3,8 @@ from agents import function_tool, Tool, RunContextWrapper
 from pydantic import BaseModel
 from gui.state import APPState
 from gui.selection import SelectionItem, SelectedKind
+from schema.enums import FrameLayout
+from schema.style.comic import ComicStyle
 from storage.generic import GenericStorage
 from schema import (
     CharacterModel,
@@ -77,15 +79,58 @@ def update_cover_description(wrapper: RunContextWrapper[APPState], series_id: st
     primary_key = {'cover_id': cover_id, 'series_id': series_id, 'issue_id': issue_id}
     return update_attribute(wrapper, Cover, primary_key, 'description', description)
 
-    series_id = state.selection[-2].id  # Assuming the second last item is the series
-    character_id = state.selection[-1].id  # Assuming the last item is the character
+@function_tool
+def update_cover_style(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, cover_id: str, style_id: str) -> str:
+    """
+    Update the style of the specified cover.
 
-    primary_key = {'character_id': character_id, 'series_id': series_id}
-    return update_attribute(wrapper, CharacterModel, primary_key, 'description', description)
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the comic book issue.
+        cover_id: The ID of the cover to update.
+        style_id: The new style ID for the cover.  NOTE:  You should verify that this style exists prior to running this tool (e.g. by getting all styles).  Failure
+           to do so may result in an error.
+    
+    Returns:
+        A message indicating the result of the update operation.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    style: ComicStyle | None = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
+    if style is None:
+        return f"Cannot update style.   Style with ID '{style_id}' not found.   Perhaps you should double check against the list of available styles."
+    
+    primary_key = {'cover_id': cover_id, 'series_id': series_id, 'issue_id': issue_id}
+    return update_attribute(wrapper, Cover, primary_key, 'style_id', style_id)
 
 # -------------------------------------------------------------------------
 # ISSUE UPDATING TOOLS
 # -------------------------------------------------------------------------
+
+@function_tool
+def update_cover_aspect_ratio(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    issue_id: str,
+    cover_id: str,
+    aspect_ratio: FrameLayout
+) -> str:
+    """
+    Update the aspect ratio of the specified cover.
+
+    Args:
+        wrapper: The context wrapper.
+        series_id: The ID of the comic series.
+        issue_id: The ID of the comic book issue.
+        cover_id: The ID of the cover to update.
+        aspect_ratio: The new aspect ratio for the cover.
+
+    Returns:
+        A message indicating the result of the update operation.
+    """
+    primary_key = {'cover_id': cover_id, 'series_id': series_id, 'issue_id': issue_id}
+    return update_attribute(wrapper, Cover, primary_key, 'aspect', aspect_ratio)
 
 @function_tool
 def update_issue_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, story: str) -> str:

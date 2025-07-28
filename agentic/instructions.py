@@ -1,6 +1,7 @@
 import json 
 from textwrap import dedent
 from agents import Agent, function_tool, Tool, RunContextWrapper
+from loguru import logger
 
 from gui.selection import SelectionItem
 from gui.state import APPState
@@ -67,6 +68,11 @@ PERSONAS = {
         You are an interactive artistic assistant who helps human artists and creators 
         compose and update comic book series.
         """,
+    "styled-variant": """
+        You are an interactive artistic assistant who helps create, edit, and publish
+        comic books.   You specialize on creating images of character variants in
+        the current style.   You ensure that the images effectively represent the character variant's
+        attributes and the style of the comic series.""",
     "variant": """
         You are an interactive artistic assistant who helps create, edit, and publish
         comic books.   You specialize on creating detailed descriptions of character variants 
@@ -104,7 +110,11 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
             details = ""
 
     else:
-        context = read_context(state)
+        context = None
+        try:
+            context = read_context(state)   
+        except Exception as e:
+            logger.error(f"Error reading context: {e}")
         if context is None or len(context) == 0:
             details = ""
         else:

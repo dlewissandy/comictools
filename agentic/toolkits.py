@@ -60,7 +60,10 @@ from agentic.tools import (
     delete_cover_image
 )
 from agentic.tools.creator import create_variant
-from agentic.tools.imaging import delete_publisher_logo_image
+from agentic.tools.imaging import (
+    delete_publisher_logo_image,
+    create_styled_image_for_character_variant,
+)
 from agentic.tools.updater import (
     update_character_description,
     update_issue_story,
@@ -73,6 +76,8 @@ from agentic.tools.updater import (
     update_logo_description,
     update_publisher_description,
     update_series_description,
+    update_cover_style,
+    update_cover_aspect_ratio
 )
 
 TOOLKITS: dict[str,list[Tool]] = {
@@ -140,8 +145,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_styles,
         # Update
         update_cover_description,
-        # TODO update_cover_aspect_ratio
-        # TODO update_cover_style
+        update_cover_aspect_ratio,
+        update_cover_style,
         # Delete
         delete_cover,
         # Navigation
@@ -247,6 +252,16 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_style,
         # Images
     ],
+    "styled-variant": [
+        # Navigation
+        # Create
+        create_styled_image_for_character_variant,
+        # Read
+        read_style,
+        read_series,
+        read_character,
+        read_variant
+    ],
     "variant": [
         # Navigation
         # Create
@@ -267,6 +282,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Delete
         delete_character_variant,
         # Imaging
+        create_styled_image_for_character_variant,
     ],
 }
 
