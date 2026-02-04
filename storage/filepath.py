@@ -44,7 +44,7 @@ PATH_TEMPLATES[SelectedKind.SCENE.value] = os.path.join(ROOT_PATH_TEMPLATES[Sele
 ROOT_PATH_TEMPLATES[SelectedKind.PANEL.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SCENE.value], "panels")
 PATH_TEMPLATES[SelectedKind.PANEL.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.PANEL.value], "{panel_id}")
 ROOT_PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value] = os.path.join(PATH_TEMPLATES[SelectedKind.STYLE.value], "images")
-PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value], "{example_id}")
+PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value], "{example_type}")
 
 ROOT_PATH_TEMPLATES[ComicStyle.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.STYLE.value]
 ROOT_PATH_TEMPLATES[Series.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.SERIES.value]
@@ -66,7 +66,7 @@ PATH_TEMPLATES[Cover.__name__] = PATH_TEMPLATES[SelectedKind.COVER.value]
 PATH_TEMPLATES[SceneModel.__name__] = PATH_TEMPLATES[SelectedKind.SCENE.value]
 PATH_TEMPLATES[Panel.__name__] = PATH_TEMPLATES[SelectedKind.PANEL.value]
 PATH_TEMPLATES[StyledVariant.__name__] = os.path.join(BASE_PATH, "styled_images", "{image_id}")
-PATH_TEMPLATES[StyleExample.__name__] = PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
+PATH_TEMPLATES[StyleExample.__name__] = SelectedKind.STYLE_EXAMPLE.value
 PATH_TEMPLATES[StyledVariant.__name__] = os.path.join(PATH_TEMPLATES[SelectedKind.VARIANT.value], "images", "{style_id}")
 PATH_TEMPLATES[SelectedKind.STYLED_VARIANT.value] = PATH_TEMPLATES[StyledVariant.__name__]
 

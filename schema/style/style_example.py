@@ -13,16 +13,11 @@ class ExampleKind(StrEnum):
 
 class StyleExample(BaseModel):
     style_id: str = Field(..., description="The id of the style for which this example is generated.  e.g. 'vintage-four-color'")
-    example_id: str = Field(..., description="The id of the example.  This is a unique identifier for the example.")
+    example_type: str = Field(..., description="The id of the example.  This is a unique identifier for the example.")
+    image_id: str = Field(..., description="The id of the image for the example.  This is a unique identifier for the image.")
+    mime_type: str = Field("image/png", description="The MIME type of the example image. Defaults to 'image/png'.")
 
-    # Validate that the example_id is the value of one of the ExampleKind values
-    @field_validator("example_id")
-    @classmethod
-    def validate_example_id(cls, v: str) -> str:
-        if v not in ExampleKind._value2member_map_:
-            raise ValueError(f"example_id must be one of {list(ExampleKind._value2member_map_.keys())}, got '{v}'")
-        return v
-    
+    # Validate that the example_type is the value of one of the ExampleKind values    
     @property
     def primary_key(self) -> dict[str, str]:
         """
@@ -30,7 +25,8 @@ class StyleExample(BaseModel):
         """
         return {
             "style_id": self.style_id,
-            "example_id": self.example_id,
+            "example_type": self.example_type,
+            "image_id": self.image_id,
         }
     
     @property
@@ -48,12 +44,12 @@ class StyleExample(BaseModel):
         return the id of the style example
         """
         # Normalize the id:
-        return self.style_id
+        return self.image_id
     
     @property
     def name(self) -> str:
         """
         return the name of the style example
         """
-        return self.style_id.replace("-", " ").title() + " Example"
+        return f"{self.style_id.replace("-", " ").title()} {self.example_type} Example"
     

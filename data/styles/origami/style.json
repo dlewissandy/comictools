@@ -68,6 +68,12 @@
   },
   "image": {
     "art": "data/styles/origami/images/art/origami.jpg",
-    "character": "data/styles/origami/images/character/554df779-d93e-4a15-8296-080973deb7f8.jpg"
+    "character": "data/styles/origami/images/character/554df779-d93e-4a15-8296-080973deb7f8.jpg",
+    "shout": "data/styles/origami/images/shout/ef9e81b1-4d20-44f1-8318-f764c50e9fcb.jpg",
+    "thought": "data/styles/origami/images/thought/9b0a5a37-5a86-4c8d-9c8e-07ef4b57cb1d.jpg",
+    "whisper": "data/styles/origami/images/whisper/a3fb9063-30cf-4b53-881a-3e616f380a1a.jpg",
+    "chat": "data/styles/origami/images/chat/44064714-7198-40d6-b42f-8a1e3e39073f.jpg",
+    "narration": null,
+    "sound-effect": "data/styles/origami/images/sound-effect/e716bddc-6eb3-4372-aed6-7fd497c22e8e.jpg"
   }
 }

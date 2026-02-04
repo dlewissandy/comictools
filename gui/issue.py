@@ -60,7 +60,13 @@ def view_issue(state:APPState):
                     kind=SelectedKind.PICK_STYLE, 
                     get_caption=lambda: "Style", 
                     get_id =lambda: style.style_id if style else None, 
-                    get_image_filepath=lambda: storage.find_image(StyleExample(style_id=style.style_id, example_id="art"), style.image.get("art", None)) if style  else None
+                    get_image_filepath=lambda: storage.find_image(
+                        StyleExample(
+                            style_id=style.style_id,
+                            example_type="art",
+                            image_id=style.image.get("art"),
+                            mime_type="image/jpeg"
+                        ), style.image.get("art", None)) if style else None
                 )
 
 

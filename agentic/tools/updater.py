@@ -5,6 +5,7 @@ from gui.state import APPState
 from gui.selection import SelectionItem, SelectedKind
 from schema.enums import FrameLayout
 from schema.style.comic import ComicStyle
+from schema.style.dialog import BubbleStyle
 from storage.generic import GenericStorage
 from schema import (
     CharacterModel,
@@ -13,10 +14,19 @@ from schema import (
     Cover,
     Publisher,
     Series,
+    ArtStyle,
+    BubbleStyle,
+    DialogType,
+    CharacterStyle
 )
 from .context import read_context
 
-def update_attribute(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], primary_key: dict[str, str], attribute: str, value: Optional[str]) -> str:
+def update_attribute(wrapper: RunContextWrapper[APPState],
+    cls: type[BaseModel],
+    primary_key: dict[str, str],
+    attribute: str,
+    value: Optional[str],
+    key: Optional[str]=None) -> str:
     """
     Update an attribute of the specified object.
     
@@ -25,6 +35,7 @@ def update_attribute(wrapper: RunContextWrapper[APPState], cls: type[BaseModel],
         primary_key (dict[str, str]): The primary key
         attribute (str): The name of the attribute to update.
         value (Optional[str]): The new value for the attribute.
+        key (Optional[str]): The key for the attribute if it is a dictionary field.
     
     Returns:
         A status message indicating the result of the update.
@@ -36,7 +47,12 @@ def update_attribute(wrapper: RunContextWrapper[APPState], cls: type[BaseModel],
         return f"{cls.__name__} with ID '{primary_key}' not found."
     if not hasattr(obj, attribute):
         return f"Attribute '{attribute}' does not exist on {cls.__name__}."
-    setattr(obj, attribute, value)
+    if key is not None:
+        if not isinstance(getattr(obj, attribute), dict):
+            return f"Attribute '{attribute}' is not a dictionary and cannot be updated with a key."
+        getattr(obj, attribute)[key] = value
+    else:
+        setattr(obj, attribute, value)
     storage.update_object(data=obj)
     state.is_dirty = True
     return f"Updated {attribute} to '{value}' for {cls.__name__} with ID '{primary_key}'."
@@ -325,7 +341,8 @@ def update_logo_description(wrapper: RunContextWrapper[APPState], publisher_id: 
         cls=Publisher,
         primary_key=pk,
         attribute="logo",
-        value=value)
+        value=value,
+        key=None)
 
 
 @function_tool
@@ -576,3 +593,101 @@ def update_variant_height(wrapper: RunContextWrapper[APPState], series_id: str, 
         value=height
     )
 
+@function_tool
+def update_style_description(wrapper: RunContextWrapper, style_id: str, value: str) -> str:
+    """
+    Update the description of the specified comic style.
+
+    Args:
+        style_id: The identifier of the style to update
+        value: The new description for the comic style. 
+
+    Returns:
+        A status message indicating the result of the operation
+    """
+    pk = { "style_id": style_id }
+    return update_attribute(
+        wrapper=wrapper,
+        cls=ComicStyle,
+        primary_key=pk,
+        attribute="description",
+        value=value
+    )
+
+@function_tool
+def update_art_style(
+        wrapper: RunContextWrapper[APPState],
+        style_id: str,
+        art_style: ArtStyle
+) -> str:
+    """
+    Update the art style of the currently selected comic style.
+    
+    Args:
+        style_id: The ID of the comic style to update.
+        art_style: The new art style for the comic style.
+    
+    Returns:
+        A status message indicating the result of the operation.
+    """
+    pk = { "style_id": style_id}
+    return update_attribute(
+        wrapper=wrapper,
+        cls=ComicStyle,
+        primary_key=pk,
+        attribute="art_style",
+        value = art_style
+        )
+
+@function_tool
+def update_dialog_style(
+        wrapper: RunContextWrapper[APPState],
+        style_id: str,
+        dialog_type: DialogType,
+        dialog_style: BubbleStyle
+) -> str:
+    """
+    Update the dialog style of the currently selected comic style.
+    
+    Args:
+        style_id: The ID of the comic style to update.
+        dialog_type: The type of dialog (e.g. chat, whisper, sound-effect, narration, shout, thought)
+        dialog_style: The new dialog style for the comic style.
+    
+    Returns:
+        A status message indicating the result of the operation.
+    """
+    pk = { "style_id": style_id }
+    return update_attribute(
+        wrapper=wrapper,
+        cls=ComicStyle,
+        primary_key=pk,
+        attribute="dialog_style",
+        value=dialog_style,
+        key = dialog_type.value
+    )
+
+@function_tool
+def update_character_style(
+        wrapper: RunContextWrapper[APPState],
+        style_id: str,
+        character_style: CharacterStyle
+) -> str:
+    """
+    Update the character style of the currently selected comic style.
+    
+    Args:
+        style_id: The ID of the comic style to update.
+        character_style: The new character style for the comic style.
+    
+    Returns:
+        A status message indicating the result of the operation.
+    """
+    pk = { "style_id": style_id }
+    return update_attribute(
+        wrapper=wrapper,
+        cls=ComicStyle,
+        primary_key=pk,
+        attribute="character_style",
+        value=character_style
+)

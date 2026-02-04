@@ -35,7 +35,7 @@ def filepath_to_img_input(filepath: str) -> dict:
 
 def invoke_generate_api(
         prompt: str, 
-        model: str = "gpt-4o-mini", 
+        model: str = "gpt-5.2", 
         temperature: float =0.7, 
         text_format: BaseModel | None=None, 
         image: str | None=None, 
@@ -47,7 +47,7 @@ def invoke_generate_api(
 
     Args:
         prompt (str): The prompt to send to the OpenAI API.
-        model (str): The model to use. Defaults to "gpt-4o-mini".
+        model (str): The model to use. Defaults to "gpt-5.2".
         temperature (float): The temperature to use. Defaults to 0.7.
         text_format (BaseModel | None): The text format to use. Defaults to None.
         image (str | None): The filepath of the image to use. Defaults to None.
@@ -84,7 +84,7 @@ def invoke_generate_api(
 
 def invoke_generate_image_api(
     prompt: str,
-    model: str = "gpt-image-1",
+    model: str = "gpt-image-1.5",
     size: str = "1024x1024",
     n: int = 1,
     quality: IMAGE_QUALITY = IMAGE_QUALITY.LOW
@@ -105,7 +105,7 @@ def invoke_generate_image_api(
         )
         return decode_image_response(response)
     except Exception as e:
-        logger.critical(f"Error invoking OpenAI image generation API: {e}")
+        logger.error(f"Error invoking OpenAI image generation API: {e}")
         raise e
 
 
@@ -136,8 +136,7 @@ def invoke_edit_image_api(
         "n": n,
         "size": size,
         "quality": quality.name.lower(),
-        "model": "gpt-image-1",
-        "output_format": "jpeg"
+        "model": "gpt-image-1.5",
     }
 
     # Use an ExitStack so all files stay open until after the call
@@ -147,5 +146,3 @@ def invoke_edit_image_api(
     response = openai.images.edit(**args)
 
     return decode_image_response(response)
-
-

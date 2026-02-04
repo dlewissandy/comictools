@@ -62,11 +62,11 @@ def view_style(state: APPState):
                 Attribute(caption="registration", get_value=lambda: art_style.registration),
                 Attribute(caption="lettering style", get_value=lambda: art_style.lettering_style),
             ], individual_icons=False, header_size=2):
-            example = StyleExample(style_id=style.id, example_id="art")
+            example = StyleExample(style_id=style.id, example_type="art", image_id="art", mime_type="image/jpeg")
             full_width_image_selector_grid(
                 state=state,
                 image_kind_name="art style image",
-                get_images = lambda: storage.list_images(example),
+                get_images = lambda example=example: storage.list_images(example),
                 get_selection=lambda: style.image["art"] if isinstance(style.image, dict) else None,
                 set_selection=lambda img_id: set_image(image_locator=img_id, example_type="art"),
                 upload_image=lambda name, data, mime_type: storage.upload_image(
@@ -92,11 +92,11 @@ def view_style(state: APPState):
             Attribute(caption="detail complexity", get_value=lambda: character_style.detail_complexity),
             Attribute(caption="texture accents", get_value=lambda: character_style.texture_accents),
         ],individual_icons=False, header_size=2):
-            example = StyleExample(style_id=style.id, example_id="character")
+            example = StyleExample(style_id=style.id, example_type="character", image_id="character", mime_type="image/jpeg")
             full_width_image_selector_grid(
                 state=state,
                 image_kind_name="character style image",
-                get_images=lambda: storage.list_images(example),
+                get_images=lambda example=example: storage.list_images(example),
                 get_selection=lambda: style.image.get("character",None) if isinstance(style.image, dict) else None,
                 set_selection=lambda img_id: set_image(image_locator=img_id, example_type="character"),
                 upload_image=lambda name, data, mime_type: storage.upload_image(
@@ -123,16 +123,16 @@ def view_style(state: APPState):
                         Attribute(caption="fill color", get_value=lambda: dialog_style.fill_color),
                         Attribute(caption="font", get_value=lambda: dialog_style.font)], expanded=False, individual_icons=False, header_size=3):
                         k = key.replace('_','-')
+                        example = StyleExample(style_id=style.id, example_type=k, image_id=k, mime_type="image/jpeg")
                         full_width_image_selector_grid(
                             state=state,
                             image_kind_name=f"{k} style example image",
                             
                             get_selection=lambda k=k: style.image.get(k.lower().replace("_", "-"),None),
-                            set_selection=lambda img_id, k=k: set_image(image_locator=img_id, example_type=k.lower().replace("_", "-")),
-                            get_images=lambda k=k: storage.list_images(
-                                StyleExample(style_id=style.style_id, example_id=k.lower())),
-                            upload_image=lambda name, data, mime_type, k=k: storage.upload_image(
-                                obj=StyleExample(style_id=style.id, example_id=k.lower()),
+                            set_selection=lambda img_id, example_type=k: set_image(image_locator=img_id, example_type=example_type),
+                            get_images=lambda example=example: storage.list_images(example),
+                            upload_image=lambda name, data, mime_type, k=k, example=example: storage.upload_image(
+                                obj=example,
                                 name=name,
                                 data=data,
                                 mime_type=mime_type),
@@ -190,7 +190,7 @@ def view_pick_style(state: APPState):
         view_all_instances(
             state=state,
             get_instances=lambda: storage.read_all_objects(ComicStyle),
-            get_image_locator=lambda x: storage.find_image(StyleExample(style_id=x.style_id, example_id="art"), x.image.get('art',None)) if x.image.get('art', None) else None,
+            get_image_locator=lambda x: storage.find_image(StyleExample(style_id=x.style_id, example_type="art", mime_type="image/jpeg", image_id="art"), x.image.get('art',None)) if x.image.get('art', None) else None,
             kind="style",
             aspect_ratio="1/1",
             get_name=lambda _,x: x.name,

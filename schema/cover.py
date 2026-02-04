@@ -5,7 +5,7 @@ from schema.character_reference import CharacterRef
 from schema.reference_image import ReferenceImage
 
 class Cover(BaseModel):
-    cover_id: str = Field(..., description="A unique identifier for the panel.   Default '<location>-cover'")
+    cover_id: str = Field(..., description="A unique identifier for the cover.")
     location: CoverLocation = Field(..., description="The location of the cover.  front, inside-front, inside-back or back.  Default to front")
     issue_id: str = Field(..., description="The parent issue of the panel.   Default to empty string")
     series_id: str = Field(..., description="The parent series of the panel.   Default to empty string")

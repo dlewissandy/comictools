@@ -1,0 +1,70 @@
+{
+  "style_id": "13e69e9c-46c7-4c7b-8fed-ebd1f0331c62",
+  "name": "Monet-Inspired Impressionism",
+  "description": "A style emulating the soft, vibrant aesthetic of Monet, focusing on color and light rather than detail.",
+  "art_style": {
+    "line_styles": "Minimal line work with soft edges to capture form without precise outlines.",
+    "inking_tools": "Brush or digital tools to replicate the fluidity and texture of Impressionist painting.",
+    "shading_style": "Light, airy shading that suggests depth through color variation rather than hard lines.",
+    "color_palette": "Soft pastels mixed with lively accents, inspired by natural landscapes and light reflection.",
+    "spot_colors": "",
+    "registration": "Loose registration allowing for color bleed, authenticating the Impressionist feel.",
+    "lettering_style": "Handwritten style to keep the organic, free feel of the artwork."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:5",
+    "limb_proportions": "Medium, slightly elongated",
+    "anatomy_detail": "Simplified, focusing on overall form rather than anatomical precision.",
+    "eye_style": "Simple dots or light reflections to illustrate life without detail.",
+    "nose_style": "Subtle curves to maintain simplicity.",
+    "mouth_style": "Soft curves for emotive expressions.",
+    "expression_exaggeration": "Moderate; emotions conveyed through color and motion rather than detail.",
+    "silhouette_clarity": "Medium, blending with backgrounds softly.",
+    "silhouette_shape_language": "Organic curves mimicking natural forms, avoiding sharp angles.",
+    "detail_complexity": "Low; emphasis on color and light over intricate details.",
+    "texture_accents": "",
+    "motion_line_style": "",
+    "expression_line_style": "",
+    "signature_motifs": "",
+    "recurring_flourishes": ""
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded",
+      "border": "Thin with slight contrast",
+      "fill_color": "Light pastel",
+      "font": "Soft, handwritten."
+    },
+    "whisper": {
+      "shape": "Rounded with softer edges",
+      "border": "Thin and delicate",
+      "fill_color": "Very light gray",
+      "font": "Soft, handwritten."
+    },
+    "shout": {
+      "shape": "Star-shaped",
+      "border": "Thick and bold",
+      "fill_color": "Vibrant color",
+      "font": "Bold text."
+    },
+    "thought": {
+      "shape": "Cloud shape",
+      "border": "Dotted",
+      "fill_color": "Light pastel",
+      "font": "Soft, italic handwritten."
+    },
+    "sound_effect": {
+      "shape": "Jagged",
+      "border": "Bold and thick",
+      "fill_color": "Bright color",
+      "font": "Expressive, playful font."
+    },
+    "narration": {
+      "shape": "Rectangular with rounded corners",
+      "border": "Thin",
+      "fill_color": "Light gray",
+      "font": "Simple, clear text."
+    }
+  },
+  "image": null
+}

@@ -129,5 +129,7 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
         ).strip()),
         details
     ])
+
+    logger.debug(f"Instructions for agent {agent.name}:\n{instructions}")
     
     return instructions

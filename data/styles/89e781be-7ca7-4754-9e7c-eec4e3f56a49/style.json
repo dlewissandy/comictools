@@ -1,0 +1,70 @@
+{
+  "style_id": "89e781be-7ca7-4754-9e7c-eec4e3f56a49",
+  "name": "Vermeer-inspired Comic Style",
+  "description": "A comic book style that emulates the classical oil painting techniques of Johannes Vermeer, featuring rich colors and soft gradients of light.",
+  "art_style": {
+    "line_styles": "Delicate, resembling fine brush strokes with varying thickness for depth.",
+    "inking_tools": "Digital painting tools to create smooth, oil-like textures.",
+    "shading_style": "Subtle gradient shading that mimics traditional oil work, using soft transitions to convey depth.",
+    "color_palette": "Rich, muted tones, with a focus on blues, yellows, and earthy colors typical of Vermeer.",
+    "spot_colors": "",
+    "registration": "Tight registration to ensure consistent color layering, emulating oil paint blending.",
+    "lettering_style": "Elegant serif font that complements the classical aesthetic, with a handwritten quality."
+  },
+  "character_style": {
+    "head_to_body_ratio": "1:6, realistic proportions to convey depth and dimensionality.",
+    "limb_proportions": "Medium with a balance between slender and realistic.",
+    "anatomy_detail": "Moderate details, emphasizing realistic body structures without excessive stylization.",
+    "eye_style": "Detailed irises with an emphasis on expressiveness.",
+    "nose_style": "Realistic but slightly softened to align with the artistic style.",
+    "mouth_style": "Subtle curves for a gentle expression, reflecting emotion with simplicity.",
+    "expression_exaggeration": "Moderate, ensuring emotional depth without cartoonish exaggeration.",
+    "silhouette_clarity": "Medium, allowing characters to blend softly into the background while still being recognizable.",
+    "silhouette_shape_language": "Organic curves that maintain a naturalistic flow.",
+    "detail_complexity": "Soft textures with minimal ornamental details.",
+    "texture_accents": "Fine hair detail and gentle fabric folds to enhance realism.",
+    "motion_line_style": "",
+    "expression_line_style": "",
+    "signature_motifs": "",
+    "recurring_flourishes": ""
+  },
+  "bubble_styles": {
+    "chat": {
+      "shape": "Rounded rectangle",
+      "border": "Thin, soft outline",
+      "fill_color": "Light cream",
+      "font": "Elegant serif font, legible yet styled."
+    },
+    "whisper": {
+      "shape": "Rounded rectangle with a smaller size",
+      "border": "Soft outline, slightly faded",
+      "fill_color": "Very light gray",
+      "font": "Discreet serif font."
+    },
+    "shout": {
+      "shape": "Angular rectangle with spikes",
+      "border": "Bold outline, contrasting color",
+      "fill_color": "Bold white",
+      "font": "Sturdy serif font for emphasis."
+    },
+    "thought": {
+      "shape": "Cloud-like",
+      "border": "Soft, wispy outline",
+      "fill_color": "Light blue",
+      "font": "Italicized, elegant serif font."
+    },
+    "sound_effect": {
+      "shape": "Explosive shape",
+      "border": "Bold, jagged outline",
+      "fill_color": "Bright yellow",
+      "font": "Bold, graphic font."
+    },
+    "narration": {
+      "shape": "Rectangle",
+      "border": "Thin outline",
+      "fill_color": "White",
+      "font": "Traditional serif font."
+    }
+  },
+  "image": null
+}

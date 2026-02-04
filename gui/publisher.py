@@ -117,7 +117,7 @@ def view_pick_publisher(state:APPState):
 
         view_all_instances(
             state=state,
-            get_instances=storage.read_all_publishers,
+            get_instances=lambda: storage.read_all_objects(cls=Publisher, order_by="name"),
             kind="publisher",
             aspect_ratio="1/1",
             get_name=lambda i,x: x.name,

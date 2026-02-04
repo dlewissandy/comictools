@@ -1,5 +1,6 @@
 from loguru import logger
 from typing import Optional
+from uuid import uuid4
 from agents import Agent, function_tool, Tool, RunContextWrapper
 from pydantic import BaseModel
 import traceback
@@ -34,6 +35,37 @@ from gui.selection import SelectionItem, SelectedKind
 from storage.generic import GenericStorage
 from agentic.tools.normalization import normalize_id, normalize_name
 
+
+def insertion_index(insertion_location: InsertionLocation,
+                    item_count: int) -> int:
+    """
+    Determine the insertion index based on the insertion location and item count.
+    Args:
+        item_number (int): The number of the item being inserted.
+        insertion_location (InsertionLocation): The location where the item should be inserted.
+        item_count (int): The current number of items in the list.
+    """
+    # Determine the panel number based on insertion location
+    if isinstance(insertion_location, AfterLast):
+        # Insert after the last panel
+        item_number = item_count + 1
+    elif isinstance(insertion_location, After):
+        # Insert after a specific panel
+        if insertion_location.index < 0 or insertion_location.index >= item_count:
+            raise ValueError(f"Invalid index {insertion_location.index} for insertion location.")
+        item_number = insertion_location.index + 2
+    elif isinstance(insertion_location, BeforeFirst):
+        # Insert before the first panel
+        item_number = 1
+    elif isinstance(insertion_location, Before):
+        # Insert before a specific panel
+        if insertion_location.index < 0 or insertion_location.index >= item_count:
+            raise ValueError(f"Invalid index {insertion_location.index} for insertion location.")
+        item_number = insertion_location.index + 1
+    else:
+        raise ValueError(f"Unknown insertion location type: {type(insertion_location)}")
+
+    return item_number
 
 
 def creator(wrapper: RunContextWrapper, obj: BaseModel, overwrite: bool=False) -> Agent | str:
@@ -263,6 +295,7 @@ def create_variant(wrapper: RunContextWrapper[APPState],
 def create_panel(
     wrapper: RunContextWrapper[APPState],
     name: str,
+    beat: Optional[str],
     description: str,
     aspect: FrameLayout,
     characters: list[CharacterRef],
@@ -289,6 +322,9 @@ Avoid using this tool for:
 Args:
 name (str): A short label summarizing the panel’s core beat (e.g., “Tormond
 Draws His Bow”).
+
+beat (str): The narrative beat for this panel. Describe the change or action
+in 1-3 sentences. This is the story moment the panel captures.
 
 description (str): A clear visual description of the panel. Describe what
 the reader sees: character positions, motion, facial expressions, and camera
@@ -344,28 +380,13 @@ purposeful.
 
     panels: list[Panel] = storage.read_all_objects(cls=Panel, primary_key={'issue_id': issue_id, 'scene_id': scene_id, 'series_id': series_id}, order_by='panel_number')
     
-    number_of_panels = len(panels)
+    panel_number = insertion_index( 
+        insertion_location = insertion_location, 
+        item_count = len(panels)
+        ) 
 
-    # Determine the panel number based on insertion location
-    if isinstance(insertion_location, AfterLast):
-        # Insert after the last panel
-        panel_number = number_of_panels + 1
-    elif isinstance(insertion_location, After):
-        # Insert after a specific panel
-        if insertion_location.index < 0 or insertion_location.index >= number_of_panels:
-            raise ValueError(f"Invalid index {insertion_location.index} for insertion location.")
-        panel_number = insertion_location.index + 2
-    elif isinstance(insertion_location, BeforeFirst):
-        # Insert before the first panel
-        panel_number = 1
-    elif isinstance(insertion_location, Before):
-        # Insert before a specific panel
-        if insertion_location.index < 0 or insertion_location.index >= number_of_panels:
-            raise ValueError(f"Invalid index {insertion_location.index} for insertion location.")
-        panel_number = insertion_location.index + 1
-    # Normalize names and IDs
-
-    description = description
+    if beat is None or beat == "":
+        beat = description
 
     # Create the panel
     storage = state.storage
@@ -375,6 +396,7 @@ purposeful.
         series_id=series_id,
         scene_id=scene_id,
         name = normalize_name(name),
+        beat=beat,
         description=description,
         aspect=aspect,
         panel_number = panel_number,
@@ -489,6 +511,7 @@ def create_cover(
     series_id: str,
     issue_id: str,
     location: CoverLocation,
+    cover_id: Optional[str],
     description: str,
     characters: list[CharacterRef] = []
 ) -> str:
@@ -502,7 +525,8 @@ def create_cover(
     Args:
         series_id: The ID of the comic series to create the cover for.
         issue_id: The ID of the comic issue to create the cover for.
-        location: The location where the cover should be created. MUST BE ONE OF "front", "back", "inside-front", "inside-back".
+        location: The location metadata for the cover. MUST BE ONE OF "front", "back", "inside-front", "inside-back".
+        cover_id: Optional unique identifier for the cover. If not provided, a unique ID will be generated.
         description: A detailed description of the visual elements in the cover.
         characters: A list of character references to include on the cover.   These references should
             be characters that are in the series.   VERIFY that they exist to avoid errors.
@@ -545,8 +569,9 @@ def create_cover(
                 return f"Character with ID '{char.character_id}' with Variant ID '{char.variant_id}' not found in series '{series.name}'.  The available variants (and their IDs) are: {existing_variant_names_and_ids}."
 
 
+        new_cover_id = normalize_id(cover_id) if cover_id else normalize_id(f"{location.value}-{uuid4().hex[:8]}")
         cover = Cover(
-            cover_id=normalize_id(location.value),
+            cover_id=new_cover_id,
             location=location,
             issue_id=issue_id,
             series_id=series_id,
@@ -569,3 +594,62 @@ def create_cover(
         logger.error(f"Error creating cover: {tb}")
         return f"Error creating cover: {str(e)}\n{tb}"
 
+@function_tool
+def create_scene(wrapper: RunContextWrapper[APPState], name: str, story: str, insertion_location: InsertionLocation) -> str:
+    """
+    Create a new scene for the currently selected comic book issue.   This will create a new scene
+    with the default properties and add it to the issue at the specified insertion location.
+
+    Args:
+        name (str): The name of the new scene.   This should be a unique identifier for the scene, and
+            should be 2-5 words long, and should only contain letters, numbers and spaces (e.g. 
+            "Teapot ride", "Joey gets hungry", etc).
+        story (str): The story for the new scene.   This should be detailed enough to guide the 
+            creative team (authors, artists, etc.) in creating the storyboard and artwork for the scene.
+            This includes information about the setting, characters involved, and key actions or events.
+            It should not be a full script, but rather a summary of the scene's content and purpose.
+            Consider the key information that is required to ensure that this scene can be written and 
+            maintains the narrative flow of the comic book issue.
+        insertion_location (InsertionLocation): The location where the new scene should be inserted.
+            NOTE: LIST ELEMENTS ARE ONES-BASED, SO THE FIRST ELEMENT IS AT INDEX 1.
+
+    Returns:
+        A status message indicating the result of the scene creation.
+    """
+    state: APPState = wrapper.context
+    logger.trace(f"inserting scene {name} at {InsertionLocation}")
+    storage: GenericStorage = state.storage
+
+    issue_id = state.selection[-1].id
+    series_id = state.selection[-2].id
+    pk = {"issue_id": issue_id, "series_id": series_id}
+
+    issue: Issue = storage.read_object(cls=Issue, primary_key=pk)
+    scenes: list[SceneModel] = storage.read_all_objects(cls=SceneModel, primary_key=pk, order_by="scene_number")
+
+    scene = SceneModel(
+        scene_id=normalize_id(name),
+        issue_id=issue_id,
+        series_id=series_id,
+        name=name,
+        story=story,
+        style_id=issue.style_id,
+        aspect=FrameLayout.PORTRAIT,
+        scene_number=insertion_index(
+            insertion_location=insertion_location, 
+            item_count=len(scenes)
+        ),
+    )
+    storage.create_object(data=scene)
+
+    # reindex the scenes to ensure they are in order
+    scenes.insert(scene.scene_number - 1, scene)
+    for i,p in enumerate(scenes):
+        if i > scene.scene_number - 1:
+            if p.scene_number != i + 1:
+                p.scene_number = i + 1
+                storage.update_object(p)
+
+
+    state.is_dirty = True
+    return f"Scene created successfully for issue {issue.name}."

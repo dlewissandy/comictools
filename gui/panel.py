@@ -145,7 +145,8 @@ def view_panel(state: APPState):
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current panel."),size=1)    
         with ui.row().classes('w-full flex-nowrap'):
             with ui.column().classes('w-3/4'):
-                markdown_field_editor(state, "Description", panel.description)
+                markdown_field_editor(state, "Beat", panel.beat)
+                markdown_field_editor(state, "Visual Description", panel.description)
             with ui.card().classes('mb-2 p-2 w-1/4 bg-blue-100 dark:bg-gray-800 break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
                 aspect_ratio_picker(state,parent=col2, caption="Aspect Ratio",set_aspect_ratio=lambda x: panel.set_aspect(x), get_aspect_ratio  = lambda: panel.aspect,)    
         markdown_field_editor(state, "Narration and Dialogue", format_dialogue(panel))

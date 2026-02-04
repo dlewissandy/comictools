@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 from loguru import logger
 from agents import function_tool, RunContextWrapper
@@ -6,12 +7,12 @@ from pydantic import BaseModel
 from gui.state import APPState
 from schema.character import CharacterModel
 from schema.character_variant import CharacterVariant
+from schema.style.dialog import DialogType
 from schema.styled_variant import StyledVariant
 from storage.generic import GenericStorage
 from schema import (
     Cover,
     Publisher,
-    CoverLocation,
     CharacterModel,
     ComicStyle,
     Issue,
@@ -19,11 +20,13 @@ from schema import (
     SceneModel,
     Series,
     CharacterRef,
+    ExampleKind,
+    StyleExample
 )
-from .formatting import format_comic_style, format_character_variant, format_issue
+from .formatting import format_comic_style, format_character_variant, format_issue, format_bubble_style
 
 from helpers.generator import invoke_edit_image_api, invoke_generate_image_api, IMAGE_QUALITY
-from schema.enums import CoverLocation, frame_layout_to_dims, FrameLayout
+from schema.enums import frame_layout_to_dims, FrameLayout
 
 
 def generate_object_image(
@@ -72,23 +75,25 @@ def generate_object_image(
             quality=image_quality
         )
 
+    logger.debug("Uploading generated image to storage.")
     locator = storage.upload_binary_image(
         obj=obj,
         data=b64_image,
     )
+    logger.debug(f"Image uploaded successfully with locator: {locator}")
 
     state.is_dirty = True
     return locator
     
 
 @function_tool
-def generate_publisher_logo_image(
+def generate_publisher_logo_reference_image(
     wrapper: RunContextWrapper[APPState],
     publisher_id: str
 ) -> str:
     """
-    Generate an image of the logo for the given publisher.
-    
+    Generate a reference image of the logo for the given publisher.
+
     Args:
         wrapper: The RunContextWrapper containing the storage context.
         publisher_id: The ID of the publisher for which to generate the logo.
@@ -133,15 +138,15 @@ def generate_publisher_logo_image(
     return f"Image generated successfully with locator: {locator}"
 
 @function_tool
-def delete_publisher_logo_image(
+def delete_publisher_logo_reference_image(
     wrapper: RunContextWrapper[APPState],
     publisher_id: str
 ) -> str:
     """
-    Delete the currently assigned logo image for a publisher.
+    Delete the currently assigned logo reference image for a publisher.
 
     Args:
-        publisher_id: The ID of the publisher whose logo image to delete.
+        publisher_id: The ID of the publisher whose logo reference image to delete.
 
     Returns:
         A message indicating the result of the deletion.
@@ -167,14 +172,14 @@ def delete_publisher_logo_image(
     return f"Logo image for {publisher.name} deleted successfully."
 
 @function_tool
-def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str, location: CoverLocation) -> str:
+def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str, cover_id: str) -> str:
     """
     Generate a cover image for the specified comic book issue.
 
     Args:
         series_id (str): The ID of the comic book series.
         issue_id (str): The ID of the comic book issue.
-        location (CoverLocation): The location of the cover (e.g., front, back, inside-front, inside-back).
+        cover_id (str): The unique identifier for the cover to render.
 
     Returns:
         A string indicating the status of the rendering operation.
@@ -203,16 +208,16 @@ def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: s
         return f"Issue with ID {issue_id} in series {series_id} not found."
     issue: Issue = issue
 
-    cover = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "location": location})
+    cover = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
     if not cover:
-        logger.error(f"Cover with location {location} for issue {issue_id} in series {series_id} not found.")
-        return f"Cover with location {location} for issue {issue_id} in series {series_id} not found."
+        logger.error(f"Cover with ID {cover_id} for issue {issue_id} in series {series_id} not found.")
+        return f"Cover with ID {cover_id} for issue {issue_id} in series {series_id} not found."
     cover: Cover = cover
 
     style = storage.read_object(cls=ComicStyle, primary_key={"style_id": cover.style_id})
     if not style:
-        logger.error(f"Style {style_id} not found")
-        return f"Style {style_id} not found"
+        logger.error(f"Style {cover.style_id} not found")
+        return f"Style {cover.style_id} not found"
 
     characters: dict[str,CharacterVariant] = {}
     for char_ref in cover.character_references:
@@ -239,7 +244,7 @@ def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: s
         if variant.images.get(cover.style_id, None) is not None:
             reference_image_locators.append(variant.images[cover.style_id])
 
-    location_name = location.value.title()
+    location_name = cover.location.value.title()
     logger.debug(f"location name: {location_name}")
 
     character_information = ""
@@ -332,23 +337,78 @@ def delete_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str
         return "Cannot delete cover image.   The specified issue does not exist."
     issue: Issue = issue
 
-    primary_key = {"series_id": series_id, "issue_id": issue_id, "location": cover_id}
+    primary_key = {"series_id": series_id, "issue_id": issue_id, "cover_id": cover_id}
 
     cover = storage.read_object(cls=Cover, primary_key=primary_key)
     if not cover:
         return "Cannot delete cover image.   The specified cover does not exist."
     cover: Cover = cover
 
-    if not cover.image.get(cover_id, None):
+    if not cover.image:
         return "No cover image to delete."
 
-    locator: str = cover.image.get(cover_id, None)
+    locator: str = cover.image
     storage.delete_image(locator)
     
     cover.image = None
     storage.update_object(data=cover)
     state.is_dirty = True
-    return f"{cover_id} image for {cover.name} deleted successfully."
+    return f"{cover_id} image deleted successfully."
+
+
+@function_tool
+def create_character_style_example_image(
+    wrapper: RunContextWrapper[APPState],
+    style_id: str
+) -> str:
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
+    if not style:
+        return f"Style with ID {style_id} not found."
+    style: ComicStyle = style
+
+    try:
+        with open(os.path.join("data", "prompts", "imaging", "character-style-example.md"), "r") as f:
+            template = f.read()
+    except FileNotFoundError:
+        return "Prompt file not found."
+
+    if not template:
+        return "Prompt file is empty."
+
+    style_description = format_comic_style(style, heading_level=2)
+    prompt = template.format(
+        style_name=style.name,
+        style_description=style_description
+    )
+
+    style_example = StyleExample(
+        style_id=style_id,
+        example_type=ExampleKind.CHARACTER.value.lower(),
+        image_id=f"{style_id}-character-style-example",
+        mime_type="image/jpg"
+    )
+
+    locator = generate_object_image(
+        wrapper=wrapper,
+        obj=style_example,
+        prompt=prompt,
+        aspect_ratio=FrameLayout.LANDSCAPE,
+        image_quality=IMAGE_QUALITY.HIGH,
+        name=style_example.image_id
+    )
+
+    # Update the variant with the new image locator
+    style.image["character"] = locator
+    storage.update_object(data=style)
+
+    state.is_dirty = True
+
+    return f"Example created successfully with locator: {locator}"    
+
+    
 
 
 @function_tool
@@ -403,38 +463,20 @@ def create_styled_image_for_character_variant(
     style_description = format_comic_style(style, heading_level=2)
 
     # Generate the styled image
-    prompt = f"""
-    Render a multi-angle character model of {character_name} using the following information:
+    try:
+        with open(os.path.join("data","prompts","imaging","styled-variant.md"), "r") as f:
+            template = f.read()
+    except FileNotFoundError:
+        return "Prompt file not found."
+    if not template:
+        return "Prompt file is empty."
 
-    # Character Brief
-    {character_description}
-
-    # Artistic Style
-    {style_description}
-
-    # Guidelines
-    * The image must have a landscape aspect ratio.
-    * First row (75% of the image height), THREE poses of the character model:
-      - front view
-      - side view
-      - back view
-    * Maintain a neutral stance with neutral background, and ensure the character is fully visible in each pose without clipping
-    * Second row (25% of image height) from left to right:
-       - Face closeup view - joy
-       - Face closeup view - anger
-       - Face closeup view - fear
-       - face closeup view - sadness
-       - face closeup view - surprise
-       - THE IMAGE LABEL: "{character_name}"
-    * The facial closeup images should be BELOW the character model images, and should not overlap with the character model images.
-    * ensure consistent appearance (color, accessories, clothing, weapons, physical features, etc) across all views.  Pay special attention to the facial closeup images,
-       ensuring that the characters facial features (eyes, eye color, ears, teeth/tusks, hair, mouth, nose, etc) are consistent across all images.
-    """
+    prompt = template.format(
+        character_name=character_name,
+        character_description=character_description,
+        style_description=style_description
+    )
     
-    logger.debug(f"Generating character image with prompt: {prompt}")
-    raw_image = invoke_generate_image_api(prompt, n=1, size="1536x1024", quality=IMAGE_QUALITY.HIGH)
-    logger.debug(f"Image generation complete.  Generating unique id for image.")
-
     styled_variant = StyledVariant(
         style_id=style_id,
         variant_id=variant_id,
@@ -457,3 +499,279 @@ def create_styled_image_for_character_variant(
     storage.update_object(data=variant)
 
     return f"Styled image created successfully with locator: {locator}"
+
+@function_tool
+def create_art_style_example_image(
+    wrapper: RunContextWrapper[APPState],
+    style_id: str
+) -> str:
+    """
+    Create an example of an art style as an image.
+    
+    Returns:
+        A message indicating the result of the operation.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
+    if not style:
+        return f"Cannot create art style image.   Style with ID {style_id} not found."
+    style: ComicStyle = style
+
+    REFERENCE_IMAGE = "data/references/art-style.jpg"
+    
+    # Serialize the descripiton of the style
+    style_info = format_comic_style(
+        include_bubble_styles=False,
+        include_character_style=False,
+        style=style,
+        heading_level=2
+
+    )
+
+    # Render the image using the OpenAI images API and the art style description
+    logger.debug(f"Rendering art style image with style: {style.name}")
+    with open(os.path.join("data", "prompts", "imaging", "art-style-example.md"), "r") as f:
+        template = f.read()
+    prompt = template.format(
+        style_name=style.name,
+        style_info=style_info
+    )
+    style_example = StyleExample(
+        style_id=style_id,
+        example_type=ExampleKind.ART.value.lower(),
+        image_id=f"{style_id}-art-style-example",
+        mime_type="image/jpg"
+    )
+
+    locator = generate_object_image(
+        wrapper=wrapper,
+        obj=style_example,
+        prompt=prompt,
+        aspect_ratio=FrameLayout.LANDSCAPE,
+        image_quality=IMAGE_QUALITY.HIGH,
+        name=style_example.image_id,
+        reference_images=[REFERENCE_IMAGE]
+    )
+
+    # Update the variant with the new image locator
+    style.image["art"] = locator
+    storage.update_object(data=style)
+
+    state.is_dirty = True
+
+    return f"Example of art style created successfully with locator: {locator}"    
+
+
+@function_tool
+def create_dialog_style_example_image(
+    wrapper: RunContextWrapper[APPState],
+    style_id: str,
+    dialog_type: DialogType
+) -> str:
+    """
+    Generate an example image of a dialog style (chat, whisper, shout, thought, sound-effect, narration)
+
+    Args:
+        style_id: The ID of the comic style.
+        dialog_type: The type of dialog (chat, whisper, shout, thought, sound-effect, narration).
+
+    Returns:
+        A message indicating the result of the operation.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    pk = { "style_id": style_id }
+    style = storage.read_object(cls=ComicStyle, primary_key=pk)
+    if not style:
+        return f"Cannot generate example image.  Style with ID {style_id} not found."
+    style: ComicStyle = style
+
+    # Create the prompt
+    with open(os.path.join("data", "prompts", "imaging", "dialog-style-example.md"), "r") as f:
+        template = f.read()
+    logger.debug
+
+    style_description = format_comic_style(
+        style=style,
+        include_bubble_styles=False,
+        include_character_style=False,
+        heading_level=2
+    )
+    logger.debug(f"Style description: {style_description}")
+    bubble_type = dialog_type.value
+    bubble_text = {
+        "chat": "Nice day, isn't it?",
+        "narration": "Once upon a time...",
+        "whisper": "Shhh.  It's a secret.",
+        "thought": "I wonder what will happen...",
+        "shout": "Watch out!",
+        "sound-effect": "Boom!"
+    }.get(bubble_type, "Unknown dialog type")
+    logger.debug(f"Bubble type: {bubble_type}, Bubble text: {bubble_text}")
+
+    # get the property from bubble_styles by accessing the attribute by name
+    if not hasattr(style.bubble_styles, bubble_type.replace("-", "_")):
+        return f"Cannot generate example image.  Style {style_id} does not have a bubble style for {bubble_type}."
+    bubble_style = getattr(style.bubble_styles, bubble_type.replace("-", "_"))
+    logger.debug(f"Bubble style: {bubble_style}")
+
+    bubble_style_description  = format_bubble_style(
+        style = bubble_style,
+        heading_level=2
+    )
+    logger.debug(f"Bubble style description: {bubble_style_description}")
+    prompt = template.format(
+        style_description=style_description,
+        dialog_style_description=bubble_style_description,
+        dialog_type=bubble_type,
+        dialog_text=bubble_text
+    )
+    logger.debug(f"Generating the dialog example image with prompt: {prompt}")
+
+    style_example = StyleExample(
+        style_id=style_id,
+        example_type=bubble_type.lower(),
+        image_id=f"{style_id}-{bubble_type}-style-example",
+        mime_type="image/jpg"
+    )
+    logger.debug(f"Generated style example: {style_example}")
+
+    locator = generate_object_image(
+        wrapper=wrapper,
+        obj=style_example,
+        prompt=prompt,
+        aspect_ratio=FrameLayout.SQUARE,
+        image_quality=IMAGE_QUALITY.HIGH,
+        name=f"{style_id}-{bubble_type}-dialog-example"
+    )
+    logger.debug(f"Generated dialog style example image with locator: {locator}")
+
+    # Update the style with the new image locator
+    if not style.image:
+        style.image = {}
+    style.image[dialog_type.value] = locator
+    logger.debug(f"Updated style with new image locator: {style.image}")
+    storage.update_object(data=style)
+    logger.debug("Style updated in storage.")
+
+    state.is_dirty = True   
+
+    return f"Example image for {bubble_type} dialog generated and saved to {locator}"
+
+
+@function_tool
+def delete_art_style_example(wrapper: RunContextWrapper[APPState], 
+    style_id: str) -> str:
+    """
+    Delete the example of the art style for the given comic style.
+    THIS IS IRREVERSIBLE.  YOU MUST ASK THE USER TO CONFIRM PRIOR TO CALLING
+    THIS FUNCTION.
+    
+    Args: 
+        style_id: The ID of the art style to delete.
+
+    Returns:
+        A status message indicating the result of the operation.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = { "style_id": style_id  }
+    style = storage.read_object(ComicStyle, primary_key = pk)
+    # if there is no style selected, return an error message
+    if not style:
+        return "The specified style does not exist"
+    # if the images are not a dictionary, return an error message
+    style: ComicStyle = style
+    if not isinstance(style.image, dict):
+        return "No art style example image to delete."
+    # if there is no art style example image selected, return an error message.
+    locator = style.image.get("art",None)
+    if not locator:
+        return "No art style example image to delete."
+    # otherwise, delete the art style example image.
+    style.image["art"] = None
+    storage.delete_image(locator)
+    storage.update_object(style)
+    state.is_dirty = True
+    return f"Art style example for {style.name} deleted."
+
+@function_tool
+def delete_character_style_example(
+        wrapper: RunContextWrapper[APPState],
+        style_id: str
+) -> str:
+    """
+    Delete the example of the character style for the specified comic style.
+    THIS IS IRREVERSIBLE.  YOU MUST ASK THE USER TO CONFIRM PRIOR TO CALLING
+    THIS FUNCTION.
+
+    Args:
+        style_id: The ID of the character style example image to delete.
+
+    Returns:
+        A status message indicating the result of the operation.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = { "style_id": style_id  }
+    style = storage.read_object(ComicStyle, primary_key = pk)
+    # if there is no style selected, return an error message
+    if not style:
+        return "The specified style does not exist"
+    # if the images are not a dictionary, return an error message
+    style: ComicStyle = style
+    if not isinstance(style.image, dict):
+        return "No character style example image to delete."
+    # if there is no art style example image selected, return an error message.
+    locator = style.image.get("character",None)
+    if not locator:
+        return "No character style example image to delete."
+    style.image["character"] = None
+    storage.delete_image(locator)
+    storage.update_object(style)
+    state.is_dirty = True
+    return f"Character style example for {style.name} deleted."
+
+
+@function_tool
+def delete_dialog_style_example(
+    wrapper: RunContextWrapper[APPState],
+    style_id: str,
+    dialog_type: DialogType) -> str:
+    """
+    Delete the example for one of the dialog styles (chat, whisper, shout, 
+    thought, sound-effect, narration) for the specified comic style.
+    THIS IS IRREVERSIBLE.  YOU MUST ASK THE USER TO CONFIRM PRIOR TO CALLING
+    THIS FUNCTION.
+
+    Args:
+        style_id: The ID of the comic style to delete the dialog style example for.
+        dialog_type: The type of dialog style to delete (chat, whisper, shout, thought, sound-effect, narration).
+
+    Returns:
+        A status message indicating the result of the operation.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = { "style_id": style_id  }
+    style = storage.read_object(ComicStyle, primary_key = pk)
+    # if there is no style selected, return an error message
+    if not style:
+        return "Cannot find comic style {style_id}."
+    style: ComicStyle = style
+    # if the images are not a dictionary, return an error message
+    if not isinstance(style.image, dict):
+        return "No dialog style example image to delete."
+    # if there is no art style example image selected, return an error message.
+    locator = style.image.get(f"{dialog_type.value}",None)
+    if not locator:
+        return "No dialog style example image to delete."
+    # otherwise, delete the character style example image.
+    style.image[dialog_type.value] = None
+    storage.delete_image(locator)
+    storage.update_object(style)
+    state.is_dirty = True
+    return f"dialog style example for {style.name} deleted."
+    

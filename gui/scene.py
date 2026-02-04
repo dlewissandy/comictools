@@ -83,7 +83,13 @@ def view_scene(state: APPState):
                     kind=SelectedKind.PICK_STYLE, 
                     get_caption = lambda: "Style", 
                     get_id = lambda: style.id if style else None, 
-                    get_image_filepath = lambda: storage.find_image(StyleExample(style_id=style.id, example_id="art"), style.image.get("art",None)) if style else None
+                    get_image_filepath = lambda: storage.find_image(
+                        StyleExample(
+                            style_id=style.id, 
+                            example_type="art",
+                            image_id=style.image.get("art"),
+                            mime_type="image/jpeg"
+                            ), style.image.get("art",None)) if style else None
                 )
                 
         with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
@@ -128,7 +134,7 @@ def view_scene(state: APPState):
                             else:
                                 with ui.scroll_area().classes('w-full h-full').style('overflow: auto;'):
                                     header(f"Panel {panel.panel_number}: {panel.name}", 3)
-                                    markdown(panel.description)
+                                    markdown(panel.beat or panel.description)
                         new_itm = SelectionItem(name=f"panel {panel.panel_number}", id=panel.panel_id, kind='panel')
                         new_sel = [s for s in selection]+[new_itm]
                         card.on('click', lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
@@ -156,4 +162,3 @@ def view_scene(state: APPState):
                     # Visible caption in center
                     with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
                         ui.label('Drop image to upload').classes('text-lg text-gray-600')
-

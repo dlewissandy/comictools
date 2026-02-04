@@ -67,6 +67,7 @@
     }
   },
   "image": {
-    "art": "data/styles/van-gogh/images/art/van-gogh.jpg"
+    "art": "data/styles/van-gogh/images/art/van-gogh.jpg",
+    "character": "data/styles/van-gogh/images/character/ad3b1b8c-b141-4ea4-9669-02a8ad56bf4a.jpg"
   }
 }

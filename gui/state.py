@@ -297,7 +297,6 @@ class APPState:
         logger.trace("Refreshing details")
         logger.debug(f"SELECTION:{self.selection}")
         # These imports are here to avoid circular imports
-        from schema import CoverLocation
         from gui.home import view_all_styles, view_all_series, view_all_publishers
         from gui.style import view_style, view_pick_style
         from gui.series import view_series
@@ -340,8 +339,8 @@ class APPState:
                 return view_scene(self)
             case "panel":
                 return view_panel(self)
-            case "cover" if identifier in CoverLocation._value2member_map_:
-                return view_cover(self, location=CoverLocation(identifier))
+            case "cover":
+                return view_cover(self)
             case "publisher":
                 return view_publisher(self)
             case "pick-publisher":
@@ -357,7 +356,6 @@ class APPState:
             case "styled-image":
                 return view_styled_image(self)
             case "styled-variant":
-                logger.critical("Selecting styled variant gui")
                 return view_styled_image(self)
             case _:        
                 # Handle other cases or return a default message

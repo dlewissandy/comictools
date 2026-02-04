@@ -72,7 +72,7 @@ def view_character_reference(state: APPState):
     """
     from schema.panel import Panel, CharacterRef
 
-    logger.critical("view_character_reference")
+    logger.trace("view_character_reference")
     storage: GenericStorage = state.storage
 
     # DEREFERENCE THE DATA

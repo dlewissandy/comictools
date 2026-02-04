@@ -68,12 +68,12 @@
   },
   "image": {
     "art": "data/styles/vintage-four-color/images/art/vintage-four-color.jpg",
-    "character": "data/styles/vintage-four-color/images/character/eec9af1c-8592-43e0-88b8-5a7d0d3306ed.jpg",
+    "character": "data/styles/vintage-four-color/images/character/c1078dd9-bda9-4a93-9d16-8a845d9e2ad0.jpg",
     "chat": "data/styles/vintage-four-color/images/chat/fd679708-6b69-4ad9-9af6-77aa9e193e1a.jpg",
     "whisper": "data/styles/vintage-four-color/images/whisper/75717bf8-fbe1-4e85-a70d-210d49cf941f.jpg",
     "sound-effect": "data/styles/vintage-four-color/images/sound-effect/c297d4ee-b687-4a80-9ed7-345a820227aa.jpg",
     "narration": "data/styles/vintage-four-color/images/narration/35573d5e-0e56-4d85-a909-68758aea35a0.jpg",
     "thought": "data/styles/vintage-four-color/images/thought/567f06aa-0db9-48b5-bef0-3a2a633d6556.jpg",
-    "shout": "data/styles/vintage-four-color/images/shout/18f03437-07b7-420f-bc8f-acfcf74ab1cd.jpg"
+    "shout": "data/styles/vintage-four-color/images/narration/35573d5e-0e56-4d85-a909-68758aea35a0.jpg"
   }
 }

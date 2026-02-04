@@ -1,7 +1,7 @@
 from nicegui import ui
 from loguru import logger
 from gui.selection import SelectionItem, SelectedKind
-from schema import Cover, CoverLocation, ComicStyle, StyleExample
+from schema import Cover, ComicStyle, StyleExample
 from gui.state import APPState
 from gui.elements import (
     header, crud_button, 
@@ -11,7 +11,7 @@ from gui.elements import (
 from gui.messaging import post_user_message
 from storage.generic import GenericStorage
 
-def view_cover(state: APPState, location: CoverLocation):
+def view_cover(state: APPState):
     """
     View the cover of a comic book issue.
     
@@ -22,13 +22,17 @@ def view_cover(state: APPState, location: CoverLocation):
     details = state.details
    
     selection = state.selection
-    location = CoverLocation( selection[-1].id )
-    cover_id = location.value
+    cover_id = selection[-1].id
     issue_id = selection[-2].id
     series_id = selection[-3].id if len(selection) > 2 else None
     logger.debug(f"series: {series_id} issue: {issue_id} cover: {cover_id}")
 
     cover:Cover  = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
+    if cover is None:
+        details.clear()
+        with details:
+            ui.markdown(f"Cover with ID {cover_id} not found in issue {issue_id}.")
+        return
 
     if cover.style_id is None:
         logger.debug(f"Issue {cover.id} has no style set.")
@@ -62,7 +66,13 @@ def view_cover(state: APPState, location: CoverLocation):
                     kind=SelectedKind.PICK_STYLE, 
                     get_caption=lambda: "Style", 
                     get_id =lambda: style.style_id if style else None, 
-                    get_image_filepath=lambda: storage.find_image(StyleExample(style_id=style.style_id, example_id="art"), style.image.get("art", None)) if style else None
+                    get_image_filepath=lambda: storage.find_image(
+                        StyleExample(
+                            style_id=style.style_id,
+                            example_type="art",
+                            image_id=style.image.get("art"),
+                            mime_type="image/jpeg"
+                            ), style.image.get("art", None)) if style else None
                 )
             
 

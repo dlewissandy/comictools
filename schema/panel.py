@@ -14,7 +14,8 @@ class Panel(BaseModel):
 
     #PROPERTIES
     name: str = Field(..., description="The name of the panel.   Should be a short (3-5 words) description of the panel.   This should be a short description of the panel that can be used to identify it in a list of panels.   Default to empty string")
-    description: str = Field(..., description="A detailed description of the image in the panel.   This should describe the image in sufficient detail so that different artists could from this information alone reproduce the same image.   This should include the setting, foreground, background, characters, props, scenery and any other elements in the panel.")
+    beat: str = Field("", description="The narrative beat for the panel.   This should describe what changes or happens in this moment.   Keep it concise (1-3 sentences).")
+    description: str = Field(..., description="A detailed visual description of the image in the panel.   This should describe the image in sufficient detail so that different artists could from this information alone reproduce the same image.   This should include the setting, foreground, background, characters, props, scenery and any other elements in the panel.")
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to square")
     character_references: list[CharacterRef] = Field(..., description="A dictionary mapping the names of the characters that appear in the panel to the visual variant that should be used as reference.   Default to empty dict")
 

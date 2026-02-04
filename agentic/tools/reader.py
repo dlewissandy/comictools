@@ -12,7 +12,6 @@ from schema import (
     CharacterVariant,
     Panel,
     Cover,
-    CoverLocation,
     SceneModel,
     Series,
     Issue,
@@ -355,21 +354,18 @@ def read_issue(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: s
     return read_one(wrapper=wrapper, cls=Issue, pk=pk)
 
 @function_tool
-def read_cover(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, location: CoverLocation) -> Cover | str:
+def read_cover(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, cover_id: str) -> Cover | str:
     """
     Look up a cover of a comic book given its series and issue identifiers.
 
     Args:
         series_id: The identifier of the series the cover belongs to.
         issue_id: The identifier of the comic book issue the cover belongs to.
-        location: The location of the cover.
+        cover_id: The identifier of the cover to look up.
     Returns:
         The Cover object if found, otherwise a status message.
     """
-    pk = dict(locals())
-    # delete the "wrapper" argument from the pk
-    del pk["wrapper"]
-    pk['location'] = location.value
+    pk = {"series_id": series_id, "issue_id": issue_id, "cover_id": cover_id}
     return read_one(wrapper=wrapper, cls=Cover, pk=pk)
 
 @function_tool

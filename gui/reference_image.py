@@ -18,7 +18,7 @@ def view_reference_image(
     state: APPState
 ):
     from gui.elements import full_width_image_selector_grid
-    from schema import Panel, CoverLocation, Cover
+    from schema import Panel, Cover
     selection = state.selection
     storage: GenericStorage = state.storage
     this_sel = selection[-1]
@@ -48,17 +48,17 @@ def view_reference_image(
         upload_image = lambda name, data, mime_type: storage.upload_reference_image(parent, name=name, data=data,  mime_type=mime_type)
         updater = lambda x: storage.update_object(x)
         name = "Panel {parent.panel_number}"
-    elif parent_sel.kind in ["front-cover", "back-cover", "inside-front-cover", "inside-back-cover"]:
+    elif parent_sel.kind == SelectedKind.COVER:
         primary_key = {
             "series_id": selection[-3].id,
             "issue_id": selection[-2].id,
-            "location": CoverLocation(parent_sel.id)
+            "cover_id": parent_sel.id
         }
         parent = storage.read_object(Cover, primary_key)
         if parent is None:
             logger.error(f"No cover found for {primary_key}")
             return
-        img_refs = [ref for ref in parent.reference_images if ref.id == primary_key["location"].value]
+        img_refs = [ref for ref in parent.reference_images if ref.id == this_sel.id]
         if len(img_refs) == 0:
             logger.error(f"No reference image found for cover {primary_key}")
             return
@@ -67,8 +67,8 @@ def view_reference_image(
             return
         else:
             img_ref = img_refs[0]
-        name = f"{primary_key["location"].value.title()} Cover"
-        upload_image = lambda name, data, mime_type: storage.upload_reference_image(parent, name=name, data=data, mime_type=mime_type, **primary_key)
+        name = f"{parent.location.value.title()} Cover"
+        upload_image = lambda name, data, mime_type: storage.upload_reference_image(parent, name=name, data=data, mime_type=mime_type)
         updater = lambda x: storage.update_object(x)
     else:
         logger.error(f"Unknown parent kind {parent_sel.kind}")

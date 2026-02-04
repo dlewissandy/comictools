@@ -27,6 +27,7 @@ from agentic.tools import (
     create_panel,
     create_character,
     create_issue,
+    create_scene,
     create_cover,
 
     delete_publisher,
@@ -45,6 +46,7 @@ from agentic.tools import (
 
     update_character_description,
     update_cover_description,
+    update_style_description,
 
     update_variant_age,
     update_variant_appearance,
@@ -55,14 +57,21 @@ from agentic.tools import (
     update_variant_height,
     update_variant_race,
 
-    generate_publisher_logo_image,  
+    generate_publisher_logo_reference_image,  
     generate_cover_image,
-    delete_cover_image
+    delete_cover_image,
+    create_character_style_example_image
 )
 from agentic.tools.creator import create_variant
 from agentic.tools.imaging import (
-    delete_publisher_logo_image,
+    delete_character_style_example,
+    delete_dialog_style_example,
+    delete_publisher_logo_reference_image,
     create_styled_image_for_character_variant,
+    create_art_style_example_image,
+    create_dialog_style_example_image,
+    delete_art_style_example
+
 )
 from agentic.tools.updater import (
     update_character_description,
@@ -77,7 +86,10 @@ from agentic.tools.updater import (
     update_publisher_description,
     update_series_description,
     update_cover_style,
-    update_cover_aspect_ratio
+    update_cover_aspect_ratio,
+    update_art_style,
+    update_dialog_style,
+    update_character_style,
 )
 
 TOOLKITS: dict[str,list[Tool]] = {
@@ -106,7 +118,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_style,
     ],
     "all-series": [
-                # Navigation
+        # Navigation
         select_series,
 
         # Getters
@@ -131,12 +143,14 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_variants,
     
         # describe_image,
+        # TODO: update_character_name,
         update_character_description,
 
         delete_character,
         create_variant,
         # create_variant_from_image
         # TODO: Create variant from image
+        # TODO: delete variant
     ],
     "cover": [
         # Create
@@ -157,6 +171,7 @@ TOOLKITS: dict[str,list[Tool]] = {
     "issue": [
         # Create
         create_cover,
+        create_scene,
         # Read
         read_issue,
         read_style,
@@ -166,6 +181,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_scene,
         read_all_scenes,
         # Update
+        # TODO: Update issue name
         update_issue_story,
         update_issue_publication_date,
         update_issue_price,
@@ -176,7 +192,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Delete
         delete_issue,
         delete_cover,
-        delete_scene
+        delete_scene,
+        # TODO Reorder scenes
 
     ],
     "panel": [
@@ -203,8 +220,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Navigation
 
         # Imaging
-        generate_publisher_logo_image,
-        delete_publisher_logo_image
+        generate_publisher_logo_reference_image,
+        delete_publisher_logo_reference_image
     ],
     "scene": [
         # Create
@@ -248,9 +265,20 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Read
         read_style,
         # Update
+        update_style_description,
+        update_art_style,
+        update_dialog_style,
+        update_character_style,
         # Delete
         delete_style,
         # Images
+        create_character_style_example_image,
+        delete_character_style_example,
+        create_art_style_example_image,
+        delete_art_style_example,
+        create_dialog_style_example_image,
+        delete_dialog_style_example
+
     ],
     "styled-variant": [
         # Navigation

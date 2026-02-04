@@ -418,15 +418,15 @@ class LocalStorage(GenericStorage):
         def order_by(cover: Cover) -> str:
            value = cover.location.value
            if value not in COVER_ORDER:
-               logger.critical(f"Cover {cover.location} not in COVER_ORDER.  This should never happen.")
+               logger.error(f"Cover {cover.location} not in COVER_ORDER.  This should never happen.")
                return 4
            idx = COVER_ORDER.index(value)
-           logger.critical(f"Cover {cover.location} has index {idx} in COVER_ORDER.")
+           logger.debug(f"Cover {cover.location} has index {idx} in COVER_ORDER.")
            return idx
 
 
         covers.sort(key=order_by)
-        logger.critical(f"Sorted covers: {[cover.location for cover in covers]}")
+        logger.debug(f"Sorted covers: {[cover.location for cover in covers]}")
         # Return the first cover that has an image
         for cover in covers:
             if cover.image is not None and cover.image != "":

@@ -59,6 +59,19 @@ def format_character_style(style: CharacterStyle, heading_level: int = 1) -> str
         result += f"* **{key.replace('_', ' ').capitalize()}**: {value}\n\n"
     return result
 
+def format_bubble_style(style: BubbleStyle, heading_level: int = 1) -> str:
+    """
+    Format the bubble styles for display.
+    """
+    self_json = style.model_dump()
+    result = ""
+    for k,v in self_json.items():
+        attribute = normalize_name(k)
+        result += f"* **{attribute.replace('_', ' ').capitalize()}**: {v}\n"
+
+    return result
+
+
 def format_bubble_styles(styles: BubbleStyles, heading_level: int = 1) -> str:
     """
     Format the bubble styles for display.
