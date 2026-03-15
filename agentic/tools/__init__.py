@@ -83,7 +83,9 @@ from .imaging import (
     delete_publisher_logo_reference_image,
     generate_cover_image,
     delete_cover_image,
-    create_character_style_example_image
+    create_character_style_example_image,
+    inpaint_image_region,
+    outpaint_image_region
 )
 
 
@@ -173,5 +175,7 @@ __all__ = [
     "generate_cover_image",
     "delete_cover_image",
     "create_character_style_example_image",
+    "inpaint_image_region",
+    "outpaint_image_region",
 
 ]

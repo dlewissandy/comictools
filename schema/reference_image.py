@@ -18,12 +18,16 @@ class ReferenceImage(BaseModel):
 
     @property
     def parent_key(self) -> dict[str, str]:
-        # TODO: This needs work!
-        return {}
+        """
+        return the parent key for the reference image
+        """
+        return {
+            "relation": self.relation.value,
+        }
     
     @property
     def id(self) -> str:
         """
         return the id of the reference image
         """
-        return self.relation.value
+        return self.image_id

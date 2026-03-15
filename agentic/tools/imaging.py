@@ -1,8 +1,13 @@
 import os
+import json
+import tempfile
 from typing import Optional
+from uuid import uuid4
+from io import BytesIO
 from loguru import logger
 from agents import function_tool, RunContextWrapper
 from pydantic import BaseModel
+from PIL import Image, ImageDraw
 
 from gui.state import APPState
 from schema.character import CharacterModel
@@ -27,6 +32,7 @@ from .formatting import format_comic_style, format_character_variant, format_iss
 
 from helpers.generator import invoke_edit_image_api, invoke_generate_image_api, IMAGE_QUALITY
 from schema.enums import frame_layout_to_dims, FrameLayout
+from gui.selection import SelectedKind, SelectionItem
 
 
 def generate_object_image(
@@ -774,4 +780,504 @@ def delete_dialog_style_example(
     storage.update_object(style)
     state.is_dirty = True
     return f"dialog style example for {style.name} deleted."
+
+
+def _find_selection_id(selection: list, kind: SelectedKind) -> str | None:
+    for item in reversed(selection):
+        if item.kind == kind:
+            return item.id
+    return None
+
+
+def _choose_output_size(width: int, height: int) -> str:
+    if height == 0:
+        return "1024x1024"
+    ratio = width / height
+    if ratio >= 1.15:
+        return "1536x1024"
+    if ratio <= 0.87:
+        return "1024x1536"
+    return "1024x1024"
+
+
+def _save_image_bytes(image_bytes: bytes, source_path: str, prefix: str = "edit") -> str:
+    output_dir = os.path.dirname(source_path)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    ext = os.path.splitext(source_path)[1].lower().lstrip(".") or "png"
+    if ext not in ["png", "jpg", "jpeg", "webp"]:
+        ext = "png"
+    filename = f"{prefix}-{uuid4().hex[:8]}.{ext}"
+    output_path = os.path.join(output_dir, filename)
+    try:
+        img = Image.open(BytesIO(image_bytes))
+        save_format = "JPEG" if ext in ["jpg", "jpeg"] else ext.upper()
+        img.save(output_path, format=save_format)
+    except Exception:
+        with open(output_path, "wb") as f:
+            f.write(image_bytes)
+    return output_path
+
+
+def _ensure_session_id(state: APPState) -> str:
+    if not state.image_editor_session_id:
+        state.image_editor_session_id = uuid4().hex[:8]
+    return state.image_editor_session_id
+
+
+def _choices_manifest_path(image_locator: str, session_id: str) -> str:
+    folder = os.path.dirname(image_locator)
+    return os.path.join(folder, f".choices-{session_id}.json")
+
+
+def _write_choices_manifest(image_locator: str, session_id: str, choices: list[str]) -> None:
+    path = _choices_manifest_path(image_locator, session_id)
+    payload = {
+        "image": image_locator,
+        "choices": choices,
+        "session_id": session_id,
+    }
+    with open(path, "w") as f:
+        json.dump(payload, f, indent=2)
+
+
+def _is_intent_only(text: str, mode: str) -> bool:
+    lowered = " ".join(text.lower().strip().split())
+    if mode == "inpaint":
+        return lowered in {
+            "i would like to inpaint a region of this image.",
+            "i would like to inpaint a region of this image",
+            "inpaint",
+            "inpaint a region",
+            "inpaint a region of this image",
+        }
+    if mode == "outpaint":
+        return lowered in {
+            "i would like to outpaint a region of this image.",
+            "i would like to outpaint a region of this image",
+            "outpaint",
+            "outpaint a region",
+            "outpaint a region of this image",
+        }
+    return False
+
+
+def _normalize_text(text: str) -> str:
+    lowered = text.lower()
+    lowered = lowered.replace("'s", "")
+    return lowered
+
+
+def _text_has_any(text: str, phrases: list[str]) -> bool:
+    return any(p in text for p in phrases)
+
+
+def _collect_reference_images(state: APPState, instruction: str, max_refs: int = 3) -> list[str]:
+    selection = state.selection
+    series_id = _find_selection_id(selection, SelectedKind.SERIES)
+    issue_id = _find_selection_id(selection, SelectedKind.ISSUE)
+    scene_id = _find_selection_id(selection, SelectedKind.SCENE)
+    panel_id = _find_selection_id(selection, SelectedKind.PANEL)
+    cover_id = _find_selection_id(selection, SelectedKind.COVER)
+
+    storage: GenericStorage = state.storage
+    text = _normalize_text(instruction or "")
+
+    candidates: list[tuple[str, int]] = []
+
+    def add_candidate(path: str | None, score: int):
+        if not path:
+            return
+        if not os.path.exists(path):
+            return
+        candidates.append((path, score))
+
+    relation_keywords = {
+        "background": ["background", "sky", "setting"],
+        "left": ["left"],
+        "right": ["right"],
+        "above": ["above", "top"],
+        "below": ["below", "bottom", "under"],
+        "before": ["before"],
+        "after": ["after"],
+    }
+
+    def relation_score(relation_value: str) -> int:
+        keywords = relation_keywords.get(relation_value, [])
+        return 3 if _text_has_any(text, keywords) else 1
+
+    if panel_id and scene_id and issue_id and series_id:
+        panel = storage.read_object(Panel, primary_key={
+            "series_id": series_id,
+            "issue_id": issue_id,
+            "scene_id": scene_id,
+            "panel_id": panel_id,
+        })
+        if panel:
+            for ref in panel.reference_images:
+                add_candidate(ref.image, relation_score(ref.relation.value))
+
+            for char_ref in panel.character_references:
+                char_model = storage.read_object(CharacterModel, primary_key={
+                    "series_id": char_ref.series_id,
+                    "character_id": char_ref.character_id,
+                })
+                name = char_model.name.lower() if char_model else char_ref.character_id.replace("-", " ")
+                if _text_has_any(text, [name, char_ref.character_id.replace("-", " ")]):
+                    if hasattr(storage, "find_variant_image"):
+                        img = storage.find_variant_image(
+                            series_id=char_ref.series_id,
+                            character_id=char_ref.character_id,
+                            variant_id=char_ref.variant_id,
+                        )
+                        add_candidate(img, 4)
+
+    if cover_id and issue_id and series_id:
+        cover = storage.read_object(Cover, primary_key={
+            "series_id": series_id,
+            "issue_id": issue_id,
+            "cover_id": cover_id,
+        })
+        if cover:
+            for ref in cover.reference_images:
+                add_candidate(ref.image, relation_score(ref.relation.value))
+
+            for char_ref in cover.character_references:
+                char_model = storage.read_object(CharacterModel, primary_key={
+                    "series_id": char_ref.series_id,
+                    "character_id": char_ref.character_id,
+                })
+                name = char_model.name.lower() if char_model else char_ref.character_id.replace("-", " ")
+                if _text_has_any(text, [name, char_ref.character_id.replace("-", " ")]):
+                    if hasattr(storage, "find_variant_image"):
+                        img = storage.find_variant_image(
+                            series_id=char_ref.series_id,
+                            character_id=char_ref.character_id,
+                            variant_id=char_ref.variant_id,
+                        )
+                        add_candidate(img, 4)
+
+    if _text_has_any(text, ["logo", "publisher"]):
+        if series_id:
+            series = storage.read_object(Series, primary_key={"series_id": series_id})
+            if series and series.publisher_id:
+                publisher = storage.read_object(Publisher, primary_key={"publisher_id": series.publisher_id})
+                if publisher and publisher.image:
+                    add_candidate(publisher.image, 4)
+
+    candidates.sort(key=lambda item: item[1], reverse=True)
+    selected: list[str] = []
+    seen = set()
+    for path, _score in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
+        selected.append(path)
+        if len(selected) >= max_refs:
+            break
+    return selected
+
+
+def _merge_reference_images(base: str, refs: list[str]) -> list[str]:
+    images = [base]
+    for ref in refs:
+        if ref and ref != base:
+            images.append(ref)
+    return images
+
+
+def _normalize_selection(selection: dict, width: int, height: int) -> dict:
+    x = int(selection.get("x", 0))
+    y = int(selection.get("y", 0))
+    w = int(selection.get("width", 0))
+    h = int(selection.get("height", 0))
+    x = max(0, min(x, width - 1))
+    y = max(0, min(y, height - 1))
+    w = max(1, min(w, width - x))
+    h = max(1, min(h, height - y))
+    return {"x": x, "y": y, "width": w, "height": h}
+
+
+def _create_full_mask(image_path: str) -> tuple[str, tuple[int, int]]:
+    img = Image.open(image_path).convert("RGBA")
+    mask = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    mask.save(tmp.name)
+    return tmp.name, img.size
+
+
+def _create_inpaint_mask(image_path: str, selection: dict) -> tuple[str, tuple[int, int]]:
+    img = Image.open(image_path).convert("RGBA")
+    width, height = img.size
+    selection = _normalize_selection(selection, width, height)
+    mask = Image.new("RGBA", img.size, (255, 255, 255, 255))
+    draw = ImageDraw.Draw(mask)
+    x = selection["x"]
+    y = selection["y"]
+    w = selection["width"]
+    h = selection["height"]
+    draw.rectangle([x, y, x + w, y + h], fill=(0, 0, 0, 0))
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    mask.save(tmp.name)
+    return tmp.name, img.size
+
+
+def _prepare_outpaint_assets(image_path: str, padding: dict) -> tuple[str, str, tuple[int, int]]:
+    img = Image.open(image_path).convert("RGBA")
+    top = max(0, int(padding.get("top", 0)))
+    bottom = max(0, int(padding.get("bottom", 0)))
+    left = max(0, int(padding.get("left", 0)))
+    right = max(0, int(padding.get("right", 0)))
+    new_width = img.width + left + right
+    new_height = img.height + top + bottom
+    base = Image.new("RGBA", (new_width, new_height), (0, 0, 0, 0))
+    base.paste(img, (left, top))
+    mask = Image.new("RGBA", (new_width, new_height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(mask)
+    draw.rectangle([left, top, left + img.width, top + img.height], fill=(255, 255, 255, 255))
+    base_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    mask_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    base.save(base_tmp.name)
+    mask.save(mask_tmp.name)
+    return base_tmp.name, mask_tmp.name, (new_width, new_height)
+
+
+def _update_parent_selection(
+    state: APPState,
+    storage: GenericStorage,
+    original_locator: str,
+    new_locator: str,
+) -> str | None:
+    selection = state.selection
+    series_id = _find_selection_id(selection, SelectedKind.SERIES)
+    issue_id = _find_selection_id(selection, SelectedKind.ISSUE)
+    scene_id = _find_selection_id(selection, SelectedKind.SCENE)
+    panel_id = _find_selection_id(selection, SelectedKind.PANEL)
+    cover_id = _find_selection_id(selection, SelectedKind.COVER)
+    publisher_id = _find_selection_id(selection, SelectedKind.PUBLISHER)
+    style_id = _find_selection_id(selection, SelectedKind.STYLE)
+    character_id = _find_selection_id(selection, SelectedKind.CHARACTER)
+    variant_id = _find_selection_id(selection, SelectedKind.VARIANT)
+    styled_variant_style_id = _find_selection_id(selection, SelectedKind.STYLED_VARIANT)
+    reference_image_id = _find_selection_id(selection, SelectedKind.REFERENCE_IMAGE)
+
+    if panel_id and scene_id and issue_id and series_id:
+        panel = storage.read_object(Panel, primary_key={
+            "series_id": series_id,
+            "issue_id": issue_id,
+            "scene_id": scene_id,
+            "panel_id": panel_id,
+        })
+        if panel:
+            panel.image = new_locator
+            storage.update_object(panel)
+            state.is_dirty = True
+            return "panel"
+
+    if cover_id and issue_id and series_id:
+        cover = storage.read_object(Cover, primary_key={
+            "series_id": series_id,
+            "issue_id": issue_id,
+            "cover_id": cover_id,
+        })
+        if cover:
+            cover.image = new_locator
+            storage.update_object(cover)
+            state.is_dirty = True
+            return "cover"
+
+    if publisher_id:
+        publisher = storage.read_object(Publisher, primary_key={"publisher_id": publisher_id})
+        if publisher:
+            publisher.image = new_locator
+            storage.update_object(publisher)
+            state.is_dirty = True
+            return "publisher"
+
+    if styled_variant_style_id and variant_id and character_id and series_id:
+        variant = storage.read_object(CharacterVariant, primary_key={
+            "series_id": series_id,
+            "character_id": character_id,
+            "variant_id": variant_id,
+        })
+        if variant:
+            variant.images[styled_variant_style_id] = new_locator
+            storage.update_object(variant)
+            state.is_dirty = True
+            return "styled-variant"
+
+    if style_id:
+        style = storage.read_object(ComicStyle, primary_key={"style_id": style_id})
+        if style:
+            if not isinstance(style.image, dict):
+                style.image = {}
+            key = None
+            for k, v in style.image.items():
+                if v == original_locator:
+                    key = k
+                    break
+            if key is None:
+                key = next(iter(style.image.keys()), "art")
+            style.image[key] = new_locator
+            storage.update_object(style)
+            state.is_dirty = True
+            return "style"
+
+    if reference_image_id:
+        if panel_id and scene_id and issue_id and series_id:
+            panel = storage.read_object(Panel, primary_key={
+                "series_id": series_id,
+                "issue_id": issue_id,
+                "scene_id": scene_id,
+                "panel_id": panel_id,
+            })
+            if panel:
+                ref = next((r for r in panel.reference_images if r.id == reference_image_id or r.image == original_locator), None)
+                if ref:
+                    ref.image = new_locator
+                    storage.update_object(panel)
+                    state.is_dirty = True
+                    return "panel-reference"
+        if cover_id and issue_id and series_id:
+            cover = storage.read_object(Cover, primary_key={
+                "series_id": series_id,
+                "issue_id": issue_id,
+                "cover_id": cover_id,
+            })
+            if cover:
+                ref = next((r for r in cover.reference_images if r.id == reference_image_id or r.image == original_locator), None)
+                if ref:
+                    ref.image = new_locator
+                    storage.update_object(cover)
+                    state.is_dirty = True
+                    return "cover-reference"
+
+    return None
+
+
+@function_tool
+def inpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str) -> str:
+    """
+    Inpaint a selected region of the current image editor image using the given instruction.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    selection = state.image_editor_selection
+    image_locator = state.image_editor_image
+
+    if not instruction or instruction.strip() == "":
+        return "No instruction provided. Describe the change in chat and try again."
+    if _is_intent_only(instruction, "inpaint"):
+        return "Tell me what you want to change in the image."
+
+    if image_locator is None:
+        if state.selection and state.selection[-1].id:
+            image_locator = state.selection[-1].id
+        else:
+            return "No image is selected for editing."
+
+    if not os.path.exists(image_locator):
+        return f"Image not found: {image_locator}"
+
+    mask_path = None
+    try:
+        session_id = _ensure_session_id(state)
+        if selection:
+            mask_path, (w, h) = _create_inpaint_mask(image_locator, selection)
+        else:
+            mask_path, (w, h) = _create_full_mask(image_locator)
+        size = _choose_output_size(w, h)
+        refs = _collect_reference_images(state, instruction)
+        images = invoke_edit_image_api(
+            prompt=instruction,
+            reference_images=_merge_reference_images(image_locator, refs),
+            mask=mask_path,
+            size=size,
+            quality=IMAGE_QUALITY.HIGH,
+            n=4,
+        )
+        if isinstance(images, bytes):
+            images = [images]
+        choices = [_save_image_bytes(img, image_locator, prefix=f"choice-{session_id}") for img in images]
+    finally:
+        if mask_path and os.path.exists(mask_path):
+            os.remove(mask_path)
+
+    if not choices:
+        return "No images were generated. Try again."
+
+    _write_choices_manifest(image_locator, session_id, choices)
+    state.image_editor_choices = choices
+    state.image_editor_choice_selected = choices[0] if choices else None
+    state.image_editor_original_image = image_locator
+    state.image_editor_image = image_locator
+    state.image_editor_mode = "inpaint"
+
+    new_sel = [s for s in state.selection]
+    new_sel.append(SelectionItem(name="Choices", id=f"{session_id}|{image_locator}", kind=SelectedKind.IMAGE_EDITOR_CHOICES))
+    state.change_selection(new=new_sel)
+    return "Generated 4 options. Pick one to apply, or cancel."
+
+
+@function_tool
+def outpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str) -> str:
+    """
+    Outpaint the current image editor image using the given instruction.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    image_locator = state.image_editor_image
+
+    if not instruction or instruction.strip() == "":
+        return "No instruction provided. Describe the change in chat and try again."
+    if _is_intent_only(instruction, "outpaint"):
+        return "Tell me what you want to extend or add beyond the image."
+
+    if image_locator is None:
+        if state.selection and state.selection[-1].id:
+            image_locator = state.selection[-1].id
+        else:
+            return "No image is selected for editing."
+
+    if not os.path.exists(image_locator):
+        return f"Image not found: {image_locator}"
+
+    padding = {"top": 256, "bottom": 256, "left": 256, "right": 256}
+    base_path = None
+    mask_path = None
+    try:
+        session_id = _ensure_session_id(state)
+        base_path, mask_path, (w, h) = _prepare_outpaint_assets(image_locator, padding)
+        size = _choose_output_size(w, h)
+        refs = _collect_reference_images(state, instruction)
+        images = invoke_edit_image_api(
+            prompt=instruction,
+            reference_images=_merge_reference_images(base_path, refs),
+            mask=mask_path,
+            size=size,
+            quality=IMAGE_QUALITY.HIGH,
+            n=4,
+        )
+        if isinstance(images, bytes):
+            images = [images]
+        choices = [_save_image_bytes(img, image_locator, prefix=f"choice-{session_id}") for img in images]
+    finally:
+        for path in [base_path, mask_path]:
+            if path and os.path.exists(path):
+                os.remove(path)
+
+    if not choices:
+        return "No images were generated. Try again."
+
+    _write_choices_manifest(image_locator, session_id, choices)
+    state.image_editor_choices = choices
+    state.image_editor_choice_selected = choices[0] if choices else None
+    state.image_editor_original_image = image_locator
+    state.image_editor_image = image_locator
+    state.image_editor_mode = "outpaint"
+
+    new_sel = [s for s in state.selection]
+    new_sel.append(SelectionItem(name="Choices", id=f"{session_id}|{image_locator}", kind=SelectedKind.IMAGE_EDITOR_CHOICES))
+    state.change_selection(new=new_sel)
+    return "Generated 4 options. Pick one to apply, or cancel."
     

@@ -81,6 +81,22 @@ PERSONAS = {
         or other attributes, but remain consistent with the character's core identity.
         Your descriptions are used by artists and writers to create content that is consistent
         with the comic series' themes and characters.
+    """,
+    "image-editor": """
+        You are an image editing assistant. The user gives you an instruction in chat,
+        and you apply it to the selected image using the image editing tools.
+        If image_editor_mode is "inpaint", call inpaint_image_region using the user's
+        latest message as the instruction. If image_editor_mode is "outpaint", call
+        outpaint_image_region the same way. If image_editor_mode is not set, ask whether
+        they want inpaint or outpaint. If no region is selected for inpaint, proceed
+        with a full-image edit.
+    """
+    ,
+    "image-editor-choices": """
+        You are an image editing assistant. The user is reviewing generated options.
+        If they provide a new instruction, call the inpaint or outpaint tools based on
+        image_editor_mode. If image_editor_mode is not set, ask whether they want inpaint
+        or outpaint. If no region is selected for inpaint, ask the user to make a selection.
     """
 }
 
@@ -121,6 +137,15 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
             # Use the first context item to get the model dump
             details = f"# SELECTION DETAILS:\n {context[0].model_dump()}"
     
+    if selection and selection[-1].kind.value in ["image-editor", "image-editor-choices"]:
+        details = "\n".join([
+            details,
+            "# IMAGE EDITOR STATE:",
+            f"mode: {state.image_editor_mode}",
+            f"selection: {state.image_editor_selection}",
+            f"image: {state.image_editor_image}",
+        ])
+
     instructions = "\n".join([
         dedent(PERSONAS.get(agent.name, "").strip()),
         BOILERPLATE_INSTRUCTIONS,

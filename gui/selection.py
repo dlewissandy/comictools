@@ -22,6 +22,8 @@ class SelectedKind(StrEnum):
     PUBLISHER = "publisher"
     STYLE = "style"
     STYLE_EXAMPLE = "style-example"
+    IMAGE_EDITOR = "image-editor"
+    IMAGE_EDITOR_CHOICES = "image-editor-choices"
     # PICKERS
     PICK_PUBLISHER = "pick-publisher"
     PICK_STYLE = "pick-style"
@@ -93,6 +95,10 @@ def selection_to_context(
             case SelectedKind.ALL_SERIES.value:
                 continue
             case SelectedKind.ALL_STYLES.value:
+                continue
+            case SelectedKind.IMAGE_EDITOR.value:
+                continue
+            case SelectedKind.IMAGE_EDITOR_CHOICES.value:
                 continue
             case _:
 

@@ -46,6 +46,16 @@ class APPState:
         # Storage and logging must be initialized before agents
         self._storage = storage
 
+        # IMAGE EDITOR STATE
+        self.image_editor_selection: dict | None = None
+        self.image_editor_image: str | None = None
+        self.image_editor_mode: str | None = None
+        self.image_editor_dom_id: str | None = None
+        self.image_editor_choices: list[str] = []
+        self.image_editor_choice_selected: str | None = None
+        self.image_editor_original_image: str | None = None
+        self.image_editor_session_id: str | None = None
+
         # AGENTS
         self._agents = init_agents(self)
         
@@ -309,6 +319,8 @@ class APPState:
         from gui.reference_image import view_reference_image
         from gui.variant import view_character_variant
         from gui.styled_image import view_styled_image
+        from gui.image_editor import view_image_editor
+        from gui.image_editor_choices import view_image_editor_choices
         from gui.selection import SelectionItem, SelectedKind
 
         self.clear_details()
@@ -357,6 +369,10 @@ class APPState:
                 return view_styled_image(self)
             case "styled-variant":
                 return view_styled_image(self)
+            case "image-editor":
+                return view_image_editor(self)
+            case "image-editor-choices":
+                return view_image_editor_choices(self)
             case _:        
                 # Handle other cases or return a default message
                 self.clear_details()

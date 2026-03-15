@@ -4,6 +4,7 @@ import json
 from loguru import logger
 from loguru._defaults import LOGURU_FORMAT
 from nicegui import ui, app
+from gui.speech import init_speech_support, start_listening, stop_listening, speak, cancel_speech
 from gui.state import APPState, STATE_FILEPATH, set_dark_mode
 from dotenv import load_dotenv
 from gui.selection import (SelectionItem)
@@ -85,10 +86,26 @@ def init_layout(logger):
     with footer:
         placeholder = "message"
         user_input = ui.input(placeholder=placeholder).props('rounded outlined input-class=mx-3 ') \
-            .classes('w-full self-center').style('flex-grow: 1; width: 100vh;')
+            .classes('w-full self-center stt-input').style('flex-grow: 1; width: 100vh;')
+
+        mic_button = ui.button('Dictate').props('rounded').classes('q-ml-md')
+        stop_mic_button = ui.button('Stop').props('rounded').classes('q-ml-md')
+        speak_button = ui.button('Speak').props('rounded').classes('q-ml-md')
+        stop_speak_button = ui.button('Mute').props('rounded').classes('q-ml-md')
         send_button = ui.button('Send').props('rounded').classes('q-ml-md')
 
-    return breadcrumbs, details, history, user_input, send_button, darkswitch
+    return (
+        breadcrumbs,
+        details,
+        history,
+        user_input,
+        send_button,
+        darkswitch,
+        mic_button,
+        stop_mic_button,
+        speak_button,
+        stop_speak_button,
+    )
 
 
 @ui.page('/')
@@ -97,7 +114,18 @@ def main_page(client):
     init_logger()
 
     # INITIALIZE THE UI LAYOUT WITH BASIC ELEMENTS
-    breadcrumbs, details, history, user_input, send_button, darkswitch = init_layout(logger)
+    (
+        breadcrumbs,
+        details,
+        history,
+        user_input,
+        send_button,
+        darkswitch,
+        mic_button,
+        stop_mic_button,
+        speak_button,
+        stop_speak_button,
+    ) = init_layout(logger)
 
     # READ THE STATE DATA FROM FILE
     state_data = json.load(open(STATE_FILEPATH, 'r')) if os.path.exists(STATE_FILEPATH) else {}
@@ -123,14 +151,21 @@ def main_page(client):
     state.change_selection(selection)   # update the selection to force the redraw of the breadcrumbs
     state.refresh_details()             # Redraw the details based on the current selection
 
+    # Enable browser speech capabilities
+    init_speech_support()
+
     # ENABLE THE EVENT HANDLERS
     darkswitch.bind_value_to(state, "dark_mode")
     user_input.on('keydown.enter', lambda _ : send(state=state))
     send_button.on('click', lambda _:send(state=state))
 
+    mic_button.on('click', lambda _: start_listening(user_input))
+    stop_mic_button.on('click', lambda _: stop_listening())
+    speak_button.on('click', lambda _: speak(user_input.value))
+    stop_speak_button.on('click', lambda _: cancel_speech())
+
     # Set static paths
     app.add_static_files('/data', './data')
 
 ui.run()
-
 

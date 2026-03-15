@@ -149,6 +149,16 @@ async def send(state: APPState):
     question = text_input.value
     text_input.value = ''
 
+    # Capture image editor selection if we're in that view
+    try:
+        if state.selection and state.selection[-1].kind.value == "image-editor" and state.image_editor_dom_id:
+            js = f"window.__imageEditorSelections && window.__imageEditorSelections['{state.image_editor_dom_id}']"
+            selection_data = await ui.run_javascript(js)
+            if selection_data:
+                state.image_editor_selection = selection_data
+    except Exception as e:
+        logger.debug(f"Failed to read image editor selection: {e}")
+
     # TODO: Disable the "send button" while the response is being generated
 
     # Build The Message History

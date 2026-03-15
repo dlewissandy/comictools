@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from base64 import b64encode, b64decode
 from io import BytesIO
 
-from helpers.image import resize_image, decode_image_response, IMAGE_QUALITY
+from helpers.image import resize_image, decode_image_response, decode_image_responses, IMAGE_QUALITY
 
 def filepath_to_filehandle(filepath: str) -> bytes:
     """
@@ -103,7 +103,9 @@ def invoke_generate_image_api(
             quality= quality.name.lower(),
             response_format=None
         )
-        return decode_image_response(response)
+        if n == 1:
+            return decode_image_response(response)
+        return decode_image_responses(response)
     except Exception as e:
         logger.error(f"Error invoking OpenAI image generation API: {e}")
         raise e
@@ -145,4 +147,6 @@ def invoke_edit_image_api(
         args["mask"] = filepath_to_filehandle(mask)
     response = openai.images.edit(**args)
 
-    return decode_image_response(response)
+    if n == 1:
+        return decode_image_response(response)
+    return decode_image_responses(response)

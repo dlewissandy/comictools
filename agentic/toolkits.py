@@ -70,7 +70,9 @@ from agentic.tools.imaging import (
     create_styled_image_for_character_variant,
     create_art_style_example_image,
     create_dialog_style_example_image,
-    delete_art_style_example
+    delete_art_style_example,
+    inpaint_image_region,
+    outpaint_image_region
 
 )
 from agentic.tools.updater import (
@@ -311,6 +313,14 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_character_variant,
         # Imaging
         create_styled_image_for_character_variant,
+    ],
+    "image-editor": [
+        inpaint_image_region,
+        outpaint_image_region,
+    ],
+    "image-editor-choices": [
+        inpaint_image_region,
+        outpaint_image_region,
     ],
 }
 

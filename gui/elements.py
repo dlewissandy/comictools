@@ -138,6 +138,7 @@ def full_width_image_selector_grid(
     header_size: int = 2,
     include_delete_button: bool = True,
     include_render_button: bool = True,
+    include_edit_button: bool = True,
     uploader: Optional[Callable[[UploadEventArguments], None]] = None,
     ):
     """
@@ -194,6 +195,19 @@ def full_width_image_selector_grid(
     with ui.row().classes('w-full flex-nowrap').style('padding-left: 2ex; padding-right: 2ex;'):
         header(caption,header_size)
         ui.space()
+        if include_edit_button:
+            def open_editor():
+                image_locator = get_selection()
+                if not image_locator:
+                    ui.notify("Select an image to edit first.", type="warning")
+                    return
+                new_itm = SelectionItem(
+                    name=f"Edit {image_kind_name.title()}",
+                    id=image_locator,
+                    kind=SelectedKind.IMAGE_EDITOR
+                )
+                state.change_selection(new=[*state.selection, new_itm])
+            crud_button(kind=CrudButtonKind.UPDATE, action=lambda _: open_editor())
         if include_render_button:
             crud_button(kind=CrudButtonKind.RENDER, action = lambda _: post_user_message(state, f"I would like to render the {image_kind_name}."))
         if include_delete_button:

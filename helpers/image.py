@@ -102,3 +102,13 @@ def decode_image_response(response) -> bytes:
     b64_img = response.data[0].b64_json
     # decode the base64 image
     return b64decode(b64_img)
+
+
+def decode_image_responses(response) -> list[bytes]:
+    """
+    Decode multiple image responses from the OpenAI API.
+    """
+    images = []
+    for item in response.data:
+        images.append(b64decode(item.b64_json))
+    return images
