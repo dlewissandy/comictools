@@ -2,6 +2,12 @@ from .context import read_context
 
 from .updater import (
     update_character_description,
+    update_scene_setting,
+    update_scene_cast,
+    update_scene_blocking,
+    update_scene_props,
+    update_location_description,
+    update_location_props,
     update_issue_story,
     update_issue_publication_date,
     update_issue_price,
@@ -33,12 +39,14 @@ from .creator import (
     create_comic_series,
     create_style,
     create_scene,
+    create_scene_panels,
     create_variant,
     create_variant_from_image,
     create_panel,
     create_character,
     create_issue,
     create_cover,
+    create_location,
 )
 
 from .reader import (
@@ -60,6 +68,8 @@ from .reader import (
     read_all_styles,
     read_all_series,
     read_all_covers,
+    read_location,
+    read_all_locations,
 )
 
 
@@ -73,6 +83,7 @@ from .deleter import (
     delete_panel,
     delete_cover,
     delete_character_variant,
+    delete_location,
 )
 
 from .normalization import (
@@ -109,8 +120,10 @@ __all__ = [
     "create_variant",
     "create_variant_from_image",
     "create_panel",
+    "create_scene_panels",
     "create_character",
     "create_issue",
+    "create_location",
 
 
     # READ
@@ -132,6 +145,8 @@ __all__ = [
     "read_all_styles",
     "read_all_series",
     "read_all_covers",
+    "read_location",
+    "read_all_locations",
 
     # UPDATE
     "update_character_description",
@@ -154,6 +169,12 @@ __all__ = [
     "update_variant_height",
     "update_variant_race",
     "update_style_description",
+    "update_scene_setting",
+    "update_scene_cast",
+    "update_scene_blocking",
+    "update_scene_props",
+    "update_location_description",
+    "update_location_props",
     "update_art_style",
     "update_dialog_style",
     "update_character_style",
@@ -168,7 +189,8 @@ __all__ = [
     "delete_issue",
     "delete_scene",
     "delete_panel",
-    
+    "delete_location",
+
     # NAVIGATION
     "select_publisher",
     "select_series",

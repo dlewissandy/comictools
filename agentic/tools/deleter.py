@@ -177,3 +177,19 @@ def delete_character_variant(wrapper: RunContextWrapper[APPState], series_id: st
     """
     pk = {"series_id": series_id, "character_id": character_id, "variant_id": variant_id}
     return deleter(wrapper=wrapper, cls=CharacterVariant, primary_key=pk)   
+@function_tool
+def delete_location(wrapper: RunContextWrapper[APPState], series_id: str, location_id: str) -> str:
+    """
+    Delete a location (set) from a comic book series.   You MUST ask for confirmation before using this tool.
+    Scenes that reference the location will keep a dangling location_id, so check for usages first.
+
+    Args:
+        series_id: The identifier of the series the location belongs to.
+        location_id: The identifier of the location to delete.
+
+    Returns:
+        A status message indicating the result of the deletion.
+    """
+    from schema import Location
+    pk = {"series_id": series_id, "location_id": location_id}
+    return deleter(wrapper=wrapper, cls=Location, primary_key=pk)

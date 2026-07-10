@@ -9,9 +9,12 @@ from schema.style.dialog import BubbleStyle
 from storage.generic import GenericStorage
 from schema import (
     CharacterModel,
+    CharacterRef,
     CharacterVariant,
     Issue,
     Cover,
+    Location,
+    Prop,
     Publisher,
     Series,
     SceneModel,
@@ -945,3 +948,179 @@ def move_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: s
             storage.update_object(p)
     state.is_dirty = True
     return f"Moved panel '{panel_id}' to position {max(1, min(new_position, len(ordered)))}."
+
+# -------------------------------------------------------------------------
+# SCENE PRODUCTION DETAILS (setting, cast, blocking)
+# -------------------------------------------------------------------------
+@function_tool
+def update_scene_setting(wrapper: RunContextWrapper[APPState],
+        series_id: str, issue_id: str, scene_id: str,
+        location_id: Optional[str] = None,
+        time_of_day: Optional[str] = None,
+        mood: Optional[str] = None) -> str:
+    """
+    Update the setting of a scene: where it takes place, at what time of day,
+    and with what mood/lighting.   Only the provided fields are changed.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue the scene belongs to.
+        scene_id (str): The ID of the scene.
+        location_id (str, optional): The location (set) where the scene takes place.
+            Must be an existing location in the series.
+        time_of_day (str, optional): e.g. 'day', 'night', 'dusk'.
+        mood (str, optional): The emotional tone and lighting mood.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
+    scene: SceneModel = storage.read_object(cls=SceneModel, primary_key=pk)
+    if scene is None:
+        return f"Scene with ID '{scene_id}' not found."
+    if location_id is not None:
+        from schema import Location
+        if storage.read_object(cls=Location, primary_key={"series_id": series_id, "location_id": location_id}) is None:
+            return f"Location '{location_id}' not found in series '{series_id}'.  Create it first."
+        scene.location_id = location_id
+    if time_of_day is not None:
+        scene.time_of_day = time_of_day
+    if mood is not None:
+        scene.mood = mood
+    storage.update_object(data=scene)
+    state.is_dirty = True
+    return f"Updated setting for scene '{scene.name}'."
+
+
+@function_tool
+def update_scene_cast(wrapper: RunContextWrapper[APPState],
+        series_id: str, issue_id: str, scene_id: str,
+        cast: list[CharacterRef]) -> str:
+    """
+    Set the cast of a scene: which characters appear and which variant (wardrobe)
+    each one wears.   Replaces the scene's existing cast list.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue the scene belongs to.
+        scene_id (str): The ID of the scene.
+        cast (list[CharacterRef]): The characters in the scene with their wardrobe variants.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
+    scene: SceneModel = storage.read_object(cls=SceneModel, primary_key=pk)
+    if scene is None:
+        return f"Scene with ID '{scene_id}' not found."
+    scene.cast = cast
+    storage.update_object(data=scene)
+    state.is_dirty = True
+    return f"Cast of scene '{scene.name}' set to: " + ", ".join(c.name for c in cast)
+
+
+@function_tool
+def update_scene_blocking(wrapper: RunContextWrapper[APPState],
+        series_id: str, issue_id: str, scene_id: str,
+        blocking: str) -> str:
+    """
+    Update the blocking notes of a scene: how the characters are staged and move
+    through the setting over the course of the scene.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue the scene belongs to.
+        scene_id (str): The ID of the scene.
+        blocking (str): The blocking notes.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
+    return update_attribute(wrapper=wrapper, cls=SceneModel, primary_key=pk, attribute="blocking", value=blocking)
+
+
+@function_tool
+def update_scene_props(wrapper: RunContextWrapper[APPState],
+        series_id: str, issue_id: str, scene_id: str,
+        props: list[Prop]) -> str:
+    """
+    Set the scene-specific props (beyond the location's standing props).
+    Replaces the scene's existing prop list.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue the scene belongs to.
+        scene_id (str): The ID of the scene.
+        props (list[Prop]): The scene-specific props.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
+    scene: SceneModel = storage.read_object(cls=SceneModel, primary_key=pk)
+    if scene is None:
+        return f"Scene with ID '{scene_id}' not found."
+    scene.props = props
+    storage.update_object(data=scene)
+    state.is_dirty = True
+    return f"Props of scene '{scene.name}' set to: " + ", ".join(p.name for p in props)
+
+
+# -------------------------------------------------------------------------
+# LOCATION (SET) UPDATES
+# -------------------------------------------------------------------------
+@function_tool
+def update_location_description(wrapper: RunContextWrapper[APPState],
+        series_id: str, location_id: str, description: str) -> str:
+    """
+    Update the visual description of a location (set).
+
+    Args:
+        series_id (str): The ID of the series the location belongs to.
+        location_id (str): The ID of the location.
+        description (str): The new visual description.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    from schema import Location
+    pk = {"series_id": series_id, "location_id": location_id}
+    return update_attribute(wrapper=wrapper, cls=Location, primary_key=pk, attribute="description", value=description)
+
+
+@function_tool
+def update_location_props(wrapper: RunContextWrapper[APPState],
+        series_id: str, location_id: str, props: list[Prop]) -> str:
+    """
+    Set the props that dress a location (set).  Replaces the existing prop list.
+    NOTE: after changing the props, existing master backgrounds for the
+    location are stale and should be re-rendered.
+
+    Args:
+        series_id (str): The ID of the series the location belongs to.
+        location_id (str): The ID of the location.
+        props (list[Prop]): The props that dress the location.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    from schema import Location
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = {"series_id": series_id, "location_id": location_id}
+    location: Location = storage.read_object(cls=Location, primary_key=pk)
+    if location is None:
+        return f"Location '{location_id}' not found in series '{series_id}'."
+    location.props = props
+    storage.update_object(data=location)
+    state.is_dirty = True
+    stale = ", ".join(location.images.keys()) if location.images else None
+    note = f"  Plates for style(s) {stale} are now stale and should be re-rendered." if stale else ""
+    return f"Props of location '{location.name}' set to: " + ", ".join(p.name for p in props) + note

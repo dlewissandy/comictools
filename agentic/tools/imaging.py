@@ -22,6 +22,7 @@ from schema import (
     ComicStyle,
     Issue,
     FrameLayout,
+    Panel,
     SceneModel,
     Series,
     CharacterRef,
@@ -1303,3 +1304,221 @@ def outpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str
     state.change_selection(new=new_sel)
     return "Generated 4 options. Pick one to apply, or cancel."
     
+
+
+# -------------------------------------------------------------------------
+# MASTER BACKGROUNDS AND PANEL RENDERING
+#
+# A location's master background is inked once per style (the empty setting,
+# dressed with its props).  Panels are then composed ON TOP of that background
+# with the cast's styled reference sheets, so the setting stays visually
+# consistent across every panel that takes place there.
+# -------------------------------------------------------------------------
+from schema import Location, SceneModel
+
+@function_tool
+def generate_location_background(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    location_id: str,
+    style_id: str,
+) -> str:
+    """
+    Render the master background for a location in a given comic style: the empty
+    setting, dressed with its props, with NO characters.   The master background is
+    stored on the location keyed by style and is reused as the shared background for
+    every panel that takes place there — ink the setting once, reuse it across pages.
+
+    If reference images have been uploaded for the location, they are used to
+    steer the rendering for real-world or previously-established looks.
+
+    Args:
+        series_id: The ID of the series the location belongs to.
+        location_id: The ID of the location to render.
+        style_id: The comic style to render the master background in.
+
+    Returns:
+        A status message with the locator of the rendered master background.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    location: Location = storage.read_object(cls=Location, primary_key={"series_id": series_id, "location_id": location_id})
+    if location is None:
+        return f"Location '{location_id}' not found in series '{series_id}'."
+    style: ComicStyle = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
+    if style is None:
+        return f"Style '{style_id}' not found."
+
+    prop_lines = "\n".join(f"* **{p.name}**: {p.description}" for p in location.props)
+    setting = "an interior" if location.interior else "an exterior"
+
+    prompt = f"""Render a comic book master background of {setting} location: "{location.name}".
+
+This is an EMPTY SETTING: render the location fully dressed with its props but with
+absolutely NO characters, people, or creatures in it.   Compose it as a wide
+establishing view with generous negative space where characters can later be
+placed.   The rendering must strictly follow the comic style below so that
+panels composed on top of this background match the rest of the issue.
+
+# Location
+{location.description}
+
+# Props
+{prop_lines if prop_lines else "* (no props)"}
+
+{format_comic_style(style, include_bubble_styles=False, include_character_style=False, heading_level=1)}
+"""
+
+    # Uploaded reference images (e.g. multi-angle sketches or photos) steer the render.
+    reference_images = storage.list_uploads(obj=location)
+
+    locator = generate_object_image(
+        wrapper=wrapper,
+        obj=location,
+        prompt=prompt,
+        reference_images=reference_images,
+        aspect_ratio=FrameLayout.LANDSCAPE,
+        image_quality=IMAGE_QUALITY.HIGH,
+        name=f"{location_id}-{style_id}-background",
+    )
+
+    location.images[style_id] = locator
+    storage.update_object(data=location)
+    state.is_dirty = True
+    return f"Master background for '{location.name}' rendered in style '{style_id}': {locator}"
+
+
+@function_tool
+def generate_panel_image(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    issue_id: str,
+    scene_id: str,
+    panel_id: str,
+) -> str:
+    """
+    Render the artwork for a panel by compositing its reference objects: the
+    scene's master background is reused as the panel's setting, the cast's styled
+    reference sheets keep the characters on-model, and the panel's own uploaded
+    reference images (if any) steer the composition.   Dialogue balloons and
+    narration boxes are lettered per the style's bubble styles.
+
+    Prerequisites for best consistency (the tool degrades gracefully without them):
+    * the scene has a location whose master background has been rendered in the
+      scene's style (generate_location_background),
+    * each character in the panel has a styled image for the scene's style
+      (create_styled_image_for_character_variant).
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        scene_id: The ID of the scene the panel belongs to.
+        panel_id: The ID of the panel to render.
+
+    Returns:
+        A status message with the locator of the rendered panel image.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    panel: Panel = storage.read_object(cls=Panel, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
+    if panel is None:
+        return f"Panel '{panel_id}' not found in scene '{scene_id}'."
+    scene: SceneModel = storage.read_object(cls=SceneModel, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
+    if scene is None:
+        return f"Scene '{scene_id}' not found in issue '{issue_id}'."
+    style: ComicStyle = storage.read_object(cls=ComicStyle, primary_key={"style_id": scene.style_id})
+    if style is None:
+        return f"Style '{scene.style_id}' not found."
+
+    reference_images: list[str] = []
+    missing: list[str] = []
+
+    # 1) The location's master background is shared by every panel in the scene.
+    location: Location | None = None
+    if scene.location_id:
+        location = storage.read_object(cls=Location, primary_key={"series_id": series_id, "location_id": scene.location_id})
+        if location is not None:
+            background = location.images.get(scene.style_id)
+            if background and os.path.exists(background):
+                reference_images.append(background)
+            else:
+                missing.append(f"master background for '{location.name}' in style '{scene.style_id}' (generate_location_background)")
+
+    # 2) The cast's styled reference sheets keep the characters on-model.
+    cast_info = ""
+    for ref in panel.character_references:
+        variant: CharacterVariant = storage.read_object(cls=CharacterVariant, primary_key={
+            "series_id": series_id, "character_id": ref.character_id, "variant_id": ref.variant_id})
+        if variant is None:
+            missing.append(f"variant '{ref.variant_id}' of character '{ref.character_id}'")
+            continue
+        styled = variant.images.get(scene.style_id)
+        if styled and os.path.exists(styled):
+            reference_images.append(styled)
+        else:
+            missing.append(f"styled image of '{ref.character_id}' ({ref.variant_id}) in style '{scene.style_id}' (create_styled_image_for_character_variant)")
+        cast_info += format_character_variant(ref.character_id, variant, 2) + "\n"
+
+    # 3) Panel-specific uploaded reference images.
+    reference_images.extend(storage.list_uploads(obj=panel))
+
+    # Assemble the dialogue/narration script for the letterer.
+    script_lines = []
+    for n in panel.narration:
+        script_lines.append(f"* **Narration ({n.position.value})**: {n.text}")
+    for d in panel.dialogue:
+        script_lines.append(f"* **{d.character_id}** ({d.emphasis.value}): {d.text}")
+    script = "\n".join(script_lines)
+
+    setting_line = ""
+    if location is not None:
+        setting_line = f"{'Interior' if location.interior else 'Exterior'}: {location.name}" + (f", {scene.time_of_day}" if scene.time_of_day else "")
+
+    prompt = f"""Render a single comic book panel.  Aspect/orientation: {panel.aspect.value}.
+{f"Setting: {setting_line}" if setting_line else ""}
+{f"Mood: {scene.mood}" if scene.mood else ""}
+
+The FIRST reference image (when present) is the location's master background: use it
+as the panel's setting — same architecture, same props, same palette — reframed as
+the panel requires.   The character reference sheets show exactly how each character
+must look; keep them strictly on-model.
+
+# Beat
+{panel.beat}
+
+# Panel description
+{panel.description}
+
+{f"# Scene blocking{chr(10)}{scene.blocking}" if scene.blocking else ""}
+
+# Characters in panel
+{cast_info if cast_info else "* (no characters in panel)"}
+
+# Lettering (render these balloons/boxes per the style's bubble styles)
+{script if script else "* (silent panel — no lettering)"}
+
+{format_comic_style(style, heading_level=1)}
+"""
+
+    locator = generate_object_image(
+        wrapper=wrapper,
+        obj=panel,
+        prompt=prompt,
+        reference_images=reference_images,
+        aspect_ratio=panel.aspect,
+        image_quality=IMAGE_QUALITY.HIGH,
+        name=f"{panel_id}-render",
+    )
+
+    panel.image = locator
+    storage.update_object(data=panel)
+    state.is_dirty = True
+
+    note = ""
+    if missing:
+        note = "  NOTE: rendered without: " + "; ".join(missing) + ".  Generate those references and re-render for better consistency."
+    return f"Panel {panel.panel_number} rendered: {locator}.{note}"

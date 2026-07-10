@@ -15,6 +15,7 @@ from schema import (
     SceneModel,
     Series,
     Issue,
+    Location,
 )
 
 # -------------------------------------------------------------------------
@@ -398,3 +399,32 @@ def read_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: s
     """
     pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id}
     return read_one(wrapper=wrapper, cls=Panel, pk=pk)
+
+@function_tool
+def read_location(wrapper: RunContextWrapper[APPState], series_id: str, location_id: str) -> Location | str:
+    """
+    Look up a location (set) by its series and location identifiers.
+
+    Args:
+        series_id: The identifier of the series the location belongs to.
+        location_id: The identifier of the location to look up.
+
+    Returns:
+        The Location object if found, otherwise a status message.
+    """
+    pk = {"series_id": series_id, "location_id": location_id}
+    return read_one(wrapper=wrapper, cls=Location, pk=pk)
+
+@function_tool
+def read_all_locations(wrapper: RunContextWrapper[APPState], series_id: str) -> list[Location]:
+    """
+    Look up all the locations (sets) in a series.   Use this before creating a new
+    location so that existing sets are reused instead of duplicated.
+
+    Args:
+        series_id: The identifier of the series.
+
+    Returns:
+        The list of locations in the series.
+    """
+    return read_all(wrapper=wrapper, cls=Location, parent_key={"series_id": series_id}, order_by="name")

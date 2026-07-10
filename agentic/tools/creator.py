@@ -2,7 +2,7 @@ from loguru import logger
 from typing import Optional
 from uuid import uuid4
 from agents import Agent, function_tool, Tool, RunContextWrapper
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import traceback
 from schema import (
     Publisher,
@@ -23,6 +23,8 @@ from schema import (
     Dialogue,
     FrameLayout,
     CharacterRef,
+    Location,
+    Prop,
     InsertionLocation,
     AfterLast,
     After,
@@ -681,23 +683,44 @@ def create_cover(
         return f"Error creating cover: {str(e)}\n{tb}"
 
 @function_tool
-def create_scene(wrapper: RunContextWrapper[APPState], name: str, story: str, insertion_location: InsertionLocation) -> str:
+def create_scene(wrapper: RunContextWrapper[APPState],
+        name: str,
+        story: str,
+        insertion_location: InsertionLocation,
+        location_id: Optional[str] = None,
+        time_of_day: Optional[str] = None,
+        mood: Optional[str] = None,
+        cast: Optional[list[CharacterRef]] = None,
+        props: Optional[list[Prop]] = None,
+        blocking: Optional[str] = None,
+    ) -> str:
     """
     Create a new scene for the currently selected comic book issue.   This will create a new scene
     with the default properties and add it to the issue at the specified insertion location.
 
+    A scene is specified like a page of a comic script: it has a setting (location + time of day),
+    a cast with wardrobe (character variants), props, and blocking notes.   Providing these
+    up front lets the panels be composed from consistent reference objects later.
+
     Args:
         name (str): The name of the new scene.   This should be a unique identifier for the scene, and
-            should be 2-5 words long, and should only contain letters, numbers and spaces (e.g. 
+            should be 2-5 words long, and should only contain letters, numbers and spaces (e.g.
             "Teapot ride", "Joey gets hungry", etc).
-        story (str): The story for the new scene.   This should be detailed enough to guide the 
+        story (str): The story for the new scene.   This should be detailed enough to guide the
             creative team (authors, artists, etc.) in creating the storyboard and artwork for the scene.
             This includes information about the setting, characters involved, and key actions or events.
             It should not be a full script, but rather a summary of the scene's content and purpose.
-            Consider the key information that is required to ensure that this scene can be written and 
+            Consider the key information that is required to ensure that this scene can be written and
             maintains the narrative flow of the comic book issue.
         insertion_location (InsertionLocation): The location where the new scene should be inserted.
             NOTE: LIST ELEMENTS ARE ONES-BASED, SO THE FIRST ELEMENT IS AT INDEX 1.
+        location_id (str, optional): The location (set) where the scene takes place.  Create or look up
+            locations first so scenes reuse the same sets.
+        time_of_day (str, optional): Slugline time, e.g. 'day', 'night', 'dusk'.
+        mood (str, optional): The emotional tone and lighting mood of the scene.
+        cast (list[CharacterRef], optional): The characters in the scene with the variant (wardrobe) worn.
+        props (list[Prop], optional): Scene-specific props beyond the location's standing props.
+        blocking (str, optional): How the characters are staged and move through the setting.
 
     Returns:
         A status message indicating the result of the scene creation.
@@ -722,9 +745,15 @@ def create_scene(wrapper: RunContextWrapper[APPState], name: str, story: str, in
         style_id=issue.style_id,
         aspect=FrameLayout.PORTRAIT,
         scene_number=insertion_index(
-            insertion_location=insertion_location, 
+            insertion_location=insertion_location,
             item_count=len(scenes)
         ),
+        location_id=location_id,
+        time_of_day=time_of_day,
+        mood=mood,
+        cast=cast or [],
+        props=props or [],
+        blocking=blocking,
     )
     storage.create_object(data=scene)
 
@@ -739,3 +768,122 @@ def create_scene(wrapper: RunContextWrapper[APPState], name: str, story: str, in
 
     state.is_dirty = True
     return f"Scene created successfully for issue {issue.name}."
+
+
+@function_tool
+def create_location(wrapper: RunContextWrapper[APPState],
+        series_id: str,
+        name: str,
+        description: str,
+        interior: bool,
+        props: Optional[list[Prop]] = None,
+    ) -> Location | str:
+    """
+    Create a new location (a recurring setting) for a series.
+    Locations are dressed with props and later rendered as style-keyed master backgrounds
+    that multiple panels share, so the setting stays visually consistent across the issue.
+
+    Before creating a location, check the existing ones (read_all_locations) so sets are
+    reused rather than duplicated.
+
+    Args:
+        series_id: The id of the series the location belongs to.
+        name: A short (1-5 word) name for the location, e.g. 'The Rusty Nail Saloon'.
+        description: A detailed visual description: architecture, layout, lighting, era,
+            palette.   Detailed enough that different artists would draw the same place.
+        interior: True for interior (INT.) locations, False for exterior (EXT.).
+        props: The props that dress the location, each with a name and a visual description.
+
+    Returns:
+        The newly created Location object, or an error message.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    series: Series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
+    if series is None:
+        return f"Series with ID {series_id} not found."
+
+    location = Location(
+        location_id=normalize_id(name),
+        series_id=series_id,
+        name=name,
+        description=description,
+        interior=interior,
+        props=props or [],
+        images={},
+    )
+    # creator() verifies the key is free; overwrite=True preserves the slug id so
+    # locations stay addressable by name across scenes.
+    return creator(wrapper=wrapper, obj=location, overwrite=True)
+
+
+class PanelSpec(BaseModel):
+    """One panel in a scene's panel layout, used by create_scene_panels."""
+    name: str = Field(..., description="A short (3-5 word) name for the panel.")
+    beat: str = Field(..., description="The narrative beat: what changes or happens in this moment (1-3 sentences).")
+    description: str = Field(..., description="A detailed visual description of the shot: framing, camera angle, foreground/background, character poses and expressions.")
+    aspect: FrameLayout = Field(..., description="The aspect ratio of the panel: landscape, portrait or square.")
+    characters: list[CharacterRef] = Field(default_factory=list, description="The characters in frame, with the variant (wardrobe) used as visual reference.")
+    narration: list[Narration] = Field(default_factory=list, description="Narration boxes for the panel.")
+    dialogue: list[Dialogue] = Field(default_factory=list, description="Dialogue balloons for the panel.")
+
+
+@function_tool
+def create_scene_panels(wrapper: RunContextWrapper[APPState],
+        series_id: str,
+        issue_id: str,
+        scene_id: str,
+        panels: list[PanelSpec],
+    ) -> str:
+    """
+    Create the full panel layout for a scene in one call: turns a list of panel specs
+    (beats already broken down) into panels appended to the scene in order.   Use this
+    after the scene's story, cast and blocking are settled — it turns the thumbnailed
+    layout into real panels.
+
+    Args:
+        series_id: The id of the series.
+        issue_id: The id of the issue.
+        scene_id: The id of the scene to panelize.
+        panels: The ordered panel layout.  Favor image-driven storytelling: strong panels
+            show change in action, framing, or emotion; dialogue and narration should be
+            minimal and purposeful.
+
+    Returns:
+        A status message summarizing the created panels.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    scene: SceneModel = storage.read_object(cls=SceneModel, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
+    if scene is None:
+        return f"Scene with ID {scene_id} not found in issue {issue_id}."
+
+    existing: list[Panel] = storage.read_all_objects(cls=Panel, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}, order_by="panel_number")
+
+    created = []
+    for i, spec in enumerate(panels):
+        panel = Panel(
+            panel_id=normalize_id(spec.name),
+            issue_id=issue_id,
+            series_id=series_id,
+            scene_id=scene_id,
+            panel_number=len(existing) + i + 1,
+            name=normalize_name(spec.name),
+            beat=spec.beat or spec.description,
+            description=spec.description,
+            aspect=spec.aspect,
+            character_references=spec.characters,
+            narration=spec.narration,
+            dialogue=spec.dialogue,
+            image=None,
+            reference_images=[],
+        )
+        storage.create_object(data=panel)
+        created.append(panel.name)
+
+    state.is_dirty = True
+    return f"Created {len(created)} panels for scene '{scene.name}': " + ", ".join(created)

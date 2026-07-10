@@ -62,7 +62,18 @@ from agentic.tools import (
     delete_cover_image,
     create_character_style_example_image
 )
-from agentic.tools.creator import create_variant, create_variant_from_image
+from agentic.tools.creator import create_variant, create_variant_from_image, create_location, create_scene_panels
+from agentic.tools.reader import read_location, read_all_locations
+from agentic.tools.deleter import delete_location
+from agentic.tools.updater import (
+    update_scene_setting,
+    update_scene_cast,
+    update_scene_blocking,
+    update_scene_props,
+    update_location_description,
+    update_location_props,
+)
+from agentic.tools.imaging import generate_location_background, generate_panel_image
 from agentic.tools.imaging import (
     delete_character_style_example,
     delete_dialog_style_example,
@@ -184,6 +195,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Create
         create_cover,
         create_scene,
+        create_scene_panels,
+        create_location,
         # Read
         read_issue,
         read_style,
@@ -192,9 +205,16 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_covers,
         read_scene,
         read_all_scenes,
+        read_location,
+        read_all_locations,
+        read_all_characters,
+        read_all_variants,
         # Update
         update_issue_name,
         update_issue_story,
+        update_scene_setting,
+        update_scene_cast,
+        update_scene_blocking,
         update_issue_publication_date,
         update_issue_price,
         update_issue_writer,
@@ -213,12 +233,19 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Read
         read_panel,
         read_scene,
+        read_location,
+        read_all_variants,
         # Update
         update_panel_name,
         update_panel_beat,
         update_panel_description,
         # Delete
         delete_panel,
+        # Imaging
+        generate_location_background,
+        generate_panel_image,
+        inpaint_image_region,
+        outpaint_image_region,
         # Navigation
     ],
     "publisher": [
@@ -241,25 +268,39 @@ TOOLKITS: dict[str,list[Tool]] = {
     "scene": [
         # Create
         create_panel,
+        create_scene_panels,
+        create_location,
         # Read
         read_scene,
         read_panel,
         read_all_panels,
         read_style,
+        read_location,
+        read_all_locations,
+        read_all_characters,
+        read_all_variants,
         # Update
         update_scene_name,
         update_scene_story,
+        update_scene_setting,
+        update_scene_cast,
+        update_scene_blocking,
+        update_scene_props,
         # Reorder
         move_panel,
         # Delete
         delete_scene,
-        delete_panel
+        delete_panel,
+        # Imaging
+        generate_location_background,
+        generate_panel_image,
 
     ],
     "series": [
         # Create
         create_character,
         create_issue,
+        create_location,
 
         # Read
         read_series,
@@ -269,15 +310,20 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_characters,
         read_issue,
         read_all_issues,
+        read_location,
+        read_all_locations,
 
         # Update
         update_series_name,
         update_series_description,
+        update_location_description,
+        update_location_props,
 
         # Delete
         delete_series,
         delete_issue,
         delete_character,
+        delete_location,
     ],
     "style": [
         # Navigation
@@ -342,6 +388,20 @@ TOOLKITS: dict[str,list[Tool]] = {
         outpaint_image_region,
     ],
 }
+
+TOOLKITS["location"] = [
+    # Read
+    read_location,
+    read_all_locations,
+    read_all_styles,
+    # Update
+    update_location_description,
+    update_location_props,
+    # Delete
+    delete_location,
+    # Imaging
+    generate_location_background,
+]
 
 TOOLKITS["front-cover"] = TOOLKITS["cover"]
 TOOLKITS["back-cover"] = TOOLKITS["cover"]

@@ -3,7 +3,7 @@ from nicegui import ui
 from loguru import logger
 from nicegui.events import UploadEventArguments
 from gui.selection import SelectionItem, SelectedKind
-from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button, CrudButtonKind
+from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button, CrudButtonKind, view_attributes, Attribute
 from gui.messaging import post_user_message
 from schema import SceneModel, Panel, FrameLayout
 from gui.state import APPState
@@ -79,19 +79,37 @@ def view_scene(state: APPState):
                 )
             with ui.column().classes('w-1/4'):
                 image_field_editor(
-                    state=state, 
-                    kind=SelectedKind.PICK_STYLE, 
-                    get_caption = lambda: "Style", 
-                    get_id = lambda: style.id if style else None, 
+                    state=state,
+                    kind=SelectedKind.PICK_STYLE,
+                    get_caption = lambda: "Style",
+                    get_id = lambda: style.id if style else None,
                     get_image_filepath = lambda: storage.find_image(
                         StyleExample(
-                            style_id=style.id, 
+                            style_id=style.id,
                             example_type="art",
                             image_id=style.image.get("art"),
                             mime_type="image/jpeg"
                             ), style.image.get("art",None)) if style else None
                 )
-                
+
+        # Production details: setting, cast (with wardrobe), props and blocking.
+        from schema import Location
+        location = storage.read_object(cls=Location, primary_key={"series_id": series_id, "location_id": scene.location_id}) if scene.location_id else None
+        view_attributes(
+            state=state,
+            caption="Production",
+            attributes=[
+                Attribute(caption="location", get_value=lambda: (f"{location.name} ({'Interior' if location.interior else 'Exterior'})" if location else scene.location_id)),
+                Attribute(caption="time of day", get_value=lambda: scene.time_of_day),
+                Attribute(caption="mood", get_value=lambda: scene.mood),
+                Attribute(caption="cast", get_value=lambda: ", ".join(f"{c.character_id} ({c.variant_id})" for c in scene.cast) if scene.cast else None),
+                Attribute(caption="props", get_value=lambda: ", ".join(p.name for p in scene.props) if scene.props else None),
+                Attribute(caption="blocking", get_value=lambda: scene.blocking),
+            ],
+            individual_icons=False,
+            header_size=2,
+        )
+
         with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
                 header("Panels", 2)
