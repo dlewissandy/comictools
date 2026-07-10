@@ -53,7 +53,7 @@ class LocalStorage(GenericStorage):
 
         # Determine the root path of the object by using the appropriate path templates.
         # If the object is not a valid class, then this method throws an error.
-        rootpath = obj_to_rootpath(data)
+        rootpath = obj_to_rootpath(data, base_path=self.base_path)
 
         # Verify that the rootpath exists and is a directory.   If it does not exist, then
         # create it.   If it exists but is not a directory, then raise an error.
@@ -82,7 +82,7 @@ class LocalStorage(GenericStorage):
         else:
             obj_id = getattr(data, id_field)
         
-        filepath = obj_to_filepath(data)  # This will raise an error if the object is not valid
+        filepath = obj_to_filepath(data, base_path=self.base_path)  # This will raise an error if the object is not valid
         parent_path = os.path.dirname(filepath)
         # make sure that file's folder exists
         if not os.path.exists(parent_path):
@@ -115,7 +115,7 @@ class LocalStorage(GenericStorage):
               construct the filepath to the object.
         """
         logger.trace(f"Reading {cls.__name__} object with primary key: {primary_key}")
-        filepath = cls_to_filepath(cls=cls, pk=primary_key)
+        filepath = cls_to_filepath(cls=cls, pk=primary_key, base_path=self.base_path)
 
 
         if not os.path.exists(filepath):
@@ -181,7 +181,7 @@ class LocalStorage(GenericStorage):
             raise ValueError(msg)
         missing_key = list(missing_keys)[0]
 
-        rootpath = template_to_filepath(template=rootpath_template, pk=primary_key)
+        rootpath = template_to_filepath(template=rootpath_template, pk=primary_key, base_path=self.base_path)
 
         if not os.path.exists(rootpath):
             logger.debug(f"Path {rootpath} does not exist. Returning empty list.")
@@ -224,7 +224,7 @@ class LocalStorage(GenericStorage):
             data (BaseModel): The data to update the object with.
         """
         logger.trace(f"Updating {data.__class__.__name__} with data: {data.model_dump()}")
-        filepath = obj_to_filepath(data)  # This will raise an error if the object is not valid
+        filepath = obj_to_filepath(data, base_path=self.base_path)  # This will raise an error if the object is not valid
         
         if not os.path.exists(filepath):
             logger.error(f"File {filepath} does not exist. Cannot update.")
@@ -263,7 +263,7 @@ class LocalStorage(GenericStorage):
             logger.debug(f"File {cls.__name__} does not exist. Cannot delete.")
             return None
         
-        filepath = obj_to_filepath(instance)
+        filepath = obj_to_filepath(instance, base_path=self.base_path)
         logger.debug(f"Deleting file at {filepath}")
         shutil.rmtree(os.path.dirname(filepath), ignore_errors=True)
 
@@ -314,7 +314,7 @@ class LocalStorage(GenericStorage):
         List all images associated with a given object.
         """
         logger.trace(f"Listing images for {obj.__class__.__name__} with primary key: {obj.primary_key}")
-        return self._list_images(obj_to_imagepath(obj))
+        return self._list_images(obj_to_imagepath(obj, base_path=self.base_path))
     
     def find_image(self, obj: BaseModel, locator: str) -> Optional[str]:
         """
@@ -355,7 +355,7 @@ class LocalStorage(GenericStorage):
         "uploads/relation" folder of the object.   
         """
         logger.trace(f"Listing uploads for {obj.__class__.__name__} with primary key: {obj.primary_key}")
-        return self._list_images(obj_to_reference_path(obj))
+        return self._list_images(obj_to_reference_path(obj, base_path=self.base_path))
 
     def _upload_image(self, path: str, name: str, data: BinaryIO, mime_type: str) -> str:
         if not mime_type.startswith("image/"):
@@ -383,13 +383,13 @@ class LocalStorage(GenericStorage):
         """ Upload an image for a given object.   The image will be stored in uploads folder
         of the object.   On success it will return the file path of the uploaded image.
         """
-        return self._upload_image(obj_to_imagepath(obj), name, data, mime_type)
+        return self._upload_image(obj_to_imagepath(obj, base_path=self.base_path), name, data, mime_type)
     
     def upload_reference_image(self, obj: BaseModel, name: str, data: BinaryIO, mime_type: str) -> str:
         """ Upload an image for a given object.   The image will be stored in uploads folder
         of the object.   On success it will return the file path of the uploaded image.
         """
-        return self._upload_image(obj_to_reference_path(obj), name, data, mime_type)
+        return self._upload_image(obj_to_reference_path(obj, base_path=self.base_path), name, data, mime_type)
 
 
     # -------------------------------------------------------------------------

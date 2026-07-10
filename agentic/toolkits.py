@@ -62,7 +62,7 @@ from agentic.tools import (
     delete_cover_image,
     create_character_style_example_image
 )
-from agentic.tools.creator import create_variant
+from agentic.tools.creator import create_variant, create_variant_from_image
 from agentic.tools.imaging import (
     delete_character_style_example,
     delete_dialog_style_example,
@@ -162,8 +162,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_character,
         delete_character_variant,
         create_variant,
-        # create_variant_from_image
-        # TODO: Create variant from image
+        create_variant_from_image,
     ],
     "cover": [
         # Create

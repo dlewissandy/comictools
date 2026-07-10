@@ -65,8 +65,7 @@ PATH_TEMPLATES[Issue.__name__] = PATH_TEMPLATES[SelectedKind.ISSUE.value]
 PATH_TEMPLATES[Cover.__name__] = PATH_TEMPLATES[SelectedKind.COVER.value]
 PATH_TEMPLATES[SceneModel.__name__] = PATH_TEMPLATES[SelectedKind.SCENE.value]
 PATH_TEMPLATES[Panel.__name__] = PATH_TEMPLATES[SelectedKind.PANEL.value]
-PATH_TEMPLATES[StyledVariant.__name__] = os.path.join(BASE_PATH, "styled_images", "{image_id}")
-PATH_TEMPLATES[StyleExample.__name__] = SelectedKind.STYLE_EXAMPLE.value
+PATH_TEMPLATES[StyleExample.__name__] = PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
 PATH_TEMPLATES[StyledVariant.__name__] = os.path.join(PATH_TEMPLATES[SelectedKind.VARIANT.value], "images", "{style_id}")
 PATH_TEMPLATES[SelectedKind.STYLED_VARIANT.value] = PATH_TEMPLATES[StyledVariant.__name__]
 
@@ -101,7 +100,8 @@ IMAGE_PATH_TEMPLATES[SelectedKind.STYLED_VARIANT.value] = os.path.join(PATH_TEMP
 IMAGE_PATH_TEMPLATES[StyledVariant.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.STYLED_VARIANT.value]
 IMAGE_PATH_TEMPLATES[SelectedKind.PUBLISHER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.PUBLISHER.value], "images")
 IMAGE_PATH_TEMPLATES[Publisher.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.PUBLISHER.value]
-IMAGE_PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE] = os.path.join(PATH_TEMPLATES[SelectedKind.STYLE], "images", "{example_id}")
+# Style example images live at styles/{style_id}/images/{example_type}/ on disk.
+IMAGE_PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value] = PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
 IMAGE_PATH_TEMPLATES[StyleExample.__name__] = PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
 
 UPLOAD_PATH_TEMPLATES = {}
@@ -116,6 +116,10 @@ UPLOAD_PATH_TEMPLATES[Publisher.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.PU
 UPLOAD_PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value] = IMAGE_PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
 UPLOAD_PATH_TEMPLATES[StyleExample.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
 UPLOAD_PATH_TEMPLATES[SceneModel.__name__] = os.path.join(PATH_TEMPLATES[SelectedKind.SCENE.value], "uploads")
+UPLOAD_PATH_TEMPLATES[SelectedKind.SERIES.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "uploads")
+UPLOAD_PATH_TEMPLATES[Series.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.SERIES.value]
+UPLOAD_PATH_TEMPLATES[SelectedKind.CHARACTER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.CHARACTER.value], "uploads")
+UPLOAD_PATH_TEMPLATES[CharacterModel.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.CHARACTER.value]
 
 
 def get_basenames(path: str, exts: list[str] = None) -> list[str]:
@@ -199,14 +203,14 @@ def cls_to_filepath(cls: type[BaseModel], pk: dict[str,str]={}, base_path: str =
     template = FILEPATH_TEMPLATES.get(clsname, None)
     return template_to_filepath(template=template, pk=pk, base_path=base_path)
 
-def cls_to_rootpath(cls: type[BaseModel], pk: dict[str,str]={}) -> str:
+def cls_to_rootpath(cls: type[BaseModel], pk: dict[str,str]={}, base_path: str = BASE_PATH) -> str:
     """
     Get the root path to a particular object for the given primary key.
     This is the path to the folder that contains the object.
     """
     clsname = cls.__name__
     template = ROOT_PATH_TEMPLATES.get(clsname, None)
-    return template_to_filepath(template=template, pk=pk, base_path=BASE_PATH)
+    return template_to_filepath(template=template, pk=pk, base_path=base_path)
 
 def obj_to_filepath(obj: BaseModel, base_path: str = BASE_PATH) -> str:
     """

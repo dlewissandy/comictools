@@ -178,7 +178,7 @@ def delete_publisher_logo_reference_image(
     return f"Logo image for {publisher.name} deleted successfully."
 
 @function_tool
-def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str, cover_id: str) -> str:
+def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str, cover_id: str, text_layout_instructions: Optional[str] = None) -> str:
     """
     Generate a cover image for the specified comic book issue.
 
@@ -186,6 +186,10 @@ def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: s
         series_id (str): The ID of the comic book series.
         issue_id (str): The ID of the comic book issue.
         cover_id (str): The unique identifier for the cover to render.
+        text_layout_instructions (str, optional): Custom instructions for how the text
+            elements (title, subtitle, price, issue number, date, credits) should be
+            placed and styled on the cover.   If omitted, a standard comic layout is
+            used (title across the top, subtitle below, credits at the bottom).
 
     Returns:
         A string indicating the status of the rendering operation.
@@ -193,8 +197,6 @@ def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: s
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
 
-    # TODO Change to have configurable elments for title, name, issue number, etc. 
-    
     # Read the context (series, issue, style, characters) from the storage
     series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
     if not series:
@@ -257,13 +259,23 @@ def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: s
     if len(characters) > 0:
         for name, variant in characters.items():
             character_information += format_character_variant(name, variant, 2) + "\n"
-    # If we got here, then we have all the information that we need to render the cover.
-    prompt = f"""
-    Create a comic book {location_name} cover.   The image should be have a {cover.aspect.value} orientation/aspect ratio.
+    # Text elements use a standard comic layout unless the caller supplies custom
+    # placement/styling instructions.
+    if text_layout_instructions:
+        text_elements = f"""* ** Title **: "{series.name}"
+* ** Subtitle **: "{issue.name}"
+{'* ** Price **: ' + str(issue.price) if issue.price else ""}
+{'* ** Issue Number **: ' + str(issue.issue_number) if issue.issue_number else ""}
+{'* ** Issue Date **: ' + issue.publication_date if issue.publication_date else ""}
+{'* ** Artist **: ' + issue.artist if issue.artist else ""}
+{'* ** Writer **: ' + issue.writer if issue.writer else ""}
+{'* ** Colorist **: ' + issue.colorist if issue.colorist else ""}
+{'* ** Creative Minds **: ' + issue.creative_minds if issue.creative_minds else ""}
 
-
-# Series
-* ** Title **: "{series.name}".   This should appear prominently across the top of the cover.
+## Text Layout Instructions
+{text_layout_instructions}"""
+    else:
+        text_elements = f"""* ** Title **: "{series.name}".   This should appear prominently across the top of the cover.
 * ** Subtitle **: "{issue.name}".  This should appear in smaller font below the title.
 {'* ** Price **: ' + str(issue.price) +".   Place below subtitle on left." if issue.price else ""}
 {'* ** Issue Number **: ' + str(issue.issue_number) + ".   Place below subtitle on right." if issue.issue_number else ""}
@@ -271,7 +283,15 @@ def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: s
 {'* ** Artist **: ' + issue.artist + ".   Place in small font at bottom of image" if issue.artist else ""}
 {'* ** Writer **: ' + issue.writer + ".   Place in small font at bottom of image" if issue.writer else ""}
 {'* ** Colorist **: ' + issue.colorist + ".   Place in small font at bottom of image" if issue.colorist else ""}
-{'* ** Creative Minds **: ' + issue.creative_minds + ".   Place in small font at bottom of image" if issue.creative_minds else ""}
+{'* ** Creative Minds **: ' + issue.creative_minds + ".   Place in small font at bottom of image" if issue.creative_minds else ""}"""
+
+    # If we got here, then we have all the information that we need to render the cover.
+    prompt = f"""
+    Create a comic book {location_name} cover.   The image should be have a {cover.aspect.value} orientation/aspect ratio.
+
+
+# Series
+{text_elements}
 
 
 {format_issue(issue,heading_level=1)}

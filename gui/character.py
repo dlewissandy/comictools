@@ -1,13 +1,15 @@
 import os
 from loguru import logger
 from nicegui import ui
+from nicegui.events import UploadEventArguments
 from schema import CharacterModel, CharacterVariant
 from gui.elements import (
-    header, 
-    crud_button, 
-    markdown_field_editor, 
+    header,
+    crud_button,
+    markdown_field_editor,
     view_all_instances,
-    CrudButtonKind
+    CrudButtonKind,
+    DARK_MODE_STYLES,
     )
 
 from gui.messaging import new_item_messager
@@ -57,11 +59,29 @@ def view_character(state:APPState):
                 new_item_messager(state=state, caption="Variants", message="I would like to create a new variant for this character.")
             view_all_instances(
                 state=state,
-                get_instances=lambda: storage.read_all_objects(CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id}), 
+                get_instances=lambda: storage.read_all_objects(CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id}),
                 get_image_locator=lambda variant: storage.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant.id),
-                kind="variant", 
+                kind="variant",
                 aspect_ratio="3:2"
                 ).style('margin-top: 0px; margin-bottom: 0px')
+
+            # Drop an image here to create a new variant from it
+            def on_upload(e: UploadEventArguments):
+                locator = storage.upload_reference_image(
+                    obj=character,
+                    name=e.name,
+                    data=e.content,
+                    mime_type=e.type
+                )
+                post_user_message(state, "I would like to create a new variant for this character from the uploaded image: " + locator)
+
+            with ui.card().classes(DARK_MODE_STYLES).style('width: 24.5%; aspect-ratio: 1/1'):
+                uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
+                uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
+
+                # Visible caption in center
+                with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
+                    ui.label('Drop image to create a variant').classes('text-lg text-gray-600')
         
         
             

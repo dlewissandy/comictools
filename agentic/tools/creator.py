@@ -291,6 +291,93 @@ def create_variant(wrapper: RunContextWrapper[APPState],
     state.is_dirty = True
     return variant
 
+
+class _VariantAttributes(BaseModel):
+    """Structured attributes extracted from a character reference image."""
+    race: str
+    gender: str
+    age: str
+    height: str
+    general_description: str
+    physical_appearance: str
+    attire: str
+    behavior: str
+
+
+@function_tool
+def create_variant_from_image(wrapper: RunContextWrapper[APPState],
+        series_id: str,
+        character_id: str,
+        name: str,
+        image_locator: str
+    ) -> CharacterVariant | str:
+    """
+    Create a new character variant by analyzing an uploaded reference image.
+    The image is examined to extract the variant's race, gender, age, height,
+    appearance, attire and behavior descriptions, which are then used to create
+    the variant exactly as if they had been supplied by hand.
+
+    Args:
+        series_id: The id of the series to create the variant in.   This should be the currently selected series.
+        character_id: The id of the character to create the variant for.   This should be the currently selected character.
+        name: The name of the variant.   This should be unique within the character's variants and should be short (1-3 words).
+        image_locator: The filepath of the uploaded reference image to analyze.
+
+    Returns:
+        The newly created CharacterVariant object, or an error message.
+    """
+    import os
+    from helpers.generator import invoke_generate_api
+
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    series: Series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
+    if series is None:
+        return f"Series with ID {series_id} not found."
+
+    character: CharacterModel = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id})
+    if character is None:
+        return f"Character with ID {character_id} not found in series {series.name}."
+
+    if not os.path.isfile(image_locator):
+        return f"Image '{image_locator}' not found.  Ask the user to upload the image first."
+
+    prompt = (
+        f"You are a comic book character designer.  The attached image is a reference for "
+        f"'{name}', a variant of the character '{character.name}' ({character.description}).  "
+        "Extract a reusable character-model description from the image.  The descriptions "
+        "should focus on attributes that would help artists and writers accurately depict the "
+        "character variant, in sufficient detail that artists who have never seen the image "
+        "could consistently reproduce the character.  Physical appearance and attire should "
+        "each be 1-2 paragraphs; race, gender, age and height should each be a few words."
+    )
+    try:
+        attrs: _VariantAttributes = invoke_generate_api(prompt, text_format=_VariantAttributes, image=image_locator)
+    except Exception as e:
+        logger.error(f"Failed to analyze reference image {image_locator}: {e}")
+        return f"Failed to analyze the reference image: {e}"
+
+    variant = CharacterVariant(
+        variant_id=normalize_id(name),
+        series_id=character.series_id,
+        character_id=character.character_id,
+        name=name,
+        race=attrs.race,
+        gender=attrs.gender,
+        age=attrs.age,
+        height=attrs.height,
+        description=attrs.general_description,
+        appearance=attrs.physical_appearance,
+        attire=attrs.attire,
+        behavior=attrs.behavior,
+        images = {}
+    )
+    storage.create_object(data=variant)
+    state.is_dirty = True
+    return variant
+
+
 @function_tool
 def create_panel(
     wrapper: RunContextWrapper[APPState],
