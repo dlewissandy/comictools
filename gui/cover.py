@@ -4,8 +4,8 @@ from gui.selection import SelectionItem, SelectedKind
 from schema import Cover, ComicStyle, StyleExample
 from gui.state import APPState
 from gui.elements import (
-    header, crud_button, 
-    view_reference_images, view_character_references, Attribute, markdown_field_editor, image_field_editor, full_width_image_selector_grid, aspect_ratio_picker, TAILWIND_CARD,
+    header, crud_button,
+    view_reference_images, view_character_references, Attribute, view_attributes, markdown_field_editor, image_field_editor, full_width_image_selector_grid, aspect_ratio_picker, TAILWIND_CARD,
     CrudButtonKind
 )
 from gui.messaging import post_user_message
@@ -75,6 +75,19 @@ def view_cover(state: APPState):
                             ), style.image.get("art", None)) if style else None
                 )
             
+
+        # The setting whose master background anchors the cover render.
+        from schema import Setting
+        setting = storage.read_object(cls=Setting, primary_key={"series_id": cover.series_id, "setting_id": cover.setting_id}) if cover.setting_id else None
+        view_attributes(
+            state=state,
+            caption="Setting",
+            attributes=[
+                Attribute(caption="setting", get_value=lambda: (f"{setting.name} ({'Interior' if setting.interior else 'Exterior'})" if setting else cover.setting_id)),
+            ],
+            individual_icons=False,
+            header_size=2,
+        )
 
         def set_image(image_locator: str):
             cover.image = image_locator

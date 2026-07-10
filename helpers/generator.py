@@ -101,7 +101,6 @@ def invoke_generate_image_api(
             size=size,
             moderation="low",
             quality= quality.name.lower(),
-            response_format=None
         )
         if n == 1:
             return decode_image_response(response)
