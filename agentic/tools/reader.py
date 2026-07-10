@@ -15,7 +15,7 @@ from schema import (
     SceneModel,
     Series,
     Issue,
-    Location,
+    Setting,
 )
 
 # -------------------------------------------------------------------------
@@ -401,30 +401,30 @@ def read_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: s
     return read_one(wrapper=wrapper, cls=Panel, pk=pk)
 
 @function_tool
-def read_location(wrapper: RunContextWrapper[APPState], series_id: str, location_id: str) -> Location | str:
+def read_setting(wrapper: RunContextWrapper[APPState], series_id: str, setting_id: str) -> Setting | str:
     """
-    Look up a location (set) by its series and location identifiers.
+    Look up a setting (set) by its series and setting identifiers.
 
     Args:
-        series_id: The identifier of the series the location belongs to.
-        location_id: The identifier of the location to look up.
+        series_id: The identifier of the series the setting belongs to.
+        setting_id: The identifier of the setting to look up.
 
     Returns:
-        The Location object if found, otherwise a status message.
+        The Setting object if found, otherwise a status message.
     """
-    pk = {"series_id": series_id, "location_id": location_id}
-    return read_one(wrapper=wrapper, cls=Location, pk=pk)
+    pk = {"series_id": series_id, "setting_id": setting_id}
+    return read_one(wrapper=wrapper, cls=Setting, pk=pk)
 
 @function_tool
-def read_all_locations(wrapper: RunContextWrapper[APPState], series_id: str) -> list[Location]:
+def read_all_settings(wrapper: RunContextWrapper[APPState], series_id: str) -> list[Setting]:
     """
-    Look up all the locations (sets) in a series.   Use this before creating a new
-    location so that existing sets are reused instead of duplicated.
+    Look up all the settings (sets) in a series.   Use this before creating a new
+    setting so that existing sets are reused instead of duplicated.
 
     Args:
         series_id: The identifier of the series.
 
     Returns:
-        The list of locations in the series.
+        The list of settings in the series.
     """
-    return read_all(wrapper=wrapper, cls=Location, parent_key={"series_id": series_id}, order_by="name")
+    return read_all(wrapper=wrapper, cls=Setting, parent_key={"series_id": series_id}, order_by="name")

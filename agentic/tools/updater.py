@@ -13,7 +13,7 @@ from schema import (
     CharacterVariant,
     Issue,
     Cover,
-    Location,
+    Setting,
     Prop,
     Publisher,
     Series,
@@ -707,7 +707,7 @@ def update_character_style(
 # -------------------------------------------------------------------------
 # NAME UPDATES
 # Renaming updates the human-readable display name only; the object's id
-# (and therefore its storage location) is intentionally left unchanged.
+# (and therefore its storage setting) is intentionally left unchanged.
 # -------------------------------------------------------------------------
 @function_tool
 def update_series_name(wrapper: RunContextWrapper[APPState], series_id: str, name: str) -> str:
@@ -955,7 +955,7 @@ def move_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: s
 @function_tool
 def update_scene_setting(wrapper: RunContextWrapper[APPState],
         series_id: str, issue_id: str, scene_id: str,
-        location_id: Optional[str] = None,
+        setting_id: Optional[str] = None,
         time_of_day: Optional[str] = None,
         mood: Optional[str] = None) -> str:
     """
@@ -966,8 +966,8 @@ def update_scene_setting(wrapper: RunContextWrapper[APPState],
         series_id (str): The ID of the comic series.
         issue_id (str): The ID of the issue the scene belongs to.
         scene_id (str): The ID of the scene.
-        location_id (str, optional): The location (set) where the scene takes place.
-            Must be an existing location in the series.
+        setting_id (str, optional): The setting (set) where the scene takes place.
+            Must be an existing setting in the series.
         time_of_day (str, optional): e.g. 'day', 'night', 'dusk'.
         mood (str, optional): The emotional tone and lighting mood.
 
@@ -980,11 +980,11 @@ def update_scene_setting(wrapper: RunContextWrapper[APPState],
     scene: SceneModel = storage.read_object(cls=SceneModel, primary_key=pk)
     if scene is None:
         return f"Scene with ID '{scene_id}' not found."
-    if location_id is not None:
-        from schema import Location
-        if storage.read_object(cls=Location, primary_key={"series_id": series_id, "location_id": location_id}) is None:
-            return f"Location '{location_id}' not found in series '{series_id}'.  Create it first."
-        scene.location_id = location_id
+    if setting_id is not None:
+        from schema import Setting
+        if storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": setting_id}) is None:
+            return f"Setting '{setting_id}' not found in series '{series_id}'.  Create it first."
+        scene.setting_id = setting_id
     if time_of_day is not None:
         scene.time_of_day = time_of_day
     if mood is not None:
@@ -1049,7 +1049,7 @@ def update_scene_props(wrapper: RunContextWrapper[APPState],
         series_id: str, issue_id: str, scene_id: str,
         props: list[Prop]) -> str:
     """
-    Set the scene-specific props (beyond the location's standing props).
+    Set the scene-specific props (beyond the setting's standing props).
     Replaces the scene's existing prop list.
 
     Args:
@@ -1077,50 +1077,76 @@ def update_scene_props(wrapper: RunContextWrapper[APPState],
 # LOCATION (SET) UPDATES
 # -------------------------------------------------------------------------
 @function_tool
-def update_location_description(wrapper: RunContextWrapper[APPState],
-        series_id: str, location_id: str, description: str) -> str:
+def update_setting_description(wrapper: RunContextWrapper[APPState],
+        series_id: str, setting_id: str, description: str) -> str:
     """
-    Update the visual description of a location (set).
+    Update the visual description of a setting (set).
 
     Args:
-        series_id (str): The ID of the series the location belongs to.
-        location_id (str): The ID of the location.
+        series_id (str): The ID of the series the setting belongs to.
+        setting_id (str): The ID of the setting.
         description (str): The new visual description.
 
     Returns:
         A status message indicating the result of the update.
     """
-    from schema import Location
-    pk = {"series_id": series_id, "location_id": location_id}
-    return update_attribute(wrapper=wrapper, cls=Location, primary_key=pk, attribute="description", value=description)
+    from schema import Setting
+    pk = {"series_id": series_id, "setting_id": setting_id}
+    return update_attribute(wrapper=wrapper, cls=Setting, primary_key=pk, attribute="description", value=description)
 
 
 @function_tool
-def update_location_props(wrapper: RunContextWrapper[APPState],
-        series_id: str, location_id: str, props: list[Prop]) -> str:
+def update_setting_props(wrapper: RunContextWrapper[APPState],
+        series_id: str, setting_id: str, props: list[Prop]) -> str:
     """
-    Set the props that dress a location (set).  Replaces the existing prop list.
+    Set the props that dress a setting (set).  Replaces the existing prop list.
     NOTE: after changing the props, existing master backgrounds for the
-    location are stale and should be re-rendered.
+    setting are stale and should be re-rendered.
 
     Args:
-        series_id (str): The ID of the series the location belongs to.
-        location_id (str): The ID of the location.
-        props (list[Prop]): The props that dress the location.
+        series_id (str): The ID of the series the setting belongs to.
+        setting_id (str): The ID of the setting.
+        props (list[Prop]): The props that dress the setting.
 
     Returns:
         A status message indicating the result of the update.
     """
-    from schema import Location
+    from schema import Setting
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
-    pk = {"series_id": series_id, "location_id": location_id}
-    location: Location = storage.read_object(cls=Location, primary_key=pk)
-    if location is None:
-        return f"Location '{location_id}' not found in series '{series_id}'."
-    location.props = props
-    storage.update_object(data=location)
+    pk = {"series_id": series_id, "setting_id": setting_id}
+    setting: Setting = storage.read_object(cls=Setting, primary_key=pk)
+    if setting is None:
+        return f"Setting '{setting_id}' not found in series '{series_id}'."
+    setting.props = props
+    storage.update_object(data=setting)
     state.is_dirty = True
-    stale = ", ".join(location.images.keys()) if location.images else None
+    stale = ", ".join(setting.images.keys()) if setting.images else None
     note = f"  Plates for style(s) {stale} are now stale and should be re-rendered." if stale else ""
-    return f"Props of location '{location.name}' set to: " + ", ".join(p.name for p in props) + note
+    return f"Props of setting '{setting.name}' set to: " + ", ".join(p.name for p in props) + note
+
+
+@function_tool
+def update_cover_setting(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, cover_id: str, setting_id: Optional[str]) -> str:
+    """
+    Set the setting for a cover.   The setting's master background (in the cover's
+    style) is used as a reference when the cover is rendered, so the cover scene
+    matches the interior pages.   Pass null to clear the setting.
+
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the comic book issue.
+        cover_id: The ID of the cover to update.
+        setting_id: The ID of the setting, or null to clear it.  Must be an existing
+            setting in the series (check with read_all_settings).
+
+    Returns:
+        A message indicating the result of the update operation.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    if setting_id is not None:
+        if storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": setting_id}) is None:
+            return f"Setting '{setting_id}' not found in series '{series_id}'.  Create it first."
+    primary_key = {'cover_id': cover_id, 'series_id': series_id, 'issue_id': issue_id}
+    return update_attribute(wrapper, Cover, primary_key, 'setting_id', setting_id)

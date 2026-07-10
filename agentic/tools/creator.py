@@ -23,7 +23,7 @@ from schema import (
     Dialogue,
     FrameLayout,
     CharacterRef,
-    Location,
+    Setting,
     Prop,
     InsertionLocation,
     AfterLast,
@@ -41,20 +41,20 @@ from agentic.tools.normalization import normalize_id, normalize_name
 def insertion_index(insertion_location: InsertionLocation,
                     item_count: int) -> int:
     """
-    Determine the insertion index based on the insertion location and item count.
+    Determine the insertion index based on the insertion setting and item count.
     Args:
         item_number (int): The number of the item being inserted.
-        insertion_location (InsertionLocation): The location where the item should be inserted.
+        insertion_location (InsertionLocation): The setting where the item should be inserted.
         item_count (int): The current number of items in the list.
     """
-    # Determine the panel number based on insertion location
+    # Determine the panel number based on insertion setting
     if isinstance(insertion_location, AfterLast):
         # Insert after the last panel
         item_number = item_count + 1
     elif isinstance(insertion_location, After):
         # Insert after a specific panel
         if insertion_location.index < 0 or insertion_location.index >= item_count:
-            raise ValueError(f"Invalid index {insertion_location.index} for insertion location.")
+            raise ValueError(f"Invalid index {insertion_location.index} for insertion setting.")
         item_number = insertion_location.index + 2
     elif isinstance(insertion_location, BeforeFirst):
         # Insert before the first panel
@@ -62,10 +62,10 @@ def insertion_index(insertion_location: InsertionLocation,
     elif isinstance(insertion_location, Before):
         # Insert before a specific panel
         if insertion_location.index < 0 or insertion_location.index >= item_count:
-            raise ValueError(f"Invalid index {insertion_location.index} for insertion location.")
+            raise ValueError(f"Invalid index {insertion_location.index} for insertion setting.")
         item_number = insertion_location.index + 1
     else:
-        raise ValueError(f"Unknown insertion location type: {type(insertion_location)}")
+        raise ValueError(f"Unknown insertion setting type: {type(insertion_location)}")
 
     return item_number
 
@@ -401,7 +401,7 @@ visual storytelling; prefer it over textual exposition when possible.
 This tool is appropriate when:
 
 * A character takes a meaningful action or reacts with clear emotion
-* The scene changes in location, time, or energy
+* The scene changes in setting, time, or energy
 * A visual contrast or beat needs to be captured (e.g., tension → release, zoom-in → zoom-out)
 
 Avoid using this tool for:
@@ -598,7 +598,7 @@ def create_cover(
     wrapper: RunContextWrapper[APPState], 
     series_id: str,
     issue_id: str,
-    location: CoverLocation,
+    setting: CoverLocation,
     cover_id: Optional[str],
     description: str,
     characters: list[CharacterRef] = []
@@ -613,7 +613,7 @@ def create_cover(
     Args:
         series_id: The ID of the comic series to create the cover for.
         issue_id: The ID of the comic issue to create the cover for.
-        location: The location metadata for the cover. MUST BE ONE OF "front", "back", "inside-front", "inside-back".
+        setting: The setting metadata for the cover. MUST BE ONE OF "front", "back", "inside-front", "inside-back".
         cover_id: Optional unique identifier for the cover. If not provided, a unique ID will be generated.
         description: A detailed description of the visual elements in the cover.
         characters: A list of character references to include on the cover.   These references should
@@ -657,10 +657,10 @@ def create_cover(
                 return f"Character with ID '{char.character_id}' with Variant ID '{char.variant_id}' not found in series '{series.name}'.  The available variants (and their IDs) are: {existing_variant_names_and_ids}."
 
 
-        new_cover_id = normalize_id(cover_id) if cover_id else normalize_id(f"{location.value}-{uuid4().hex[:8]}")
+        new_cover_id = normalize_id(cover_id) if cover_id else normalize_id(f"{setting.value}-{uuid4().hex[:8]}")
         cover = Cover(
             cover_id=new_cover_id,
-            location=location,
+            setting=setting,
             issue_id=issue_id,
             series_id=series_id,
             character_references=characters,
@@ -687,7 +687,7 @@ def create_scene(wrapper: RunContextWrapper[APPState],
         name: str,
         story: str,
         insertion_location: InsertionLocation,
-        location_id: Optional[str] = None,
+        setting_id: Optional[str] = None,
         time_of_day: Optional[str] = None,
         mood: Optional[str] = None,
         cast: Optional[list[CharacterRef]] = None,
@@ -696,9 +696,9 @@ def create_scene(wrapper: RunContextWrapper[APPState],
     ) -> str:
     """
     Create a new scene for the currently selected comic book issue.   This will create a new scene
-    with the default properties and add it to the issue at the specified insertion location.
+    with the default properties and add it to the issue at the specified insertion setting.
 
-    A scene is specified like a page of a comic script: it has a setting (location + time of day),
+    A scene is specified like a page of a comic script: it has a setting (setting + time of day),
     a cast with wardrobe (character variants), props, and blocking notes.   Providing these
     up front lets the panels be composed from consistent reference objects later.
 
@@ -712,14 +712,14 @@ def create_scene(wrapper: RunContextWrapper[APPState],
             It should not be a full script, but rather a summary of the scene's content and purpose.
             Consider the key information that is required to ensure that this scene can be written and
             maintains the narrative flow of the comic book issue.
-        insertion_location (InsertionLocation): The location where the new scene should be inserted.
+        insertion_location (InsertionLocation): The setting where the new scene should be inserted.
             NOTE: LIST ELEMENTS ARE ONES-BASED, SO THE FIRST ELEMENT IS AT INDEX 1.
-        location_id (str, optional): The location (set) where the scene takes place.  Create or look up
-            locations first so scenes reuse the same sets.
+        setting_id (str, optional): The setting (set) where the scene takes place.  Create or look up
+            settings first so scenes reuse the same sets.
         time_of_day (str, optional): Slugline time, e.g. 'day', 'night', 'dusk'.
         mood (str, optional): The emotional tone and lighting mood of the scene.
         cast (list[CharacterRef], optional): The characters in the scene with the variant (wardrobe) worn.
-        props (list[Prop], optional): Scene-specific props beyond the location's standing props.
+        props (list[Prop], optional): Scene-specific props beyond the setting's standing props.
         blocking (str, optional): How the characters are staged and move through the setting.
 
     Returns:
@@ -748,7 +748,7 @@ def create_scene(wrapper: RunContextWrapper[APPState],
             insertion_location=insertion_location,
             item_count=len(scenes)
         ),
-        location_id=location_id,
+        setting_id=setting_id,
         time_of_day=time_of_day,
         mood=mood,
         cast=cast or [],
@@ -771,31 +771,31 @@ def create_scene(wrapper: RunContextWrapper[APPState],
 
 
 @function_tool
-def create_location(wrapper: RunContextWrapper[APPState],
+def create_setting(wrapper: RunContextWrapper[APPState],
         series_id: str,
         name: str,
         description: str,
         interior: bool,
         props: Optional[list[Prop]] = None,
-    ) -> Location | str:
+    ) -> Setting | str:
     """
-    Create a new location (a recurring setting) for a series.
-    Locations are dressed with props and later rendered as style-keyed master backgrounds
+    Create a new setting (a recurring place where scenes take place) for a series.
+    Settings are dressed with props and later rendered as style-keyed master backgrounds
     that multiple panels share, so the setting stays visually consistent across the issue.
 
-    Before creating a location, check the existing ones (read_all_locations) so sets are
+    Before creating a setting, check the existing ones (read_all_settings) so sets are
     reused rather than duplicated.
 
     Args:
-        series_id: The id of the series the location belongs to.
-        name: A short (1-5 word) name for the location, e.g. 'The Rusty Nail Saloon'.
+        series_id: The id of the series the setting belongs to.
+        name: A short (1-5 word) name for the setting, e.g. 'The Rusty Nail Saloon'.
         description: A detailed visual description: architecture, layout, lighting, era,
             palette.   Detailed enough that different artists would draw the same place.
-        interior: True for interior (INT.) locations, False for exterior (EXT.).
-        props: The props that dress the location, each with a name and a visual description.
+        interior: True for interior (INT.) settings, False for exterior (EXT.).
+        props: The props that dress the setting, each with a name and a visual description.
 
     Returns:
-        The newly created Location object, or an error message.
+        The newly created Setting object, or an error message.
     """
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
@@ -804,8 +804,8 @@ def create_location(wrapper: RunContextWrapper[APPState],
     if series is None:
         return f"Series with ID {series_id} not found."
 
-    location = Location(
-        location_id=normalize_id(name),
+    setting = Setting(
+        setting_id=normalize_id(name),
         series_id=series_id,
         name=name,
         description=description,
@@ -814,8 +814,8 @@ def create_location(wrapper: RunContextWrapper[APPState],
         images={},
     )
     # creator() verifies the key is free; overwrite=True preserves the slug id so
-    # locations stay addressable by name across scenes.
-    return creator(wrapper=wrapper, obj=location, overwrite=True)
+    # settings stay addressable by name across scenes.
+    return creator(wrapper=wrapper, obj=setting, overwrite=True)
 
 
 class PanelSpec(BaseModel):

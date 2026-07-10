@@ -139,7 +139,7 @@ def delete_cover(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
     Args:
         series_id: The identifier of the series the issue belongs to.
         issue_id: The identifier of the issue the cover belongs to.
-        location: The location of the cover (e.g., FRONT, BACK).
+        setting: The setting of the cover (e.g., FRONT, BACK).
     
     Returns:
         A status message indicating the result of the deletion.
@@ -178,18 +178,18 @@ def delete_character_variant(wrapper: RunContextWrapper[APPState], series_id: st
     pk = {"series_id": series_id, "character_id": character_id, "variant_id": variant_id}
     return deleter(wrapper=wrapper, cls=CharacterVariant, primary_key=pk)   
 @function_tool
-def delete_location(wrapper: RunContextWrapper[APPState], series_id: str, location_id: str) -> str:
+def delete_setting(wrapper: RunContextWrapper[APPState], series_id: str, setting_id: str) -> str:
     """
-    Delete a location (set) from a comic book series.   You MUST ask for confirmation before using this tool.
-    Scenes that reference the location will keep a dangling location_id, so check for usages first.
+    Delete a setting (set) from a comic book series.   You MUST ask for confirmation before using this tool.
+    Scenes that reference the setting will keep a dangling setting_id, so check for usages first.
 
     Args:
-        series_id: The identifier of the series the location belongs to.
-        location_id: The identifier of the location to delete.
+        series_id: The identifier of the series the setting belongs to.
+        setting_id: The identifier of the setting to delete.
 
     Returns:
         A status message indicating the result of the deletion.
     """
-    from schema import Location
-    pk = {"series_id": series_id, "location_id": location_id}
-    return deleter(wrapper=wrapper, cls=Location, primary_key=pk)
+    from schema import Setting
+    pk = {"series_id": series_id, "setting_id": setting_id}
+    return deleter(wrapper=wrapper, cls=Setting, primary_key=pk)

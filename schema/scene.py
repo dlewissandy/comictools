@@ -1,12 +1,12 @@
 from typing import Optional
 from pydantic import BaseModel, Field
 from schema.character_reference import CharacterRef
-from schema.location import Prop
+from schema.setting import Prop
 
 class SceneModel(BaseModel):
     """
     A scene is a collection of pannels that tell a story.   For example, a scene could be a page in a comic book.
-    A scene has a setting (location + time), a cast with wardrobe
+    A scene has a setting (setting + time), a cast with wardrobe
     (character variants), props, and blocking notes describing how the characters move through the setting.
     """
     scene_id: str = Field(..., description="The unique identifier of the scene.  This is the same as the title, but with spaces replaced by underscores.")
@@ -18,11 +18,11 @@ class SceneModel(BaseModel):
     scene_number: int = Field(..., description="The scene number.   Default to 1")
 
     # PRODUCTION METADATA (all optional so pre-existing scenes still load)
-    location_id: Optional[str] = Field(None, description="The location where this scene takes place.  Default to None.")
+    setting_id: Optional[str] = Field(None, description="The setting where this scene takes place.  Default to None.")
     time_of_day: Optional[str] = Field(None, description="The time of day of the scene's setting, e.g. 'day', 'night', 'dusk'.  Default to None.")
     mood: Optional[str] = Field(None, description="The emotional tone and lighting mood of the scene, e.g. 'tense, low warm lamplight'.  Default to None.")
     cast: list[CharacterRef] = Field(default_factory=list, description="The characters appearing in this scene with the variant (wardrobe) they wear.  Default to empty list.")
-    props: list[Prop] = Field(default_factory=list, description="Scene-specific props beyond the location's standing props.  Default to empty list.")
+    props: list[Prop] = Field(default_factory=list, description="Scene-specific props beyond the setting's standing props.  Default to empty list.")
     blocking: Optional[str] = Field(None, description="Blocking notes: how the characters are staged and move through the setting during the scene.  Default to None.")
 
     @property

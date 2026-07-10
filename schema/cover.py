@@ -10,6 +10,7 @@ class Cover(BaseModel):
     issue_id: str = Field(..., description="The parent issue of the panel.   Default to empty string")
     series_id: str = Field(..., description="The parent series of the panel.   Default to empty string")
     character_references: list[CharacterRef]  = Field(..., description="The names of the characters in the panel")
+    setting_id: Optional[str] = Field(None, description="The setting where the cover scene takes place.  Its master background is used as a reference so the cover matches the interior pages.  Default to None.")
     style_id: str = Field(..., description="The art style of the panel.  Default to 'vintage-4-color'")
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to portrait")
     reference_images: list[ReferenceImage] = Field(..., description="The reference images for the panel")

@@ -93,13 +93,13 @@ def view_scene(state: APPState):
                 )
 
         # Production details: setting, cast (with wardrobe), props and blocking.
-        from schema import Location
-        location = storage.read_object(cls=Location, primary_key={"series_id": series_id, "location_id": scene.location_id}) if scene.location_id else None
+        from schema import Setting
+        setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": scene.setting_id}) if scene.setting_id else None
         view_attributes(
             state=state,
             caption="Production",
             attributes=[
-                Attribute(caption="location", get_value=lambda: (f"{location.name} ({'Interior' if location.interior else 'Exterior'})" if location else scene.location_id)),
+                Attribute(caption="setting", get_value=lambda: (f"{setting.name} ({'Interior' if setting.interior else 'Exterior'})" if setting else scene.setting_id)),
                 Attribute(caption="time of day", get_value=lambda: scene.time_of_day),
                 Attribute(caption="mood", get_value=lambda: scene.mood),
                 Attribute(caption="cast", get_value=lambda: ", ".join(f"{c.character_id} ({c.variant_id})" for c in scene.cast) if scene.cast else None),

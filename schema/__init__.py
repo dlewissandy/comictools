@@ -13,7 +13,7 @@ from schema.style.character import CharacterStyle
 from schema.style.style_example import StyleExample, ExampleKind
 from schema.styled_variant import StyledVariant
 from schema.character_reference import CharacterRef
-from schema.location import Location, Prop
+from schema.setting import Setting, Prop
 from schema.reference_image import ReferenceImage
 from schema.cover import Cover
 from schema.enums import FrameLayout, CoverLocation, Relation, frame_dimensions, frame_layout_to_dims, InsertionLocation, BeforeFirst, Before, After, AfterLast
@@ -41,7 +41,7 @@ __all__ = [
     "FrameLayout",
     "InsertionLocation",
     "Issue",
-    "Location",
+    "Setting",
     "Narration",
     "NarrationPosition",
     "Panel",

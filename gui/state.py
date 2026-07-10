@@ -310,7 +310,7 @@ class APPState:
         from gui.home import view_all_styles, view_all_series, view_all_publishers
         from gui.style import view_style, view_pick_style
         from gui.series import view_series
-        from gui.location import view_location
+        from gui.setting import view_setting
         from gui.character import view_character, view_character_reference
         from gui.issue import view_issue
         from gui.scene import view_scene
@@ -344,8 +344,8 @@ class APPState:
                 return view_style(self)
             case "series":
                 return view_series(self)
-            case "location":
-                return view_location(self)
+            case "setting":
+                return view_setting(self)
             case "character":
                 return view_character(self)
             case "issue":

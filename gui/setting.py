@@ -1,6 +1,6 @@
 """
-This file displays a location — a recurring setting for scenes and panels.
-It shows the location's description, its props, and its master backgrounds
+This file displays a setting — a recurring setting for scenes and panels.
+It shows the setting's description, its props, and its master backgrounds
 (one per comic style), and lets the user upload reference images.
 """
 
@@ -9,7 +9,7 @@ from loguru import logger
 from nicegui import ui
 from nicegui.events import UploadEventArguments
 
-from schema import Location
+from schema import Setting
 from gui.elements import (
     header,
     crud_button,
@@ -25,9 +25,9 @@ from gui.state import APPState
 from storage.generic import GenericStorage
 
 
-def view_location(state: APPState):
+def view_setting(state: APPState):
     """
-    View the details of a location.
+    View the details of a setting.
 
     Args:
         state: The GUI elements containing the details and selection.
@@ -35,56 +35,56 @@ def view_location(state: APPState):
     selection = state.selection
     storage: GenericStorage = state.storage
 
-    location_id = selection[-1].id
+    setting_id = selection[-1].id
     series_id = selection[-2].id
 
-    location: Location = storage.read_object(cls=Location, primary_key={"series_id": series_id, "location_id": location_id})
+    setting: Setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": setting_id})
     details = state.details
 
-    if location is None:
+    if setting is None:
         state.clear_details()
         with details:
-            header("Location Not Found", 2).style('color: red;')
-            header(f"Location with ID {location_id} not found in series {series_id}.", 4)
-        logger.error(f"Location with ID {location_id} not found in series {series_id}.")
+            header("Setting Not Found", 2).style('color: red;')
+            header(f"Setting with ID {setting_id} not found in series {series_id}.", 4)
+        logger.error(f"Setting with ID {setting_id} not found in series {series_id}.")
         return
 
     def on_upload(e: UploadEventArguments):
         locator = storage.upload_reference_image(
-            obj=location,
+            obj=setting,
             name=e.name,
             data=e.content,
             mime_type=e.type
         )
-        post_user_message(state, "I uploaded a reference image for this location: " + locator)
+        post_user_message(state, "I uploaded a reference image for this setting: " + locator)
 
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
-            header(f"{location.name.title()} ({'Interior' if location.interior else 'Exterior'})", 0)
+            header(f"{setting.name.title()} ({'Interior' if setting.interior else 'Exterior'})", 0)
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current location."), size=1)
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current setting."), size=1)
 
-        markdown_field_editor(state, "Description", location.description)
+        markdown_field_editor(state, "Description", setting.description)
 
-        # Props that dress the location
+        # Props that dress the setting
         view_attributes(
             state=state,
             caption="Props",
             attributes=[
                 Attribute(caption=prop.name, get_value=lambda prop=prop: prop.description)
-                for prop in location.props
+                for prop in setting.props
             ] or [Attribute(caption="props", get_value=lambda: None)],
             individual_icons=False,
             header_size=2,
         )
 
-        # Master backgrounds, one per comic style.  Panels set in this location
+        # Master backgrounds, one per comic style.  Panels set in this setting
         # reuse these backgrounds so the setting stays consistent.
         with ui.expansion(value=True).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
-                new_item_messager(state, "Master Backgrounds", "I would like to render a master background for this location.")
+                new_item_messager(state, "Master Backgrounds", "I would like to render a master background for this setting.")
             with ui.row().classes('w-full'):
-                rendered = {style_id: img for style_id, img in (location.images or {}).items() if img and os.path.exists(img)}
+                rendered = {style_id: img for style_id, img in (setting.images or {}).items() if img and os.path.exists(img)}
                 if not rendered:
                     ui.markdown("No master backgrounds rendered yet.  Ask me to render one in a comic style.")
                 for style_id, img in rendered.items():
@@ -97,7 +97,7 @@ def view_location(state: APPState):
             with expansion.add_slot('header'):
                 header("Reference Images", 2)
             with ui.row().classes('w-full'):
-                for upload in storage.list_uploads(location):
+                for upload in storage.list_uploads(setting):
                     with ui.card().classes(TAILWIND_CARD).style('width: 24%; aspect-ratio: 1/1'):
                         ui.image(source=upload).style('top-padding: 0; bottom-padding:0;')
                 uploader_card(

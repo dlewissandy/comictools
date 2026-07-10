@@ -12,7 +12,7 @@ class SelectedKind(StrEnum):
     ALL_STYLES = "all-styles"
 
     SERIES = "series"
-    LOCATION = "location"
+    LOCATION = "setting"
     ISSUE = "issue"
     SCENE = "scene"
     PANEL = "panel"
@@ -48,7 +48,7 @@ def selection_to_context(
     Returns:
         A string that represents the primary key for the selection.
     """
-    from schema import Publisher, ComicStyle, Series, Issue, SceneModel, Panel, Cover, CharacterModel, CharacterVariant, StyledVariant, ReferenceImage, Location
+    from schema import Publisher, ComicStyle, Series, Issue, SceneModel, Panel, Cover, CharacterModel, CharacterVariant, StyledVariant, ReferenceImage, Setting
     i = 0
     accum  = {}
     context = []
@@ -82,8 +82,8 @@ def selection_to_context(
                 accum["character_id"] = id
                 context.append((CharacterModel, {k:v for k, v in accum.items()}))
             case SelectedKind.LOCATION.value:
-                accum["location_id"] = id
-                context.append((Location, {k:v for k, v in accum.items()}))
+                accum["setting_id"] = id
+                context.append((Setting, {k:v for k, v in accum.items()}))
             case SelectedKind.VARIANT.value:
                 accum["variant_id"] = id
                 context.append((CharacterVariant, {k:v for k, v in accum.items()}))

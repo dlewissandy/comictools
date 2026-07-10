@@ -62,18 +62,19 @@ from agentic.tools import (
     delete_cover_image,
     create_character_style_example_image
 )
-from agentic.tools.creator import create_variant, create_variant_from_image, create_location, create_scene_panels
-from agentic.tools.reader import read_location, read_all_locations
-from agentic.tools.deleter import delete_location
+from agentic.tools.creator import create_variant, create_variant_from_image, create_setting, create_scene_panels
+from agentic.tools.reader import read_setting, read_all_settings
+from agentic.tools.deleter import delete_setting
 from agentic.tools.updater import (
     update_scene_setting,
     update_scene_cast,
     update_scene_blocking,
     update_scene_props,
-    update_location_description,
-    update_location_props,
+    update_setting_description,
+    update_setting_props,
+    update_cover_setting,
 )
-from agentic.tools.imaging import generate_location_background, generate_panel_image
+from agentic.tools.imaging import generate_setting_background, generate_panel_image
 from agentic.tools.imaging import (
     delete_character_style_example,
     delete_dialog_style_example,
@@ -180,15 +181,19 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Read
         read_cover,
         read_all_styles,
+        read_setting,
+        read_all_settings,
         # Update
         update_cover_description,
         update_cover_aspect_ratio,
         update_cover_style,
+        update_cover_setting,
         # Delete
         delete_cover,
         # Navigation
         # Imaging
         generate_cover_image,
+        generate_setting_background,
         delete_cover_image
     ],
     "issue": [
@@ -196,7 +201,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         create_cover,
         create_scene,
         create_scene_panels,
-        create_location,
+        create_setting,
         # Read
         read_issue,
         read_style,
@@ -205,8 +210,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_covers,
         read_scene,
         read_all_scenes,
-        read_location,
-        read_all_locations,
+        read_setting,
+        read_all_settings,
         read_all_characters,
         read_all_variants,
         # Update
@@ -233,7 +238,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Read
         read_panel,
         read_scene,
-        read_location,
+        read_setting,
         read_all_variants,
         # Update
         update_panel_name,
@@ -242,7 +247,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Delete
         delete_panel,
         # Imaging
-        generate_location_background,
+        generate_setting_background,
         generate_panel_image,
         inpaint_image_region,
         outpaint_image_region,
@@ -269,14 +274,14 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Create
         create_panel,
         create_scene_panels,
-        create_location,
+        create_setting,
         # Read
         read_scene,
         read_panel,
         read_all_panels,
         read_style,
-        read_location,
-        read_all_locations,
+        read_setting,
+        read_all_settings,
         read_all_characters,
         read_all_variants,
         # Update
@@ -292,7 +297,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_scene,
         delete_panel,
         # Imaging
-        generate_location_background,
+        generate_setting_background,
         generate_panel_image,
 
     ],
@@ -300,7 +305,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Create
         create_character,
         create_issue,
-        create_location,
+        create_setting,
 
         # Read
         read_series,
@@ -310,20 +315,20 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_characters,
         read_issue,
         read_all_issues,
-        read_location,
-        read_all_locations,
+        read_setting,
+        read_all_settings,
 
         # Update
         update_series_name,
         update_series_description,
-        update_location_description,
-        update_location_props,
+        update_setting_description,
+        update_setting_props,
 
         # Delete
         delete_series,
         delete_issue,
         delete_character,
-        delete_location,
+        delete_setting,
     ],
     "style": [
         # Navigation
@@ -389,18 +394,18 @@ TOOLKITS: dict[str,list[Tool]] = {
     ],
 }
 
-TOOLKITS["location"] = [
+TOOLKITS["setting"] = [
     # Read
-    read_location,
-    read_all_locations,
+    read_setting,
+    read_all_settings,
     read_all_styles,
     # Update
-    update_location_description,
-    update_location_props,
+    update_setting_description,
+    update_setting_props,
     # Delete
-    delete_location,
+    delete_setting,
     # Imaging
-    generate_location_background,
+    generate_setting_background,
 ]
 
 TOOLKITS["front-cover"] = TOOLKITS["cover"]

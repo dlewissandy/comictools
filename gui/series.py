@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from nicegui.events import UploadEventArguments
-from schema import Series, Issue, CharacterModel, Publisher, Location
+from schema import Series, Issue, CharacterModel, Publisher, Setting
 from gui.elements import (
     markdown, header, uploader_card, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message, view_attributes, CrudButtonKind)
 from nicegui import ui
@@ -102,19 +102,19 @@ def view_series(state: APPState):
                     aspect_ratio="6/5"
                 )
 
-        # A cardwall for viewing and adding recurring locations (settings) of the series.
-        def location_image(loc: Location):
+        # A cardwall for viewing and adding the recurring settings of the series.
+        def setting_image(loc: Setting):
             # Show the first rendered master background, if any.
             return next((img for img in (loc.images or {}).values() if img and os.path.exists(img)), None)
 
         with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
-                new_item_messager(state, "Locations", "I would like to create a new location")
+                new_item_messager(state, "Settings", "I would like to create a new setting")
             view_all_instances(
                 state=state,
-                get_instances=lambda: storage.read_all_objects(Location, primary_key={"series_id": series.series_id}, order_by="name"),
-                get_image_locator=location_image,
-                kind="location",
+                get_instances=lambda: storage.read_all_objects(Setting, primary_key={"series_id": series.series_id}, order_by="name"),
+                get_image_locator=setting_image,
+                kind="setting",
                 aspect_ratio="3/2",
                 get_name=lambda _, x: x.name
                 ).style('margin-top: 0px; margin-bottom: 0px')

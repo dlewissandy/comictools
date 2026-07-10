@@ -33,8 +33,8 @@ ROOT_PATH_TEMPLATES[SelectedKind.SERIES.value] = os.path.join("{base_path}", "se
 PATH_TEMPLATES[SelectedKind.SERIES.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.SERIES.value], "{series_id}")
 ROOT_PATH_TEMPLATES[SelectedKind.CHARACTER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "characters")
 PATH_TEMPLATES[SelectedKind.CHARACTER.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.CHARACTER.value], "{character_id}")
-ROOT_PATH_TEMPLATES[SelectedKind.LOCATION.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "locations")
-PATH_TEMPLATES[SelectedKind.LOCATION.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.LOCATION.value], "{location_id}")
+ROOT_PATH_TEMPLATES[SelectedKind.LOCATION.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "settings")
+PATH_TEMPLATES[SelectedKind.LOCATION.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.LOCATION.value], "{setting_id}")
 ROOT_PATH_TEMPLATES[SelectedKind.VARIANT.value] = os.path.join(PATH_TEMPLATES[SelectedKind.CHARACTER.value], "variants")
 PATH_TEMPLATES[SelectedKind.VARIANT.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.VARIANT.value], "{variant_id}")
 ROOT_PATH_TEMPLATES[SelectedKind.ISSUE.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "issues")
@@ -52,7 +52,7 @@ ROOT_PATH_TEMPLATES[ComicStyle.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.STYL
 ROOT_PATH_TEMPLATES[Series.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.SERIES.value]
 ROOT_PATH_TEMPLATES[Publisher.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.PUBLISHER.value]
 ROOT_PATH_TEMPLATES[CharacterModel.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.CHARACTER.value]
-ROOT_PATH_TEMPLATES[Location.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.LOCATION.value]
+ROOT_PATH_TEMPLATES[Setting.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.LOCATION.value]
 ROOT_PATH_TEMPLATES[CharacterVariant.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.VARIANT.value]
 ROOT_PATH_TEMPLATES[Issue.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.ISSUE.value]
 ROOT_PATH_TEMPLATES[Cover.__name__] = ROOT_PATH_TEMPLATES[SelectedKind.COVER.value]
@@ -63,7 +63,7 @@ PATH_TEMPLATES[ComicStyle.__name__] = PATH_TEMPLATES[SelectedKind.STYLE.value]
 PATH_TEMPLATES[Series.__name__] = PATH_TEMPLATES[SelectedKind.SERIES.value]
 PATH_TEMPLATES[Publisher.__name__] = PATH_TEMPLATES[SelectedKind.PUBLISHER.value]
 PATH_TEMPLATES[CharacterModel.__name__] = PATH_TEMPLATES[SelectedKind.CHARACTER.value]
-PATH_TEMPLATES[Location.__name__] = PATH_TEMPLATES[SelectedKind.LOCATION.value]
+PATH_TEMPLATES[Setting.__name__] = PATH_TEMPLATES[SelectedKind.LOCATION.value]
 PATH_TEMPLATES[CharacterVariant.__name__] = PATH_TEMPLATES[SelectedKind.VARIANT.value]
 PATH_TEMPLATES[Issue.__name__] = PATH_TEMPLATES[SelectedKind.ISSUE.value]
 PATH_TEMPLATES[Cover.__name__] = PATH_TEMPLATES[SelectedKind.COVER.value]
@@ -78,7 +78,7 @@ FILEPATH_TEMPLATES[SelectedKind.PUBLISHER.value] = os.path.join(PATH_TEMPLATES[S
 FILEPATH_TEMPLATES[SelectedKind.SERIES.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "series.json")
 FILEPATH_TEMPLATES[SelectedKind.STYLE.value] = os.path.join(PATH_TEMPLATES[SelectedKind.STYLE.value], "style.json")
 FILEPATH_TEMPLATES[SelectedKind.CHARACTER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.CHARACTER.value], "character.json")
-FILEPATH_TEMPLATES[SelectedKind.LOCATION.value] = os.path.join(PATH_TEMPLATES[SelectedKind.LOCATION.value], "location.json")
+FILEPATH_TEMPLATES[SelectedKind.LOCATION.value] = os.path.join(PATH_TEMPLATES[SelectedKind.LOCATION.value], "setting.json")
 FILEPATH_TEMPLATES[SelectedKind.VARIANT.value] = os.path.join(PATH_TEMPLATES[SelectedKind.VARIANT.value], "variant.json")
 FILEPATH_TEMPLATES[SelectedKind.ISSUE.value] = os.path.join(PATH_TEMPLATES[SelectedKind.ISSUE.value], "issue.json")
 FILEPATH_TEMPLATES[SelectedKind.COVER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.COVER.value], "cover.json")
@@ -89,7 +89,7 @@ FILEPATH_TEMPLATES[Publisher.__name__] = FILEPATH_TEMPLATES[SelectedKind.PUBLISH
 FILEPATH_TEMPLATES[Series.__name__] = FILEPATH_TEMPLATES[SelectedKind.SERIES.value]
 FILEPATH_TEMPLATES[ComicStyle.__name__] = FILEPATH_TEMPLATES[SelectedKind.STYLE.value]
 FILEPATH_TEMPLATES[CharacterModel.__name__] = FILEPATH_TEMPLATES[SelectedKind.CHARACTER.value]
-FILEPATH_TEMPLATES[Location.__name__] = FILEPATH_TEMPLATES[SelectedKind.LOCATION.value]
+FILEPATH_TEMPLATES[Setting.__name__] = FILEPATH_TEMPLATES[SelectedKind.LOCATION.value]
 FILEPATH_TEMPLATES[CharacterVariant.__name__] = FILEPATH_TEMPLATES[SelectedKind.VARIANT.value]
 FILEPATH_TEMPLATES[Issue.__name__] = FILEPATH_TEMPLATES[SelectedKind.ISSUE.value]
 FILEPATH_TEMPLATES[Cover.__name__] = FILEPATH_TEMPLATES[SelectedKind.COVER.value]
@@ -109,9 +109,9 @@ IMAGE_PATH_TEMPLATES[Publisher.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.PUB
 # Style example images live at styles/{style_id}/images/{example_type}/ on disk.
 IMAGE_PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value] = PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
 IMAGE_PATH_TEMPLATES[StyleExample.__name__] = PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
-# Location background plates are style-keyed, like styled variants.
+# Setting background plates are style-keyed, like styled variants.
 IMAGE_PATH_TEMPLATES[SelectedKind.LOCATION.value] = os.path.join(PATH_TEMPLATES[SelectedKind.LOCATION.value], "images")
-IMAGE_PATH_TEMPLATES[Location.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.LOCATION.value]
+IMAGE_PATH_TEMPLATES[Setting.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.LOCATION.value]
 
 UPLOAD_PATH_TEMPLATES = {}
 UPLOAD_PATH_TEMPLATES[SelectedKind.PANEL.value] = os.path.join(PATH_TEMPLATES[SelectedKind.PANEL.value], "uploads")
@@ -130,7 +130,7 @@ UPLOAD_PATH_TEMPLATES[Series.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.SERI
 UPLOAD_PATH_TEMPLATES[SelectedKind.CHARACTER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.CHARACTER.value], "uploads")
 UPLOAD_PATH_TEMPLATES[CharacterModel.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.CHARACTER.value]
 UPLOAD_PATH_TEMPLATES[SelectedKind.LOCATION.value] = os.path.join(PATH_TEMPLATES[SelectedKind.LOCATION.value], "uploads")
-UPLOAD_PATH_TEMPLATES[Location.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.LOCATION.value]
+UPLOAD_PATH_TEMPLATES[Setting.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.LOCATION.value]
 
 
 def get_basenames(path: str, exts: list[str] = None) -> list[str]:
