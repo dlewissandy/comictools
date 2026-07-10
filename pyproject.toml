@@ -14,3 +14,17 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "streamlit>=1.45.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "api: test makes a real OpenAI API call (deselect with -m 'not api')",
+]
+filterwarnings = ["ignore::DeprecationWarning"]

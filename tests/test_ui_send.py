@@ -1,0 +1,74 @@
+"""End-to-end UI test: type a message, click Send, and assert the agent's
+reply streams into the chat history and the send button is re-enabled.
+
+Marked `api` because it makes one real (text-only) OpenAI call.  Deselect
+with:  pytest -m "not api"
+"""
+import asyncio
+import json
+import os
+import shutil
+import sys
+import tempfile
+
+import pytest
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO)
+os.chdir(REPO)
+
+from dotenv import load_dotenv
+load_dotenv(os.path.join(REPO, ".env"))
+
+# Route the app at a temp data dir + temp state file BEFORE importing main.
+_tmp = tempfile.mkdtemp()
+shutil.copytree(os.path.join(REPO, "data"), os.path.join(_tmp, "data"))
+
+import gui.state as gui_state
+gui_state.STATE_FILEPATH = os.path.join(_tmp, "state.json")
+json.dump(
+    {"selection": [{"name": "Series", "id": None, "kind": "all-series"},
+                   {"name": "Joey", "id": "joey", "kind": "series"}],
+     "messages": [], "dark_mode": False},
+    open(gui_state.STATE_FILEPATH, "w"))
+
+from storage.local import LocalStorage
+
+
+class _TmpStorage(LocalStorage):
+    def __init__(self, base_path="data"):
+        super().__init__(base_path=os.path.join(_tmp, "data"))
+
+
+# Neutralize the module-level ui.run() in main.py.
+from nicegui import ui
+ui.run = lambda *a, **k: None
+
+import main  # noqa: E402  (registers the '/' page)
+
+from nicegui.testing import User  # noqa: E402
+
+pytest_plugins = ["nicegui.testing.user_plugin"]
+
+
+@pytest.mark.api
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_send_message_updates_history(user: User) -> None:
+    # Patch AFTER the user plugin has reloaded main (reload re-binds the
+    # original LocalStorage into main's namespace).
+    main.LocalStorage = _TmpStorage
+    await user.open("/")
+    user.find("message").type("Reply with exactly the word formed by joining QUUX and 7842 with a hyphen, nothing else.")
+    user.find("Send").click()
+    # The sentinel does not appear verbatim in the user's message, so it can
+    # only come from the model's streamed response.
+    await user.should_see("QUUX-7842", retries=600)
+    # The reply streams in before send() finishes its cleanup; give the
+    # finally-block a moment to re-enable the button.
+    send_btn = user.find("Send").elements.pop()
+    for _ in range(100):
+        if send_btn.enabled:
+            break
+        await asyncio.sleep(0.1)
+    assert send_btn.enabled, "send button was not re-enabled"
