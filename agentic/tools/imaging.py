@@ -407,6 +407,8 @@ def create_character_style_example_image(
     )
 
     # Update the variant with the new image locator
+    if not isinstance(style.image, dict):
+        style.image = {}
     style.image["character"] = locator
     storage.update_object(data=style)
 
@@ -488,7 +490,7 @@ def create_styled_image_for_character_variant(
         variant_id=variant_id,
         series_id=series_id,
         character_id=character_id,
-        image_id="{character.name}-{variant.name}-{style.name}-styled-image"
+        image_id=f"{character.name}-{variant.name}-{style.name}-styled-image"
     )
 
     locator = generate_object_image(

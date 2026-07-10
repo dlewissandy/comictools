@@ -23,7 +23,7 @@ from storage.generic import GenericStorage
 
 def panel_selector(state: APPState, container: ui.element, image_filepath, new_itm:SelectionItem):
     selection = state.selection
-    new_sel = [s for s in state]+[new_itm]
+    new_sel = [s for s in selection]+[new_itm]
     image_id = new_itm.id
     with container:
         if image_id is not None and image_id != "":
@@ -162,7 +162,7 @@ def view_panel(state: APPState):
                 get_selection=lambda : panel.image,
                 set_selection=set_image,
                 get_images=lambda: storage.list_images(panel),
-                aspect_ratio={aspect},
+                aspect_ratio=aspect,
                 columns=4,
                 header_size=2,
             )

@@ -62,7 +62,7 @@ def init_layout(logger):
     ui.query('.nicegui-content').classes('w-full')
     ui.query('.q-page').classes('flex')   
     header = ui.header().classes().classes(HEADFOOT_STYLING_CLASSES)
-    middle = ui.row().classes('w-screen flex-1 overflow-hidden' + MIDDLE_STYLING_CLASSES).style('padding-left:12px; padding-right:12px;')
+    middle = ui.row().classes('w-screen flex-1 overflow-hidden ' + MIDDLE_STYLING_CLASSES).style('padding-left:12px; padding-right:12px;')
     footer = ui.footer().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300')
 
     # INITIALIZE EACH OF THE REGIONS
@@ -80,7 +80,7 @@ def init_layout(logger):
             with splitter.before:
                 details = ui.scroll_area().classes("h-full w-full "+MIDDLE_STYLING_CLASSES).style('padding-left:12px; padding-right:12px;')
             with splitter.after:
-                history = ui.scroll_area().classes("h-full w-full"+MIDDLE_STYLING_CLASSES+" border").style('padding-left:12px; padding-right:12px;')
+                history = ui.scroll_area().classes("h-full w-full "+MIDDLE_STYLING_CLASSES+" border").style('padding-left:12px; padding-right:12px;')
 
     # Footer region has the user input field and the send button
     with footer:

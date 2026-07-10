@@ -159,7 +159,9 @@ async def send(state: APPState):
     except Exception as e:
         logger.debug(f"Failed to read image editor selection: {e}")
 
-    # TODO: Disable the "send button" while the response is being generated
+    # Disable the "send button" while the response is being generated
+    send_button = state.send_button
+    send_button.disable()
 
     # Build The Message History
     messages = state.get_messages(role_map=ROLE_MAP)
@@ -181,12 +183,14 @@ async def send(state: APPState):
     history.scroll_to(percent=100)
     
     # Stream the responses from the agent, updating the UI as we go
-    responses = await handle_agent_events(state, messages, response_markdown, divider)
+    try:
+        responses = await handle_agent_events(state, messages, response_markdown, divider)
+    finally:
+        # Now that we are done, clean up the ui and re-enable the send button
+        # even if the agent run raised, so the user is never left stuck.
+        spinner.delete()
+        send_button.enable()
 
-    # Now that we are done, celan up the ui.
-    # TODO: RE-enable "send button" after the response is complete
-    spinner.delete()
-    
     state.write()
     if state.is_dirty:
         state.refresh_details()

@@ -14,6 +14,8 @@ from schema import (
     Cover,
     Publisher,
     Series,
+    SceneModel,
+    Panel,
     ArtStyle,
     BubbleStyle,
     DialogType,
@@ -657,15 +659,21 @@ def update_dialog_style(
     Returns:
         A status message indicating the result of the operation.
     """
-    pk = { "style_id": style_id }
-    return update_attribute(
-        wrapper=wrapper,
-        cls=ComicStyle,
-        primary_key=pk,
-        attribute="dialog_style",
-        value=dialog_style,
-        key = dialog_type.value
-    )
+    # BubbleStyles is a pydantic model whose per-type fields use underscores
+    # (e.g. "sound-effect" -> "sound_effect"), so we cannot treat it as a plain
+    # dict.  Update the specific nested bubble style field directly.
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    style: ComicStyle = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
+    if style is None:
+        return f"ComicStyle with ID '{style_id}' not found."
+    field = dialog_type.value.replace("-", "_")
+    if not hasattr(style.bubble_styles, field):
+        return f"Unknown dialog type '{dialog_type.value}'."
+    setattr(style.bubble_styles, field, dialog_style)
+    storage.update_object(data=style)
+    state.is_dirty = True
+    return f"Updated {dialog_type.value} bubble style for comic style '{style_id}'."
 
 @function_tool
 def update_character_style(
@@ -691,3 +699,249 @@ def update_character_style(
         attribute="character_style",
         value=character_style
 )
+
+
+# -------------------------------------------------------------------------
+# NAME UPDATES
+# Renaming updates the human-readable display name only; the object's id
+# (and therefore its storage location) is intentionally left unchanged.
+# -------------------------------------------------------------------------
+@function_tool
+def update_series_name(wrapper: RunContextWrapper[APPState], series_id: str, name: str) -> str:
+    """
+    Update the display name (title) of a comic series.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        name (str): The new name for the series.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    return update_attribute(wrapper=wrapper, cls=Series, primary_key={"series_id": series_id}, attribute="name", value=name)
+
+
+@function_tool
+def update_issue_name(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, name: str) -> str:
+    """
+    Update the display name (title) of a comic book issue.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the comic book issue.
+        name (str): The new name for the issue.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    return update_attribute(wrapper=wrapper, cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id}, attribute="name", value=name)
+
+
+@function_tool
+def update_character_name(wrapper: RunContextWrapper[APPState], series_id: str, character_id: str, name: str) -> str:
+    """
+    Update the display name of a character.
+
+    Args:
+        series_id (str): The ID of the comic series the character belongs to.
+        character_id (str): The ID of the character.
+        name (str): The new name for the character.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    return update_attribute(wrapper=wrapper, cls=CharacterModel, primary_key={"series_id": series_id, "character_id": character_id}, attribute="name", value=name)
+
+
+@function_tool
+def update_style_name(wrapper: RunContextWrapper[APPState], style_id: str, name: str) -> str:
+    """
+    Update the display name of a comic style.
+
+    Args:
+        style_id (str): The ID of the comic style.
+        name (str): The new name for the style.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    return update_attribute(wrapper=wrapper, cls=ComicStyle, primary_key={"style_id": style_id}, attribute="name", value=name)
+
+
+# -------------------------------------------------------------------------
+# SCENE UPDATES
+# -------------------------------------------------------------------------
+@function_tool
+def update_scene_name(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, scene_id: str, name: str) -> str:
+    """
+    Update the title/name of a scene.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue the scene belongs to.
+        scene_id (str): The ID of the scene.
+        name (str): The new name for the scene.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
+    return update_attribute(wrapper=wrapper, cls=SceneModel, primary_key=pk, attribute="name", value=name)
+
+
+@function_tool
+def update_scene_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, scene_id: str, story: str) -> str:
+    """
+    Update the story/narrative arc of a scene.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue the scene belongs to.
+        scene_id (str): The ID of the scene.
+        story (str): The new story for the scene.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
+    return update_attribute(wrapper=wrapper, cls=SceneModel, primary_key=pk, attribute="story", value=story)
+
+
+# -------------------------------------------------------------------------
+# PANEL UPDATES
+# -------------------------------------------------------------------------
+@function_tool
+def update_panel_name(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, scene_id: str, panel_id: str, name: str) -> str:
+    """
+    Update the short name of a panel.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue.
+        scene_id (str): The ID of the scene the panel belongs to.
+        panel_id (str): The ID of the panel.
+        name (str): The new name for the panel.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id}
+    return update_attribute(wrapper=wrapper, cls=Panel, primary_key=pk, attribute="name", value=name)
+
+
+@function_tool
+def update_panel_beat(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, scene_id: str, panel_id: str, beat: str) -> str:
+    """
+    Update the narrative beat of a panel (what changes or happens in this moment).
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue.
+        scene_id (str): The ID of the scene the panel belongs to.
+        panel_id (str): The ID of the panel.
+        beat (str): The new narrative beat for the panel.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id}
+    return update_attribute(wrapper=wrapper, cls=Panel, primary_key=pk, attribute="beat", value=beat)
+
+
+@function_tool
+def update_panel_description(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, scene_id: str, panel_id: str, description: str) -> str:
+    """
+    Update the detailed visual description of a panel.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue.
+        scene_id (str): The ID of the scene the panel belongs to.
+        panel_id (str): The ID of the panel.
+        description (str): The new visual description for the panel.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id}
+    return update_attribute(wrapper=wrapper, cls=Panel, primary_key=pk, attribute="description", value=description)
+
+
+# -------------------------------------------------------------------------
+# REORDERING
+# Moving an item renumbers the whole sibling list so the *_number fields stay
+# contiguous and 1-based, matching how the create_* tools maintain order.
+# -------------------------------------------------------------------------
+def _reorder(items: list, number_attr: str, item_id_attr: str, item_id: str, new_position: int):
+    """
+    Move the item identified by item_id to new_position (1-based) within items
+    (which must already be ordered by number_attr) and return the reordered list.
+    Returns None if the item is not found.
+    """
+    idx = next((i for i, it in enumerate(items) if getattr(it, item_id_attr) == item_id), None)
+    if idx is None:
+        return None
+    # Clamp the target to a valid 1-based position.
+    target = max(1, min(new_position, len(items))) - 1
+    moved = items.pop(idx)
+    items.insert(target, moved)
+    return items
+
+
+@function_tool
+def move_scene(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, scene_id: str, new_position: int) -> str:
+    """
+    Reorder a scene within its issue by moving it to a new position.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue the scene belongs to.
+        scene_id (str): The ID of the scene to move.
+        new_position (int): The 1-based position the scene should occupy (1 = first).
+
+    Returns:
+        A status message indicating the result of the reorder.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = {"series_id": series_id, "issue_id": issue_id}
+    scenes: list = storage.read_all_objects(cls=SceneModel, primary_key=pk, order_by="scene_number")
+    ordered = _reorder(scenes, "scene_number", "scene_id", scene_id, new_position)
+    if ordered is None:
+        return f"Scene '{scene_id}' not found in issue '{issue_id}'."
+    for i, s in enumerate(ordered):
+        if s.scene_number != i + 1:
+            s.scene_number = i + 1
+            storage.update_object(s)
+    state.is_dirty = True
+    return f"Moved scene '{scene_id}' to position {max(1, min(new_position, len(ordered)))}."
+
+
+@function_tool
+def move_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, scene_id: str, panel_id: str, new_position: int) -> str:
+    """
+    Reorder a panel within its scene by moving it to a new position.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue.
+        scene_id (str): The ID of the scene the panel belongs to.
+        panel_id (str): The ID of the panel to move.
+        new_position (int): The 1-based position the panel should occupy (1 = first).
+
+    Returns:
+        A status message indicating the result of the reorder.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
+    panels: list = storage.read_all_objects(cls=Panel, primary_key=pk, order_by="panel_number")
+    ordered = _reorder(panels, "panel_number", "panel_id", panel_id, new_position)
+    if ordered is None:
+        return f"Panel '{panel_id}' not found in scene '{scene_id}'."
+    for i, p in enumerate(ordered):
+        if p.panel_number != i + 1:
+            p.panel_number = i + 1
+            storage.update_object(p)
+    state.is_dirty = True
+    return f"Moved panel '{panel_id}' to position {max(1, min(new_position, len(ordered)))}."

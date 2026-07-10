@@ -53,7 +53,7 @@ def read_all(
         return storage.read_all_objects(cls=cls)
 
     # If we reach here, the requested object is a child of the last item in the hierarchy
-    pk_parent = context[0][1] if parent_key is None else parent_key
+    pk_parent = context[-1][1] if parent_key is None else parent_key
     objs = storage.read_all_objects(cls=cls, primary_key=pk_parent)
 
     if order_by is None:
@@ -95,7 +95,7 @@ def read_one(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], pk: dic
     elif len(context) == 0:
         # If the context is empty, we can still find series, publishers and styles (since they)
         # are top level objects in the hierarchy.
-        if any(pk.keys(), lambda k: k not in TOP_LEVEL_IDS):
+        if any(k not in TOP_LEVEL_IDS for k in pk):
             # However if the user selected something that is not at the top level of the hierarch, then
             # We throw an error
             logger.error(CONTEXT_ERROR_MSG)
@@ -103,12 +103,12 @@ def read_one(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], pk: dic
         logger.debug("Finding top level object with key = {pk}")
 
     # Special case for when the context and the primary key of the current selection are the same
-    elif len(context) > 0 and context[0][1] == pk:
+    elif len(context) > 0 and context[-1][1] == pk:
         logger.debug(f"Finding current selection {pk}")
-    
+
     # The requested object should be a child of the selected object
     elif len(context) > 0 and len(pk) == len(context)+1:
-        parent_pk = context[0][1]
+        parent_pk = context[-1][1]
         parent_keys = list(parent_pk.keys())
         child_keys = pk.keys()
         while len(parent_keys) > 0:

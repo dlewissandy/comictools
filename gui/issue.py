@@ -46,7 +46,7 @@ def view_issue(state:APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message("I would like to delete the current issue."))
+            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current issue."))
 
         
         with ui.row().classes('w-full flex-nowrap'):

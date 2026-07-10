@@ -47,7 +47,7 @@ def view_reference_image(
             img_ref = image_refs[0]
         upload_image = lambda name, data, mime_type: storage.upload_reference_image(parent, name=name, data=data,  mime_type=mime_type)
         updater = lambda x: storage.update_object(x)
-        name = "Panel {parent.panel_number}"
+        name = f"Panel {parent.panel_number}"
     elif parent_sel.kind == SelectedKind.COVER:
         primary_key = {
             "series_id": selection[-3].id,
@@ -84,17 +84,10 @@ def view_reference_image(
         updater(parent)
         state.is_dirty = True
 
-    images_path = os.path.join("data","uploads")
-
     def get_images():
-
-        # return the filepaths to all the reference images in
-        # data/uploads
-        if not os.path.exists(images_path):
-            return []
-        else:
-            
-            return [os.path.join(images_path, f) for f in os.listdir(images_path) if os.path.isfile(os.path.join(images_path, f))]
+        # Return the reference-image uploads that belong to THIS object
+        # (panel or cover), not a shared global uploads directory.
+        return storage.list_uploads(parent)
     
 
 

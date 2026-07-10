@@ -77,7 +77,9 @@ from agentic.tools.imaging import (
 )
 from agentic.tools.updater import (
     update_character_description,
+    update_character_name,
     update_issue_story,
+    update_issue_name,
     update_issue_publication_date,
     update_issue_price,
     update_issue_writer,
@@ -87,6 +89,15 @@ from agentic.tools.updater import (
     update_logo_description,
     update_publisher_description,
     update_series_description,
+    update_series_name,
+    update_style_name,
+    update_scene_name,
+    update_scene_story,
+    update_panel_name,
+    update_panel_beat,
+    update_panel_description,
+    move_scene,
+    move_panel,
     update_cover_style,
     update_cover_aspect_ratio,
     update_art_style,
@@ -145,14 +156,14 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_variants,
     
         # describe_image,
-        # TODO: update_character_name,
+        update_character_name,
         update_character_description,
 
         delete_character,
+        delete_character_variant,
         create_variant,
         # create_variant_from_image
         # TODO: Create variant from image
-        # TODO: delete variant
     ],
     "cover": [
         # Create
@@ -183,7 +194,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_scene,
         read_all_scenes,
         # Update
-        # TODO: Update issue name
+        update_issue_name,
         update_issue_story,
         update_issue_publication_date,
         update_issue_price,
@@ -191,12 +202,12 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_issue_artist,
         update_issue_colorist,
         update_issue_creative_minds,
+        # Reorder
+        move_scene,
         # Delete
         delete_issue,
         delete_cover,
         delete_scene,
-        # TODO Reorder scenes
-
     ],
     "panel": [
         # Create
@@ -204,6 +215,9 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_panel,
         read_scene,
         # Update
+        update_panel_name,
+        update_panel_beat,
+        update_panel_description,
         # Delete
         delete_panel,
         # Navigation
@@ -234,10 +248,14 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_panels,
         read_style,
         # Update
+        update_scene_name,
+        update_scene_story,
+        # Reorder
+        move_panel,
         # Delete
         delete_scene,
         delete_panel
-    
+
     ],
     "series": [
         # Create
@@ -254,6 +272,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_issues,
 
         # Update
+        update_series_name,
         update_series_description,
 
         # Delete
@@ -267,6 +286,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Read
         read_style,
         # Update
+        update_style_name,
         update_style_description,
         update_art_style,
         update_dialog_style,

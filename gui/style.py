@@ -49,6 +49,8 @@ def view_style(state: APPState):
             """
             Set the image for the style.
             """
+            if not isinstance(style.image, dict):
+                style.image = {}
             style.image[example_type] = image_locator
             storage.update_object(style)
 
@@ -167,7 +169,7 @@ def view_pick_style(state: APPState):
         scene_id = selection[-2].id
         issue_id = selection[-3].id
         series_id = selection[-4].id
-        parent = storage.read_object(cls=SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})(series_id=series_id, issue_id=issue_id, scene_id=scene_id)
+        parent = storage.read_object(cls=SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
         writer = lambda: storage.update_object(data=parent)
     elif parent_kind == SelectedKind.COVER:
         issue_id = selection[-3].id
@@ -190,7 +192,7 @@ def view_pick_style(state: APPState):
         view_all_instances(
             state=state,
             get_instances=lambda: storage.read_all_objects(ComicStyle),
-            get_image_locator=lambda x: storage.find_image(StyleExample(style_id=x.style_id, example_type="art", mime_type="image/jpeg", image_id="art"), x.image.get('art',None)) if x.image.get('art', None) else None,
+            get_image_locator=lambda x: storage.find_image(StyleExample(style_id=x.style_id, example_type="art", mime_type="image/jpeg", image_id="art"), x.image.get('art',None)) if isinstance(x.image, dict) and x.image.get('art', None) else None,
             kind="style",
             aspect_ratio="1/1",
             get_name=lambda _,x: x.name,

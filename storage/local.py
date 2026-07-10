@@ -342,7 +342,7 @@ class LocalStorage(GenericStorage):
             image_locator (str): The file path of the image to find.
             relation (Relation): The relation to use to determine the folder in which the image is stored.
         """
-        logger.trace(f"Finding reference image for {obj.__class__.__name__} with primary key: {obj.primary_key}, image locator: {image_locator}, and relation: {relation}")
+        logger.trace(f"Finding reference image for {obj.__class__.__name__} with primary key: {obj.primary_key}, image locator: {image_locator}")
         uploads = self.list_uploads(obj)
         for upload in uploads:
             if upload == image_locator:
@@ -355,7 +355,7 @@ class LocalStorage(GenericStorage):
         "uploads/relation" folder of the object.   
         """
         logger.trace(f"Listing uploads for {obj.__class__.__name__} with primary key: {obj.primary_key}")
-        return self._list_images(obj_to_imagepath(obj))
+        return self._list_images(obj_to_reference_path(obj))
 
     def _upload_image(self, path: str, name: str, data: BinaryIO, mime_type: str) -> str:
         if not mime_type.startswith("image/"):

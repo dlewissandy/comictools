@@ -70,8 +70,7 @@ def select_series(wrapper: RunContextWrapper[APPState], series_id: str) -> str:
         name=series.name,
         kind=SelectedKind.SERIES,
     )
-    state.selection.append(sel_itm)
-    state.is_dirty = True
+    state.change_selection(new=state.selection + [sel_itm])
     return f"Selected comic series: {series.name}"
 
 @function_tool

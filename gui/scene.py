@@ -122,15 +122,14 @@ def view_scene(state: APPState):
                         w = 0
                     w += panel_width
                     image = None
-                    if hasattr(panel, "image"):
-                        image = getattr(panel, "image")
-                        if image == "":
-                            image == None
+                    if getattr(panel, "image", None):
+                        # Resolve the stored locator to an actual image filepath.
+                        image = storage.find_image(obj=panel, locator=panel.image)
                     with row:
                         # Create a new card that is panel_width/8 wide
                         with ui.card().classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800').style(f'; width: {panel_width*12.25}%; aspect-ratio: {aspect}').classes('mb-2 p-2 break-inside-avoid ') as card:
                             if image is not None:
-                                ui.image(source=os.path.join(scene.path, "panels", "images", f"image.py"))
+                                ui.image(source=image).style(f'top-padding: 0; bottom-padding:0; aspect-ratio: {aspect};')
                             else:
                                 with ui.scroll_area().classes('w-full h-full').style('overflow: auto;'):
                                     header(f"Panel {panel.panel_number}: {panel.name}", 3)

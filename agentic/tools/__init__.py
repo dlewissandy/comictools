@@ -2,6 +2,13 @@ from .context import read_context
 
 from .updater import (
     update_character_description,
+    update_issue_story,
+    update_issue_publication_date,
+    update_issue_price,
+    update_issue_writer,
+    update_issue_artist,
+    update_issue_colorist,
+    update_issue_creative_minds,
     update_logo_description,
     update_publisher_description,
     update_series_description,
@@ -144,7 +151,7 @@ __all__ = [
     "update_variant_gender",
     "update_variant_height",
     "update_variant_race",
-    "update_style_description"
+    "update_style_description",
     "update_art_style",
     "update_dialog_style",
     "update_character_style",

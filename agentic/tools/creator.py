@@ -301,7 +301,7 @@ def create_panel(
     characters: list[CharacterRef],
     narration: list[Narration],
     dialogue: list[Dialogue],
-    insertion_location: InsertionLocation = AfterLast,
+    insertion_location: InsertionLocation = AfterLast(kind="after_last"),
 ) -> str:
     """
 Use this tool to create a single panel in a comic book. Choose this when you 
@@ -451,13 +451,12 @@ def create_issue(wrapper: RunContextWrapper[APPState], series_id: str, title: st
     issue = Issue(
         issue_id = title.lower().replace(" ", "-"),
         style_id = "vintage-four-color",
-        series_id = series.id,
-        title = title,
+        series_id = series.series_id,
+        name = title,
         story = story,
         issue_number = issue_number,
         publication_date = None,  # This can be set later
         price = None,  # This can be set later
-        author = None,  # This can be set later
         writer = None,  # This can be set later
         artist= None,  # This can be set later
         colorist= None,  # This can be set later
