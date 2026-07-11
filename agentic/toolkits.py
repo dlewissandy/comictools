@@ -64,7 +64,7 @@ from agentic.tools import (
 )
 from agentic.tools.creator import create_variant, create_variant_from_image, create_setting, create_scene_panels
 from agentic.tools.reader import read_setting, read_all_settings
-from agentic.tools.deleter import delete_setting
+from agentic.tools.deleter import delete_setting, undo_last_delete
 from agentic.tools.updater import (
     update_scene_setting,
     update_scene_cast,
@@ -79,7 +79,7 @@ from agentic.tools.library import list_library_assets, import_character, import_
 from agentic.tools.assets import (
     create_prop, read_all_props, update_prop_description, delete_prop,
     create_outfit, read_all_outfits, update_outfit_description, delete_outfit,
-    compose_character_variant,
+    compose_character_variant, extract_outfit_from_variant,
 )
 from agentic.tools.imaging import generate_prop_reference, generate_outfit_reference
 from agentic.tools.imaging import (
@@ -134,6 +134,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Update
 
         # Delete
+        undo_last_delete,
         delete_publisher,
         # Navigation
         select_publisher,
@@ -183,6 +184,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         create_variant,
         create_variant_from_image,
         compose_character_variant,
+        extract_outfit_from_variant,
         read_all_outfits,
         read_all_props,
         create_outfit,
@@ -201,6 +203,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_cover_style,
         update_cover_setting,
         # Delete
+        undo_last_delete,
         delete_cover,
         # Navigation
         # Imaging
@@ -250,6 +253,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         preflight_issue,
         export_issue_pdf,
         # Delete
+        undo_last_delete,
         delete_issue,
         delete_cover,
         delete_scene,
@@ -266,6 +270,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_panel_beat,
         update_panel_description,
         # Delete
+        undo_last_delete,
         delete_panel,
         # Imaging
         generate_setting_background,
@@ -284,6 +289,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_logo_description,
         update_publisher_description,
         # Delete
+        undo_last_delete,
         delete_publisher,
 
         # Navigation
@@ -320,6 +326,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Reorder
         move_panel,
         # Delete
+        undo_last_delete,
         delete_scene,
         delete_panel,
         # Imaging
@@ -369,6 +376,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_setting_props,
 
         # Delete
+        undo_last_delete,
         delete_series,
         delete_issue,
         delete_character,
@@ -386,6 +394,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_dialog_style,
         update_character_style,
         # Delete
+        undo_last_delete,
         delete_style,
         # Images
         create_character_style_example_image,
@@ -424,9 +433,11 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_variant_race,
 
         # Delete
+        undo_last_delete,
         delete_character_variant,
         # Imaging
         create_styled_image_for_character_variant,
+        extract_outfit_from_variant,
         generate_outfit_reference,
         generate_prop_reference,
         read_all_outfits,
@@ -452,6 +463,22 @@ TOOLKITS["library"] = [
     # Import
     import_character,
     import_setting,
+]
+
+TOOLKITS["prop"] = [
+    read_all_props,
+    update_prop_description,
+    delete_prop,
+    generate_prop_reference,
+    read_all_styles,
+]
+
+TOOLKITS["outfit"] = [
+    read_all_outfits,
+    update_outfit_description,
+    delete_outfit,
+    generate_outfit_reference,
+    read_all_styles,
 ]
 
 TOOLKITS["setting"] = [

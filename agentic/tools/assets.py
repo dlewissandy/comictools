@@ -212,3 +212,43 @@ def compose_character_variant(wrapper: RunContextWrapper[APPState],
     return (f"Composed variant '{name}' of {character_id}: base '{base_variant_id}' identity + "
             f"outfit '{outfit.name}'{props_note}.  Render its reference sheet with "
             f"create_styled_image_for_character_variant.")
+
+
+@function_tool
+def extract_outfit_from_variant(wrapper: RunContextWrapper[APPState],
+        series_id: str, character_id: str, variant_id: str, outfit_name: str = "") -> str:
+    """
+    Retrofit an older variant into the composition model: lift its attire
+    description out into a reusable Outfit asset and link the variant to it.
+    The variant keeps looking exactly the same; its wardrobe just becomes a
+    studio asset any character can wear.
+
+    Args:
+        series_id: The series the character belongs to.
+        character_id: The character.
+        variant_id: The variant whose attire to extract.
+        outfit_name: Name for the new outfit (defaults to the variant's name).
+
+    Returns:
+        A status message.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    variant = storage.read_object(CharacterVariant, {"series_id": series_id, "character_id": character_id, "variant_id": variant_id})
+    if variant is None:
+        return f"Variant '{variant_id}' of '{character_id}' not found."
+    if variant.outfit_id:
+        return f"This variant already wears the outfit '{variant.outfit_id}'."
+    if not (variant.attire or "").strip():
+        return "This variant has no attire description to extract."
+
+    name = outfit_name or f"{variant.name}"
+    outfit = Outfit(outfit_id=normalize_id(name), series_id=series_id, name=name, description=variant.attire)
+    result = creator(wrapper=wrapper, obj=outfit, overwrite=True)
+    if isinstance(result, str):
+        return result
+    variant.outfit_id = outfit.outfit_id
+    storage.update_object(data=variant)
+    state.is_dirty = True
+    return (f"Extracted outfit '{name}' from {character_id}'s '{variant.name}' and linked it.  "
+            f"Render its reference art with generate_outfit_reference so composites can use it.")

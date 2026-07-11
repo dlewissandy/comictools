@@ -264,8 +264,9 @@ class LocalStorage(GenericStorage):
             return None
         
         filepath = obj_to_filepath(instance, base_path=self.base_path)
-        logger.debug(f"Deleting file at {filepath}")
-        shutil.rmtree(os.path.dirname(filepath), ignore_errors=True)
+        logger.debug(f"Soft-deleting {os.path.dirname(filepath)}")
+        from storage.trash import soft_delete
+        soft_delete(str(self.base_path), os.path.dirname(filepath), note=cls.__name__)
 
         # sync the grandparent folder
         grandparent_path = os.path.dirname(os.path.dirname(filepath))
@@ -594,6 +595,7 @@ class LocalStorage(GenericStorage):
             return
         if not os.path.isfile(locator):
             raise NotADirectoryError(f"Path {locator} is not a file.")
-        os.remove(locator)
-        logger.debug(f"Image {locator} deleted.")   
+        from storage.trash import soft_delete
+        soft_delete(str(self.base_path), locator, note="image")
+        logger.debug(f"Image {locator} moved to trash.")   
         

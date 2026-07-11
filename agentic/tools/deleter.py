@@ -193,3 +193,21 @@ def delete_setting(wrapper: RunContextWrapper[APPState], series_id: str, setting
     from schema import Setting
     pk = {"series_id": series_id, "setting_id": setting_id}
     return deleter(wrapper=wrapper, cls=Setting, primary_key=pk)
+
+@function_tool
+def undo_last_delete(wrapper: RunContextWrapper[APPState]) -> str:
+    """
+    Restore the most recently deleted object or image from the studio trash.
+    Deletes in this studio are never destructive — everything can be brought
+    back, most recent first.
+
+    Returns:
+        What was restored, or why nothing could be.
+    """
+    from storage.trash import restore_last
+    state: APPState = wrapper.context
+    restored = restore_last(str(state.storage.base_path))
+    if restored is None:
+        return "Nothing to restore — the trash is empty (or the original location is occupied again)."
+    state.is_dirty = True
+    return f"Restored: {restored}"
