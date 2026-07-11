@@ -457,6 +457,21 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                 if e.key.name in ('k', 'K') and (e.modifiers.ctrl or e.modifiers.meta) and e.action.keydown and not e.action.repeat
                 else None, ignore=[])
 
+    # THE DRAWING BOARD: a quiet header chip while the studio renders —
+    # you always know work is underway without watching the chat.
+    with breadcrumbs.parent_slot.parent:
+        with ui.row().classes('items-center no-wrap').style('gap: 6px; display: none;') as board_chip:
+            ui.spinner('dots', size='1.4em', color='primary')
+            board_label = ui.label('').classes('text-xs')
+        board_chip.tooltip('The studio is at work — receipts land in the chat as pieces finish')
+
+    def _board_tick():
+        n = len(getattr(state, '_render_pending', None) or [])
+        if n:
+            board_label.set_text(f"{n} on the drawing board")
+        board_chip.style(f"display: {'flex' if n else 'none'}; gap: 6px;")
+    ui.timer(1.0, _board_tick)
+
     # Browser back/forward re-resolves the selection from the URL.
     ui.add_body_html("<script>window.addEventListener('popstate', () => location.reload());</script>")
 

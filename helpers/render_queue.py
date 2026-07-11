@@ -26,6 +26,16 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
     """
     from nicegui import ui
 
+    # the header's drawing-board chip watches this list
+    pending = getattr(state, '_render_pending', None)
+    if pending is None:
+        pending = []
+        try:
+            state._render_pending = pending
+        except Exception:
+            pass
+    pending.extend(label for label, _ in jobs)
+
     def _announce(text: str, image: str | None = None):
         try:
             from gui.avatars import comic_chat_message
@@ -59,6 +69,11 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                 failed += 1
                 logger.error(f"render job '{label}' failed: {e}")
                 _announce(f"⚠️ **{label}** — failed: {e}")
+            finally:
+                try:
+                    pending.remove(label)
+                except ValueError:
+                    pass
             try:
                 state.refresh_details()
             except Exception as e:
