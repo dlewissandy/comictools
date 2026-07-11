@@ -251,6 +251,46 @@ if (!window._roughDragInit) {
     }
     report(fig, canvas);
   }, {passive: false});
+  // STACK REORDER: drag rows; the stack order IS the z-order
+  let stackDrag = null;
+  document.addEventListener('dragstart', (e) => {
+    const row = e.target.closest('.stack-row');
+    if (!row) return;
+    stackDrag = row;
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  document.addEventListener('dragover', (e) => {
+    if (!stackDrag) return;
+    const row = e.target.closest('.stack-row');
+    if (row && row !== stackDrag) {
+      e.preventDefault();
+      row.classList.add('stack-drop');
+    }
+  });
+  document.addEventListener('dragleave', (e) => {
+    const row = e.target.closest('.stack-row');
+    if (row) row.classList.remove('stack-drop');
+  });
+  document.addEventListener('drop', (e) => {
+    document.querySelectorAll('.stack-drop').forEach(r => r.classList.remove('stack-drop'));
+    if (!stackDrag) return;
+    const row = e.target.closest('.stack-row');
+    const src = stackDrag;
+    stackDrag = null;
+    if (!row || row === src) return;
+    e.preventDefault();
+    const stack = row.closest('.acetate-stack');
+    if (!stack) return;
+    emitEvent('stack_reorder', {
+      src: src.dataset.key, dst: row.dataset.key,
+      series: stack.dataset.series, issue: stack.dataset.issue,
+      scene: stack.dataset.scene, panel: stack.dataset.panel});
+  });
+  document.addEventListener('dragend', () => {
+    document.querySelectorAll('.stack-drop').forEach(r => r.classList.remove('stack-drop'));
+    stackDrag = null;
+  });
+
   // double-click a balloon or caption: edit the words IN PLACE
   document.addEventListener('dblclick', (e) => {
     const fig = e.target.closest('.rough-drag');
@@ -353,6 +393,56 @@ def light_table(state: APPState, panel, scene, setting,
             state.storage.update_object(p)
         ui.on('rough_text', _on_text)
 
+        def _on_reorder(e):
+            from schema import Panel as _Panel
+            a = e.args
+            p = state.storage.read_object(cls=_Panel, primary_key={
+                "series_id": a['series'], "issue_id": a['issue'],
+                "scene_id": a['scene'], "panel_id": a['panel']})
+            if p is None:
+                return
+            fig_keys = [f"{r.character_id}/{r.variant_id}" for r in (p.character_references or [])]
+            fig_keys += [k for k in sorted(p.figure_images or {}) if k.startswith('element/')]
+
+            def z(k):
+                return ((p.figure_blocking or {}).get(k) or {}).get('z', 0)
+
+            blocks, grouped = [], set()
+            for gname, ks in (p.layer_groups or {}).items():
+                ms = sorted([k for k in ks if k in fig_keys], key=lambda k: -z(k))
+                if ms:
+                    blocks.append([f'group:{gname}', ms])
+                    grouped.update(ms)
+            for k in fig_keys:
+                if k not in grouped:
+                    blocks.append([k, [k]])
+            blocks.sort(key=lambda b: -max(z(k) for k in b[1]))
+
+            src, dst = a['src'], a['dst']
+            ids = [b[0] for b in blocks]
+            if src in ids and dst in ids:
+                # move a whole block before the target block
+                blk = blocks.pop(ids.index(src))
+                blocks.insert([b[0] for b in blocks].index(dst), blk)
+            else:
+                # member-level: reorder within the same group only
+                owner = {k: b for b in blocks for k in b[1]}
+                if src in owner and dst in owner and owner[src] is owner[dst]:
+                    ms = owner[src][1]
+                    ms.remove(src)
+                    ms.insert(ms.index(dst), src)
+                else:
+                    return
+            flat = [k for b in blocks for k in b[1]]
+            n = len(flat)
+            for i, k in enumerate(flat):
+                cur = dict((p.figure_blocking or {}).get(k) or {})
+                cur['z'] = n - i
+                p.figure_blocking[k] = cur
+            state.storage.update_object(p)
+            state.refresh_details()
+        ui.on('stack_reorder', _on_reorder)
+
     # ---- gather the acetates -------------------------------------------
     background = None
     split_plate = (panel.figure_images or {}).get("background/plate")
@@ -379,7 +469,8 @@ def light_table(state: APPState, panel, scene, setting,
         blocking.setdefault("h", 78 if posed else 52)
         blocking.setdefault("z", i)
         figures.append({"ref": ref, "key": key, "img": posed or sheet,
-                        "posed": posed is not None, "on": True, "blocking": blocking})
+                        "posed": posed is not None,
+                        "on": bool(blocking.get("on", 1)), "blocking": blocking})
 
     for key, path in sorted((panel.figure_images or {}).items()):
         if not key.startswith("element/") or not (path and os.path.exists(path)):
@@ -389,8 +480,9 @@ def light_table(state: APPState, panel, scene, setting,
         blocking.setdefault("y", 0)
         blocking.setdefault("h", 45)
         blocking.setdefault("z", 40)
-        figures.append({"ref": None, "key": key, "img": path, "posed": True, "on": True,
-                        "blocking": blocking, "name": key.split("/", 1)[1].replace("-", " ")})
+        figures.append({"ref": None, "key": key, "img": path, "posed": True,
+                        "on": bool(blocking.get("on", 1)), "blocking": blocking,
+                        "name": key.split("/", 1)[1].replace("-", " ")})
 
     props = [{"name": p.name, "on": True} for p in ((scene.props or []) if scene is not None else [])]
 
@@ -571,6 +663,11 @@ def light_table(state: APPState, panel, scene, setting,
 
         def toggle():
             layer["on"] = not layer["on"]
+            if layer.get("key"):
+                cur = dict((panel.figure_blocking or {}).get(layer["key"]) or {})
+                cur["on"] = 1 if layer["on"] else 0
+                panel.figure_blocking[layer["key"]] = cur
+                storage.update_object(panel)
             btn.props(f'icon={"visibility" if layer["on"] else "visibility_off"}')
             rough.refresh()
         btn.on('click', toggle)
@@ -665,8 +762,13 @@ def light_table(state: APPState, panel, scene, setting,
         ui.button('Compose', icon='auto_awesome').props('unelevated dense').on('click', lambda _: compose())
 
     with ui.row().classes('w-full flex-nowrap').style('gap: 12px; align-items: stretch;'):
-        with ui.column().classes('w-1/3').style('gap: 4px; min-width: 220px;'):
-            ui.label('top of the stack prints last').classes('text-xs text-gray-500 italic')
+        stack_col = ui.column().classes('w-1/3 acetate-stack').style('gap: 4px; min-width: 220px;')
+        stack_col._props['data-series'] = series_id
+        stack_col._props['data-issue'] = panel.issue_id
+        stack_col._props['data-scene'] = panel.scene_id
+        stack_col._props['data-panel'] = panel.panel_id
+        with stack_col:
+            ui.label('top of the stack prints last — drag rows to restack').classes('text-xs text-gray-500 italic')
             if has_letters:
                 layer_row('chat_bubble', 'Letters — balloons & captions', letters,
                           edit_message='I would like to edit the narration and dialogue of this panel.')
@@ -747,11 +849,17 @@ def light_table(state: APPState, panel, scene, setting,
                                 .tooltip('Remove this narrator box').on('click', lambda _, n=n: drop_caption(n))
             for p in props:
                 layer_row('category', f"Foreground — {p['name']}", p)
-            for f in figures:
-                if f["ref"] is None:
-                    # a SPLIT ELEMENT: movable, healable, removable
-                    with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
-                        eye(f)
+            # THE STACK IS THE Z-ORDER: drag rows to restack (top prints
+            # last); split products sit nested under their group.
+            def figure_row(f, indent=False):
+                row = ui.row().classes('light-layer stack-row w-full items-center flex-nowrap') \
+                    .style('gap: 6px;' + (' margin-left: 14px; width: calc(100% - 14px);' if indent else ''))
+                row.props('draggable=true')
+                row._props['data-key'] = f["key"]
+                with row:
+                    ui.icon('drag_indicator').classes('text-sm text-gray-400')
+                    eye(f)
+                    if f["ref"] is None:
                         ui.image(source=_src(f["img"])).classes('light-thumb')
                         ui.label(f["name"].title()).classes('text-sm')
 
@@ -765,32 +873,22 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.button(icon='content_cut').props('flat round dense size=xs') \
                             .tooltip('Split this element into ITS elements') \
                             .on('click', lambda _, k=f["key"], p=f["img"]: split_flow(k, p))
-
-                        def restack_el(f=f, front=True):
-                            zs = [g["blocking"].get("z", 0) for g in figures] or [0]
-                            f["blocking"]["z"] = (max(zs) + 1) if front else (min(zs) - 1)
-                            cur = dict((panel.figure_blocking or {}).get(f["key"]) or {})
-                            cur.update(f["blocking"])
-                            panel.figure_blocking[f["key"]] = cur
-                            storage.update_object(panel)
-                            rough.refresh()
-                        ui.button(icon='flip_to_front').props('flat round dense size=xs') \
-                            .tooltip('Bring to front').on('click', lambda _, f=f: restack_el(f, True))
-                        ui.button(icon='flip_to_back').props('flat round dense size=xs') \
-                            .tooltip('Send to back').on('click', lambda _, f=f: restack_el(f, False))
+                        ui.space()
 
                         def drop_element(key=f["key"], nm=f["name"]):
                             panel.figure_images.pop(key, None)
                             panel.figure_blocking.pop(key, None)
+                            for gname in list((panel.layer_groups or {})):
+                                panel.layer_groups[gname] = [k for k in panel.layer_groups[gname] if k != key]
+                                if not panel.layer_groups[gname]:
+                                    panel.layer_groups.pop(gname)
                             storage.update_object(panel)
                             _receipt(f"✂️ removed **{nm}** from the table")
                             state.refresh_details()
                         ui.button(icon='close').props('flat round dense size=xs') \
                             .tooltip('Remove this element for good') \
                             .on('click', lambda _, k=f["key"], n=f["name"]: drop_element(k, n))
-                    continue
-                with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
-                    eye(f)
+                        return
 
                     def pick_variant(ref=f["ref"]):
                         # click the acetate to swap which variant they wear
@@ -811,25 +909,11 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.button(icon='accessibility_new').props('flat round dense size=xs') \
                         .tooltip('Pose this figure — describe the pose' if not f["posed"] else 'Re-pose — describe the new pose') \
                         .on('click', lambda _, r=f["ref"]: pose_dialog(r.character_id, r.variant_id))
-                    def restack(f=f, front=True):
-                        zs = [g["blocking"].get("z", 0) for g in figures] or [0]
-                        f["blocking"]["z"] = (max(zs) + 1) if front else (min(zs) - 1)
-                        cur = dict((panel.figure_blocking or {}).get(f["key"]) or {})
-                        cur.update(f["blocking"])
-                        panel.figure_blocking[f["key"]] = cur
-                        storage.update_object(panel)
-                        rough.refresh()
-                    ui.button(icon='flip_to_front').props('flat round dense size=xs') \
-                        .tooltip('Bring to front') \
-                        .on('click', lambda _, f=f: restack(f, True))
-                    ui.button(icon='flip_to_back').props('flat round dense size=xs') \
-                        .tooltip('Send to back') \
-                        .on('click', lambda _, f=f: restack(f, False))
                     if f["posed"]:
                         ui.button(icon='content_cut').props('flat round dense size=xs') \
                             .tooltip('Split: lift props/wardrobe off this figure, revealing the character beneath') \
                             .on('click', lambda _, k=f["key"], p=f["img"]: split_flow(k, p))
-                    if f["posed"]:
+
                         def edit_acetate(path=f["img"], name=name_lbl):
                             from gui.selection import SelectionItem, SelectedKind
                             itm = SelectionItem(name=f"Edit {name} acetate", id=path,
@@ -858,6 +942,58 @@ def light_table(state: APPState, panel, scene, setting,
                         .mark('uncast') \
                         .tooltip('Take this figure off the table') \
                         .on('click', lambda _, ref=f["ref"]: uncast(ref))
+
+            fig_by_key = {f["key"]: f for f in figures}
+            grouped_keys = set()
+            display = []
+            for gname, ks in (panel.layer_groups or {}).items():
+                members = [fig_by_key[k] for k in ks if k in fig_by_key]
+                if members:
+                    display.append(('group', gname, members))
+                    grouped_keys.update(m["key"] for m in members)
+            for f in figures:
+                if f["key"] not in grouped_keys:
+                    display.append(('fig', None, [f]))
+            display.sort(key=lambda it: -max(m["blocking"].get("z", 0) for m in it[2]))
+
+            for kind_, gname, members in display:
+                if kind_ == 'fig':
+                    figure_row(members[0])
+                    continue
+                grow = ui.row().classes('light-layer stack-row w-full items-center flex-nowrap').style('gap: 6px;')
+                grow.props('draggable=true')
+                grow._props['data-key'] = f'group:{gname}'
+                with grow:
+                    ui.icon('drag_indicator').classes('text-sm text-gray-400')
+                    all_on = any(m["on"] for m in members)
+                    gbtn = ui.button(icon='visibility' if all_on else 'visibility_off') \
+                        .props('flat round dense size=sm').tooltip('Lift the whole group')
+
+                    def toggle_group(members=members, gbtn=gbtn):
+                        now = not any(m["on"] for m in members)
+                        for m in members:
+                            m["on"] = now
+                            cur = dict((panel.figure_blocking or {}).get(m["key"]) or {})
+                            cur["on"] = 1 if now else 0
+                            panel.figure_blocking[m["key"]] = cur
+                        storage.update_object(panel)
+                        gbtn.props(f"icon={'visibility' if now else 'visibility_off'}")
+                        rough.refresh()
+                    gbtn.on('click', lambda _, m=members, b=gbtn: toggle_group(m, b))
+                    ui.icon('folder_open').classes('text-lg').style('width: 40px; text-align: center;')
+                    ui.label(gname.title()).classes('text-sm text-bold')
+                    ui.space()
+
+                    def ungroup(gname=gname):
+                        panel.layer_groups.pop(gname, None)
+                        storage.update_object(panel)
+                        _receipt(f"📂 ungrouped **{gname}**")
+                        state.refresh_details()
+                    ui.button(icon='folder_off').props('flat round dense size=xs') \
+                        .tooltip('Ungroup (the layers stay)') \
+                        .on('click', lambda _, g=gname: ungroup(g))
+                for m in sorted(members, key=lambda g: -g["blocking"].get("z", 0)):
+                    figure_row(m, indent=True)
             for r in references:
                 layer_row('attachment', f"Reference — {os.path.basename(r['img'])}", r, thumb=r["img"])
 

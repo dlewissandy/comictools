@@ -27,6 +27,7 @@ class Panel(BaseModel):
     image: str | None = Field(None, description="The selected image for this panel.  default to None")
     figure_images: dict[str, str] = Field(default_factory=dict, description="Posed figure acetates for this panel: maps 'character_id/variant_id' to a transparent cut-out image posed for this moment.  Default to empty dict.")
     figure_blocking: dict[str, dict] = Field(default_factory=dict, description="Blocking for each figure acetate: maps 'character_id/variant_id' to {x: percent from left (center of figure), y: percent up from the bottom, h: height as percent of the frame}.  Default to empty dict.")
+    layer_groups: dict[str, list[str]] = Field(default_factory=dict, description="Named groups of light-table layers: maps a group name to the member layer keys.  Splitting a layer nests its products under a group.  Default to empty dict.")
     reference_images: list[ReferenceImage] = Field(..., description="The reference images for the panel.  default to empty list")
 
     @property

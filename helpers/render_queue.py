@@ -46,6 +46,7 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
     async def run():
         done, failed = 0, 0
         for i, (label, job) in enumerate(jobs, start=1):
+            _announce(f"⏳ **{label}** — on the drawing board… ({i}/{len(jobs)})")
             try:
                 result = await asyncio.to_thread(job)
                 done += 1

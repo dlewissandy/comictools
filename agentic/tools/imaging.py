@@ -2200,9 +2200,19 @@ else exactly as it is, same art style.""",
             f.write(base_bytes)
         panel.figure_images[layer] = base_path
 
+    # the split nests its products under a group named for the source layer
+    group_name = ('background' if layer == 'background'
+                  else layer.split('/', 1)[-1].replace('-', ' '))
+    members = [f"element/{_re.sub(r'[^a-z0-9]+', '-', n.lower()).strip('-')[:40] or 'element'}" for n in lifted]
+    members.append('background/plate' if kind == 'background' else layer)
+    existing = dict(panel.layer_groups or {})
+    existing[f"{group_name} (split)"] = members
+    panel.layer_groups = existing
+
     storage.update_object(data=panel)
     state.is_dirty = True
-    return (f"Split layer '{layer}' into {len(lifted)} acetate(s): {names}.  "
+    return (f"Split layer '{layer}' into {len(lifted)} acetate(s): {names} "
+            f"(grouped as '{group_name} (split)').  "
             f"The base was repainted with them removed: {base_path}")
 
 

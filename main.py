@@ -181,6 +181,8 @@ def init_layout(logger):
         .rh { position: absolute; width: 11px; height: 11px;
               background: #fff; border: 1.5px solid #3b82f6;
               border-radius: 2px; pointer-events: auto; }
+        .stack-row { cursor: grab; }
+        .stack-row.stack-drop { outline: 2px dashed #3b82f6; outline-offset: -2px; }
         .rh-nw { top: -6px; left: -6px; cursor: nwse-resize; }
         .rh-ne { top: -6px; right: -6px; cursor: nesw-resize; }
         .rh-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
