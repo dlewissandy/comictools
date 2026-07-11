@@ -68,19 +68,27 @@ def bind_issue_pdf(storage: GenericStorage, series_id: str, issue_id: str, outpu
     if front:
         pages.append(full_bleed(front))
 
-    # Interior: stack panels down the page; break when the next doesn't fit.
-    page = None
-    cursor = MARGIN
-    inner_w = PAGE_W - 2 * MARGIN
-    for path in panel_images:
-        img = Image.open(path).convert("RGB")
-        h = int(img.height * inner_w / img.width)
-        if page is None or cursor + h > PAGE_H - MARGIN:
-            page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
-            pages.append(page)
-            cursor = MARGIN
-        page.paste(img.resize((inner_w, h), Image.LANCZOS), (MARGIN, cursor))
-        cursor += h + GUTTER
+    layout = layout_pages(storage, series_id, issue_id)
+    if layout:
+        # A page layout exists: compose each page as its designed grid.
+        for page_model, rows in layout:
+            pages.append(_compose_page(rows))
+            for path in (p for row in rows for p in row if p is None):
+                pass  # unplaced/unrendered already reported via collect_issue
+    else:
+        # No layout yet: flow panels down each page in reading order.
+        page = None
+        cursor = MARGIN
+        inner_w = PAGE_W - 2 * MARGIN
+        for path in panel_images:
+            img = Image.open(path).convert("RGB")
+            h = int(img.height * inner_w / img.width)
+            if page is None or cursor + h > PAGE_H - MARGIN:
+                page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+                pages.append(page)
+                cursor = MARGIN
+            page.paste(img.resize((inner_w, h), Image.LANCZOS), (MARGIN, cursor))
+            cursor += h + GUTTER
 
     if back:
         pages.append(full_bleed(back))
@@ -92,3 +100,72 @@ def bind_issue_pdf(storage: GenericStorage, series_id: str, issue_id: str, outpu
     pages[0].save(output_path, "PDF", save_all=True, append_images=pages[1:], resolution=150)
     logger.info(f"Bound issue {issue_id} to {output_path} ({len(pages)} pages)")
     return len(pages), missing
+
+
+def layout_pages(storage: GenericStorage, series_id: str, issue_id: str):
+    """
+    Resolve the issue's designed page layout, if any: a list of
+    (Page, rows) where rows mirror Page.rows but hold rendered image paths
+    (None for unrendered panels).
+    """
+    from schema import Page
+    page_models = storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id}, order_by="page_number")
+    if not page_models:
+        return []
+    resolved = []
+    for pm in page_models:
+        rows = []
+        for row in pm.rows:
+            paths = []
+            for ref in row:
+                panel = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
+                                                    "scene_id": ref.scene_id, "panel_id": ref.panel_id})
+                ok = panel and panel.image and os.path.exists(panel.image)
+                paths.append(panel.image if ok else None)
+            rows.append(paths)
+        resolved.append((pm, rows))
+    return resolved
+
+
+def _compose_page(rows: list[list[str | None]]) -> "Image.Image":
+    """
+    Compose one designed page: each row's panels share a height chosen so the
+    row spans the page width; rows are scaled uniformly if they overflow.
+    Unrendered panels appear as light placeholder boxes.
+    """
+    inner_w = PAGE_W - 2 * MARGIN
+    prepared: list[tuple[int, list[tuple["Image.Image | None", int]]]] = []
+    total_h = 0
+    for row in rows:
+        imgs, ratios = [], []
+        for path in row:
+            if path:
+                im = Image.open(path).convert("RGB")
+                imgs.append(im)
+                ratios.append(im.width / im.height)
+            else:
+                imgs.append(None)
+                ratios.append(1.0)
+        usable = inner_w - GUTTER * (len(row) - 1)
+        row_h = int(usable / sum(ratios))
+        prepared.append((row_h, list(zip(imgs, [int(row_h * r) for r in ratios]))))
+        total_h += row_h
+    total_h += GUTTER * (len(rows) - 1)
+
+    scale = min(1.0, (PAGE_H - 2 * MARGIN) / total_h) if total_h else 1.0
+    page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+    y = MARGIN
+    for row_h, cells in prepared:
+        h = int(row_h * scale)
+        x = MARGIN
+        for im, w0 in cells:
+            w = int(w0 * scale)
+            if im is not None:
+                page.paste(im.resize((w, h), Image.LANCZOS), (x, y))
+            else:
+                from PIL import ImageDraw
+                d = ImageDraw.Draw(page)
+                d.rectangle([x, y, x + w, y + h], outline=(180, 180, 180), width=3, fill=(240, 240, 240))
+            x += w + GUTTER
+        y += h + GUTTER
+    return page

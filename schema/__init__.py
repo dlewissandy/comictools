@@ -2,6 +2,7 @@ from schema.character import CharacterModel
 from schema.character_variant import CharacterVariant, CharacterVariantMinimal
 from schema.dialog import Narration, NarrationPosition, Dialogue, DialogueEmphasis
 from schema.issue import Issue
+from schema.page import Page, PanelRef
 from schema.panel import Panel
 from schema.scene import SceneModel
 from schema.series import Series
@@ -45,7 +46,9 @@ __all__ = [
     "Setting",
     "Narration",
     "NarrationPosition",
+    "Page",
     "Panel",
+    "PanelRef",
     "Prop",
     "Publisher",
     "ReferenceImage",

@@ -247,12 +247,27 @@ def read_issue_page(series_id: str, issue_id: str):
         if issue is None:
             ui.markdown(f"Issue `{issue_id}` not found.")
             return
+        from helpers.binder import layout_pages
         front, panel_images, back, missing = collect_issue(storage, series_id, issue_id)
         ui.label(f"{issue.name}").classes('text-3xl font-bold')
         if front:
             ui.image(source=front).classes('w-full').style('max-width: 700px;')
-        for img in panel_images:
-            ui.image(source=img).classes('w-full')
+        layout = layout_pages(storage, series_id, issue_id)
+        if layout:
+            # Designed pages: each page is a sheet of rows; panels share row height.
+            for pm, rows in layout:
+                with ui.card().classes('w-full q-pa-md').style('background: white; aspect-ratio: 994/1538; overflow: hidden;'):
+                    for row in rows:
+                        with ui.row().classes('w-full flex-nowrap items-stretch').style('gap: 8px;'):
+                            for img in row:
+                                if img:
+                                    ui.image(source=img).style('flex: 1; min-width: 0;')
+                                else:
+                                    ui.element('div').style('flex: 1; background: #eee; border: 2px dashed #bbb; min-height: 120px;')
+                ui.label(f"page {pm.page_number}").classes('text-xs text-gray-500 self-center')
+        else:
+            for img in panel_images:
+                ui.image(source=img).classes('w-full')
         if back:
             ui.image(source=back).classes('w-full').style('max-width: 700px;')
         if missing:

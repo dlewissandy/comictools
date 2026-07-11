@@ -68,6 +68,12 @@ PERSONAS = {
            (varying framing: establishing panel, medium, close-up).   Favor
            image-driven storytelling; keep dialogue minimal and purposeful.
 
+        7. LAY OUT THE PAGES once panels exist: propose a page-by-page grid —
+           rows of 1-3 panels, splash pages for the big moments, pacing at the
+           page turn — get approval, then call layout_issue_pages.  Use
+           preflight_issue to see what still needs rendering, and
+           export_issue_pdf to bind the finished book.
+
         Work incrementally and conversationally — a few scenes at a time, checking in —
         rather than dumping everything at once.  Artwork (backgrounds and panel art)
         is rendered later from the scene view.

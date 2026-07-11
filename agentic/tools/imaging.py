@@ -1623,3 +1623,56 @@ def preflight_issue(wrapper: RunContextWrapper[APPState], series_id: str, issue_
     else:
         report.append("The issue is complete — ready to export (export_issue_pdf).")
     return "\n".join(report)
+
+
+@function_tool
+def layout_issue_pages(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, pages: list[list[list[str]]]) -> str:
+    """
+    Lay out the issue's pages: assign every panel to a page grid.   Each page is
+    a list of rows; each row is a list of 1-3 panel ids placed left to right.
+    A page with one row of one panel is a splash page.   Replaces any existing
+    page layout for the issue.
+
+    Propose the page breakdown to the user BEFORE calling this: pacing lives in
+    the page turn.   Panels are identified by panel_id alone (they are unique
+    within an issue); every panel of the issue should appear exactly once.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        pages: The page grids, in reading order.  e.g. [[[p1],[p2,p3]], [[p4]]]
+            = page 1 has panel p1 full-width above panels p2|p3; page 2 is a
+            splash of p4.
+
+    Returns:
+        A status message summarizing the layout.
+    """
+    from schema import Page, PanelRef
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    # panel_id -> scene_id map for the whole issue
+    scene_of: dict[str, str] = {}
+    for scene in storage.read_all_objects(SceneModel, {"series_id": series_id, "issue_id": issue_id}):
+        for p in storage.read_all_objects(Panel, {"series_id": series_id, "issue_id": issue_id, "scene_id": scene.scene_id}):
+            scene_of[p.panel_id] = scene.scene_id
+
+    unknown = [pid for page in pages for row in page for pid in row if pid not in scene_of]
+    if unknown:
+        return f"Unknown panel id(s): {', '.join(unknown[:5])}.  Check the shot list (read_all_panels per scene)."
+
+    # replace existing layout
+    for old in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id}):
+        storage.delete_object(cls=Page, primary_key=old.primary_key)
+
+    placed = 0
+    for i, page_rows in enumerate(pages, start=1):
+        page = Page(page_id=f"page-{i}", issue_id=issue_id, series_id=series_id, page_number=i,
+                    rows=[[PanelRef(scene_id=scene_of[pid], panel_id=pid) for pid in row] for row in page_rows])
+        storage.create_object(data=page, overwrite=True)
+        placed += sum(len(r) for r in page_rows)
+
+    leftover = len(scene_of) - placed
+    note = f"  NOTE: {leftover} panel(s) of the issue are not placed on any page." if leftover > 0 else ""
+    state.is_dirty = True
+    return f"Laid out {len(pages)} pages ({placed} panels placed).{note}"
