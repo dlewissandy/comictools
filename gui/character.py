@@ -54,15 +54,16 @@ def view_character(state:APPState):
         markdown_field_editor(state, "Description", character.description)        
 
 
-        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
-            with expansion.add_slot('header'):
-                new_item_messager(state=state, caption="Variants", message="I would like to create a new variant for this character.")
+        from gui.elements import caption_action, CrudButtonKind as _CK
+        with ui.element('div').classes('w-full q-mt-md'):
             view_all_instances(
                 state=state,
                 get_instances=lambda: storage.read_all_objects(CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id}),
                 get_image_locator=lambda variant: storage.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant.id),
                 kind="variant",
-                aspect_ratio="3:2"
+                aspect_ratio="3:2",
+                overlap_caption=lambda: caption_action("Variants", _CK.CREATE,
+                    lambda _: post_user_message(state, "I would like to create a new variant for this character."), 3)
                 ).style('margin-top: 0px; margin-bottom: 0px')
 
             # Drop an image here to create a new variant from it

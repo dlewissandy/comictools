@@ -84,6 +84,7 @@ def init_layout(logger):
                        font-size: .85rem; letter-spacing: .8px; transform: rotate(-.4deg); }
         .caption-box-sm { font-size: .72rem; padding: 0 8px; }
         .caption-flex { display: inline-flex; align-items: center; gap: 4px; }
+        .panel-caption { position: absolute; top: -12px; left: -8px; z-index: 6; }
         .caption-btn { color: var(--caption-ink) !important; min-height: 0 !important;
                        padding: 0 !important; margin: -2px -4px -2px 2px !important; }
 

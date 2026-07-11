@@ -76,7 +76,7 @@ def caption_action(text: str, kind: CrudButtonKind, action: Callable, level: int
     with ui.element('div').classes(HEADER_CLASSES[min(level, 3)] + ' caption-flex') as box:
         ui.label(text)
         ui.button(icon=CRUD_ICON[kind.value]).props('flat round dense size=sm') \
-            .classes('caption-btn').on('click', action)
+            .classes('caption-btn').on('click.stop', action)
     return box
 
 
@@ -361,7 +361,8 @@ def render_object_cards(
         get_markdown: Optional[Callable] = None, 
         number_of_columns: int = 4,
         on_remove: Optional[Callable] = None,
-        flow_span: Optional[int] = None):
+        flow_span: Optional[int] = None,
+        overlap_caption: Optional[Callable] = None):
     
     selection = state.selection
     if flow_span:
@@ -384,6 +385,11 @@ def render_object_cards(
             with cell:
                 card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}')
             card.classes('relative overflow-visible')
+            if i == 0 and overlap_caption is not None:
+                # the group's narrator box overlaps its first panel, comic-style
+                with card:
+                    with ui.element('div').classes('panel-caption'):
+                        overlap_caption()
             with card:
                 if on_remove is not None:
                     def _detach(instance=instance, name=name):
@@ -423,6 +429,10 @@ def render_object_cards(
                 
             # Fix lambda by creating a closure with the current value of new_sel
             card.on('click', lambda _, new_sel=new_sel: state.change_selection( new_sel))
+        if not instances and overlap_caption is not None:
+            with (ui.element('div').classes(f'cspan-{flow_span} flow-caption') if flow_span
+                  else contextlib.nullcontext()):
+                overlap_caption()
     return grid
 
 
@@ -438,7 +448,8 @@ def view_all_instances(
         number_of_columns: int=4,
         aspect_ratio: str = "1/1",
         on_remove: Optional[Callable] = None,
-        flow_span: Optional[int] = None): 
+        flow_span: Optional[int] = None,
+        overlap_caption: Optional[Callable] = None): 
     """
     A gui shortcut to view all the instances of a given kind.
 
@@ -503,7 +514,8 @@ def view_all_instances(
             number_of_columns=number_of_columns,
             aspect_ratio=aspect_ratio,
             on_remove=on_remove,
-            flow_span=flow_span
+            flow_span=flow_span,
+            overlap_caption=overlap_caption
         )
 
 class Attribute(TypedDict, total=False):

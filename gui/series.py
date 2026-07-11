@@ -74,8 +74,9 @@ def view_series(state: APPState):
                     caption_size=2)
         
         # A cardwall for viewing and adding issues of the comic.
-        from gui.elements import flow_caption
-        flow_caption(state, "Issues", "I would like to create a new issue")
+        from gui.elements import caption_action, CrudButtonKind as _CK
+        def _cap(text, msg):
+            return lambda: caption_action(text, _CK.CREATE, lambda _, m=msg: post_user_message(state, m), 3)
         if True:
             def _issue_label(_i, issue):
                 from schema import SceneModel, Panel
@@ -95,11 +96,11 @@ def view_series(state: APPState):
                 kind="issue",
                 get_name=_issue_label,
                 aspect_ratio="16/27",
-                flow_span=3
+                flow_span=3,
+                overlap_caption=_cap("Issues", "I would like to create a new issue")
                 ).style('margin-top: 0px; margin-bottom: 0px')
 
         # A cardwall for viewing and adding characters to the comic series.
-        flow_caption(state, "Characters", "I would like to create a new character")
         if True:
             with view_all_instances(
                 state=state, 
@@ -108,7 +109,8 @@ def view_series(state: APPState):
                 kind="character",
                 aspect_ratio="6/5",
                 get_name=lambda _,x: x.name,
-                flow_span=3
+                flow_span=3,
+                overlap_caption=_cap("Characters", "I would like to create a new character")
                 ):
                 pass
         with ccell(3):
@@ -123,7 +125,6 @@ def view_series(state: APPState):
             # Show the first rendered master background, if any.
             return next((img for img in (loc.images or {}).values() if img and os.path.exists(img)), None)
 
-        flow_caption(state, "Settings", "I would like to create a new setting")
         if True:
             view_all_instances(
                 state=state,
@@ -132,7 +133,8 @@ def view_series(state: APPState):
                 kind="setting",
                 aspect_ratio="3/2",
                 get_name=lambda _, x: x.name,
-                flow_span=3
+                flow_span=3,
+                overlap_caption=_cap("Settings", "I would like to create a new setting")
                 ).style('margin-top: 0px; margin-bottom: 0px')
         page.__exit__(None, None, None)
         

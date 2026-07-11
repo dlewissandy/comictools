@@ -143,8 +143,9 @@ def view_issue(state:APPState):
         COVER_ORDER = ["front", "inside-front", "inside-back", "back"]
         order_by = lambda cover: COVER_ORDER.index(cover.location.value) if cover.location.value in COVER_ORDER else -1
 
-        from gui.elements import flow_caption
-        flow_caption(state, "Covers", "I would like to create a new cover for this issue.")
+        from gui.elements import caption_action, CrudButtonKind as _CK
+        def _cap(text, msg):
+            return lambda: caption_action(text, _CK.CREATE, lambda _, m=msg: post_user_message(state, m), 3)
         if True:
             view_all_instances(
                 state=state,
@@ -153,10 +154,10 @@ def view_issue(state:APPState):
                 kind=SelectedKind.COVER,
                 get_name=lambda _,cover: f"{cover.location.replace('_', ' ').title()} Cover",
                 aspect_ratio="6/9",
-                flow_span=3
+                flow_span=3,
+                overlap_caption=_cap("Covers", "I would like to create a new cover for this issue.")
             )
 
-        flow_caption(state, "Scenes", "I would like to create a new scene for this issue.", span=3)
         if True:
             view_all_instances(
                 state=state,
@@ -167,7 +168,8 @@ def view_issue(state:APPState):
                 get_name=lambda i,scene: (lambda d,t: f"Scene {i+1}: {scene.name}" + (f"  ·  {d}/{t} 🎨" if t else "  ·  no panels"))(*_scene_counts(scene.scene_id)),
                 get_markdown=lambda scene: scene.story,
                 number_of_columns=3,
-                flow_span=3
+                flow_span=3,
+                overlap_caption=_cap("Scenes", "I would like to create a new scene for this issue.")
             )
         page.__exit__(None, None, None)                
         
