@@ -164,10 +164,9 @@ def view_scene(state: APPState):
 
 
         with ccell(12):
-            with ui.row().classes('w-full items-center'):
-                header("Panels", 2)
-                ui.space()
-                crud_button(CrudButtonKind.CREATE, lambda: post_user_message(state, "I would like to add a new panel to the scene."))
+            from gui.elements import caption_action
+            caption_action("Panels", CrudButtonKind.CREATE,
+                           lambda _: post_user_message(state, "I would like to add a new panel to the scene."), 2)
 
             panels = storage.read_all_objects(Panel, primary_key={
                 "series_id": series_id,

@@ -68,14 +68,26 @@ def crud_button(kind: CrudButtonKind, action: Callable, size: int = 2):
     button.on('click', action)
     return button
 
+def caption_action(text: str, kind: CrudButtonKind, action: Callable, level: int = 2):
+    """
+    A narrator box with its action INSIDE it — the button is part of the
+    caption, a printed glyph in the box, not chrome floating beside it.
+    """
+    with ui.element('div').classes(HEADER_CLASSES[min(level, 3)] + ' caption-flex') as box:
+        ui.label(text)
+        ui.button(icon=CRUD_ICON[kind.value]).props('flat round dense size=sm') \
+            .classes('caption-btn').on('click', action)
+    return box
+
+
 def markdown_field_editor(state: APPState, name: str, value: str | None, header_size: int = 2):
     with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
-        header(name.title(),header_size)
-        ui.space()
         if value is not None:
-            crud_button(kind=CrudButtonKind.UPDATE, action=lambda _: post_user_message(state, f"I would like to edit the {name}"))
+            caption_action(name.title(), CrudButtonKind.UPDATE,
+                           lambda _: post_user_message(state, f"I would like to edit the {name}"), header_size)
         else:
-            crud_button(kind=CrudButtonKind.CREATE, action = lambda _: post_user_message(state, f"I would like to add a {name}."))
+            caption_action(name.title(), CrudButtonKind.CREATE,
+                           lambda _: post_user_message(state, f"I would like to add a {name}."), header_size)
 
     if value is not None and value !="":
         markdown(value)
@@ -504,13 +516,13 @@ def view_attributes(state: APPState, caption: str, attributes: list[Attribute], 
     with ui.element().classes('w-full') as container:
         with ui.expansion( value=expanded ).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
-                header(caption, header_size)
                 if not individual_icons:
-                    ui.space()
-                    crud_button(kind=CrudButtonKind.UPDATE, action=lambda _: post_user_message(state, f"I would like to edit the {caption}."))
+                    caption_action(caption, CrudButtonKind.UPDATE,
+                                   lambda _: post_user_message(state, f"I would like to edit the {caption}."), header_size)
                     cols = 2
                     col_style = 'grid-template-columns: auto auto;'
                 else:
+                    header(caption, header_size)
                     cols = 3
                     col_style = 'grid-template-columns: auto auto auto;'
             with ui.grid(rows=len(attributes), columns=cols).style(col_style):
@@ -815,6 +827,5 @@ def flow_caption(state: APPState, caption: str, message: str, span: int = 3):
     right after it — so short groups share rows, like a real comic page.
     """
     with ui.element('div').classes(f'cspan-{span} flow-caption'):
-        header(caption, 2)
-        crud_button(kind=CrudButtonKind.CREATE,
-                    action=lambda _: post_user_message(state, message), size=2)
+        caption_action(caption, CrudButtonKind.CREATE,
+                       lambda _: post_user_message(state, message), 2)

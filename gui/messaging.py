@@ -10,11 +10,10 @@ def post_user_message(state:APPState, message: str):
     send_button.run_method('click')
     
 def new_item_messager(state: APPState, caption: str, message: str, caption_size: int = 2):
-    from gui.elements import header, crud_button, CrudButtonKind
+    from gui.elements import caption_action, CrudButtonKind
     with ui.row().classes('w-full') as row:
-        header(caption, caption_size)
-        ui.space()
-        crud_button(kind=CrudButtonKind.CREATE, action=lambda _: post_user_message(state, message), size=caption_size).style('margin-top: 0px; margin-bottom: 0px')
+        caption_action(caption, CrudButtonKind.CREATE,
+                       lambda _: post_user_message(state, message), caption_size)
     # set the top and bottom margin to 0
     row.style('margin-top: 0; margin-bottom: 0;')
     return row
