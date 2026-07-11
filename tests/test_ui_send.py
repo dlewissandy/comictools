@@ -205,3 +205,38 @@ async def test_palette_and_chip_removal(user: User) -> None:
     assert palette_inputs, "palette input exists"
     palette_inputs[-1].set_value("fortune")
     await user.should_see("setting · Wonders of the Witchlight")
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_issue_production_dashboard(user: User) -> None:
+    """The issue view opens on a dashboard of what's left to do."""
+    main.LocalStorage = _TmpStorage
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("Production")
+    await user.should_see("front cover")
+    await user.should_see("page layout")
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_drawer_scopes_to_current_series(user: User) -> None:
+    """Inside a series the catalog defaults to that series; the switch widens it."""
+    main.LocalStorage = _TmpStorage
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    user.find("Assets").click()
+    await user.should_see("Fortune Teller Tent")
+    await user.should_not_see("Joey")     # Joey's assets are out of scope
+
+    switches = [e for e in user.client.elements.values()
+                if e.__class__.__name__ == "Switch" and "only" in str(getattr(e, "text", ""))]
+    assert switches, "scope switch exists"
+    switches[-1].set_value(False)
+    await user.should_see("Joey")         # the whole studio

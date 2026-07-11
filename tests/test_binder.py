@@ -7,10 +7,10 @@ WL = "wonders-of-the-witchlight"
 CARN = "witchlight-carnival"
 
 
-def test_collect_reports_missing_renders(storage):
+def test_collect_reports_missing_renders(storage, unrendered_panel):
     front, panels, back, missing = collect_issue(storage, WL, CARN)
     assert front and os.path.exists(front)
-    assert panels, "the tent panel render should be collected"
+    assert panels, "rendered panels are collected"
     assert any("not rendered" in m for m in missing), "unrendered panels must be reported"
 
 

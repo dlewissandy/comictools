@@ -44,14 +44,9 @@ def test_layout_tool_rejects_unknown_panel(storage):
     assert "Unknown panel" in str(out)
 
 
-def test_binder_composes_designed_pages(storage, tmp_data):
+def test_binder_composes_designed_pages(storage, tmp_data, unrendered_panel):
     # splash page of the rendered tent panel + a row with an unrendered placeholder
-    from schema import SceneModel
-    all_panels = []
-    for sc in storage.read_all_objects(SceneModel, {"series_id": WL, "issue_id": CARN}):
-        all_panels += [p.panel_id for p in storage.read_all_objects(
-            Panel, {"series_id": WL, "issue_id": CARN, "scene_id": sc.scene_id})]
-    other = [pid for pid in all_panels if pid != TENT_PANEL][0]
+    other = unrendered_panel.panel_id
     _invoke(imaging.layout_issue_pages, _Stub(storage),
             series_id=WL, issue_id=CARN, pages=[[[TENT_PANEL]], [[TENT_PANEL, other]]])
     layout = layout_pages(storage, WL, CARN)

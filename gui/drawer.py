@@ -34,33 +34,33 @@ def _catalog(storage: GenericStorage):
     for series in storage.read_all_objects(Series, order_by="name"):
         sid = series.series_id
         for c in storage.read_all_objects(CharacterModel, {"series_id": sid}):
-            yield ("character", c.name, f"{series.name}",
+            yield ("character", c.name, f"{series.name}", sid,
                    storage.find_character_image(series_id=sid, character_id=c.character_id),
                    f"Use the character '{c.name}' (id: {c.character_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
                    f"/series/{sid}/character/{c.character_id}")
             for v in storage.read_all_objects(CharacterVariant, {"series_id": sid, "character_id": c.character_id}):
                 vimg = storage.find_variant_image(series_id=sid, character_id=c.character_id, variant_id=v.variant_id)
-                yield ("variant", f"{c.name} — {v.name}", f"{series.name}", vimg,
+                yield ("variant", f"{c.name} — {v.name}", f"{series.name}", sid, vimg,
                        f"Use the variant '{v.name}' (id: {v.variant_id}) of character '{c.name}' "
                        f"(id: {c.character_id}) from the series '{sid}' here as the wardrobe.  "
                        f"Import the character into this series first if needed.",
                        f"/series/{sid}/character/{c.character_id}/variant/{v.variant_id}")
         for s in storage.read_all_objects(Setting, {"series_id": sid}):
             img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
-            yield ("setting", s.name, f"{series.name}", img,
+            yield ("setting", s.name, f"{series.name}", sid, img,
                    f"Use the setting '{s.name}' (id: {s.setting_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
                    f"/series/{sid}/setting/{s.setting_id}")
         for p in storage.read_all_objects(PropAsset, {"series_id": sid}):
             pimg = next((i for i in (p.images or {}).values() if i and os.path.exists(i)), None)
-            yield ("prop", p.name, f"{series.name}", pimg,
+            yield ("prop", p.name, f"{series.name}", sid, pimg,
                    f"Use the prop '{p.name}' (id: {p.prop_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
                    f"/series/{sid}/prop/{p.prop_id}")
         for o in storage.read_all_objects(Outfit, {"series_id": sid}):
             oimg = next((i for i in (o.images or {}).values() if i and os.path.exists(i)), None)
-            yield ("outfit", o.name, f"{series.name}", oimg,
+            yield ("outfit", o.name, f"{series.name}", sid, oimg,
                    f"Use the outfit '{o.name}' (id: {o.outfit_id}) from the series '{sid}' here — "
                    f"e.g. compose a character variant wearing it.  Import it first if needed.",
                    f"/series/{sid}/outfit/{o.outfit_id}")
@@ -68,7 +68,7 @@ def _catalog(storage: GenericStorage):
     for style in storage.read_all_objects(ComicStyle, order_by="name"):
         img = style.image.get("art") if isinstance(style.image, dict) else None
         img = img if img and os.path.exists(img) else None
-        yield ("style", style.name, "studio-wide", img,
+        yield ("style", style.name, "studio-wide", None, img,
                f"Use the comic style '{style.name}' (id: {style.style_id}) here.",
                f"/styles/{style.style_id}")
 
@@ -80,10 +80,17 @@ def build_asset_drawer(state):
     drawer = ui.left_drawer(value=False, fixed=True).props('bordered overlay width=480') \
         .classes('bg-gray-100 dark:bg-gray-900')
 
+    def _current_series():
+        for item in state.selection or []:
+            if item.kind.value == "series":
+                return item.id, item.name
+        return None, None
+
     def refresh():
         drawer.clear()
         entries = list(_catalog(state.storage))
         counts = {k: sum(1 for e in entries if e[0] == k) for k in KIND_META}
+        cur_sid, cur_name = _current_series()
 
         with drawer:
             with ui.row().classes('w-full items-center q-px-sm'):
@@ -91,6 +98,13 @@ def build_asset_drawer(state):
                 ui.label(f"{len(entries)} in the studio").classes('text-xs text-gray-500')
                 ui.space()
                 ui.button(icon='refresh', on_click=refresh).props('flat round dense')
+            # Scope: default to the series you're working in; flip the
+            # switch to browse the whole studio.
+            scope_switch = None
+            if cur_sid:
+                scope_switch = ui.switch(f'only {cur_name}', value=True) \
+                    .props('dense').classes('q-px-sm text-sm') \
+                    .tooltip('Off = show assets from every series in the studio')
             search = ui.input(placeholder='search assets…') \
                 .props('dense outlined clearable').classes('w-full q-px-sm')
             kind_filter = ui.toggle(
@@ -98,7 +112,7 @@ def build_asset_drawer(state):
                 value="all").props('dense no-caps unelevated toggle-color=primary').classes('q-px-sm')
             body = ui.column().classes('w-full q-px-sm').style('gap: 4px;')
 
-            def tile(kind, title, subtitle, img, use_msg, url):
+            def tile(kind, title, subtitle, sid, img, use_msg, url):
                 with ui.element('div').classes('cursor-pointer').style(
                         'width: 31%; min-width: 130px;') as card:
                     with ui.element('div').classes('relative rounded-md overflow-hidden border '
@@ -131,7 +145,9 @@ def build_asset_drawer(state):
                     for kind, (label, icon) in KIND_META.items():
                         if selected != "all" and kind != selected:
                             continue
+                        scoped = cur_sid if (scope_switch is not None and scope_switch.value) else None
                         matches = [e for e in entries if e[0] == kind and
+                                   (scoped is None or e[3] is None or e[3] == scoped) and
                                    (not term or term in e[1].lower() or term in e[2].lower())]
                         if not matches:
                             continue
@@ -147,12 +163,13 @@ def build_asset_drawer(state):
 
             search.on_value_change(render)
             kind_filter.on_value_change(render)
+            if scope_switch is not None:
+                scope_switch.on_value_change(render)
             render()
 
     def toggle():
-        if not getattr(drawer, '_filled', False):
-            refresh()
-            drawer._filled = True
+        if not drawer.value:
+            refresh()  # rebuild on every open: scope follows the live selection
         drawer.toggle()
 
     return toggle

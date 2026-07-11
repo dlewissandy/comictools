@@ -241,7 +241,10 @@ def create_variant(wrapper: RunContextWrapper[APPState],
         behavior: str
     ) -> CharacterVariant:
     """
-    Create a new character variant with the provided attributes.
+    Create a character's BASE look — the one fully-described variant that
+    captures identity.   Use this ONCE per character.   For every additional
+    look, DO NOT re-describe the character: compose it from the base plus an
+    Outfit asset and props (compose_character_variant).
     
     Args:
         series_id: The id of the series to create the variant in.   This should be the currently selected series.

@@ -90,12 +90,12 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                 series_id, character_id = sel[-2].id, sel[-1].id
                 variants = storage.read_all_objects(CharacterVariant, {"series_id": series_id, "character_id": character_id})
                 if not variants:
-                    return ("No wardrobe yet — every character needs at least a base look before they can appear on the page.",
-                            ["Create the base variant", "Create a variant from an image"])
-                return (None, ["Create another variant", "Update the description"])
+                    return ("No looks yet — describe the base look once (that's the identity), and every other look gets composed from it.",
+                            ["Create the base look", "Create the base look from an image"])
+                return (None, ["Compose a new look from an outfit", "Extract this character's wardrobe into outfits"])
 
             case "variant":
-                return (None, ["Create a styled reference sheet", "Refine the appearance"])
+                return (None, ["Render the reference sheet", "Swap the outfit", "Extract this look's outfit"])
 
             case "setting":
                 series_id, setting_id = sel[-2].id, sel[-1].id

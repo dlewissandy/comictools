@@ -54,6 +54,23 @@ def view_issue(state:APPState):
         d, t = _scene_counts(sc.scene_id)
         done_total += d; total += t
 
+    # ---- the production dashboard: what stands between here and a bound book
+    from schema import Page
+    covers_all = storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id})
+    front_ok = any(c.location.value == "front" and c.image and os.path.exists(c.image) for c in covers_all)
+    pages_all = storage.read_all_objects(Page, primary_key={"series_id": series_id, "issue_id": issue_id})
+    export_path = os.path.join("data", "series", series_id, "issues", issue_id, "exports", f"{issue_id}.pdf")
+
+    def _pill(ok: bool, label: str, fix_message: str | None = None):
+        """A dashboard step: green when done; amber and CLICKABLE when it isn't."""
+        if ok:
+            ui.chip(label, icon='check_circle', color='green').props('dense outline')
+        else:
+            chip = ui.chip(label, icon='radio_button_unchecked', color='orange').props('dense clickable')
+            if fix_message:
+                chip.tooltip('Click and I\'ll get started')
+                chip.on('click', lambda _, m=fix_message: post_user_message(state, m))
+
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
@@ -66,6 +83,20 @@ def view_issue(state:APPState):
                 .on('click', lambda _: ui.run_javascript(
                     f"window.open('/series/{series_id}/issue/{issue_id}/read', '_blank');"))
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current issue."))
+
+        # Production dashboard: each amber step is one click from underway.
+        with ui.row().classes('w-full items-center q-pa-sm border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800').style('gap: 8px;'):
+            ui.label('Production').classes('text-xs uppercase text-gray-500')
+            _pill(bool(issue.story), 'story', 'Help me write the story for this issue.')
+            _pill(len(scenes_all) > 0, 'scenes', 'Break my story into scenes.')
+            _pill(total > 0, 'panels', 'Break the scenes into panels.')
+            _pill(total > 0 and done_total == total,
+                  f'artwork {done_total}/{total}' if total else 'artwork',
+                  'Render the missing panels.')
+            _pill(front_ok, 'front cover', 'Create and render a front cover.')
+            _pill(len(pages_all) > 0, 'page layout', 'Lay out the pages for this issue.')
+            everything = bool(issue.story) and total > 0 and done_total == total and front_ok
+            _pill(everything and os.path.exists(export_path), 'bound PDF', 'Export the issue as a PDF.')
 
         
         with ui.row().classes('w-full flex-nowrap'):

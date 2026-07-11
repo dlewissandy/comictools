@@ -39,3 +39,18 @@ def mock_imaging(monkeypatch):
     monkeypatch.setattr(imaging, "invoke_edit_image_api",
                         lambda prompt, reference_images=None, **kw: calls.append(("edit", prompt, list(reference_images or []))) or _jpeg())
     return calls
+
+
+@pytest.fixture()
+def unrendered_panel(storage):
+    """Add one unrendered panel to the tent scene (temp data) and return it."""
+    from schema import Panel
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    SC = "b3cc50eb-5a57-463c-ba10-927d941c9779"
+    existing = storage.read_all_objects(Panel, {"series_id": WL, "issue_id": CARN, "scene_id": SC})
+    p = Panel(panel_id="test-unrendered", issue_id=CARN, series_id=WL, scene_id=SC,
+              panel_number=len(existing) + 1, name="Test Unrendered", beat="b",
+              description="d", aspect="square", character_references=[],
+              narration=[], dialogue=[], image=None, reference_images=[])
+    storage.create_object(p, overwrite=True)
+    return p

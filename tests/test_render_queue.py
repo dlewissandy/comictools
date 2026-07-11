@@ -26,13 +26,8 @@ class _Ctx:
 
 
 @pytest.mark.asyncio
-async def test_quote_then_background_render(storage, mock_imaging):
+async def test_quote_then_background_render(storage, mock_imaging, unrendered_panel):
     st = _Stub(storage)
-    # 1) without confirm: a quote, no renders
-    out = await imaging.render_missing_panels.on_invoke_tool(
-        _Ctx(st), json.dumps({"series_id": WL, "issue_id": CARN, "scene_id": TENT_SCENE}))
-    # the tent scene's one panel is already rendered -> nothing to do there;
-    # use the whole issue for a real quote
     out = await imaging.render_missing_panels.on_invoke_tool(
         _Ctx(st), json.dumps({"series_id": WL, "issue_id": CARN}))
     assert "Estimated cost" in str(out) and "confirm=true" in str(out)
@@ -58,5 +53,5 @@ async def test_quote_then_background_render(storage, mock_imaging):
 async def test_nothing_to_render(storage, mock_imaging):
     st = _Stub(storage)
     out = await imaging.render_missing_panels.on_invoke_tool(
-        _Ctx(st), json.dumps({"series_id": WL, "issue_id": CARN, "scene_id": TENT_SCENE}))
+        _Ctx(st), json.dumps({"series_id": WL, "issue_id": CARN}))
     assert "every panel already has artwork" in str(out)
