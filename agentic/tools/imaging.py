@@ -2024,9 +2024,12 @@ def generate_figure_acetate(wrapper: RunContextWrapper, series_id: str, issue_id
 # is repainted with everything lifted removed — revealing what was beneath
 # (split a figure and its props/wardrobe come off, revealing the character).
 # ---------------------------------------------------------------------------
-def recognize_layer_entities(image_path: str, max_entities: int = 8) -> list[dict]:
+def recognize_layer_entities(image_path: str, max_entities: int = 8,
+                             cast: list[dict] | None = None) -> list[dict]:
     """Vision pass: name the distinct liftable entities in a layer image and
-    their bounding boxes (percent coordinates).  Returns [{name, box}]."""
+    their bounding boxes (percent coordinates).  When the series cast is
+    given ([{character_id, name}]), each entity is also matched against it.
+    Returns [{name, box, beneath, character_id}]."""
     import base64
     import json as _json
     import re as _re
@@ -2036,16 +2039,30 @@ def recognize_layer_entities(image_path: str, max_entities: int = 8) -> list[dic
     with open(image_path, 'rb') as f:
         b64 = base64.b64encode(f.read()).decode()
     mime = 'image/png' if image_path.lower().endswith('.png') else 'image/jpeg'
+    cast_block = ""
+    if cast:
+        roster = "\n".join(f'  - id "{c["character_id"]}": {c.get("name") or c["character_id"]}'
+                           + (f' — {c["notes"][:160]}' if c.get("notes") else '')
+                           for c in cast[:20])
+        cast_block = f"""
+
+KNOWN CAST — characters from this comic who may appear in the image:
+{roster}
+If an entity IS one of these characters (a person, creature or figure that
+matches), use the character's proper name as the entity name and set its
+"character_id" to the matching id.   Otherwise set "character_id" to null."""
     prompt = f"""Identify the distinct visual entities in this image that could be lifted
-onto separate layers: props, furniture, signage, garments/wardrobe pieces,
-carried objects, creatures, vehicles, distinct scenery pieces.   Skip the
-overall background itself and skip anything cut off at the image edge unless
-it is prominent.   At most {max_entities} entities, most prominent first.
+onto separate layers: people/characters, props, furniture, signage,
+garments/wardrobe pieces, carried objects, creatures, vehicles, distinct
+scenery pieces.   Skip the overall background itself and skip anything cut
+off at the image edge unless it is prominent.   At most {max_entities}
+entities, most prominent first.{cast_block}
 
 Respond with STRICT JSON only, no prose:
 {{"entities": [{{"name": "<2-4 word name>",
                 "box": {{"x": <left %>, "y": <top %>, "w": <width %>, "h": <height %>}},
-                "beneath": "<one phrase: what is revealed when it is removed>"}}]}}"""
+                "beneath": "<one phrase: what is revealed when it is removed>",
+                "character_id": <matching cast id or null>}}]}}"""
     resp = openai.chat.completions.create(
         model=os.getenv('VISION_MODEL', 'gpt-5.2'),
         messages=[{"role": "user", "content": [
@@ -2058,15 +2075,28 @@ Respond with STRICT JSON only, no prose:
         return []
     try:
         data = _json.loads(m.group(0))
+        known = {c["character_id"] for c in (cast or [])}
         out = []
         for e in data.get("entities", [])[:max_entities]:
             if e.get("name"):
+                cid = e.get("character_id")
                 out.append({"name": str(e["name"]), "box": e.get("box") or {},
-                            "beneath": e.get("beneath", "")})
+                            "beneath": e.get("beneath", ""),
+                            "character_id": cid if cid in known else None})
         return out
     except Exception as ex:
         logger.error(f"entity recognition parse failed: {ex}")
         return []
+
+
+def series_cast_roster(storage, series_id: str) -> list[dict]:
+    """The series' characters as a recognition roster: [{character_id, name, notes}]."""
+    from schema import CharacterModel
+    roster = []
+    for c in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
+        roster.append({"character_id": c.character_id, "name": c.name,
+                       "notes": (getattr(c, 'description', '') or '')})
+    return roster
 
 
 def _resolve_layer_source(panel, scene, storage, series_id: str, layer: str):
@@ -2117,10 +2147,25 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str,
         return f"Layer '{layer}' has no image to split."
 
     if entities is None:
-        entities = recognize_layer_entities(source, max_entities=6)
+        entities = recognize_layer_entities(source, max_entities=6,
+                                            cast=series_cast_roster(storage, series_id))
     entities = [{"name": e, "box": {}} if isinstance(e, str) else e for e in (entities or [])]
     if not entities:
         return "No liftable entities were recognized on that layer."
+
+    # A recognized entity that IS a cast member lands as that character's
+    # posed acetate — cast, named and linked to their reference sheets —
+    # not an anonymous element.
+    def _variant_for(cid: str) -> str:
+        for r in (panel.character_references or []):
+            if r.character_id == cid:
+                return r.variant_id
+        for r in ((scene.cast or []) if scene is not None else []):
+            if r.character_id == cid:
+                return r.variant_id
+        vs = list(storage.read_all_objects(CharacterVariant, primary_key={
+            "series_id": series_id, "character_id": cid}))
+        return vs[0].variant_id if vs else "default"
 
     images_dir = obj_to_imagepath(obj=panel, base_path=storage.base_path)
     figures_dir = os.path.join(os.path.dirname(images_dir), "figures")
@@ -2137,9 +2182,16 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str,
     canvas_ar = {"landscape": 1.5, "portrait": 2 / 3, "square": 1.0}[panel.aspect.value]
     layer_blocking = dict((panel.figure_blocking or {}).get(layer) or {})
     lifted = []
+    lifted_keys = []
+    identified = []
     for e in entities:
         name = e["name"]
         slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "element"
+        cid = e.get("character_id")
+        vid = _variant_for(cid) if cid else None
+        key = f"{cid}/{vid}" if cid else f"element/{slug}"
+        if key == layer:   # a layer can't be split into itself
+            cid, key = None, f"element/{slug}"
         box = e.get("box") or {}
         crop_rect = None
         if box:
@@ -2183,11 +2235,19 @@ COMPLETELY TRANSPARENT background: a cut-out acetate.""",
                 background="transparent",
                 input_fidelity="high",
             )
-        cut_path = os.path.join(figures_dir, f"element--{slug}--{uuid4().hex[:8]}.png")
+        stem = f"{cid}--{vid}" if cid else f"element--{slug}"
+        cut_path = os.path.join(figures_dir, f"{stem}--{uuid4().hex[:8]}.png")
         with open(cut_path, "wb") as f:
             f.write(cut_bytes)
-        key = f"element/{slug}"
         panel.figure_images[key] = cut_path
+        if cid:
+            # cast them into the panel so the acetate rides the figure row
+            from schema.character_reference import CharacterRef
+            if not any(r.character_id == cid and r.variant_id == vid
+                       for r in (panel.character_references or [])):
+                panel.character_references = (panel.character_references or []) + [
+                    CharacterRef(series_id=series_id, character_id=cid, variant_id=vid)]
+            identified.append(f"{name} = {cid}")
 
         # place the acetate exactly where its crop came from
         if crop_rect:
@@ -2212,6 +2272,7 @@ COMPLETELY TRANSPARENT background: a cut-out acetate.""",
         else:
             panel.figure_blocking[key] = {"x": 50, "y": 0, "h": 45, "z": 40}
         lifted.append(name)
+        lifted_keys.append(key)
 
     # repaint the base with everything lifted removed — revealing what was
     # beneath (a figure keeps its transparency; a background stays opaque)
@@ -2248,7 +2309,7 @@ else must remain PIXEL-IDENTICAL — same composition, same style, same colors."
     # the split nests its products under a group named for the source layer
     group_name = ('background' if layer == 'background'
                   else layer.split('/', 1)[-1].replace('-', ' '))
-    members = [f"element/{_re.sub(r'[^a-z0-9]+', '-', n.lower()).strip('-')[:40] or 'element'}" for n in lifted]
+    members = list(lifted_keys)
     members.append('background/plate' if kind == 'background' else layer)
     existing = dict(panel.layer_groups or {})
     existing[f"{group_name} (split)"] = members
@@ -2256,8 +2317,9 @@ else must remain PIXEL-IDENTICAL — same composition, same style, same colors."
 
     storage.update_object(data=panel)
     state.is_dirty = True
+    matched = f"  Recognized cast: {'; '.join(identified)}." if identified else ""
     return (f"Split layer '{layer}' into {len(lifted)} acetate(s): {names} "
-            f"(grouped as '{group_name} (split)').  "
+            f"(grouped as '{group_name} (split)').{matched}  "
             f"The base was repainted with them removed: {base_path}")
 
 

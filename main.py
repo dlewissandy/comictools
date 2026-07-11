@@ -247,6 +247,22 @@ def init_layout(logger):
         .rough-pin { position: absolute; width: 16%; background: #fff;
                      padding: 2px; border: 2px solid var(--ink);
                      box-shadow: 2px 3px 4px rgba(0,0,0,.35); }
+        /* THE STYLE SWATCH: a printer's color chip taped to the board */
+        .style-swatch { display: flex; align-items: center; gap: 6px;
+                        padding: 2px 8px 2px 3px; background: var(--panel);
+                        border: 2px solid var(--ink); border-radius: 2px;
+                        box-shadow: 2px 2px 0 rgba(0,0,0,.3);
+                        transform: rotate(-1.5deg);
+                        transition: transform .15s ease, box-shadow .15s ease; }
+        .style-swatch:hover { transform: rotate(0deg) scale(1.05);
+                              box-shadow: 3px 3px 0 rgba(0,0,0,.35); }
+        .style-swatch-art { width: 34px; height: 24px; object-fit: cover;
+                            border: 1.5px solid var(--ink); flex-shrink: 0; }
+        .style-swatch-name { font-size: .68rem; font-weight: 700;
+                             text-transform: uppercase; letter-spacing: .04em;
+                             white-space: nowrap; }
+        .style-swatch-current { outline: 3px solid var(--accent, #c62828);
+                                outline-offset: 2px; }
         .comic-page > * { min-width: 0; }
         .cpanel { position: relative; background: var(--panel);
                   border: 2.5px solid var(--ink); border-radius: 2px;

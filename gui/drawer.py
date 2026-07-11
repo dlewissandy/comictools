@@ -3,7 +3,9 @@ The asset catalog drawer: the studio's palette, on the left of every view.
 
 Designed like a contact sheet: a dense thumbnail grid so many assets are
 visible at once, grouped by type, filterable and searchable.  Clicking a tile
-IS the action — it asks the current view's coauthor to use that asset here.
+IS the action — with a panel open it lays the asset straight onto the light
+table (figures get posed, backgrounds/props/styles land with a receipt);
+anywhere else it asks the current view's coauthor to use the asset here.
 A small corner icon opens the asset in a new window instead.
 
 Reusable creative assets only (characters, variants, settings, props,
@@ -29,38 +31,40 @@ KIND_META = {
 
 def _catalog(storage: GenericStorage):
     """
-    Yield catalog entries: (kind, title, subtitle, image, use_message, open_url).
+    Yield catalog entries:
+    (kind, title, subtitle, series_id, asset_id, image, use_message, open_url).
     """
     for series in storage.read_all_objects(Series, order_by="name"):
         sid = series.series_id
         for c in storage.read_all_objects(CharacterModel, {"series_id": sid}):
-            yield ("character", c.name, f"{series.name}", sid,
+            yield ("character", c.name, f"{series.name}", sid, c.character_id,
                    storage.find_character_image(series_id=sid, character_id=c.character_id),
                    f"Use the character '{c.name}' (id: {c.character_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
                    f"/series/{sid}/character/{c.character_id}")
             for v in storage.read_all_objects(CharacterVariant, {"series_id": sid, "character_id": c.character_id}):
                 vimg = storage.find_variant_image(series_id=sid, character_id=c.character_id, variant_id=v.variant_id)
-                yield ("variant", f"{c.name} — {v.name}", f"{series.name}", sid, vimg,
+                yield ("variant", f"{c.name} — {v.name}", f"{series.name}", sid,
+                       f"{c.character_id}/{v.variant_id}", vimg,
                        f"Use the variant '{v.name}' (id: {v.variant_id}) of character '{c.name}' "
                        f"(id: {c.character_id}) from the series '{sid}' here as the wardrobe.  "
                        f"Import the character into this series first if needed.",
                        f"/series/{sid}/character/{c.character_id}/variant/{v.variant_id}")
         for s in storage.read_all_objects(Setting, {"series_id": sid}):
             img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
-            yield ("setting", s.name, f"{series.name}", sid, img,
+            yield ("setting", s.name, f"{series.name}", sid, s.setting_id, img,
                    f"Use the setting '{s.name}' (id: {s.setting_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
                    f"/series/{sid}/setting/{s.setting_id}")
         for p in storage.read_all_objects(PropAsset, {"series_id": sid}):
             pimg = next((i for i in (p.images or {}).values() if i and os.path.exists(i)), None)
-            yield ("prop", p.name, f"{series.name}", sid, pimg,
+            yield ("prop", p.name, f"{series.name}", sid, p.prop_id, pimg,
                    f"Use the prop '{p.name}' (id: {p.prop_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
                    f"/series/{sid}/prop/{p.prop_id}")
         for o in storage.read_all_objects(Outfit, {"series_id": sid}):
             oimg = next((i for i in (o.images or {}).values() if i and os.path.exists(i)), None)
-            yield ("outfit", o.name, f"{series.name}", sid, oimg,
+            yield ("outfit", o.name, f"{series.name}", sid, o.outfit_id, oimg,
                    f"Use the outfit '{o.name}' (id: {o.outfit_id}) from the series '{sid}' here — "
                    f"e.g. compose a character variant wearing it.  Import it first if needed.",
                    f"/series/{sid}/outfit/{o.outfit_id}")
@@ -68,7 +72,7 @@ def _catalog(storage: GenericStorage):
     for style in storage.read_all_objects(ComicStyle, order_by="name"):
         img = style.image.get("art") if isinstance(style.image, dict) else None
         img = img if img and os.path.exists(img) else None
-        yield ("style", style.name, "studio-wide", None, img,
+        yield ("style", style.name, "studio-wide", None, style.style_id, img,
                f"Use the comic style '{style.name}' (id: {style.style_id}) here.",
                f"/styles/{style.style_id}")
 
@@ -86,11 +90,37 @@ def build_asset_drawer(state):
                 return item.id, item.name
         return None, None
 
+    def _current_panel():
+        """The panel being worked on (and its scene) when the panel page is
+        open — drawer tiles then lay assets straight onto the light table."""
+        from schema import Panel, SceneModel
+        sel = state.selection or []
+        if not sel or sel[-1].kind.value != "panel":
+            return None, None
+        ids = {}
+        for item in sel:
+            match item.kind.value:
+                case "series":
+                    ids = {"series_id": item.id}
+                case "issue":
+                    ids["issue_id"] = item.id
+                case "scene":
+                    ids["scene_id"] = item.id
+                case "panel":
+                    ids["panel_id"] = item.id
+        if len(ids) < 4:
+            return None, None
+        panel = state.storage.read_object(cls=Panel, primary_key=ids)
+        scene = state.storage.read_object(cls=SceneModel, primary_key={
+            k: v for k, v in ids.items() if k != "panel_id"})
+        return panel, scene
+
     def refresh():
         drawer.clear()
         entries = list(_catalog(state.storage))
         counts = {k: sum(1 for e in entries if e[0] == k) for k in KIND_META}
         cur_sid, cur_name = _current_series()
+        cur_panel, cur_scene = _current_panel()
 
         with drawer:
             with ui.row().classes('w-full items-center q-px-sm'):
@@ -98,6 +128,9 @@ def build_asset_drawer(state):
                 ui.label(f"{len(entries)} in the studio").classes('text-xs text-gray-500')
                 ui.space()
                 ui.button(icon='refresh', on_click=refresh).props('flat round dense')
+            if cur_panel is not None:
+                ui.label('a panel is on the light table — clicking a tile lays the asset straight on it') \
+                    .classes('text-xs text-primary q-px-sm italic')
             # Scope: default to the series you're working in; flip the
             # switch to browse the whole studio.
             scope_switch = None
@@ -112,7 +145,13 @@ def build_asset_drawer(state):
                 value="all").props('dense no-caps unelevated toggle-color=primary').classes('q-px-sm')
             body = ui.column().classes('w-full q-px-sm').style('gap: 4px;')
 
-            def tile(kind, title, subtitle, sid, img, use_msg, url):
+            def tile(kind, title, subtitle, sid, aid, img, use_msg, url):
+                # a tile lays its asset straight on the light table when a
+                # panel is open and the asset is from that panel's series
+                # (styles are studio-wide); otherwise it asks the coauthor
+                direct = (cur_panel is not None
+                          and kind in ("character", "variant", "setting", "prop", "style")
+                          and (sid is None or sid == cur_panel.series_id))
                 with ui.element('div').classes('cursor-pointer').style(
                         'width: 31%; min-width: 130px;') as card:
                     with ui.element('div').classes('relative rounded-md overflow-hidden border '
@@ -129,9 +168,56 @@ def build_asset_drawer(state):
                         'white-space: nowrap; overflow: hidden; text-overflow: ellipsis;')
                     ui.label(subtitle).classes('text-xs text-gray-500 w-full').style(
                         'white-space: nowrap; overflow: hidden; text-overflow: ellipsis;')
-                    ui.tooltip(f"Add to what you're working on — {title} ({subtitle})")
+                    ui.tooltip(f"Lay it on the light table — {title}" if direct
+                               else f"Add to what you're working on — {title} ({subtitle})")
+
+                def _lay_direct(kind=kind, sid=sid, aid=aid, title=title):
+                    from gui import light_table as lt
+                    storage = state.storage
+                    if kind == "character":
+                        vs = list(storage.read_all_objects(CharacterVariant, {
+                            "series_id": sid, "character_id": aid}))
+                        if not vs:
+                            return False
+                        lt.lay_figure_on_table(state, cur_panel, aid, vs[0].variant_id, title)
+                    elif kind == "variant":
+                        cid, vid = aid.split("/", 1)
+                        lt.lay_figure_on_table(state, cur_panel, cid, vid, title)
+                    elif kind == "setting":
+                        if cur_scene is None:
+                            return False
+                        s = storage.read_object(cls=Setting, primary_key={
+                            "series_id": sid, "setting_id": aid})
+                        if s is None:
+                            return False
+                        lt.lay_background_on_table(state, cur_scene, cur_panel, s)
+                    elif kind == "prop":
+                        if cur_scene is None:
+                            return False
+                        pa = storage.read_object(cls=PropAsset, primary_key={
+                            "series_id": sid, "prop_id": aid})
+                        if pa is None:
+                            return False
+                        lt.lay_prop_on_table(state, cur_scene, pa)
+                    elif kind == "style":
+                        if cur_scene is None:
+                            return False
+                        st = storage.read_object(cls=ComicStyle, primary_key={"style_id": aid})
+                        if st is None:
+                            return False
+                        lt.wear_style_on_table(state, cur_scene, st)
+                    else:
+                        return False
+                    return True
 
                 def _use(msg=use_msg):
+                    if direct:
+                        try:
+                            if _lay_direct():
+                                drawer.hide()
+                                return
+                        except Exception as ex:
+                            logger.warning(f"direct lay failed, falling back to chat: {ex}")
                     post_user_message(state, msg)
                     drawer.hide()
                 card.on('click', lambda _, m=use_msg: _use(m))

@@ -12,7 +12,7 @@ from nicegui import ui
 
 from gui.messaging import post_user_message
 from gui.state import APPState
-from schema import CharacterModel, Setting, PropAsset, CharacterVariant
+from schema import CharacterModel, ComicStyle, Setting, PropAsset, CharacterVariant
 from schema.character_reference import CharacterRef
 from schema.setting import Prop
 
@@ -349,6 +349,82 @@ def _src(path: str) -> str:
     return f"/{p}?v={v}" if p.startswith('data/') else path
 
 
+# ---------------------------------------------------------------------------
+# LAYING ASSETS ON THE TABLE: one-click direct writes, shared by the table's
+# own pickers AND the assets drawer (a drawer tile lays its asset right here
+# when a panel is open — the drawer IS part of the table).
+# ---------------------------------------------------------------------------
+def table_receipt(state, text: str):
+    """A receipt panel in the chat history, spoken as the user."""
+    try:
+        from gui.avatars import comic_chat_message
+        with state.history:
+            with comic_chat_message(name='You', sent=True).classes('w-full'):
+                ui.markdown(text)
+        state.history.scroll_to(percent=100)
+    except Exception:
+        pass
+
+
+def pose_figure_bg(state, panel, character_id: str, variant_id: str,
+                   pose_direction: str | None = None):
+    """Queue a posed-acetate render for a figure on this panel."""
+    from agentic.tools.imaging import generate_figure_acetate_body
+    from helpers.render_queue import enqueue_renders
+    enqueue_renders(state, [(
+        f"posing {character_id} for panel {panel.panel_number}",
+        lambda: generate_figure_acetate_body(
+            state, panel.series_id, panel.issue_id, panel.scene_id,
+            panel.panel_id, character_id, variant_id, pose_direction),
+    )], role="the Penciller")
+
+
+def lay_figure_on_table(state, panel, character_id: str, variant_id: str,
+                        name: str | None = None):
+    refs = panel.character_references or []
+    if not any(c.character_id == character_id and c.variant_id == variant_id for c in refs):
+        panel.character_references = refs + [CharacterRef(
+            series_id=panel.series_id, character_id=character_id, variant_id=variant_id)]
+        state.storage.update_object(panel)
+    table_receipt(state, f"🎭 laid **{name or character_id.replace('-', ' ')}** on the table "
+                         f"— posing them for the shot…")
+    pose_figure_bg(state, panel, character_id, variant_id)
+    state.refresh_details()
+
+
+def lay_background_on_table(state, scene, panel, setting):
+    scene.setting_id = setting.setting_id
+    state.storage.update_object(scene)
+    # a new background replaces any split plate
+    if (panel.figure_images or {}).pop('background/plate', None) is not None:
+        for gname in list(panel.layer_groups or {}):
+            panel.layer_groups[gname] = [k for k in panel.layer_groups[gname]
+                                         if k != 'background/plate']
+            if not panel.layer_groups[gname]:
+                panel.layer_groups.pop(gname)
+        state.storage.update_object(panel)
+    table_receipt(state, f"🏔 laid the **{setting.name}** background on the table")
+    state.refresh_details()
+
+
+def lay_prop_on_table(state, scene, prop_asset):
+    if any(p.name == prop_asset.name for p in (scene.props or [])):
+        table_receipt(state, f"🎪 **{prop_asset.name}** is already on the table")
+    else:
+        scene.props = (scene.props or []) + [Prop(name=prop_asset.name,
+                                                  description=prop_asset.description)]
+        state.storage.update_object(scene)
+        table_receipt(state, f"🎪 laid the **{prop_asset.name}** prop on the table")
+    state.refresh_details()
+
+
+def wear_style_on_table(state, scene, style):
+    scene.style_id = style.style_id
+    state.storage.update_object(scene)
+    table_receipt(state, f"🎨 swapped the style swatch — takes now print in **{style.name}**")
+    state.refresh_details()
+
+
 def light_table(state: APPState, panel, scene, setting,
                 featured: str | None = None, actions=None):
     """
@@ -561,9 +637,18 @@ def light_table(state: APPState, panel, scene, setting,
     references = [{"img": u, "on": True} for u in storage.list_uploads(panel)
                   if u and os.path.exists(u)]
 
+    def _key_on(key, default=1):
+        return bool(((panel.figure_blocking or {}).get(key) or {}).get('on', default))
+
     has_letters = bool(panel.narration or panel.dialogue)
-    letters = {"on": has_letters}
-    bg_layer = {"on": background is not None}
+    letter_keys = [f'balloon/{i}' for i in range(len((panel.dialogue or [])[:4]))]
+    for _pos in ('top', 'bottom'):
+        _caps = [n for n in (panel.narration or []) if n.position.value == _pos]
+        letter_keys += [f'caption/{_pos}/{i}' for i in range(len(_caps[:2]))]
+    # the master eye rules its letters recursively; it reads as ON when any is
+    letters = {"on": has_letters and (not letter_keys or any(_key_on(k) for k in letter_keys)),
+               "keys": letter_keys}
+    bg_layer = {"on": background is not None and _key_on('background'), "key": "background"}
 
     aspect = _ASPECT[panel.aspect.value]
 
@@ -677,13 +762,15 @@ def light_table(state: APPState, panel, scene, setting,
 
     async def split_flow(layer_key: str, source_path: str):
         import asyncio
-        from agentic.tools.imaging import recognize_layer_entities, split_layer_body
+        from agentic.tools.imaging import recognize_layer_entities, split_layer_body, series_cast_roster
         from helpers.render_queue import enqueue_renders
         ui.notify('Reading the layer — recognizing its elements…', type='info')
-        entities = await asyncio.to_thread(recognize_layer_entities, source_path)
+        roster = series_cast_roster(storage, series_id)
+        entities = await asyncio.to_thread(recognize_layer_entities, source_path, 8, roster)
         if not entities:
             ui.notify('No liftable elements recognized on that layer.', type='warning')
             return
+        cast_names = {c['character_id']: (c.get('name') or c['character_id']) for c in roster}
         with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px;'):
             ui.label('Split this layer').classes('caption-box caption-box-sm')
             ui.label('Pick what to lift onto its own acetate.  The layer is repainted '
@@ -691,7 +778,13 @@ def light_table(state: APPState, panel, scene, setting,
             picks = []
             for e in entities:
                 note = f" — beneath: {e['beneath']}" if e.get('beneath') else ''
-                cb = ui.checkbox(f"{e['name']}{note}", value=True)
+                with ui.row().classes('items-center flex-nowrap w-full').style('gap: 6px;'):
+                    cb = ui.checkbox(f"{e['name']}{note}", value=True)
+                    who = cast_names.get(e.get('character_id'))
+                    if who:
+                        ui.chip(f"= {who}", icon='badge').props('dense outline color=primary') \
+                            .tooltip("Recognized as a cast member — lands as their figure acetate, "
+                                     "linked to their reference sheets")
                 picks.append((e, cb))
             extra = ui.input(placeholder='…something else on this layer').classes('w-full').props('outlined dense')
 
@@ -741,13 +834,19 @@ def light_table(state: APPState, panel, scene, setting,
 
         def toggle():
             layer["on"] = not layer["on"]
-            if layer.get("key"):
-                cur = dict((panel.figure_blocking or {}).get(layer["key"]) or {})
+            # a layer with "keys" is a group of layers: the eye rules them ALL
+            keys = ([layer["key"]] if layer.get("key") else []) + list(layer.get("keys") or [])
+            for k in keys:
+                cur = dict((panel.figure_blocking or {}).get(k) or {})
                 cur["on"] = 1 if layer["on"] else 0
-                panel.figure_blocking[layer["key"]] = cur
+                panel.figure_blocking[k] = cur
+            if keys:
                 storage.update_object(panel)
             btn.props(f'icon={"visibility" if layer["on"] else "visibility_off"}')
-            rough.refresh()
+            if layer.get("keys"):
+                state.refresh_details()   # member rows' eyes follow the group
+            else:
+                rough.refresh()
         btn.on('click', toggle)
         btn.tooltip('Lift this acetate off the table' if layer["on"] else 'Lay it back down')
 
@@ -949,7 +1048,93 @@ def light_table(state: APPState, panel, scene, setting,
                     eye(f)
                     if f["ref"] is None:
                         ui.image(source=_src(f["img"])).classes('light-thumb')
-                        ui.label(f["name"].title()).classes('text-sm')
+                        name_label = ui.label(f["name"].title()).classes('text-sm cursor-pointer') \
+                            .tooltip('Rename this layer')
+
+                        def _move_key(old_key, new_key):
+                            # a layer's name IS its key: move image, blocking
+                            # and group membership together
+                            panel.figure_images[new_key] = panel.figure_images.pop(old_key)
+                            if old_key in (panel.figure_blocking or {}):
+                                panel.figure_blocking[new_key] = panel.figure_blocking.pop(old_key)
+                            for g in list(panel.layer_groups or {}):
+                                panel.layer_groups[g] = [new_key if k == old_key else k
+                                                         for k in panel.layer_groups[g]]
+
+                        def rename_element(key=f["key"], nm=f["name"]):
+                            with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 360px;'):
+                                ui.label('Rename this layer').classes('caption-box caption-box-sm')
+                                inp = ui.input(value=nm).classes('w-full q-mt-sm') \
+                                    .props('outlined dense autofocus')
+
+                                def go():
+                                    import re as _re
+                                    new = (inp.value or '').strip()
+                                    slug = _re.sub(r'[^a-z0-9]+', '-', new.lower()).strip('-')[:40]
+                                    if not slug:
+                                        ui.notify('Give the layer a name.', type='warning')
+                                        return
+                                    new_key = f'element/{slug}'
+                                    if new_key == key:
+                                        dlg.close()
+                                        return
+                                    if new_key in (panel.figure_images or {}):
+                                        ui.notify('Another layer already has that name.', type='warning')
+                                        return
+                                    _move_key(key, new_key)
+                                    storage.update_object(panel)
+                                    _receipt(f"🏷 renamed the **{nm}** layer to **{new}**")
+                                    dlg.close()
+                                    state.refresh_details()
+                                inp.on('keydown.enter', lambda _: go())
+                                with ui.row().classes('w-full justify-end'):
+                                    ui.button('Rename', icon='drive_file_rename_outline') \
+                                        .props('unelevated dense').on('click', lambda _: go())
+                            dlg.open()
+                        name_label.on('click', lambda _, k=f["key"], n=f["name"]: rename_element(k, n))
+
+                        def identify_element(key=f["key"], nm=f["name"]):
+                            # link the cut-out to the asset it depicts: it
+                            # becomes that character's posed acetate
+                            with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                                    .style('min-width: 480px; max-width: 720px;'):
+                                ui.label('Who is this?').classes('caption-box caption-box-sm')
+                                ui.label('Link this cut-out to a cast member — it becomes their posed '
+                                         'acetate, tied to their reference sheets.').classes('text-sm q-mt-sm')
+                                with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
+                                    for ch in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
+                                        for v in storage.read_all_objects(CharacterVariant, primary_key={
+                                                "series_id": series_id, "character_id": ch.character_id}):
+                                            img = storage.find_variant_image(
+                                                series_id=series_id, character_id=ch.character_id, variant_id=v.id)
+                                            with ui.card().classes('soft-card p-1 cursor-pointer') \
+                                                    .style('width: 130px;') as card:
+                                                if img and os.path.exists(img):
+                                                    ui.image(source=img).style('height: 70px;').props('fit=contain')
+                                                vname = getattr(v, 'name', None) or v.id
+                                                ui.label(f"{ch.name.title()} · {vname}") \
+                                                    .classes('text-xs text-center w-full')
+
+                                            def link(ch=ch, v=v, key=key, nm=nm):
+                                                fig_key = f"{ch.character_id}/{v.id}"
+                                                replaced = fig_key in (panel.figure_images or {})
+                                                _move_key(key, fig_key)
+                                                if not any(c.character_id == ch.character_id and c.variant_id == v.id
+                                                           for c in (panel.character_references or [])):
+                                                    panel.character_references = (panel.character_references or []) + [
+                                                        CharacterRef(series_id=series_id,
+                                                                     character_id=ch.character_id, variant_id=v.id)]
+                                                storage.update_object(panel)
+                                                _receipt(f"🪪 identified **{nm}** as **{ch.name}** — the cut-out "
+                                                         f"is now their acetate"
+                                                         + (" (it replaces their previous one)" if replaced else ""))
+                                                dlg.close()
+                                                state.refresh_details()
+                                            card.on('click', lambda _, ch=ch, v=v: link(ch, v))
+                            dlg.open()
+                        ui.button(icon='person_search').props('flat round dense size=xs') \
+                            .tooltip('Who is this?  Link this cut-out to a cast member') \
+                            .on('click', lambda _, k=f["key"], n=f["name"]: identify_element(k, n))
 
                         def heal_element(path=f["img"], nm=f["name"]):
                             from gui.selection import SelectionItem, SelectedKind
@@ -1133,23 +1318,58 @@ def light_table(state: APPState, panel, scene, setting,
                 grow._props['data-key'] = f'group:{gname}'
                 with grow:
                     ui.icon('drag_indicator').classes('text-sm text-gray-400')
-                    all_on = any(m["on"] for m in members)
+                    has_plate_member = 'background/plate' in ((panel.layer_groups or {}).get(gname) or [])
+                    all_on = any(m["on"] for m in members) or (has_plate_member and bg_layer["on"])
                     gbtn = ui.button(icon='visibility' if all_on else 'visibility_off') \
-                        .props('flat round dense size=sm').tooltip('Lift the whole group')
+                        .props('flat round dense size=sm') \
+                        .tooltip('Lift the whole group — every acetate in it')
 
-                    def toggle_group(members=members, gbtn=gbtn):
-                        now = not any(m["on"] for m in members)
+                    def toggle_group(gname=gname, members=members, was_on=all_on):
+                        # the group eye rules EVERY member recursively — the
+                        # split plate included
+                        now = not was_on
                         for m in members:
                             m["on"] = now
                             cur = dict((panel.figure_blocking or {}).get(m["key"]) or {})
                             cur["on"] = 1 if now else 0
                             panel.figure_blocking[m["key"]] = cur
+                        if 'background/plate' in ((panel.layer_groups or {}).get(gname) or []):
+                            cur = dict((panel.figure_blocking or {}).get('background') or {})
+                            cur["on"] = 1 if now else 0
+                            panel.figure_blocking['background'] = cur
                         storage.update_object(panel)
-                        gbtn.props(f"icon={'visibility' if now else 'visibility_off'}")
-                        rough.refresh()
-                    gbtn.on('click', lambda _, m=members, b=gbtn: toggle_group(m, b))
+                        state.refresh_details()   # member rows' eyes follow the group
+                    gbtn.on('click', lambda _, g=gname, m=members, w=all_on: toggle_group(g, m, w))
                     ui.icon('folder_open').classes('text-lg').style('width: 40px; text-align: center;')
-                    ui.label(gname.title()).classes('text-sm text-bold')
+                    glabel = ui.label(gname.title()).classes('text-sm text-bold cursor-pointer') \
+                        .tooltip('Rename this group')
+
+                    def rename_group(gname=gname):
+                        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 360px;'):
+                            ui.label('Rename this group').classes('caption-box caption-box-sm')
+                            inp = ui.input(value=gname).classes('w-full q-mt-sm') \
+                                .props('outlined dense autofocus')
+
+                            def go():
+                                new = (inp.value or '').strip()
+                                if not new or new == gname:
+                                    dlg.close()
+                                    return
+                                if new in (panel.layer_groups or {}):
+                                    ui.notify('Another group already has that name.', type='warning')
+                                    return
+                                panel.layer_groups = {(new if k == gname else k): v
+                                                      for k, v in (panel.layer_groups or {}).items()}
+                                storage.update_object(panel)
+                                _receipt(f"🏷 renamed the **{gname}** group to **{new}**")
+                                dlg.close()
+                                state.refresh_details()
+                            inp.on('keydown.enter', lambda _: go())
+                            with ui.row().classes('w-full justify-end'):
+                                ui.button('Rename', icon='drive_file_rename_outline') \
+                                    .props('unelevated dense').on('click', lambda _: go())
+                        dlg.open()
+                    glabel.on('click', lambda _, g=gname: rename_group(g))
                     ui.space()
 
                     ui.button(icon='layers').props('flat round dense size=xs') \
@@ -1216,14 +1436,7 @@ def light_table(state: APPState, panel, scene, setting,
             # ONE CLICK from a picker; letters go through the coauthor (they
             # need writing).
             def _receipt(text: str):
-                try:
-                    from gui.avatars import comic_chat_message
-                    with state.history:
-                        with comic_chat_message(name='You', sent=True).classes('w-full'):
-                            ui.markdown(text)
-                    state.history.scroll_to(percent=100)
-                except Exception:
-                    pass
+                table_receipt(state, text)
 
             def pick_figure():
                 with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 720px;'):
@@ -1242,13 +1455,8 @@ def light_table(state: APPState, panel, scene, setting,
                                     ui.label(f"{ch.name.title()} · {vname}").classes('text-xs text-center w-full')
 
                                 def lay(ch=ch, v=v):
-                                    panel.character_references = (panel.character_references or []) + [
-                                        CharacterRef(series_id=series_id, character_id=ch.character_id, variant_id=v.id)]
-                                    storage.update_object(panel)
-                                    _receipt(f"🎭 laid **{ch.name}** ({v.id}) on the table — posing them for the shot…")
                                     dlg.close()
-                                    pose_figure(ch.character_id, v.id)
-                                    state.refresh_details()
+                                    lay_figure_on_table(state, panel, ch.character_id, v.id, ch.name)
                                 card.on('click', lambda _, ch=ch, v=v: lay(ch, v))
                 dlg.open()
 
@@ -1264,19 +1472,8 @@ def light_table(state: APPState, panel, scene, setting,
                                 ui.label(s.name.title()).classes('text-xs text-center w-full')
 
                             def lay(s=s):
-                                scene.setting_id = s.setting_id
-                                storage.update_object(scene)
-                                # a new background replaces any split plate
-                                if (panel.figure_images or {}).pop('background/plate', None) is not None:
-                                    for gname in list(panel.layer_groups or {}):
-                                        panel.layer_groups[gname] = [k for k in panel.layer_groups[gname]
-                                                                     if k != 'background/plate']
-                                        if not panel.layer_groups[gname]:
-                                            panel.layer_groups.pop(gname)
-                                    storage.update_object(panel)
-                                _receipt(f"🏔 laid the **{s.name}** background on the table")
                                 dlg.close()
-                                state.refresh_details()
+                                lay_background_on_table(state, scene, panel, s)
                             card.on('click', lambda _, s=s: lay(s))
                 dlg.open()
 
@@ -1295,11 +1492,8 @@ def light_table(state: APPState, panel, scene, setting,
                                 ui.label(pa.name.title()).classes('text-xs text-center w-full')
 
                             def lay(pa=pa):
-                                scene.props = (scene.props or []) + [Prop(name=pa.name, description=pa.description)]
-                                storage.update_object(scene)
-                                _receipt(f"🎪 laid the **{pa.name}** prop on the table")
                                 dlg.close()
-                                state.refresh_details()
+                                lay_prop_on_table(state, scene, pa)
                             card.on('click', lambda _, pa=pa: lay(pa))
                 dlg.open()
 
@@ -1445,6 +1639,58 @@ def light_table(state: APPState, panel, scene, setting,
         with ui.column().style('flex: 1 1 0; min-width: 0;'):
             with ui.row().classes('w-full items-center flex-nowrap').style('gap: 4px;'):
                 ui.label('THE ROUGH').classes('comic-label-sm')
+
+                # THE STYLE SWATCH: taped to the board like a printer's color
+                # chip — the style every take of this scene prints in
+                cur_style = None
+                if scene is not None and scene.style_id:
+                    cur_style = storage.read_object(cls=ComicStyle,
+                                                    primary_key={"style_id": scene.style_id})
+
+                def _style_art(st):
+                    art = st.image.get('art') if isinstance(st.image, dict) else st.image
+                    return art if art and os.path.exists(art) else None
+
+                def pick_style():
+                    if scene is None:
+                        ui.notify('This panel has no scene to restyle.', type='warning')
+                        return
+                    with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                            .style('min-width: 520px; max-width: 780px;'):
+                        ui.label('Swap the style swatch').classes('caption-box caption-box-sm')
+                        ui.label('Every take of this scene prints in the swatched style — '
+                                 'pick the one this panel should wear.').classes('text-sm q-mt-sm')
+                        with ui.row().classes('w-full q-mt-sm').style('gap: 10px;'):
+                            for st in storage.read_all_objects(ComicStyle, order_by='name'):
+                                art = _style_art(st)
+                                current = scene.style_id == st.style_id
+                                with ui.card().classes(
+                                        'soft-card p-1' + (' style-swatch-current' if current
+                                                           else ' cursor-pointer')) \
+                                        .style('width: 150px;') as card:
+                                    if art:
+                                        ui.image(source=_src(art)).style('height: 90px;').props('fit=cover')
+                                    ui.label(st.name.title() + (' — on the board' if current else '')) \
+                                        .classes('text-xs text-center w-full')
+
+                                def wear(st=st):
+                                    dlg.close()
+                                    wear_style_on_table(state, scene, st)
+                                if not current:
+                                    card.on('click', lambda _, st=st: wear(st))
+                    dlg.open()
+
+                swatch = ui.element('div').classes('style-swatch cursor-pointer')
+                with swatch:
+                    art = _style_art(cur_style) if cur_style is not None else None
+                    if art:
+                        ui.image(source=_src(art)).classes('style-swatch-art')
+                    else:
+                        ui.icon('palette').style('font-size: 16px;')
+                    ui.label(cur_style.name if cur_style is not None else 'pick a style') \
+                        .classes('style-swatch-name')
+                swatch.tooltip('The style this panel prints in — click to swap the swatch')
+                swatch.on('click', lambda _: pick_style())
                 ui.space()
                 # the frame's SHAPE, switched right on the rough
                 from schema import FrameLayout as _FL
