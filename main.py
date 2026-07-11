@@ -161,20 +161,28 @@ def init_layout(logger):
         /* markdown inside panels: no extra air */
         .cpanel .q-pa-md { padding: 4px 2px !important; }
 
-        /* the conversation is comic dialog: each message an inked panel,
-           each speaker a drawn CHARACTER in the margin */
-        .q-message-text { border: 2.5px solid var(--ink); border-radius: 6px;
-                          box-shadow: 3px 3px 0 rgba(0,0,0,.35);
+        /* the conversation is comic PANELS: each message a square-cornered
+           inked frame, its speaker's name a caption box riding the top
+           rule, the speaker a drawn CHARACTER in the margin */
+        .q-message-text { border: 2.5px solid var(--ink); border-radius: 2px;
+                          box-shadow: 4px 4px 0 rgba(0,0,0,.45);
                           background: var(--panel) !important; color: var(--ink) !important;
-                          padding: 10px 14px; }
-        .q-message-text::before { color: var(--ink); }  /* balloon tail stays inked */
+                          padding: 14px 16px 12px; margin-top: 0; }
+        .q-message-text::before { display: none; }  /* panels, not balloons */
         .q-message-sent .q-message-text { background: var(--caption) !important;
                                           color: var(--caption-ink) !important; }
         .q-message-name { font-weight: 800; text-transform: uppercase;
-                          font-size: .7rem; letter-spacing: .5px; }
-        .q-message-avatar { width: 42px; height: 42px; min-width: 42px;
+                          font-size: .7rem; letter-spacing: .5px;
+                          background: var(--caption); color: var(--caption-ink);
+                          border: 2px solid var(--ink); border-radius: 2px;
+                          box-shadow: 2px 2px 0 rgba(0,0,0,.4);
+                          display: inline-block; padding: 1px 10px;
+                          position: relative; z-index: 2;
+                          margin: 0 0 -7px 10px; }
+        .q-message-sent .q-message-name { margin: 0 10px -7px 0; }
+        .q-message-avatar { width: 46px; height: 46px; min-width: 46px;
                             border: 2.5px solid var(--ink); background: #faf6ec;
-                            box-shadow: 2px 2px 0 rgba(0,0,0,.3); }
+                            box-shadow: 2px 2px 0 rgba(0,0,0,.35); }
     """)
 
     # SET THE DARK MODE BASED ON THE ENVIRONMENT VARIABLE

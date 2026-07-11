@@ -795,8 +795,10 @@ def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], N
                   packer: Optional["PagePacker"] = None, variants: Optional[list[tuple[float, float]]] = None,
                   label: str = 'Drop image to upload',
                   overlap_caption: Optional[Callable] = None):
-    # drop boxes are the SMALLEST size (3x2), so rows of them pack tight
-    cell = packer.place_cell(variants or [(3, 2)], fudge=False) if packer is not None else contextlib.nullcontext()
+    # drop boxes are n x 2: smallest-first (3 wide) so rows pack tight,
+    # stretching only to close out a row, and never past 6
+    cell = (packer.place_cell(variants or [(3, 2)], fudge=True, max_w=6)
+            if packer is not None else contextlib.nullcontext())
     with cell:
         card = ui.card().classes(TAILWIND_CARD + ' relative')
         if overlap_caption is None:
@@ -938,10 +940,13 @@ class PagePacker:
         self.width = width
         self.requests: list[list] = []  # [cell, variants, flexible]
 
-    def place_cell(self, variants: list[tuple[float, float]], fudge: bool = True):
-        """Register a card cell; actual placement happens in finalize()."""
+    def place_cell(self, variants: list[tuple[float, float]], fudge: bool = True,
+                   max_w: Optional[float] = None):
+        """Register a card cell; actual placement happens in finalize().
+        fudge: the cell may stretch wider to close out its row.
+        max_w: cap on that stretch (None = unlimited)."""
         cell = ui.element('div')
-        self.requests.append([cell, list(variants), fudge])
+        self.requests.append([cell, list(variants), fudge, max_w])
         return cell
 
     # -- classification ------------------------------------------------
@@ -960,35 +965,51 @@ class PagePacker:
     def _nominal(variants) -> tuple[float, float]:
         return variants[0]
 
+    @staticmethod
+    def _stretch_row(row, target):
+        """Widen a row's flexible cells (capped ones last) so it spans
+        `target`; row items are [cell, x, y, w, h, flex, max_w]."""
+        for capped in (False, True):
+            leftover = target - sum(r[3] for r in row)
+            if leftover <= 1e-6:
+                break
+            flexes = [r for r in row
+                      if r[5] and (r[6] is None) == (not capped)
+                      and (r[6] is None or r[3] < r[6] - 1e-6)]
+            if not flexes:
+                continue
+            extra = leftover / len(flexes)
+            for r in flexes:
+                r[3] += min(extra, (r[6] - r[3]) if r[6] is not None else extra)
+        # reflow x positions
+        x = row[0][1]
+        for r in row:
+            r[1] = x
+            x += r[3]
+        return x
+
     # -- band construction ----------------------------------------------
     def _row_band(self, reqs, i):
         """A simple one-slice band: consecutive same-height cards, reading
-        left to right; text cards stretch to close the right margin."""
-        cell, variants, flex = reqs[i]
+        left to right; flexible cards stretch to close the right margin
+        (uncapped text first, capped cells like drop boxes last)."""
+        cell, variants, flex, mw = reqs[i]
         w0, h0 = self._nominal(variants)
-        row = [[cell, 0.0, 0.0, float(w0), float(h0), flex]]
+        row = [[cell, 0.0, 0.0, float(w0), float(h0), flex, mw]]
         x = float(w0)
         j = i + 1
         while j < len(reqs) and x < self.width - 1e-6:
-            c2, v2, f2 = reqs[j]
+            c2, v2, f2, m2 = reqs[j]
             if self._is_portrait(v2):
                 break
             w2, h2 = self._nominal(v2)
             if h2 != h0 or x + w2 > self.width + 1e-6:
                 break
-            row.append([c2, x, 0.0, float(w2), float(h2), f2])
+            row.append([c2, x, 0.0, float(w2), float(h2), f2, m2])
             x += w2
             j += 1
-        flexes = [r for r in row if r[5]]
-        if x < self.width - 1e-6 and flexes:
-            extra = (self.width - x) / len(flexes)
-            shift = 0.0
-            for r in row:
-                r[1] += shift
-                if r[5]:
-                    r[3] += extra
-                    shift += extra
-            x = self.width
+        if x < self.width - 1e-6 and any(r[5] for r in row):
+            x = self._stretch_row(row, self.width)
         return {'W': x, 'cells': [tuple(r[:5]) for r in row], 'next': j}
 
     def _try_cover_band(self, reqs, i, H):
@@ -1010,13 +1031,13 @@ class PagePacker:
         R = 0.0
         first_slice = []
         while H > 3 and j < len(reqs):
-            c2, v2, f2 = reqs[j]
+            c2, v2, f2, m2 = reqs[j]
             if self._is_portrait(v2):
                 break
             w2, h2 = self._nominal(v2)
             if h2 != 2 or R + w2 > budget + 1e-6:
                 break
-            first_slice.append([c2, x + R, 0.0, float(w2), 2.0, f2])
+            first_slice.append([c2, x + R, 0.0, float(w2), 2.0, f2, m2])
             R += w2
             j += 1
         if first_slice:
@@ -1024,7 +1045,7 @@ class PagePacker:
             y = 2.0
             while y < H - 1e-6 and j < len(reqs):
                 left = H - y
-                c2, v2, f2 = reqs[j]
+                c2, v2, f2, m2 = reqs[j]
                 if self._is_portrait(v2):
                     break
                 # a landscape card may scale to take the whole slice
@@ -1040,24 +1061,16 @@ class PagePacker:
                 row = []
                 jj = j
                 while jj < len(reqs) and rx < R - 1e-6:
-                    c3, v3, f3 = reqs[jj]
+                    c3, v3, f3, m3 = reqs[jj]
                     w3, h3 = self._nominal(v3)
                     if self._is_portrait(v3) or h3 != h2 or rx + w3 > R + 1e-6:
                         break
-                    row.append([c3, x + rx, y, float(w3), float(h3), f3])
+                    row.append([c3, x + rx, y, float(w3), float(h3), f3, m3])
                     rx += w3
                     jj += 1
-                if row and rx < R - 1e-6:
-                    flexes = [r for r in row if r[5]]
-                    if flexes:
-                        extra = (R - rx) / len(flexes)
-                        shift = 0.0
-                        for r in row:
-                            r[1] += shift
-                            if r[5]:
-                                r[3] += extra
-                                shift += extra
-                        rx = R
+                if row and rx < R - 1e-6 and any(r[5] for r in row):
+                    rx = self._stretch_row(row, R) - row[0][1] + 0.0
+                    rx = sum(r[3] for r in row)
                 if not row or rx < R - 1e-6:
                     break  # can't close this slice — the band ends here
                 cells += [tuple(r[:5]) for r in row]
