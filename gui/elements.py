@@ -382,22 +382,22 @@ def render_object_cards(
             id = instance.id
             logger.debug(f"Creating card for {id}")
             if flow_span:
-                # rows spanned ≈ columns * (h/w): the region approximates the
-                # art's shape, and the card stretches to fill it exactly.
+                # Region spans (in HALF-row units) match the art's true aspect;
+                # the card itself keeps aspect-ratio — never stretched, never
+                # cropped.  rspan = 2 * cols * h/w.
                 try:
                     w_r, h_r = (float(x) for x in str(aspect_ratio).replace(':', '/').split('/'))
                 except Exception:
                     w_r = h_r = 1.0
-                rspan = max(2, min(8, round(flow_span * h_r / w_r)))
+                rspan = max(2, min(12, round(2 * flow_span * h_r / w_r)))
+                rspan = rspan if rspan in (2,3,4,5,6,7,8,9,10,12) else min((2,3,4,5,6,7,8,9,10,12), key=lambda v: abs(v-rspan))
                 cell = ui.element('div').classes(f'cspan-{flow_span} rspan-{rspan}')
             else:
                 cell = contextlib.nullcontext()
             with cell:
-                card = ui.card().classes(TAILWIND_CARD)
+                card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}')
                 if flow_span:
                     card.classes('mosaic-card')
-                else:
-                    card.style(f'aspect-ratio: {aspect_ratio}')
             card.classes('relative overflow-visible')
             if i == 0 and overlap_caption is not None:
                 # the group's narrator box overlaps its first panel, comic-style
