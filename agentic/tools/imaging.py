@@ -1562,13 +1562,57 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
     # 3) Panel-specific uploaded reference images.
     reference_images.extend(storage.list_uploads(obj=panel))
 
-    # Assemble the dialogue/narration script for the letterer.
+    # Assemble the dialogue/narration script for the letterer, honoring the
+    # author's light-table arrangement: positions, tail targets, emphasis,
+    # and letters lifted off the table.
+    blk = panel.figure_blocking or {}
+
+    def _pct(v):
+        return f"{round(float(v))}%"
+
     script_lines = []
-    for n in panel.narration:
-        script_lines.append(f"* **Narration ({n.position.value})**: {n.text}")
-    for d in panel.dialogue:
-        script_lines.append(f"* **{d.character_id}** ({d.emphasis.value}): {d.text}")
+    for pos in ('top', 'bottom'):
+        for i, n in enumerate([n for n in panel.narration if n.position.value == pos]):
+            b = blk.get(f'caption/{pos}/{i}') or {}
+            if not b.get('on', 1):
+                continue
+            line = f"* **Narration ({pos})**: {n.text}"
+            if b:
+                line += f"   [box at {_pct(b.get('x', 4))} from left, {_pct(b.get('y', 88))} up from the bottom]"
+            script_lines.append(line)
+    for i, d in enumerate(panel.dialogue):
+        b = blk.get(f'balloon/{i}') or {}
+        if not b.get('on', 1):
+            continue
+        line = f"* **{d.character_id}** ({d.emphasis.value}): {d.text}"
+        if b:
+            line += f"   [balloon at {_pct(b.get('x', 50))} from left, {_pct(b.get('y', 70))} up"
+            if b.get('tx') is not None:
+                line += f"; tail tip at {_pct(b['tx'])} across, {_pct(b.get('ty', 0))} up"
+            line += "]"
+        script_lines.append(line)
     script = "\n".join(script_lines)
+
+    # The author's figure blocking from the light table.
+    blocking_lines = []
+    for ref in panel.character_references:
+        b = blk.get(f"{ref.character_id}/{ref.variant_id}") or {}
+        if not b:
+            continue
+        h = float(b.get('h', 60))
+        depth = "in the near foreground, large" if h >= 88 else ("far in the background, small" if h <= 45 else "in the mid-ground")
+        blocking_lines.append(f"* {ref.character_id} stands at {_pct(b.get('x', 50))} from left, {depth}"
+                              + (f", raised {_pct(b['y'])} above the panel bottom" if float(b.get('y', 0)) > 5 else "")
+                              + ("; only partly in frame, rising from below the bottom edge" if float(b.get('y', 0)) < -5 else ""))
+    for key, path in sorted((panel.figure_images or {}).items()):
+        if not key.startswith('element/'):
+            continue
+        b = blk.get(key) or {}
+        if not b.get('on', 1):
+            blocking_lines.append(f"* OMIT the {key.split('/', 1)[1].replace('-', ' ')} entirely")
+        elif b:
+            blocking_lines.append(f"* the {key.split('/', 1)[1].replace('-', ' ')} sits at {_pct(b.get('x', 50))} from left")
+    table_layout = "\n".join(blocking_lines)
 
     setting_line = ""
     if setting is not None:
@@ -1594,7 +1638,9 @@ must look; keep them strictly on-model.
 # Characters in panel
 {cast_info if cast_info else "* (no characters in panel)"}
 
-# Lettering (render these balloons/boxes per the style's bubble styles)
+{f"# Layout — the author BLOCKED this on the light table; honor positions and depths{chr(10)}{table_layout}{chr(10)}" if table_layout else ""}
+# Lettering (render these balloons/boxes per the style's bubble styles;
+# bracketed placements are the author's — put each balloon and tail there)
 {script if script else "* (silent panel — no lettering)"}
 
 {format_comic_style(style, heading_level=1)}

@@ -628,8 +628,21 @@ def light_table(state: APPState, panel, scene, setting,
         pinned = [r for r in references if r["on"]]
         if pinned:
             parts.append(f"{len(pinned)} pinned reference image(s)")
-        parts.append("letter the narration and dialogue" if (letters["on"] and has_letters)
-                     else "leave it unlettered")
+        if letters["on"] and has_letters:
+            fresh_blk = (storage.read_object(cls=_Panel, primary_key=panel.primary_key) or panel).figure_blocking or {}
+            placed = []
+            for i, d in enumerate(panel.dialogue[:4]):
+                b = fresh_blk.get(f'balloon/{i}') or {}
+                if not b.get('on', 1):
+                    continue
+                desc = f"{d.character_id}'s {d.emphasis.value} balloon at {round(b.get('x', 50))}%"
+                if b.get('tx') is not None:
+                    desc += f" (tail aimed at {round(b['tx'])}%, {round(b.get('ty', 0))}% up)"
+                placed.append(desc)
+            parts.append("letter it AS BLOCKED on the table"
+                         + (f" — {'; '.join(placed)}" if placed else ""))
+        else:
+            parts.append("leave it unlettered")
         post_user_message(state, "Ink this rough into a new take of this panel — compose it with " +
                           "; ".join(parts) + ".")
 
