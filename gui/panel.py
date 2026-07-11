@@ -8,34 +8,29 @@ from gui.elements import (
     crud_button,
     uploader_card,
     aspect_ratio_picker,
-    caption_action,
     ruled_page,
     comic_page,
     cpanel,
     ccell,
-    view_reference_images,
-    view_character_references,
-    HEADER_CLASSES,
     CrudButtonKind,
       )
 from gui.selection import SelectionItem, SelectedKind
 from gui.state import APPState
 from gui.messaging import post_user_message
+from gui.light_table import light_table
 from storage.generic import GenericStorage
 
-# Frame sizes per panel shape: the featured art rules BIG, other renders
-# small — every frame the exact shape of its art.
-_BIG = {FrameLayout.LANDSCAPE: (6, 4), FrameLayout.PORTRAIT: (4, 6), FrameLayout.SQUARE: (4, 4)}
+# Frame sizes per panel shape — every frame the exact shape of its art.
 _SMALL = {FrameLayout.LANDSCAPE: (3, 2), FrameLayout.PORTRAIT: (2, 3), FrameLayout.SQUARE: (3, 3)}
 _DROP = {FrameLayout.LANDSCAPE: (3, 2), FrameLayout.PORTRAIT: (3, 3), FrameLayout.SQUARE: (3, 3)}
 
 
 def view_panel(state: APPState):
     """
-    The panel workbench: the script (beat, description, dialogue), THE ART
-    (featured render with edit/render/delete riding on it, other takes beside
-    it), and the COMPOSITION the render is built from — the scene's setting
-    and style, the cast in frame with their variants, and reference images.
+    The panel workbench, pivoted around THE LIGHT TABLE: the beat up top
+    (the line the render is generated from), then the acetate stack, the
+    rough, and the print side by side; takes below; the rest of the script
+    and the reference images tucked into quiet sections.
     """
     details = state.details
     storage: GenericStorage = state.storage
@@ -101,11 +96,6 @@ def view_panel(state: APPState):
         new_itm = SelectionItem(name="Edit Panel Image", id=panel.image, kind=SelectedKind.IMAGE_EDITOR)
         state.change_selection(new=[*state.selection, new_itm])
 
-    def _todo(label: str, fix_message: str):
-        chip = ui.chip(label, icon='radio_button_unchecked', color='orange').props('dense clickable')
-        chip.tooltip("Click and I'll get started")
-        chip.on('click', lambda _, m=fix_message: post_user_message(state, m))
-
     details.clear()
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
@@ -113,76 +103,33 @@ def view_panel(state: APPState):
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current panel."), size=1)
 
-        # THE PAGE: the panel workbench stitches into a comic page.
+        # THE PAGE: the light table is the workspace; everything else is
+        # the margin around it.
         page = comic_page()
         page.__enter__()
 
-        # ONE production strip: what this panel composes FROM.
-        with cpanel(12), ui.row().classes('w-full items-center').style('gap: 8px;'):
-            ui.label('Composed from').classes('comic-label-sm')
-            if setting is not None:
-                ui.chip(setting.name, icon='location_on').props('dense outline')
-            else:
-                _todo('setting', 'Give this scene a setting.')
-            if scene is not None and scene.style_id:
-                ui.chip(scene.style_id.replace('-', ' '), icon='palette').props('dense outline')
-            else:
-                _todo('style', 'Pick a style for this scene.')
-            if not panel.character_references:
-                _todo('cast in frame', 'Cast the characters appearing in this panel.')
-            for prop in (scene.props or []) if scene is not None else []:
-                ui.chip(prop.name, icon='category').props('dense outline')
-            if panel.image:
-                ui.chip('artwork', icon='check_circle', color='green').props('dense outline')
-            else:
-                _todo('artwork', 'Render this panel.')
-
-        # The script: beat, visual description, dialogue — the words the
-        # artist draws from.
-        with cpanel(8):
+        # THE BEAT: what happens in this moment — the line the whole
+        # render is generated from, so it stays front and center.
+        with cpanel(12):
             markdown_field_editor(state, "Beat", panel.beat)
-            markdown_field_editor(state, "Visual Description", panel.description)
-        with cpanel(4):
-            with ui.card().classes('mb-2 p-2 w-full soft-card break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
-                aspect_ratio_picker(state, parent=col2, caption="Aspect Ratio",
-                                    set_aspect_ratio=lambda x: panel.set_aspect(x),
-                                    get_aspect_ratio=lambda: panel.aspect)
-        with ccell(12):
-            markdown_field_editor(state, "Narration and Dialogue", format_dialogue(panel))
 
-        # THE ART: the featured render, big, with its actions riding on it.
+        # THE LIGHT TABLE: stack, rough, and print side by side.
         with ccell(12):
-            caption_action("Artwork", CrudButtonKind.RENDER,
-                           lambda _: post_user_message(state, "I would like to render this panel."), 2)
             featured = storage.find_image(obj=panel, locator=panel.image) if panel.image else None
-            with ruled_page() as packer:
-                with packer.place_cell([_BIG[panel.aspect]], fudge=False):
-                    with ui.card().classes('soft-card p-2 mosaic-card relative panel-fill'):
-                        if featured and os.path.exists(featured):
-                            ui.image(source=featured).props('fit=cover').classes('absolute inset-0 w-full h-full')
-                            with ui.row().classes('absolute top-1 right-1 z-10 items-center').style('gap: 4px;'):
-                                ui.button(icon='edit').props('flat round dense size=xs') \
-                                    .classes('bg-white/70 dark:bg-black/50') \
-                                    .tooltip('Open this artwork in the image editor') \
-                                    .on('click.stop', lambda _: open_editor())
-                                ui.button(icon='brush').props('flat round dense size=xs') \
-                                    .classes('bg-white/70 dark:bg-black/50') \
-                                    .tooltip('Render a new take') \
-                                    .on('click.stop', lambda _: post_user_message(state, "I would like to render this panel."))
-                                ui.button(icon='delete').props('flat round dense size=xs') \
-                                    .classes('bg-white/70 dark:bg-black/50') \
-                                    .tooltip('Delete this artwork') \
-                                    .on('click.stop', lambda _: post_user_message(state, "I would like to delete the currently selected panel image."))
-                        else:
-                            with ui.column().classes('absolute inset-0 items-center justify-center'):
-                                ui.label('No artwork yet').classes('text-lg text-gray-600')
-                                ui.button('Render this panel', icon='brush').props('outline dense') \
-                                    .on('click', lambda _: post_user_message(state, "I would like to render this panel."))
+            if featured and not os.path.exists(featured):
+                featured = None
+            light_table(
+                state, panel, scene, setting,
+                featured=featured,
+                actions=[
+                    ('edit', 'Open this artwork in the image editor', lambda _: open_editor()),
+                    ('brush', 'Render a new take', lambda _: post_user_message(state, "I would like to render this panel.")),
+                    ('delete', 'Delete this artwork', lambda _: post_user_message(state, "I would like to delete the currently selected panel image.")),
+                ])
 
-            # OTHER TAKES: every render of this panel; click one to feature
-            # it, drop an image to add a take.
+        # TAKES: every render; click one to feature it on the table.
+        with ccell(12):
             takes = [img for img in storage.list_images(panel) if os.path.exists(img)]
-            others = [img for img in takes if img != featured]
             header("Takes", 4)
             with ruled_page() as packer:
                 for img in takes:
@@ -201,29 +148,18 @@ def view_panel(state: APPState):
                               variants=[_DROP[panel.aspect]],
                               label='Drop image to add a take')
 
-        # THE LIGHT TABLE: compose the next take from acetate layers —
-        # letters over foreground over figures over background — and see
-        # the penciller's rough assemble live.
+        # THE SCRIPT: the prose behind the panel — tucked away until needed.
         with ccell(12):
-            caption_action("The Light Table", CrudButtonKind.RENDER,
-                           lambda _: post_user_message(state, "I would like to render this panel."), 2)
-            from gui.light_table import light_table
-            light_table(state, panel, scene, setting)
+            with ui.expansion(value=False).classes('w-full section-flat') as exp:
+                with exp.add_slot('header'):
+                    header("Script", 2)
+                with ui.row().classes('w-full flex-nowrap'):
+                    with ui.column().classes('w-3/4'):
+                        markdown_field_editor(state, "Visual Description", panel.description)
+                        markdown_field_editor(state, "Narration and Dialogue", format_dialogue(panel))
+                    with ui.card().classes('mb-2 p-2 w-1/4 soft-card break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
+                        aspect_ratio_picker(state, parent=col2, caption="Aspect Ratio",
+                                            set_aspect_ratio=lambda x: panel.set_aspect(x),
+                                            get_aspect_ratio=lambda: panel.aspect)
 
-        # THE CAST IN FRAME: which characters appear, wearing which variant.
-        with ccell(12):
-            view_character_references(
-                state=state,
-                parent=panel,
-            )
-
-        # Reference images steer the render alongside the setting's master
-        # background and the cast's reference sheets.
-        with ccell(12):
-            view_reference_images(
-                state=state,
-                parent=panel,
-                get_images=lambda: storage.list_uploads(panel),
-                upload_image=lambda name, data, mime_type: storage.upload_reference_image(panel, name, data, mime_type)
-            )
         page.__exit__(None, None, None)

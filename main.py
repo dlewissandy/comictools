@@ -185,6 +185,10 @@ def init_layout(logger):
                        box-shadow: 2px 2px 0 rgba(0,0,0,.2); }
         .light-thumb { width: 40px; height: 28px; border: 1.5px solid var(--ink);
                        border-radius: 2px; object-fit: cover; flex-shrink: 0; }
+        /* reference acetates pin to the rough like photos taped to the table */
+        .rough-pin { position: absolute; width: 16%; background: #fff;
+                     padding: 2px; border: 2px solid var(--ink);
+                     box-shadow: 2px 3px 4px rgba(0,0,0,.35); }
         .comic-page > * { min-width: 0; }
         .cpanel { position: relative; background: var(--panel);
                   border: 2.5px solid var(--ink); border-radius: 2px;

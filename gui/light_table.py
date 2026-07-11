@@ -17,7 +17,11 @@ _ASPECT = {"landscape": "3/2", "portrait": "2/3", "square": "1/1"}
 _POS_X = {"left": 18, "center": 50, "right": 82}
 
 
-def light_table(state: APPState, panel, scene, setting):
+def light_table(state: APPState, panel, scene, setting,
+                featured: str | None = None, actions=None):
+    """
+    actions: optional list of (icon, tooltip, handler) riding THE PRINT.
+    """
     storage = state.storage
     series_id = panel.series_id
 
@@ -38,6 +42,9 @@ def light_table(state: APPState, panel, scene, setting):
                         "on": True, "pos": ["left", "center", "right"][i % 3]})
 
     props = [{"name": p.name, "on": True} for p in ((scene.props or []) if scene is not None else [])]
+
+    references = [{"img": u, "on": True} for u in storage.list_uploads(panel)
+                  if u and os.path.exists(u)]
 
     has_letters = bool(panel.narration or panel.dialogue)
     letters = {"on": has_letters}
@@ -66,6 +73,12 @@ def light_table(state: APPState, panel, scene, setting):
                 with ui.row().classes('absolute').style('bottom: 4px; left: 6px; z-index: 3; gap: 4px;'):
                     for name in live_props:
                         ui.label(name).classes('rough-prop')
+
+            pinned = [r for r in references if r["on"]]
+            for i, r in enumerate(pinned[:4]):
+                ui.image(source=r["img"]).classes('rough-pin') \
+                    .style(f'top: {4 + i * 6}%; right: {3 + (i % 2) * 4}%; '
+                           f'transform: rotate({(-6, 5, -3, 7)[i % 4]}deg); z-index: 5;')
 
             if letters["on"] and has_letters:
                 top_y = 4
@@ -118,6 +131,9 @@ def light_table(state: APPState, panel, scene, setting):
         live_props = [p["name"] for p in props if p["on"]]
         if live_props:
             parts.append("foreground props: " + ", ".join(live_props))
+        pinned = [r for r in references if r["on"]]
+        if pinned:
+            parts.append(f"{len(pinned)} pinned reference image(s)")
         parts.append("letter the narration and dialogue" if (letters["on"] and has_letters)
                      else "leave it unlettered")
         post_user_message(state, "Ink this rough into a new take of this panel — compose it with " +
@@ -134,8 +150,19 @@ def light_table(state: APPState, panel, scene, setting):
             for f in figures:
                 with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
                     eye(f)
+
+                    def pick_variant(ref=f["ref"]):
+                        # click the acetate to swap which variant they wear
+                        from gui.selection import SelectionItem, SelectedKind
+                        itm = SelectionItem(name=ref.character_id,
+                                            id=f"{series_id}/{ref.character_id}/{ref.variant_id}",
+                                            kind=SelectedKind.CHARACTER_REFERENCE)
+                        state.change_selection(new=[*state.selection, itm])
+
                     if f["img"]:
-                        ui.image(source=f["img"]).classes('light-thumb')
+                        ui.image(source=f["img"]).classes('light-thumb cursor-pointer') \
+                            .tooltip('Swap wardrobe/variant') \
+                            .on('click', lambda _, ref=f["ref"]: pick_variant(ref))
                     else:
                         ui.icon('person').classes('text-lg').style('width: 40px; text-align: center;')
                     ui.label(f["ref"].character_id.replace('-', ' ').title()).classes('text-sm')
@@ -146,6 +173,26 @@ def light_table(state: APPState, panel, scene, setting):
                         f["pos"] = e.value
                         rough.refresh()
                     sel.on_value_change(reposition)
+
+                    def uncast(ref=f["ref"]):
+                        panel.character_references = [
+                            c for c in panel.character_references
+                            if not (c.character_id == ref.character_id and c.variant_id == ref.variant_id)]
+                        storage.update_object(panel)
+                        try:
+                            from gui.avatars import comic_chat_message
+                            with state.history:
+                                with comic_chat_message(name='You', sent=True).classes('w-full'):
+                                    ui.markdown(f"✂️ removed **{ref.character_id}** from this panel")
+                            state.history.scroll_to(percent=100)
+                        except Exception:
+                            pass
+                        state.refresh_details()
+                    ui.button(icon='close').props('flat round dense size=xs') \
+                        .tooltip('Take this figure off the table') \
+                        .on('click', lambda _, ref=f["ref"]: uncast(ref))
+            for r in references:
+                layer_row('attachment', f"Reference — {os.path.basename(r['img'])}", r, thumb=r["img"])
             layer_row('landscape', f"Background — {setting.name if setting else 'no setting yet'}",
                       bg_layer, thumb=background)
 
@@ -168,7 +215,29 @@ def light_table(state: APPState, panel, scene, setting):
                 _ask('chat_bubble', 'Letters — write narration or dialogue for this panel',
                      'I would like to add dialogue or narration to this panel.')
 
+            # or just drop an image straight onto the table as a reference
+            with ui.row().classes('light-layer w-full items-center justify-center relative').style('min-height: 34px;'):
+                def on_drop_reference(e):
+                    storage.upload_reference_image(panel, e.name, e.content, e.type)
+                    state.refresh_details()
+                ui.upload(on_upload=on_drop_reference, auto_upload=True, max_files=1) \
+                    .classes('absolute inset-0 opacity-0 cursor-pointer z-10')
+                ui.label('…or drop a reference image on the table').classes('text-xs text-gray-500')
+
             ui.button('Ink this rough', icon='brush').props('unelevated dense') \
                 .classes('q-mt-sm self-start').on('click', lambda _: ink())
         with ui.column().classes('flex-grow').style('min-width: 0;'):
+            ui.label('THE ROUGH').classes('comic-label-sm')
             rough()
+        if featured is not None:
+            with ui.column().classes('flex-grow').style('min-width: 0;'):
+                ui.label('THE PRINT').classes('comic-label-sm')
+                with ui.element('div').classes('rough-canvas').style(f'aspect-ratio: {aspect};'):
+                    ui.image(source=featured).props('fit=cover') \
+                        .classes('absolute inset-0 w-full h-full')
+                    if actions:
+                        with ui.row().classes('absolute top-1 right-1 z-10 items-center').style('gap: 4px;'):
+                            for icon, tip, handler in actions:
+                                ui.button(icon=icon).props('flat round dense size=xs') \
+                                    .classes('bg-white/70 dark:bg-black/50') \
+                                    .tooltip(tip).on('click.stop', handler)
