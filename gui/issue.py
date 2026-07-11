@@ -46,6 +46,10 @@ def view_issue(state:APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
             ui.space()
+            ui.button('Read', icon='menu_book').props('rounded') \
+                .tooltip('Read the issue front to back') \
+                .on('click', lambda _: ui.run_javascript(
+                    f"window.open('/series/{series_id}/issue/{issue_id}/read', '_blank');"))
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current issue."))
 
         

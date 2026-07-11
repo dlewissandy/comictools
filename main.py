@@ -216,6 +216,36 @@ def styles_page():
 def style_page(tail: str):
     _page_from_path('styles/' + tail)
 
+@ui.page('/series/{series_id}/issue/{issue_id}/read')
+def read_issue_page(series_id: str, issue_id: str):
+    """
+    The reader: the bound issue, front to back — cover first, then every
+    scene's panels in reading order.  Read-only; no chat.
+    """
+    from helpers.binder import collect_issue
+    from schema import Issue
+    storage = LocalStorage(base_path="data")
+    issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
+    with ui.column().classes('mx-auto items-center').style('max-width: 900px; width: 100%; padding: 24px 12px;'):
+        if issue is None:
+            ui.markdown(f"Issue `{issue_id}` not found.")
+            return
+        front, panel_images, back, missing = collect_issue(storage, series_id, issue_id)
+        ui.label(f"{issue.name}").classes('text-3xl font-bold')
+        if front:
+            ui.image(source=front).classes('w-full').style('max-width: 700px;')
+        for img in panel_images:
+            ui.image(source=img).classes('w-full')
+        if back:
+            ui.image(source=back).classes('w-full').style('max-width: 700px;')
+        if missing:
+            with ui.expansion(f"{len(missing)} piece(s) still missing from a complete issue").classes('w-full'):
+                for m in missing:
+                    ui.markdown(f"* {m}")
+        if not front and not panel_images:
+            ui.markdown("Nothing rendered yet — render covers and panels, then come back.")
+
+
 @ui.page('/series/{tail:path}')
 def series_page(tail: str):
     _page_from_path('series/' + tail)

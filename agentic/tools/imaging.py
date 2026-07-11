@@ -1554,3 +1554,42 @@ must look; keep them strictly on-model.
     if missing:
         note = "  NOTE: rendered without: " + "; ".join(missing) + ".  Generate those references and re-render for better consistency."
     return f"Panel {panel.panel_number} rendered: {locator}.{note}"
+
+
+@function_tool
+def export_issue_pdf(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+    """
+    Bind the issue into a PDF book: covers full-bleed, interior panels laid down
+    each page in reading order.   Reports any unrendered panels or covers so they
+    can be generated first — a complete issue is one where nothing is missing.
+
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the issue to export.
+
+    Returns:
+        A status message with the PDF locator, the page count, and anything
+        still missing from a complete issue.
+    """
+    from helpers.binder import bind_issue_pdf
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    issue: Issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
+    if issue is None:
+        return f"Issue '{issue_id}' not found in series '{series_id}'."
+
+    output = os.path.join(str(storage.base_path), "series", series_id, "issues", issue_id, "exports", f"{issue_id}.pdf")
+    try:
+        page_count, missing = bind_issue_pdf(storage, series_id, issue_id, output)
+    except Exception as e:
+        logger.error(f"Failed to bind issue {issue_id}: {e}")
+        return f"Failed to bind the issue: {e}"
+
+    if page_count == 0:
+        return "Nothing to bind yet: no rendered covers or panels.  " + "; ".join(missing)
+    note = ""
+    if missing:
+        note = f"  Still missing for a complete issue: " + "; ".join(missing)
+    state.is_dirty = True
+    return f"Issue '{issue.name}' bound to {output} ({page_count} pages).{note}"
