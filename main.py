@@ -151,6 +151,11 @@ def init_layout(logger):
                                z-index: 5; opacity: 0; pointer-events: none;
                                transition: opacity .15s ease-in; }
         .q-card:hover > .panel-hover-caption { opacity: 1; }
+        /* scene panels: the bottom edge belongs to the reading-order chips
+           and the top-right to delete, so the name rides top-left, ABOVE
+           the overlay controls */
+        .panel-fill .panel-hover-caption { bottom: auto; top: 8px;
+                                           z-index: 12; }
         .comic-page > * { min-width: 0; }
         .cpanel { position: relative; background: var(--panel);
                   border: 2.5px solid var(--ink); border-radius: 2px;
