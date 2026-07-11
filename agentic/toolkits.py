@@ -76,7 +76,7 @@ from agentic.tools.updater import (
     update_setting_props,
     update_cover_setting,
 )
-from agentic.tools.imaging import generate_setting_background, generate_panel_image, generate_figure_acetate, export_issue_pdf, preflight_issue, layout_issue_pages, render_missing_panels
+from agentic.tools.imaging import generate_setting_background, generate_panel_image, generate_figure_acetate, split_background_element, export_issue_pdf, preflight_issue, layout_issue_pages, render_missing_panels
 from agentic.tools.library import list_library_assets, import_character, import_setting, import_prop, import_outfit
 from agentic.tools.assets import (
     create_prop, read_all_props, update_prop_description, delete_prop,
@@ -287,6 +287,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         generate_setting_background,
         generate_panel_image,
         generate_figure_acetate,
+        split_background_element,
         render_missing_panels,
         inpaint_image_region,
         outpaint_image_region,

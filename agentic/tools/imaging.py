@@ -1928,10 +1928,12 @@ speech balloons.  This is a cut-out acetate to be layered over a background.
         background="transparent",
     )
 
+    from uuid import uuid4
     images_dir = obj_to_imagepath(obj=panel, base_path=storage.base_path)
     figures_dir = os.path.join(os.path.dirname(images_dir), "figures")
     os.makedirs(figures_dir, exist_ok=True)
-    filepath = os.path.join(figures_dir, f"{character_id}--{variant_id}.png")
+    # unique filename per pose: re-poses never collide with a cached URL
+    filepath = os.path.join(figures_dir, f"{character_id}--{variant_id}--{uuid4().hex[:8]}.png")
     with open(filepath, "wb") as f:
         f.write(image_bytes)
 
@@ -1967,3 +1969,109 @@ def generate_figure_acetate(wrapper: RunContextWrapper, series_id: str, issue_id
     """
     return generate_figure_acetate_body(wrapper.context, series_id, issue_id, scene_id,
                                         panel_id, character_id, variant_id, pose_direction)
+
+
+# ---------------------------------------------------------------------------
+# LAYER SPLITTING: lift a named element off the background into its own
+# transparent acetate, and inpaint the plate underneath it — the acetate way
+# to REMOVE or REARRANGE what a layer contains.
+# ---------------------------------------------------------------------------
+def split_background_element_body(state, series_id: str, issue_id: str, scene_id: str,
+                                  panel_id: str, element: str) -> str:
+    """Two renders: (1) the element as a transparent cut-out acetate;
+    (2) the background plate with the element removed and the area behind it
+    inpainted.  Both attach to the panel; the plate becomes the panel's local
+    background so the setting's shared master stays untouched."""
+    import re
+    from uuid import uuid4
+    from storage.filepath import obj_to_imagepath
+    from helpers.generator import invoke_edit_image_api
+
+    storage: GenericStorage = state.storage
+    panel: Panel = storage.read_object(cls=Panel, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
+    if panel is None:
+        return f"Panel '{panel_id}' not found."
+    scene: SceneModel = storage.read_object(cls=SceneModel, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
+
+    # source: the panel's local plate if it already split once, else the
+    # setting's master background
+    source = (panel.figure_images or {}).get("background/plate")
+    if not (source and os.path.exists(source)):
+        source = None
+        if scene is not None and scene.setting_id:
+            setting: Setting = storage.read_object(cls=Setting, primary_key={
+                "series_id": series_id, "setting_id": scene.setting_id})
+            if setting is not None:
+                cand = (setting.images or {}).get(scene.style_id) or next(
+                    (i for i in (setting.images or {}).values() if i and os.path.exists(i)), None)
+                source = cand if cand and os.path.exists(cand) else None
+    if source is None:
+        return "No background on the table to split — lay one down first."
+
+    images_dir = obj_to_imagepath(obj=panel, base_path=storage.base_path)
+    figures_dir = os.path.join(os.path.dirname(images_dir), "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    slug = re.sub(r"[^a-z0-9]+", "-", element.lower()).strip("-")[:40] or "element"
+
+    # 1) the element, lifted onto its own acetate
+    cut_bytes = invoke_edit_image_api(
+        f"""Render ONLY the {element} exactly as it appears in the reference image —
+same angle, same colors, same lighting, same art style, complete and uncropped.
+Nothing else from the scene.  COMPLETELY TRANSPARENT background: this is a
+cut-out acetate to be layered back over the image it was lifted from.""",
+        reference_images=[source],
+        size="1024x1024",
+        quality=IMAGE_QUALITY.MEDIUM,
+        background="transparent",
+    )
+    cut_path = os.path.join(figures_dir, f"element--{slug}--{uuid4().hex[:8]}.png")
+    with open(cut_path, "wb") as f:
+        f.write(cut_bytes)
+
+    # 2) the plate: the same background with the element gone
+    from PIL import Image as _Img
+    with _Img.open(source) as _s:
+        plate_size = "1536x1024" if _s.width > _s.height else ("1024x1536" if _s.height > _s.width else "1024x1024")
+    plate_bytes = invoke_edit_image_api(
+        f"""Remove the {element} from this image ENTIRELY.  Inpaint what lies behind
+and underneath it: continue the surrounding architecture, ground, sky and
+lighting seamlessly, in the same art style.  Change NOTHING else in the image.""",
+        reference_images=[source],
+        size=plate_size,
+        quality=IMAGE_QUALITY.MEDIUM,
+    )
+    plate_path = os.path.join(figures_dir, f"plate--{uuid4().hex[:8]}.png")
+    with open(plate_path, "wb") as f:
+        f.write(plate_bytes)
+
+    panel.figure_images[f"element/{slug}"] = cut_path
+    panel.figure_images["background/plate"] = plate_path
+    storage.update_object(data=panel)
+    state.is_dirty = True
+    return (f"Split '{element}' off the background: acetate {cut_path}; "
+            f"plate (element removed) {plate_path}.")
+
+
+@function_tool
+def split_background_element(wrapper: RunContextWrapper, series_id: str, issue_id: str,
+                             scene_id: str, panel_id: str, element: str) -> str:
+    """
+    SPLIT a named element off the panel's background into its own acetate
+    layer, inpainting the plate underneath it.   Afterwards the element can be
+    moved, scaled, or simply lifted off the table (removal).   Splitting again
+    works on the already-split plate, so several elements can be lifted in turn.
+
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the issue.
+        scene_id: The ID of the scene the panel belongs to.
+        panel_id: The ID of the panel.
+        element: What to lift, named concretely (e.g. 'the ticket booth').
+
+    Returns:
+        A status message with the acetate and plate locators.
+    """
+    return split_background_element_body(wrapper.context, series_id, issue_id, scene_id,
+                                         panel_id, element)

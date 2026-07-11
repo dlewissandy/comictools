@@ -174,12 +174,29 @@ def init_layout(logger):
         .rough-drag { cursor: grab; touch-action: none; user-select: none;
                       max-width: none; }
         .rough-drag:active { cursor: grabbing; }
+        /* SELECTION: dashed border + corner grab handles on the acetate */
+        .rough-sel-box { position: absolute; inset: 0;
+                         border: 1.5px dashed #3b82f6;
+                         pointer-events: none; z-index: 4; }
+        .rh { position: absolute; width: 11px; height: 11px;
+              background: #fff; border: 1.5px solid #3b82f6;
+              border-radius: 2px; pointer-events: auto; }
+        .rh-nw { top: -6px; left: -6px; cursor: nwse-resize; }
+        .rh-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+        .rh-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+        .rh-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
         .rough-balloon { position: absolute; transform: translateX(-50%);
                          background: #fff; color: #1a1512;
                          border: 2px solid var(--ink); border-radius: 12px;
                          padding: 2px 10px; font-size: .68rem; max-width: 42%;
-                         overflow: hidden; text-overflow: ellipsis;
+                         overflow: visible; text-overflow: ellipsis;
                          white-space: nowrap; }
+        /* the tail points at the speaker; double-click a balloon to flip it */
+        .rough-balloon::after { content: ''; position: absolute; bottom: -9px;
+                                border: 5px solid transparent;
+                                border-top: 9px solid var(--ink); }
+        .rough-balloon.tail-left::after { left: 12px; }
+        .rough-balloon.tail-right::after { right: 12px; }
         .rough-narration { position: absolute; left: 4px;
                            background: var(--caption); color: var(--caption-ink);
                            border: 2px solid var(--ink); border-radius: 2px;
