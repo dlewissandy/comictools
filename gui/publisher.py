@@ -144,6 +144,7 @@ def view_pick_publisher(state:APPState):
             get_choice=lambda : series.publisher_id if series else None,
             set_choice=set_publisher,
             get_image_locator=lambda publisher: publisher.image,
+            variants=[(2, 2)],
         )            
 
             

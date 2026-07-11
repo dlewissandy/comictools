@@ -8,7 +8,7 @@ from loguru import logger
 from nicegui import ui
 from nicegui.events import UploadEventArguments
 
-from gui.elements import header, crud_button, markdown_field_editor, CrudButtonKind, TAILWIND_CARD, uploader_card
+from gui.elements import header, crud_button, markdown_field_editor, CrudButtonKind, TAILWIND_CARD, uploader_card, ruled_page, HEADER_CLASSES
 from gui.messaging import post_user_message, new_item_messager
 from gui.state import APPState
 from schema import Outfit, PropAsset
@@ -48,23 +48,26 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
         with ui.expansion(value=True).classes('w-full section-flat') as exp:
             with exp.add_slot('header'):
                 new_item_messager(state, "Reference Art", render_hint)
-            with ui.row().classes('w-full'):
-                rendered = {sid: img for sid, img in (asset.images or {}).items() if img and os.path.exists(img)}
-                if not rendered:
-                    ui.markdown(f"No reference art yet — ask me to render this {kind_label} in a comic style.")
-                for style_id, img in rendered.items():
-                    with ui.card().classes(TAILWIND_CARD).style('width: 32%; aspect-ratio: 1/1'):
-                        ui.image(source=img).style('top-padding: 0; bottom-padding:0;')
-                        ui.label(style_id.replace('-', ' ').title()).classes('text-sm')
+            rendered = {sid: img for sid, img in (asset.images or {}).items() if img and os.path.exists(img)}
+            if not rendered:
+                ui.markdown(f"No reference art yet — ask me to render this {kind_label} in a comic style.")
+            else:
+                with ruled_page() as packer:
+                    for style_id, img in rendered.items():
+                        with packer.place_cell([(4, 4)], fudge=False):
+                            with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'):
+                                ui.label(style_id.replace('-', ' ').title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                                ui.image(source=img).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
 
         with ui.expansion(value=True).classes('w-full section-flat') as exp:
             with exp.add_slot('header'):
                 header("Uploads", 2)
-            with ui.row().classes('w-full'):
+            with ruled_page() as packer:
                 for upload in storage.list_uploads(asset):
-                    with ui.card().classes(TAILWIND_CARD).style('width: 24%; aspect-ratio: 1/1'):
-                        ui.image(source=upload).style('top-padding: 0; bottom-padding:0;')
-                uploader_card(state=state, on_upload=on_upload, aspect_ratio="1/1")
+                    with packer.place_cell([(3, 3)], fudge=False):
+                        with ui.card().classes(TAILWIND_CARD + ' mosaic-card'):
+                            ui.image(source=upload).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                uploader_card(state=state, on_upload=on_upload, packer=packer, variants=[(3, 3)])
 
 
 def view_prop(state: APPState):

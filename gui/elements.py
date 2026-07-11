@@ -1,4 +1,5 @@
 import os
+import contextlib
 from typing import Optional, TypedDict, Callable, BinaryIO
 from nicegui import ui
 from nicegui.events import UploadEventArguments
@@ -295,7 +296,8 @@ def render_object_choices(
         cardwall: ui.element, 
         aspect_ratio: str = "1/1",
         get_name: Callable = lambda i,x: x.name,
-        number_of_columns: int = 4):    
+        number_of_columns: int = 4,
+        variants: Optional[list[tuple[float, float]]] = None):
     """
     Render a list of choices for a given object type.   Clicking on a choice will set the selection to that choice.
 
@@ -323,30 +325,39 @@ def render_object_choices(
             cardwall=cardwall,
             aspect_ratio=aspect_ratio,
             number_of_columns=number_of_columns,
+            get_name=get_name,
+            variants=variants,
             )
 
-    logger.debug([instance.name for instance in instances])
+    def _choice_card(i, instance, packed: bool):
+        card = ui.card().classes(TAILWIND_CARD).on('click', lambda _, id=instance.id: on_click(id=id))
+        if packed:
+            card.classes('mosaic-card')
+        else:
+            card.style('aspect-ratio: 1/1')
+        with card:
+            card.classes('relative overflow-visible')
+            image_filepath = get_image_locator(instance)
+            has_image = image_filepath is not None and os.path.exists(image_filepath)
+            if has_image:
+                ui.label(get_name(i, instance)).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                ui.image(source=image_filepath).props('fit=contain').style('top-padding: 0; bottom-padding:0')
+            else:
+                header(get_name(i, instance), 4)
+                ui.label('no artwork yet').classes('text-xs text-gray-500')
+            if instance.id == get_selection():
+                ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10').style('aspect-ratio: 1/1;')
+
     with cardwall:
-        for i,instance in enumerate(instances):
-            logger.debug(f"Rendering card for {instance.name} with id {instance.id}")
-            with ui.card().classes(TAILWIND_CARD).style('aspect-ratio: 1/1').on('click', lambda _,id=instance.id: on_click(id=id)) as card:
-                logger.debug(f"Creating card for {instance.id}")
-                card.classes('relative overflow-visible')
-                header(get_name(i,instance),4)
-                image_filepath = get_image_locator(instance)
-                if image_filepath is not None and os.path.exists(image_filepath):
-                    logger.debug(f"Image {image_filepath} exists.")
-                    ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')
-                    logger.debug(f"instance.id={instance.id}, get_selection()={get_selection()}")
-                else:
-                    logger.debug(f"Image {image_filepath} does not exist.")
-                    ui.label(f"Image {image_filepath} not found.").style('color: red;')
-                if instance.id == get_selection():
-                    logger.debug(f"Image {image_filepath} is selected.")
-                    ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10').style('aspect-ratio: 1/1;')
-                else:
-                    logger.debug(f"Image {image_filepath} is not selected.")
-                
+        if variants:
+            # THE RULED PAGE: choices pack into blocks like any other panels
+            with ruled_page() as packer:
+                for i, instance in enumerate(instances):
+                    with packer.place_cell(list(variants), fudge=False):
+                        _choice_card(i, instance, packed=True)
+        else:
+            for i, instance in enumerate(instances):
+                _choice_card(i, instance, packed=False)
     return cardwall
 
 
@@ -526,8 +537,9 @@ def view_all_instances(
             get_image_locator=get_image_locator,
             get_selection=get_choice, 
             set_selection=set_choice, 
-            cardwall=init_cardwall(), 
-            aspect_ratio=aspect_ratio
+            cardwall=ui.element('div').classes('w-full') if variants else init_cardwall(), 
+            aspect_ratio=aspect_ratio,
+            variants=variants
         )
     else:
         return render_object_cards(
@@ -735,14 +747,16 @@ def view_character_references(state: APPState, parent: BaseModel):
             ui.space()
             crud_button(CrudButtonKind.CREATE, lambda: post_user_message(state, "I would like to add a new character reference."))
 
-        view_all_instances(
-            state=state, 
-            kind=SelectedKind.CHARACTER_REFERENCE,
-            get_instances=lambda: parent.character_references,
-            get_image_locator=lambda x: storage.find_variant_image(series_id=x.series_id, character_id=x.character_id, variant_id=x.variant_id),
-            get_name= lambda _, x: x.name, 
-            on_remove=_remove_ref,
-        )
+        with ruled_page() as packer:
+            view_all_instances(
+                state=state, 
+                kind=SelectedKind.CHARACTER_REFERENCE,
+                get_instances=lambda: parent.character_references,
+                get_image_locator=lambda x: storage.find_variant_image(series_id=x.series_id, character_id=x.character_id, variant_id=x.variant_id),
+                get_name= lambda _, x: x.name, 
+                on_remove=_remove_ref,
+                packer=packer, variants=[(3, 2)],
+            )
     expansion.open()
     return expansion
 
@@ -760,29 +774,39 @@ def view_reference_images(state: APPState, parent: BaseModel, get_images: Callab
                 ui.space()
                 crud_button(CrudButtonKind.CREATE, lambda: post_user_message(state, "I would like to add a new reference image."))
 
-            # TODO: Add drop region to add new reference image
-            with view_all_instances(
-                state=state, 
-                kind=SelectedKind.REFERENCE_IMAGE,
-                get_instances=lambda: get_images(),
-                get_name= lambda _, x: x.relation.value + " image",
-                get_image_locator=lambda x: x.image
-            ):
-                uploader_card(state, on_upload=on_upload )
+            with ruled_page() as packer:
+                view_all_instances(
+                    state=state, 
+                    kind=SelectedKind.REFERENCE_IMAGE,
+                    get_instances=lambda: get_images(),
+                    get_name= lambda _, x: x.relation.value + " image",
+                    get_image_locator=lambda x: x.image,
+                    packer=packer, variants=[(3, 2)],
+                )
+                uploader_card(state, on_upload=on_upload, packer=packer)
         expansion.open()
         return expansion
     return redraw()
             
 
 
-def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], None], aspect_ratio: str = "3/2"): 
-    with ui.card().classes(TAILWIND_CARD + ' relative overflow-hidden').style(f'aspect-ratio: {aspect_ratio}'):
+def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], None], aspect_ratio: str = "3/2",
+                  packer: Optional["PagePacker"] = None, variants: Optional[list[tuple[float, float]]] = None,
+                  label: str = 'Drop image to upload'):
+    cell = packer.place_cell(variants or [(3, 2)]) if packer is not None else contextlib.nullcontext()
+    with cell:
+        card = ui.card().classes(TAILWIND_CARD + ' relative overflow-hidden')
+        if packer is not None:
+            card.classes('mosaic-card')
+        else:
+            card.style(f'aspect-ratio: {aspect_ratio}')
+        with card:
             uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
             uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
 
             # Visible caption in center
             with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
-                ui.label('Drop image to upload').classes('text-lg text-gray-600')
+                ui.label(label).classes('text-lg text-gray-600')
 
 
 def removable_chips(state: APPState, caption: str, items: list[tuple[str, str]],
@@ -870,6 +894,20 @@ def flow_caption(state: APPState, caption: str, message: str, span: int = 3):
     with ui.element('div').classes(f'cspan-{span} flow-caption'):
         caption_action(caption, CrudButtonKind.CREATE,
                        lambda _: post_user_message(state, message), 2)
+
+
+@contextlib.contextmanager
+def ruled_page():
+    """
+    Open a ruled comic-page area and yield its PagePacker.  Every cardwall or
+    cell placed through the packer lands in BLOCK bands — top and bottom
+    edges ruling straight across, each band scaled to fill the page width.
+    """
+    packer = PagePacker(12)
+    with ui.element('div').classes('mosaic-host w-full'):
+        with ui.element('div').classes('comic-mosaic w-full'):
+            yield packer
+            packer.finalize()
 
 
 # ---------------------------------------------------------------------------

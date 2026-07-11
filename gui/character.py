@@ -54,19 +54,8 @@ def view_character(state:APPState):
         markdown_field_editor(state, "Description", character.description)        
 
 
-        from gui.elements import caption_action, CrudButtonKind as _CK
+        from gui.elements import caption_action, ruled_page, uploader_card, CrudButtonKind as _CK
         with ui.element('div').classes('w-full q-mt-md'):
-            view_all_instances(
-                state=state,
-                get_instances=lambda: storage.read_all_objects(CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id}),
-                get_image_locator=lambda variant: storage.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant.id),
-                kind="variant",
-                aspect_ratio="3:2",
-                overlap_caption=lambda: caption_action("Variants", _CK.CREATE,
-                    lambda _: post_user_message(state, "I would like to create a new variant for this character."), 3)
-                ).style('margin-top: 0px; margin-bottom: 0px')
-
-            # Drop an image here to create a new variant from it
             def on_upload(e: UploadEventArguments):
                 locator = storage.upload_reference_image(
                     obj=character,
@@ -76,13 +65,20 @@ def view_character(state:APPState):
                 )
                 post_user_message(state, "I would like to create a new variant for this character from the uploaded image: " + locator)
 
-            with ui.card().classes(DARK_MODE_STYLES).style('width: 24.5%; aspect-ratio: 1/1'):
-                uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
-                uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
-
-                # Visible caption in center
-                with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
-                    ui.label('Drop image to create a variant').classes('text-lg text-gray-600')
+            with ruled_page() as packer:
+                view_all_instances(
+                    state=state,
+                    get_instances=lambda: storage.read_all_objects(CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id}),
+                    get_image_locator=lambda variant: storage.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant.id),
+                    kind="variant",
+                    aspect_ratio="3:2",
+                    packer=packer, variants=[(3, 2), (4, 8/3), (6, 4)],
+                    overlap_caption=lambda: caption_action("Variants", _CK.CREATE,
+                        lambda _: post_user_message(state, "I would like to create a new variant for this character."), 3)
+                    )
+                # Drop an image here to create a new variant from it
+                uploader_card(state, on_upload=on_upload, packer=packer,
+                              label='Drop image to create a variant')
         
         
             
@@ -151,7 +147,8 @@ def view_character_reference(state: APPState):
             kind="variant",
             aspect_ratio="3/2",
             get_choice = lambda: get_choice(),
-            set_choice = lambda id: set_choice(id)
+            set_choice = lambda id: set_choice(id),
+            variants=[(3, 2)],
             )
                                     
             

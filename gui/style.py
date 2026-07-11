@@ -198,6 +198,7 @@ def view_pick_style(state: APPState):
             get_name=lambda _,x: x.name,
             get_choice=lambda : parent.style_id if parent else None,
             set_choice=set_style,
+            variants=[(3, 3)],
         )           
 
     

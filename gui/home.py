@@ -13,12 +13,15 @@ def view_all_styles(state: APPState):
     storage: GenericStorage = state.storage
     with state.details:
         new_item_messager(state, "STYLES", "I would like to create a new comic book style.")
-        view_all_instances(
-            state=state,
-            get_image_locator=lambda style: style.image.get('art', None) if style.image else None,
-            get_instances=lambda: storage.read_all_objects(ComicStyle),
-            kind="style",
-            aspect_ratio="1/1")
+        from gui.elements import ruled_page
+        with ruled_page() as packer:
+            view_all_instances(
+                state=state,
+                get_image_locator=lambda style: style.image.get('art', None) if style.image else None,
+                get_instances=lambda: storage.read_all_objects(ComicStyle),
+                kind="style",
+                aspect_ratio="1/1",
+                packer=packer, variants=[(3, 3)])
         
 def view_all_publishers(state: APPState):
     from gui.elements import PagePacker, caption_action, CrudButtonKind as _CK
@@ -43,9 +46,12 @@ def view_all_series(state: APPState):
     storage: GenericStorage = state.storage
     with state.details:
         new_item_messager(state, "SERIES", "I would like to create a new comic book series.")
-        view_all_instances(
-            state=state,
-            get_image_locator=lambda x: storage.find_series_image(series_id=x.series_id),
-            get_instances=lambda: storage.read_all_objects(Series),
-            kind="series",
-            aspect_ratio="16/27")
+        from gui.elements import ruled_page
+        with ruled_page() as packer:
+            view_all_instances(
+                state=state,
+                get_image_locator=lambda x: storage.find_series_image(series_id=x.series_id),
+                get_instances=lambda: storage.read_all_objects(Series),
+                kind="series",
+                aspect_ratio="16/27",
+                packer=packer, variants=[(2, 3), (8/3, 4), (4, 6)])

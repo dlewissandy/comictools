@@ -173,32 +173,28 @@ def view_scene(state: APPState):
                 "issue_id": issue_id,
                 "scene_id": scene_id
             }, order_by='panel_number')
-            row = ui.row().classes("w-full")
             if not panels or panels == []:
                 ui.markdown("No panels available for this scene.")
             else:
-                w = 0
+                from gui.elements import ruled_page, HEADER_CLASSES
+                page_ctx = ruled_page()
+                packer = page_ctx.__enter__()
                 for panel in panels:
                     if panel.aspect == FrameLayout.LANDSCAPE:
-                        panel_width = 3
-                        aspect = "3/2"
+                        # 4.5x3 keeps 3:2 at the same band height as the
+                        # square panels, so mixed pages rule in one block
+                        variants = [(4.5, 3), (3, 2), (6, 4)]
                     else:
-                        panel_width = 2
-                        aspect = "1/1"
-                    if w + panel_width > 8:
-                        # Start a new row
-                        row = ui.row().classes("w-full")
-                        w = 0
-                    w += panel_width
+                        variants = [(3, 3)]
                     image = None
                     if getattr(panel, "image", None):
                         # Resolve the stored locator to an actual image filepath.
                         image = storage.find_image(obj=panel, locator=panel.image)
-                    with row:
-                        # Create a new card that is panel_width/8 wide
-                        with ui.card().classes('soft-card').style(f'; width: {panel_width*12.25}%; aspect-ratio: {aspect}').classes('mb-2 p-2 break-inside-avoid ') as card:
+                    with packer.place_cell(variants, fudge=image is None):
+                        with ui.card().classes('soft-card mb-2 p-2 break-inside-avoid mosaic-card relative') as card:
                             if image is not None:
-                                ui.image(source=image).style(f'top-padding: 0; bottom-padding:0; aspect-ratio: {aspect};')
+                                ui.label(f"Panel {panel.panel_number}: {panel.name}").classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                                ui.image(source=image).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
                             else:
                                 with ui.scroll_area().classes('w-full h-full').style('overflow: auto;'):
                                     header(f"Panel {panel.panel_number}: {panel.name}", 3)
@@ -240,28 +236,19 @@ def view_scene(state: APPState):
                                 ui.button(icon='chevron_right').props('flat round dense size=xs') \
                                     .tooltip('Move later in the reading order') \
                                     .on('click.stop', lambda _, pid=panel.panel_id, n=panel.panel_number: _nudge(pid, 1, n))
-                # Add a card for uploading an image to create a new panel
-                if w + 2 > 8:
-                    # Start a new row
-                    row = ui.row().classes("w-full")
-                    w = 0
-                with row:
-                    def on_upload(e:UploadEventArguments):
-                        # Save the uploaded file to the data/uploads directory with a unique name
-                        locator = storage.upload_reference_image(
-                            obj=scene,
-                            name=e.name,
-                            data=e.content,
-                            mime_type=e.type
-                        )
+                # A card for uploading an image to create a new panel
+                def on_upload(e:UploadEventArguments):
+                    # Save the uploaded file to the data/uploads directory with a unique name
+                    locator = storage.upload_reference_image(
+                        obj=scene,
+                        name=e.name,
+                        data=e.content,
+                        mime_type=e.type
+                    )
 
-                        post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
-            with row:
-                with ui.card().classes(DARK_MODE_STYLES).style('width: 24.5%; aspect-ratio: 1/1'):
-                    uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
-                    uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
-
-                    # Visible caption in center
-                    with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
-                        ui.label('Drop image to upload').classes('text-lg text-gray-600')
+                    post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
+                from gui.elements import uploader_card
+                uploader_card(state, on_upload=on_upload, packer=packer,
+                              variants=[(3, 3)], label='Drop image to create a panel')
+                page_ctx.__exit__(None, None, None)
         page.__exit__(None, None, None)

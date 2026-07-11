@@ -84,25 +84,30 @@ def view_setting(state: APPState):
         with ui.expansion(value=True).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Master Backgrounds", "I would like to render a master background for this setting.")
-            with ui.row().classes('w-full'):
-                rendered = {style_id: img for style_id, img in (setting.images or {}).items() if img and os.path.exists(img)}
-                if not rendered:
-                    ui.markdown("No master backgrounds rendered yet.  Ask me to render one in a comic style.")
-                for style_id, img in rendered.items():
-                    with ui.card().classes(TAILWIND_CARD).style('width: 32%; aspect-ratio: 3/2'):
-                        ui.image(source=img).style('top-padding: 0; bottom-padding:0;')
-                        ui.label(style_id.replace('-', ' ').title()).classes('text-sm')
+            from gui.elements import ruled_page, HEADER_CLASSES
+            rendered = {style_id: img for style_id, img in (setting.images or {}).items() if img and os.path.exists(img)}
+            if not rendered:
+                ui.markdown("No master backgrounds rendered yet.  Ask me to render one in a comic style.")
+            else:
+                with ruled_page() as packer:
+                    for style_id, img in rendered.items():
+                        with packer.place_cell([(4, 8/3), (3, 2), (6, 4)], fudge=False):
+                            with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'):
+                                ui.label(style_id.replace('-', ' ').title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                                ui.image(source=img).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
 
         # Reference image uploads (sketches, photos, prior art) steer the rendering.
         with ui.expansion(value=True).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 header("Reference Images", 2)
-            with ui.row().classes('w-full'):
+            from gui.elements import ruled_page
+            with ruled_page() as packer:
                 for upload in storage.list_uploads(setting):
-                    with ui.card().classes(TAILWIND_CARD).style('width: 24%; aspect-ratio: 1/1'):
-                        ui.image(source=upload).style('top-padding: 0; bottom-padding:0;')
+                    with packer.place_cell([(3, 3)], fudge=False):
+                        with ui.card().classes(TAILWIND_CARD + ' mosaic-card'):
+                            ui.image(source=upload).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
                 uploader_card(
                     state=state,
                     on_upload=on_upload,
-                    aspect_ratio="1/1"
+                    packer=packer, variants=[(3, 3)]
                 )

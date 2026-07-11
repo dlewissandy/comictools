@@ -7,22 +7,24 @@ import os
 from loguru import logger
 from nicegui import ui
 
-from gui.elements import header, TAILWIND_CARD
+from gui.elements import header, TAILWIND_CARD, ruled_page, HEADER_CLASSES
 from gui.selection import SelectionItem, SelectedKind
 from gui.state import APPState
 from schema import CharacterModel, Setting, Series, Publisher
 from storage.generic import GenericStorage
 
 
-def _asset_card(state: APPState, title: str, subtitle: str, image: str | None, deep_sel: list[SelectionItem]):
-    with ui.card().classes(TAILWIND_CARD).style('width: 23.5%; min-width: 180px;') as card:
-        if image and os.path.exists(image):
-            ui.image(source=image).style('aspect-ratio: 3/2; object-fit: cover;')
-        else:
-            ui.label('no reference art yet').classes('text-xs text-gray-500').style('aspect-ratio: 3/2; display:flex; align-items:center; justify-content:center;')
-        ui.label(title).classes('font-bold text-sm')
-        ui.label(subtitle).classes('text-xs text-gray-500')
-    card.on('click', lambda _, s=deep_sel: state.change_selection(new=s))
+def _asset_card(state: APPState, packer, title: str, subtitle: str, image: str | None, deep_sel: list[SelectionItem]):
+    with packer.place_cell([(3, 2)], fudge=image is None):
+        with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative') as card:
+            if image and os.path.exists(image):
+                ui.label(f"{title} · {subtitle}").classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                ui.image(source=image).props('fit=contain')
+            else:
+                ui.label(title).classes('font-bold text-sm')
+                ui.label(subtitle).classes('text-xs text-gray-500')
+                ui.label('no reference art yet').classes('text-xs text-gray-500')
+        card.on('click', lambda _, s=deep_sel: state.change_selection(new=s))
 
 
 def view_library(state: APPState):
@@ -51,14 +53,14 @@ def view_library(state: APPState):
                     ui.label(f"published by {pub_name}").classes('text-sm text-gray-500 self-center q-ml-md')
                 base = [S(name="Series", id=None, kind=SelectedKind.ALL_SERIES),
                         S(name=series.name, id=series.series_id, kind=SelectedKind.SERIES)]
-                with ui.row().classes('w-full'):
+                with ruled_page() as packer:
                     for c in characters:
                         img = storage.find_character_image(series_id=series.series_id, character_id=c.character_id)
                         origin = f" · from {c.origin.series_id}" if c.origin else ""
-                        _asset_card(state, c.name, f"character{origin}", img,
+                        _asset_card(state, packer, c.name, f"character{origin}", img,
                                     base + [S(name=c.name, id=c.character_id, kind=SelectedKind.CHARACTER)])
                     for s in settings:
                         img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
                         origin = f" · from {s.origin.series_id}" if s.origin else ""
-                        _asset_card(state, s.name, f"setting{origin}", img,
+                        _asset_card(state, packer, s.name, f"setting{origin}", img,
                                     base + [S(name=s.name, id=s.setting_id, kind=SelectedKind.SETTING)])
