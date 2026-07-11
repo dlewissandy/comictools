@@ -517,18 +517,15 @@ def breadcrumb_selector(state: APPState):
         raise ValueError("Selection cannot be empty.  Please select an item first.")
     primary_selection = ui.dropdown_button(selection[0].name.title(), auto_close=True)
     with primary_selection:
-        all_series = ui.item("Series")
         all_publishers = ui.item("Publishers")
         all_styles = ui.item("Styles")
 
     
     new_sel = [selection[0]]
-    series_sel = [SelectionItem(kind=SelectedKind.ALL_SERIES, name="Series", id=None)]
     publishers_sel = [SelectionItem(kind=SelectedKind.ALL_PUBLISHERS, name="Publishers", id=None)]
     styles_sel = [SelectionItem(kind=SelectedKind.ALL_STYLES, name="Styles", id=None)]
 
     primary_selection.on("click", lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
-    all_series.on_click(lambda _, new_sel=series_sel: state.change_selection( new=new_sel))
     all_publishers.on_click( lambda _, new_sel=publishers_sel: state.change_selection( new=new_sel))
     all_styles.on_click( lambda _, new_sel=styles_sel: state.change_selection( new=new_sel))
     return primary_selection

@@ -20,7 +20,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 HEADFOOT_STYLING_CLASSES = "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300"
 MIDDLE_STYLING_CLASSES = "text-gray-900 dark:text-gray-300"
 # Default selection to initialize the breadcrumbs
-DEFAULT_SELECTION = [{"kind":"all-series", "name":"Series", "id":None}]
+DEFAULT_SELECTION = [{"kind":"all-publishers", "name":"Publishers", "id":None}]
 
 # ---------------------------------------------------------
 # LOGGER INITIALIZATION

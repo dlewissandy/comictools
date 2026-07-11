@@ -65,6 +65,23 @@ def view_publisher(state: APPState):
         # and a button to save the changes
         markdown_field_editor(state, "Description", publisher.description)
 
+        # THE PUBLISHER'S LIST: its series, as panels.  Navigation to a series
+        # runs through its publisher.
+        from gui.elements import caption_action, comic_page, CrudButtonKind as _CK
+        from schema import Series
+        with comic_page():
+            view_all_instances(
+                state=state,
+                get_instances=lambda: [s for s in storage.read_all_objects(Series, order_by="name")
+                                       if s.publisher_id == publisher_id],
+                get_image_locator=lambda x: storage.find_series_image(series_id=x.series_id),
+                kind="series",
+                aspect_ratio="16/27",
+                flow_span=3,
+                overlap_caption=lambda: caption_action("Series", _CK.CREATE,
+                    lambda _: post_user_message(state, "I would like to create a new comic book series published by this publisher."), 3)
+            )
+
         # Below that we have a full width row for editing the description of the
         # publisher's logo
         with view_attributes(

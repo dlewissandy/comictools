@@ -123,6 +123,15 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
         return None
 
     sid = parts[1]
+    # Navigation runs Publishers -> Series: root the chain at the publisher.
+    sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
+    try:
+        series_obj = storage.read_object(cls=Series, primary_key={"series_id": sid})
+        if series_obj is not None and series_obj.publisher_id:
+            sel.append(_named(storage, SelectedKind.PUBLISHER, series_obj.publisher_id,
+                              Publisher, {"publisher_id": series_obj.publisher_id}))
+    except Exception as e:
+        logger.debug(f"routes: publisher resolution for {sid} skipped: {e}")
     sel.append(_named(storage, SelectedKind.SERIES, sid, Series, {"series_id": sid}))
     rest = parts[2:]
     if not rest:

@@ -282,9 +282,11 @@ TOOLKITS: dict[str,list[Tool]] = {
     ],
     "publisher": [
         # Create
-
+        create_comic_series,
         # Read
         read_publisher,
+        read_all_series,
+        select_series,
         # Update
         update_logo_description,
         update_publisher_description,

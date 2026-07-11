@@ -67,7 +67,9 @@ def selection_to_context(
                 accum["style_id"] = id
                 context.append((ComicStyle, {k:v for k, v in accum.items()}))
             case SelectedKind.SERIES.value:
-                accum["series_id"] = id
+                # Series sit under publishers for NAVIGATION, but storage keys
+                # are rooted at series_id — the chain resets here.
+                accum = {"series_id": id}
                 context.append((Series, {k:v for k, v in accum.items()}))
             case SelectedKind.ISSUE.value:
                 accum["issue_id"] = id
