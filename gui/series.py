@@ -76,11 +76,23 @@ def view_series(state: APPState):
         with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Issues", "I would like to create a new issue")
+            def _issue_label(_i, issue):
+                from schema import SceneModel, Panel
+                done = total = 0
+                for sc in storage.read_all_objects(SceneModel, {"series_id": series.series_id, "issue_id": issue.issue_id}):
+                    for p in storage.read_all_objects(Panel, {"series_id": series.series_id, "issue_id": issue.issue_id, "scene_id": sc.scene_id}):
+                        total += 1
+                        if p.image and os.path.exists(p.image):
+                            done += 1
+                pulse = f"  ·  {done}/{total} 🎨" if total else "  ·  no panels"
+                return f"{issue.name}{pulse}"
+
             view_all_instances(
                 state=state, 
                 get_instances=lambda: storage.read_all_objects(Issue, primary_key={"series_id": series.series_id}, order_by="issue_number"), 
                 get_image_locator=lambda x: storage.find_issue_image(series_id=series.series_id, issue_id=x.issue_id),
                 kind="issue",
+                get_name=_issue_label,
                 aspect_ratio="16/27"
                 ).style('margin-top: 0px; margin-bottom: 0px')
 

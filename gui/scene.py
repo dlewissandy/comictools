@@ -62,11 +62,34 @@ def view_scene(state: APPState):
 
         post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
 
+    panels_all = storage.read_all_objects(Panel, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
+    rendered_ct = sum(1 for p in panels_all if p.image and os.path.exists(p.image))
+
+    def _pill(ok: bool, label: str, fix_message: str | None = None):
+        if ok:
+            ui.chip(label, icon='check_circle', color='green').props('dense outline')
+        else:
+            chip = ui.chip(label, icon='radio_button_unchecked', color='orange').props('dense clickable')
+            if fix_message:
+                chip.tooltip("Click and I'll get started")
+                chip.on('click', lambda _, m=fix_message: post_user_message(state, m))
+
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"Scene {scene.scene_number}: {scene.name.title()}", 0)
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current scene."), size=1)
+
+        # Production strip: what stands between this scene and finished pages.
+        with ui.row().classes('w-full items-center q-pa-sm border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800').style('gap: 8px;'):
+            ui.label('Production').classes('text-xs uppercase text-gray-500')
+            _pill(bool(scene.setting_id), 'setting', 'Give this scene a setting.')
+            _pill(bool(scene.cast), 'cast', 'Cast the characters for this scene.')
+            _pill(len(panels_all) > 0, 'panels', 'Break this scene into panels.')
+            _pill(len(panels_all) > 0 and rendered_ct == len(panels_all),
+                  f'artwork {rendered_ct}/{len(panels_all)}' if panels_all else 'artwork',
+                  'Render the missing panels.')
 
         with ui.row().classes('w-full flex-nowrap'):
             with ui.column().classes('w-3/4'):
