@@ -6,6 +6,7 @@ are posed to a special "thoughts" container that can be expanded by the user to 
 """
 
 import asyncio
+import json
 from agents import Runner, ItemHelpers
 from loguru import logger
 from nicegui import ui
@@ -66,32 +67,75 @@ async def handle_handoff_event(state: APPState, event: AgentUpdatedStreamEvent, 
     logger.info(f"\n[Agent switched to: {event.new_agent.name}]")
     # TODO: If we use handoffs, then this needs to be updated so that we get a history of the handoffs
 
+# Human-readable receipts for tool activity (UX: the coauthor is a colleague,
+# not a debugger).  Verb prefix -> emoji; read-only activity stays quiet inside
+# the Thoughts expansion, mutations surface as receipts.
+_VERB_ICONS = [
+    ("create", "🆕"), ("update", "✏️"), ("delete", "🗑️"), ("generate", "🎨"),
+    ("render", "🎨"), ("import", "📚"), ("move", "↕️"), ("export", "📕"),
+    ("inpaint", "🖌️"), ("outpaint", "🖌️"), ("select", "🧭"), ("read", "🔎"), ("list", "🔎"),
+]
+_QUIET_VERBS = ("read", "list", "select")
+
+
+def _receipt_for(tool_name: str, args_json: str) -> tuple[str, bool]:
+    """Return (human line, is_quiet) for a tool call."""
+    icon = "🔧"
+    quiet = False
+    for verb, ic in _VERB_ICONS:
+        if tool_name.startswith(verb):
+            icon, quiet = ic, verb in _QUIET_VERBS
+            break
+    action = tool_name.replace("_", " ").capitalize()
+    detail = ""
+    try:
+        args = json.loads(args_json) if args_json else {}
+        interesting = [f"{v}" for k, v in args.items()
+                       if isinstance(v, (str, int)) and k not in ("series_id",) and len(str(v)) <= 40]
+        if interesting:
+            detail = " — " + ", ".join(str(x) for x in interesting[:3])
+    except Exception:
+        pass
+    return f"{icon} **{action}**{detail}", quiet
+
+
 async def handle_tool_call_event(state: APPState, event: RunItemStreamEvent, divider: ui.row):
     """
-    This event occurs when the agent calls a tool.   Handle a tool call event by updating the response
-    markdown with the tool call details.
+    The agent called a tool: show a human receipt.  Quiet (read-only) activity
+    goes inside the collapsed Thoughts expansion; actions surface as receipts.
     """
     raw_item = event.item.raw_item
-    tool_name = raw_item.name
-    args = raw_item.arguments
-    thought = f"🔧 Calling tool **{tool_name}** with arguments:\n```\n{args}\n```"
-    logger.debug(thought)
-    with thoughts_container(divider):
-        with ui.chat_message(name='Tool Call', sent=False).classes('w-full'):
-            ui.markdown(f"{tool_name}({args})")
+    line, quiet = _receipt_for(raw_item.name, raw_item.arguments)
+    logger.debug(f"tool call: {raw_item.name}({raw_item.arguments})")
+    container = thoughts_container(divider) if quiet else divider
+    with container:
+        ui.markdown(line).classes("w-full text-sm" + ("" if quiet else " q-px-md"))
+
 
 async def handle_tool_output_event(state: APPState, event: RunItemStreamEvent, divider: ui.row):
     """
-    This event occurs when a tool responds to a tool call event.   Handle the event by updating the 
-    "thoughts" container with the tool output.
+    A tool responded.  Our tools return human sentences: show short results as
+    receipt follow-ups; long/structured payloads stay in Thoughts.  Refresh the
+    details pane immediately after mutations so the user watches the coauthor
+    work instead of waiting for the end of the turn.
     """
-    item = event.item
-    output = item.output
-    thought = f"📤 Tool responded with:\n```\n{output}\n```"
-    logger.debug(thought)
-    with thoughts_container(divider):
-        with ui.chat_message(name='Tool Output', sent=False).classes('w-full'):
-            ui.markdown(str(output))
+    output = str(event.item.output)
+    logger.debug(f"tool output: {output[:200]}")
+    is_short_sentence = len(output) < 300 and not output.lstrip().startswith(("{", "[", "<"))
+    if is_short_sentence and not output.startswith("An error"):
+        with thoughts_container(divider):
+            ui.markdown(output).classes("w-full text-sm")
+    else:
+        with thoughts_container(divider):
+            with ui.chat_message(name='Tool Output', sent=False).classes('w-full'):
+                ui.markdown(output[:1500])
+    # live refresh: the coauthor's edits appear as they happen
+    if state.is_dirty:
+        try:
+            state.refresh_details()
+            state.is_dirty = False
+        except Exception as e:
+            logger.debug(f"mid-turn refresh skipped: {e}")
 
 
 async def handle_message_output_event(state: APPState, event: RunItemStreamEvent, divider: ui.row):
