@@ -105,7 +105,8 @@ def view_character_variant(state:APPState):
                 header("Styled Images", 2).classes('ml-4')
                 ui.space()
                 crud_button(kind=CrudButtonKind.CREATE, action=lambda _: post_user_message(state, "I would like a new styled image for the current character variant."))
-            from gui.elements import ruled_page
+            from gui.elements import ruled_page, HEADER_CLASSES, TAILWIND_CARD
+            from schema import ComicStyle
             with ruled_page() as packer:
                 view_all_instances(
                     state=state,
@@ -115,7 +116,37 @@ def view_character_variant(state:APPState):
                     aspect_ratio="3/2",
                     get_name=lambda _,img: img.name,
                     packer=packer, variants=[(3, 2), (4, 8/3), (6, 4)],
-                )           
+                )
+
+                # GHOST CARDS: styles this look has no sheet in yet — one
+                # click sends the render to the drawing board, so panels in
+                # that style stop drawing the character off-model
+                def ink_sheet(st):
+                    from agentic.tools.imaging import create_styled_image_body
+                    from helpers.render_queue import enqueue_renders
+                    ui.notify(f"Inking {character.name.title()}'s {variant.name or variant_id} sheet "
+                              f"in {st.name.title()} — it lands here when done.", type='info')
+                    enqueue_renders(state, [(
+                        f"styled sheet — {character.name} ({variant.name or variant_id}) in {st.name}",
+                        lambda: create_styled_image_body(state, series_id, character_id,
+                                                         variant_id, st.style_id),
+                    )], role='the Character Designer')
+
+                have = {sid for sid, img in (variant.images or {}).items() if img}
+                for st in storage.read_all_objects(ComicStyle, order_by='name'):
+                    if st.style_id in have:
+                        continue
+                    with packer.place_cell([(3, 2), (4, 8/3), (6, 4)], fudge=False):
+                        with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative ghost-card'):
+                            art = st.image.get('art') if isinstance(st.image, dict) else st.image
+                            if art and os.path.exists(art):
+                                ui.image(source=art).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                            ui.label(st.name.title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                            with ui.column().classes('absolute inset-0 items-center justify-center z-10'):
+                                ui.button(f'Ink it in {st.name.title()}', icon='brush') \
+                                    .props('unelevated dense no-caps size=sm') \
+                                    .tooltip("Render this look's reference sheet in this style") \
+                                    .on('click', lambda _, st=st: ink_sheet(st))
 
             
 

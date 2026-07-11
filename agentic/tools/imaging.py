@@ -608,28 +608,13 @@ def create_character_style_example_image(
     
 
 
-@function_tool
-def create_styled_image_for_character_variant(
-    wrapper: RunContextWrapper[APPState],
-    series_id: str,
-    character_id: str,
-    variant_id: str,
-    style_id: str,
-) -> str:
-    """
-    Create a styled image for a character variant.   This image can be used as a reference image to help artists
-    faithfully represent the character in the comic book.
-
-    Args:
-        series_id: The ID of the comic book series.
-        character_id: The ID of the character.
-        variant_id: The ID of the character variant.
-        style_id: The ID of the comic style to use for the image.
-
-    Returns:
-        A locator for the generated image.
-    """
-    state: APPState = wrapper.context
+def create_styled_image_body(state, series_id: str, character_id: str,
+                             variant_id: str, style_id: str) -> str:
+    """Render a variant's styled reference sheet in one style — callable
+    directly from the GUI (background job) or via the tool."""
+    class _W:  # minimal wrapper shim for generate_object_image
+        context = state
+    wrapper = _W()
     storage: GenericStorage = state.storage
 
     # Read the series
@@ -720,14 +705,40 @@ def create_styled_image_for_character_variant(
         name=f"{character.name}-{variant.name}-{style.name}-styled-image"
     )
 
-    # Update the variant with the new image locator
-    variant.images[style.style_id] = locator
-    storage.update_object(data=variant)
+    # Update the variant with the new image locator — onto a FRESH read; the
+    # render takes minutes and the variant may have changed meanwhile
+    fresh = storage.read_object(cls=CharacterVariant, primary_key=variant.primary_key) or variant
+    fresh.images[style.style_id] = locator
+    storage.update_object(data=fresh)
 
     note = ""
     if missing:
         note = "  NOTE: rendered without: " + "; ".join(missing) + ".  Generate those references and re-render for better consistency."
     return f"Styled image created successfully with locator: {locator}.{note}"
+
+
+@function_tool
+def create_styled_image_for_character_variant(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    character_id: str,
+    variant_id: str,
+    style_id: str,
+) -> str:
+    """
+    Create a styled image for a character variant.   This image can be used as a reference image to help artists
+    faithfully represent the character in the comic book.
+
+    Args:
+        series_id: The ID of the comic book series.
+        character_id: The ID of the character.
+        variant_id: The ID of the character variant.
+        style_id: The ID of the comic style to use for the image.
+
+    Returns:
+        A locator for the generated image.
+    """
+    return create_styled_image_body(wrapper.context, series_id, character_id, variant_id, style_id)
 
 @function_tool
 def create_art_style_example_image(

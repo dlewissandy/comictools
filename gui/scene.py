@@ -90,7 +90,36 @@ def view_scene(state: APPState):
         with cpanel(12), ui.row().classes('w-full items-center').style('gap: 8px;'):
             ui.label('Production').classes('comic-label-sm')
             if not scene.setting_id:
-                _todo('setting', 'Give this scene a setting.')
+                # one click sets the scene — the picker mirrors the light
+                # table's background picker; a brand-new setting goes via chat
+                def pick_setting():
+                    from gui.light_table import table_receipt
+                    with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                            .style('min-width: 480px; max-width: 720px;'):
+                        ui.label('Set the scene').classes('caption-box caption-box-sm')
+                        with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
+                            for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}, order_by="name"):
+                                img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
+                                with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 150px;') as card:
+                                    if img:
+                                        ui.image(source=img).style('height: 80px;').props('fit=cover')
+                                    ui.label(s.name.title()).classes('text-xs text-center w-full')
+
+                                def choose(s=s):
+                                    scene.setting_id = s.setting_id
+                                    storage.update_object(scene)
+                                    table_receipt(state, f"🏔 set the scene in **{s.name}**")
+                                    dlg.close()
+                                    state.refresh_details()
+                                card.on('click', lambda _, s=s: choose(s))
+                        ui.button('A brand-new setting instead…', icon='add') \
+                            .props('flat dense no-caps').classes('q-mt-sm') \
+                            .on('click', lambda _: (dlg.close(),
+                                post_user_message(state, 'I would like to create a new setting for this scene.')))
+                    dlg.open()
+                chip = ui.chip('setting', icon='location_on', color='orange').props('dense clickable')
+                chip.tooltip('Pick where this scene is set — one click')
+                chip.on('click', lambda _: pick_setting())
             if not scene.cast:
                 _todo('cast', 'Cast the characters for this scene.')
             if not panels_all:

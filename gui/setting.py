@@ -79,6 +79,32 @@ def view_setting(state: APPState):
                 [(p.name, p.name) for p in (setting.props or [])],
                 _remove_prop, icon='category')
 
+        # SET HERE: every scene that takes place in this setting — so the
+        # author can see what an edit touches before making it
+        from schema import Issue, SceneModel
+        from gui.selection import SelectionItem, SelectedKind
+        used_in = []
+        for iss in storage.read_all_objects(Issue, primary_key={"series_id": series_id}):
+            for sc in storage.read_all_objects(SceneModel, primary_key={
+                    "series_id": series_id, "issue_id": iss.issue_id}):
+                if sc.setting_id == setting_id:
+                    used_in.append((iss, sc))
+        with ui.row().classes('w-full items-center q-px-sm').style('gap: 6px;'):
+            ui.label('Set here').classes('comic-label-sm')
+            if not used_in:
+                ui.label('no scenes take place here yet').classes('text-xs text-gray-500')
+            for iss, sc in used_in[:12]:
+                def goto(iss=iss, sc=sc):
+                    base = [s for s in state.selection
+                            if s.kind.value in ('all-series', 'series')]
+                    state.change_selection(new=[*base,
+                        SelectionItem(name=iss.name, id=iss.issue_id, kind=SelectedKind.ISSUE),
+                        SelectionItem(name=sc.name, id=sc.scene_id, kind=SelectedKind.SCENE)])
+                ui.chip(f"{iss.name} · Scene {sc.scene_number}: {sc.name}", icon='auto_stories') \
+                    .props('dense clickable outline') \
+                    .tooltip('Open this scene') \
+                    .on('click', lambda _, iss=iss, sc=sc: goto(iss, sc))
+
         # Master backgrounds, one per comic style.  Panels set in this setting
         # reuse these backgrounds so the setting stays consistent.  Styles the
         # setting hasn't been inked in yet appear as GHOST CARDS — one click

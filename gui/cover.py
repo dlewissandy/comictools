@@ -61,8 +61,38 @@ def view_cover(state: APPState):
 
     details.clear()
     with details:
-        with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
+        with ui.row().classes('w-full flex-nowrap items-center').style('padding: 0; margin: 0;'):
             header(cover.location.value.replace('-', ' ').title() + " Cover", 0)
+
+            # WALK THE COVERS: ‹ › steps front → inside-front → inside-back → back
+            order = ["front", "inside-front", "inside-back", "back"]
+            sibs = sorted(storage.read_all_objects(Cover, primary_key={
+                "series_id": series_id, "issue_id": issue_id}),
+                key=lambda c: order.index(c.location.value) if c.location.value in order else 9)
+            idx = next((i for i, c in enumerate(sibs) if c.cover_id == cover_id), 0)
+
+            def goto(delta):
+                tgt = sibs[idx + delta]
+                state.change_selection(new=[*selection[:-1], SelectionItem(
+                    name=tgt.location.value.replace('-', ' ').title() + " Cover",
+                    id=tgt.cover_id, kind=SelectedKind.COVER)])
+
+            if len(sibs) > 1:
+                with ui.row().classes('items-center flex-nowrap self-center').style('gap: 2px;'):
+                    pb = ui.button(icon='chevron_left').props('flat round dense') \
+                        .tooltip('Previous cover')
+                    if idx <= 0:
+                        pb.props('disable')
+                    else:
+                        pb.on('click', lambda _: goto(-1))
+                    ui.label(f'{idx + 1}/{len(sibs)}').classes('text-xs text-gray-500')
+                    nb = ui.button(icon='chevron_right').props('flat round dense') \
+                        .tooltip('Next cover')
+                    if idx >= len(sibs) - 1:
+                        nb.props('disable')
+                    else:
+                        nb.on('click', lambda _: goto(1))
+
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE,
                         action=lambda _: post_user_message(state, "I would like to delete the current cover."),
