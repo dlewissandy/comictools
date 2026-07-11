@@ -1603,7 +1603,8 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
         depth = "in the near foreground, large" if h >= 88 else ("far in the background, small" if h <= 45 else "in the mid-ground")
         blocking_lines.append(f"* {ref.character_id} stands at {_pct(b.get('x', 50))} from left, {depth}"
                               + (f", raised {_pct(b['y'])} above the panel bottom" if float(b.get('y', 0)) > 5 else "")
-                              + ("; only partly in frame, rising from below the bottom edge" if float(b.get('y', 0)) < -5 else ""))
+                              + ("; only partly in frame, rising from below the bottom edge" if float(b.get('y', 0)) < -5 else "")
+                              + ("; MIRRORED left-to-right versus their reference sheet" if b.get('flip') else ""))
     for key, path in sorted((panel.figure_images or {}).items()):
         if not key.startswith('element/'):
             continue

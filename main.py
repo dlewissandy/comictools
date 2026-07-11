@@ -181,8 +181,15 @@ def init_layout(logger):
         .rh { position: absolute; width: 11px; height: 11px;
               background: #fff; border: 1.5px solid #3b82f6;
               border-radius: 2px; pointer-events: auto; }
+        /* a selected take LOCKS the table; only Unlock stays live */
+        .table-locked > * { pointer-events: none; opacity: .55; }
+        .table-locked > .table-unlock { pointer-events: auto; opacity: 1; }
         .stack-row { cursor: grab; }
-        .stack-row.stack-drop { outline: 2px dashed #3b82f6; outline-offset: -2px; }
+        /* drop ONTO a row to nest under it; drop at an edge to reorder */
+        .stack-row.stack-drop-onto { outline: 2px solid #3b82f6; outline-offset: -2px;
+                                     background: rgba(59,130,246,.12) !important; }
+        .stack-row.stack-drop-above { box-shadow: 0 -3px 0 0 #3b82f6; }
+        .stack-row.stack-drop-below { box-shadow: 0 3px 0 0 #3b82f6; }
         .rh-nw { top: -6px; left: -6px; cursor: nwse-resize; }
         .rh-ne { top: -6px; right: -6px; cursor: nesw-resize; }
         .rh-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }

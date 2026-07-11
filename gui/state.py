@@ -359,6 +359,14 @@ class APPState:
             self.suggestions_row.clear()
 
             async def _fire(text: str):
+                if text.endswith('…'):
+                    # a prompt STARTER: prefill the conversation box, don't send
+                    self.user_input.value = text[:-1]
+                    try:
+                        self.user_input.run_method('focus')
+                    except Exception:
+                        pass
+                    return
                 self.user_input.value = text
                 await send(state=self)
 

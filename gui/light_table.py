@@ -34,7 +34,9 @@ if (!window._roughDragInit) {
     const scale = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
     const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
     const ox = r.left + (r.width - w) / 2, oy = r.top + (r.height - h) / 2;
-    const x = (cx - ox) / scale, y = (cy - oy) / scale;
+    let x = (cx - ox) / scale;
+    const y = (cy - oy) / scale;
+    if (fig.dataset.flip) x = img.naturalWidth - x;
     if (x < 0 || y < 0 || x >= img.naturalWidth || y >= img.naturalHeight) return 0;
     const c = window._roughHit || (window._roughHit = document.createElement('canvas'));
     c.width = 1; c.height = 1;
@@ -55,7 +57,11 @@ if (!window._roughDragInit) {
   function pickFigure(e) {
     const cands = [...new Set(document.elementsFromPoint(e.clientX, e.clientY)
       .map(el => el.closest('.rough-drag')).filter(Boolean))];
-    for (const f of cands) if (alphaAt(f, e.clientX, e.clientY) > 20) return f;
+    for (const f of cands) {
+      const canvas = f.closest('.rough-canvas');
+      if (canvas && canvas.dataset.locked) continue;   // the table is locked
+      if (alphaAt(f, e.clientX, e.clientY) > 20) return f;
+    }
     return null;
   }
 
@@ -259,20 +265,26 @@ if (!window._roughDragInit) {
     stackDrag = row;
     e.dataTransfer.effectAllowed = 'move';
   });
+  const clearDropMarks = () => document.querySelectorAll('.stack-drop-onto, .stack-drop-above, .stack-drop-below')
+      .forEach(r => r.classList.remove('stack-drop-onto', 'stack-drop-above', 'stack-drop-below'));
+  const dropMode = (e, row) => {
+    const r = row.getBoundingClientRect();
+    const frac = (e.clientY - r.top) / r.height;
+    return frac < 0.3 ? 'before' : (frac > 0.7 ? 'after' : 'onto');
+  };
   document.addEventListener('dragover', (e) => {
     if (!stackDrag) return;
     const row = e.target.closest('.stack-row');
+    clearDropMarks();
     if (row && row !== stackDrag) {
       e.preventDefault();
-      row.classList.add('stack-drop');
+      const mode = dropMode(e, row);
+      row.classList.add(mode === 'onto' ? 'stack-drop-onto'
+                        : (mode === 'before' ? 'stack-drop-above' : 'stack-drop-below'));
     }
   });
-  document.addEventListener('dragleave', (e) => {
-    const row = e.target.closest('.stack-row');
-    if (row) row.classList.remove('stack-drop');
-  });
   document.addEventListener('drop', (e) => {
-    document.querySelectorAll('.stack-drop').forEach(r => r.classList.remove('stack-drop'));
+    clearDropMarks();
     if (!stackDrag) return;
     const row = e.target.closest('.stack-row');
     const src = stackDrag;
@@ -282,12 +294,12 @@ if (!window._roughDragInit) {
     const stack = row.closest('.acetate-stack');
     if (!stack) return;
     emitEvent('stack_reorder', {
-      src: src.dataset.key, dst: row.dataset.key,
+      src: src.dataset.key, dst: row.dataset.key, mode: dropMode(e, row),
       series: stack.dataset.series, issue: stack.dataset.issue,
       scene: stack.dataset.scene, panel: stack.dataset.panel});
   });
   document.addEventListener('dragend', () => {
-    document.querySelectorAll('.stack-drop').forEach(r => r.classList.remove('stack-drop'));
+    clearDropMarks();
     stackDrag = null;
   });
 
@@ -341,9 +353,12 @@ def light_table(state: APPState, panel, scene, setting,
                 featured: str | None = None, actions=None):
     """
     actions: optional list of (icon, tooltip, handler) riding THE PRINT.
+    A selected take LOCKS the table (the print corresponds to this exact
+    arrangement); unlocking deselects the take so the table can be reworked.
     """
     storage = state.storage
     series_id = panel.series_id
+    locked = featured is not None
 
     # BLOCKING: the drag/scale script ships in main.py's page head; here we
     # wire the event once per client — the handler resolves the panel from
@@ -401,39 +416,96 @@ def light_table(state: APPState, panel, scene, setting,
                 "scene_id": a['scene'], "panel_id": a['panel']})
             if p is None:
                 return
+            mode = a.get('mode', 'before')
+            src_k, dst_k = a['src'], a['dst']
             fig_keys = [f"{r.character_id}/{r.variant_id}" for r in (p.character_references or [])]
             fig_keys += [k for k in sorted(p.figure_images or {}) if k.startswith('element/')]
 
             def z(k):
                 return ((p.figure_blocking or {}).get(k) or {}).get('z', 0)
 
-            blocks, grouped = [], set()
-            for gname, ks in (p.layer_groups or {}).items():
-                ms = sorted([k for k in ks if k in fig_keys], key=lambda k: -z(k))
-                if ms:
-                    blocks.append([f'group:{gname}', ms])
-                    grouped.update(ms)
-            for k in fig_keys:
-                if k not in grouped:
-                    blocks.append([k, [k]])
-            blocks.sort(key=lambda b: -max(z(k) for k in b[1]))
+            def disp(k):
+                return (k.split('/', 1)[1] if k.startswith('element/') else k.split('/')[0]).replace('-', ' ')
 
-            src, dst = a['src'], a['dst']
-            ids = [b[0] for b in blocks]
-            if src in ids and dst in ids:
-                # move a whole block before the target block
-                blk = blocks.pop(ids.index(src))
-                blocks.insert([b[0] for b in blocks].index(dst), blk)
-            else:
-                # member-level: reorder within the same group only
-                owner = {k: b for b in blocks for k in b[1]}
-                if src in owner and dst in owner and owner[src] is owner[dst]:
-                    ms = owner[src][1]
-                    ms.remove(src)
-                    ms.insert(ms.index(dst), src)
+            groups = {n: sorted([k for k in ks if k in fig_keys], key=lambda k: -z(k))
+                      for n, ks in (p.layer_groups or {}).items()}
+            groups = {n: ks for n, ks in groups.items() if ks}
+            parent = {k: n for n, ks in groups.items() for k in ks}
+
+            # top-level sequence: ('g', name) and ('l', key), by current z
+            entries = [('g', n, max(z(k) for k in ks)) for n, ks in groups.items()]
+            entries += [('l', k, z(k)) for k in fig_keys if k not in parent]
+            entries.sort(key=lambda t: -t[2])
+            seq = [(t, i) for t, i, _ in entries]
+
+            def remove_src():
+                nonlocal seq
+                if src_k.startswith('group:'):
+                    name = src_k[6:]
+                    seq = [b for b in seq if b != ('g', name)]
+                    return ('g', name)
+                if src_k in parent:
+                    groups[parent[src_k]].remove(src_k)
+                    if not groups[parent[src_k]]:
+                        gname = parent[src_k]
+                        groups.pop(gname)
+                        seq = [b for b in seq if b != ('g', gname)]
                 else:
-                    return
-            flat = [k for b in blocks for k in b[1]]
+                    seq = [b for b in seq if b != ('l', src_k)]
+                return ('l', src_k)
+
+            if mode == 'onto' and not dst_k.startswith('group:') is None:
+                pass
+            if mode == 'onto':
+                kind_, name_ = remove_src()
+                members = groups.get(name_, [name_ if kind_ == 'l' else None]) if False else None
+                moving = (groups.pop(name_) if kind_ == 'g' else [src_k]) if kind_ == 'g' else [src_k]
+                if kind_ == 'g':
+                    seq = [b for b in seq if b != ('g', name_)]
+                if dst_k.startswith('group:'):
+                    tname = dst_k[6:]
+                elif dst_k in parent and parent[dst_k] in groups:
+                    tname = parent[dst_k]
+                else:
+                    tname = disp(dst_k)
+                    while tname in groups:
+                        tname += ' •'
+                    groups[tname] = [dst_k]
+                    seq = [('g', tname) if b == ('l', dst_k) else b for b in seq]
+                if tname in groups:
+                    tgt = groups[tname]
+                    at = tgt.index(dst_k) + 1 if dst_k in tgt else 0
+                    for m in moving:
+                        if m not in tgt:
+                            tgt.insert(at, m)
+                            at += 1
+                    if ('g', tname) not in seq:
+                        seq.append(('g', tname))
+            else:
+                kind_, name_ = remove_src()
+                block = ('g', name_) if kind_ == 'g' else ('l', src_k)
+                offset = 0 if mode == 'before' else 1
+                if kind_ == 'l' and not dst_k.startswith('group:') and dst_k in parent and parent[dst_k] in groups:
+                    # between members: inherit the target's group
+                    ms = groups[parent[dst_k]]
+                    ms.insert(ms.index(dst_k) + offset, src_k)
+                else:
+                    anchor = ('g', dst_k[6:]) if dst_k.startswith('group:') else \
+                             (('g', parent[dst_k]) if dst_k in parent else ('l', dst_k))
+                    idx = seq.index(anchor) if anchor in seq else len(seq)
+                    seq.insert(idx + offset, block)
+
+            # persist: groups + z from the flattened display order
+            p.layer_groups = {n: ks for n, ks in groups.items() if ks}
+            flat = []
+            for t, i in seq:
+                if t == 'g':
+                    flat += groups.get(i, [])
+                else:
+                    flat.append(i)
+            for k in fig_keys:
+                if k not in flat:
+                    flat.append(k)
             n = len(flat)
             for i, k in enumerate(flat):
                 cur = dict((p.figure_blocking or {}).get(k) or {})
@@ -503,6 +575,8 @@ def light_table(state: APPState, panel, scene, setting,
         canvas._props['data-issue'] = panel.issue_id
         canvas._props['data-scene'] = panel.scene_id
         canvas._props['data-panel'] = panel.panel_id
+        if locked:
+            canvas._props['data-locked'] = '1'
         with canvas:
             if bg_layer["on"] and background:
                 ui.image(source=_src(background)).props('fit=cover') \
@@ -526,12 +600,16 @@ def light_table(state: APPState, panel, scene, setting,
                 b = f["blocking"]
                 k = img_k(f["img"])
                 cls = 'rough-figure rough-drag' + (' rough-figure-posed' if f["posed"] else '')
+                flip = ' scaleX(-1)' if b.get('flip') else ''
                 fig = ui.image(source=_src(f["img"])).props('fit=contain').classes(cls) \
                     .style(f'left: {b["x"]}%; bottom: {b["y"]}%; height: {b["h"]}%; '
                            f'width: {b["h"] * k}%; '
+                           f'transform: translateX(-50%){flip}; '
                            f'z-index: {max(1, 10 + int(b.get("z", 0)))};')
                 fig._props['data-key'] = f["key"]
                 fig._props['data-war'] = f'{k:.4f}'
+                if b.get('flip'):
+                    fig._props['data-flip'] = '1'
 
             live_props = [p["name"] for p in props if p["on"]]
             if live_props:
@@ -743,31 +821,29 @@ def light_table(state: APPState, panel, scene, setting,
         post_user_message(state, "Ink this rough into a new take of this panel — compose it with " +
                           "; ".join(parts) + ".")
 
-    # ---- ONE PROMPT, WHOLE COMPOSITION -----------------------------------
-    # Describe the shot; the Penciller lays every acetate and renders a take.
-    with ui.row().classes('w-full items-center flex-nowrap q-mb-sm').style('gap: 8px;'):
-        direction = ui.input(placeholder='Describe the shot — I\'ll lay the acetates and render a take…') \
-            .props('outlined dense').classes('flex-grow')
-
-        def compose():
-            text = (direction.value or '').strip()
-            if not text:
-                ui.notify('Describe the shot first.', type='warning')
-                return
-            direction.value = ''
-            post_user_message(state,
-                f"Compose this panel: {text}")
-
-        direction.on('keydown.enter', lambda _: compose())
-        ui.button('Compose', icon='auto_awesome').props('unelevated dense').on('click', lambda _: compose())
-
     with ui.row().classes('w-full flex-nowrap').style('gap: 12px; align-items: stretch;'):
         stack_col = ui.column().classes('w-1/3 acetate-stack').style('gap: 4px; min-width: 220px;')
         stack_col._props['data-series'] = series_id
         stack_col._props['data-issue'] = panel.issue_id
         stack_col._props['data-scene'] = panel.scene_id
         stack_col._props['data-panel'] = panel.panel_id
+        if locked:
+            stack_col.classes('table-locked')
         with stack_col:
+            if locked:
+                with ui.row().classes('light-layer table-unlock w-full items-center flex-nowrap').style('gap: 6px;'):
+                    ui.icon('lock').classes('text-lg').style('width: 40px; text-align: center;')
+                    ui.label('The selected take is printed from this table') \
+                        .classes('text-xs').style('overflow: hidden;')
+                    ui.space()
+
+                    def unlock():
+                        panel.image = None
+                        storage.update_object(panel)
+                        _receipt('🔓 unlocked the table — no take is selected while you rework it')
+                        state.refresh_details()
+                    ui.button('Unlock', icon='lock_open').props('outline dense size=sm') \
+                        .on('click', lambda _: unlock())
             ui.label('top of the stack prints last — drag rows to restack').classes('text-xs text-gray-500 italic')
             if has_letters:
                 layer_row('chat_bubble', 'Letters — balloons & captions', letters,
@@ -851,6 +927,18 @@ def light_table(state: APPState, panel, scene, setting,
                 layer_row('category', f"Foreground — {p['name']}", p)
             # THE STACK IS THE Z-ORDER: drag rows to restack (top prints
             # last); split products sit nested under their group.
+            def mirror_btn(f):
+                def flip(f=f):
+                    b = dict((panel.figure_blocking or {}).get(f["key"]) or {})
+                    b['flip'] = 0 if b.get('flip') else 1
+                    f["blocking"]['flip'] = b['flip']
+                    panel.figure_blocking[f["key"]] = {**f["blocking"], **b}
+                    storage.update_object(panel)
+                    rough.refresh()
+                ui.button(icon='swap_horiz').props('flat round dense size=xs') \
+                    .tooltip('Mirror left/right — the renderer often gets facing wrong') \
+                    .on('click', lambda _, f=f: flip(f))
+
             def figure_row(f, indent=False):
                 row = ui.row().classes('light-layer stack-row w-full items-center flex-nowrap') \
                     .style('gap: 6px;' + (' margin-left: 14px; width: calc(100% - 14px);' if indent else ''))
@@ -873,6 +961,7 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.button(icon='content_cut').props('flat round dense size=xs') \
                             .tooltip('Split this element into ITS elements') \
                             .on('click', lambda _, k=f["key"], p=f["img"]: split_flow(k, p))
+                        mirror_btn(f)
                         ui.space()
 
                         def drop_element(key=f["key"], nm=f["name"]):
@@ -909,6 +998,7 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.button(icon='accessibility_new').props('flat round dense size=xs') \
                         .tooltip('Pose this figure — describe the pose' if not f["posed"] else 'Re-pose — describe the new pose') \
                         .on('click', lambda _, r=f["ref"]: pose_dialog(r.character_id, r.variant_id))
+                    mirror_btn(f)
                     if f["posed"]:
                         ui.button(icon='content_cut').props('flat round dense size=xs') \
                             .tooltip('Split: lift props/wardrobe off this figure, revealing the character beneath') \
@@ -942,6 +1032,84 @@ def light_table(state: APPState, panel, scene, setting,
                         .mark('uncast') \
                         .tooltip('Take this figure off the table') \
                         .on('click', lambda _, ref=f["ref"]: uncast(ref))
+
+            def flatten_group(gname):
+                import io
+                from uuid import uuid4
+                from PIL import Image as _Img
+                from schema import Panel as _Panel
+                keys = list((panel.layer_groups or {}).get(gname, []))
+                has_plate = 'background/plate' in keys
+                fresh = storage.read_object(cls=_Panel, primary_key=panel.primary_key) or panel
+                fkeys = {f["key"]: f for f in figures}
+                live = [fkeys[k] for k in keys if k in fkeys
+                        and ((fresh.figure_blocking or {}).get(k) or {}).get('on', 1)
+                        and fkeys[k]["img"]]
+                dims = {'landscape': (1536, 1024), 'portrait': (1024, 1536), 'square': (1024, 1024)}[panel.aspect.value]
+                W, H = dims
+                car = {'landscape': 1.5, 'portrait': 2 / 3, 'square': 1.0}[panel.aspect.value]
+                if has_plate:
+                    plate_path = (panel.figure_images or {}).get('background/plate')
+                    if plate_path and os.path.exists(plate_path):
+                        base = _Img.open(plate_path).convert('RGBA')
+                        s = max(W / base.width, H / base.height)
+                        base = base.resize((max(1, round(base.width * s)), max(1, round(base.height * s))))
+                        lft, tp = (base.width - W) // 2, (base.height - H) // 2
+                        base = base.crop((lft, tp, lft + W, tp + H))
+                    else:
+                        base = _Img.new('RGBA', dims, (250, 246, 236, 255))
+                else:
+                    base = _Img.new('RGBA', dims, (0, 0, 0, 0))
+                boxes = []
+                for m in sorted(live, key=lambda g: {**g["blocking"], **((fresh.figure_blocking or {}).get(g["key"]) or {})}.get('z', 0)):
+                    b = {**m["blocking"], **((fresh.figure_blocking or {}).get(m["key"]) or {})}
+                    img = _Img.open(m["img"]).convert('RGBA')
+                    if b.get('flip'):
+                        img = img.transpose(_Img.FLIP_LEFT_RIGHT)
+                    th = H * b["h"] / 100
+                    s = th / img.height
+                    img = img.resize((max(1, round(img.width * s)), max(1, round(th))))
+                    cx = W * b["x"] / 100
+                    bottom = H - H * b["y"] / 100
+                    base.paste(img, (round(cx - img.width / 2), round(bottom - img.height)), img)
+                    boxes.append((cx - img.width / 2, bottom - img.height, cx + img.width / 2, bottom))
+                from storage.filepath import obj_to_imagepath
+                figures_dir = os.path.join(os.path.dirname(obj_to_imagepath(obj=panel, base_path=storage.base_path)), 'figures')
+                os.makedirs(figures_dir, exist_ok=True)
+                # remove the members that were baked in (or discarded if hidden)
+                for k in keys:
+                    if k.startswith('element/') or k == 'background/plate':
+                        panel.figure_images.pop(k, None)
+                        panel.figure_blocking.pop(k, None)
+                    elif '/' in k and not k.startswith('background'):
+                        cid, vid = k.split('/', 1)
+                        panel.character_references = [
+                            c for c in panel.character_references
+                            if not (c.character_id == cid and c.variant_id == vid)]
+                        panel.figure_blocking.pop(k, None)
+                panel.layer_groups.pop(gname, None)
+                if has_plate:
+                    out = os.path.join(figures_dir, f'plate--{uuid4().hex[:8]}.png')
+                    base.save(out, 'PNG')
+                    panel.figure_images['background/plate'] = out
+                elif boxes:
+                    L = max(0, min(b[0] for b in boxes)); T = max(0, min(b[1] for b in boxes))
+                    R = min(W, max(b[2] for b in boxes)); B = min(H, max(b[3] for b in boxes))
+                    crop = base.crop((int(L), int(T), int(R), int(B)))
+                    import re as _re
+                    slug = _re.sub(r'[^a-z0-9]+', '-', gname.lower()).strip('-')[:40] or 'flat'
+                    out = os.path.join(figures_dir, f'element--{slug}--{uuid4().hex[:8]}.png')
+                    crop.save(out, 'PNG')
+                    key = f'element/{slug}'
+                    panel.figure_images[key] = out
+                    panel.figure_blocking[key] = {
+                        'x': round((L + R) / 2 / W * 100, 1),
+                        'y': round(100 - B / H * 100, 1),
+                        'h': round((B - T) / H * 100, 1),
+                        'z': max((m["blocking"].get('z', 0) for m in live), default=0)}
+                storage.update_object(panel)
+                _receipt(f"🗜 flattened the **{gname}** group into one layer")
+                state.refresh_details()
 
             fig_by_key = {f["key"]: f for f in figures}
             grouped_keys = set()
@@ -984,6 +1152,10 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.label(gname.title()).classes('text-sm text-bold')
                     ui.space()
 
+                    ui.button(icon='layers').props('flat round dense size=xs') \
+                        .tooltip('Flatten this group into one layer (hidden members are discarded)') \
+                        .on('click', lambda _, g=gname: flatten_group(g))
+
                     def ungroup(gname=gname):
                         panel.layer_groups.pop(gname, None)
                         storage.update_object(panel)
@@ -1025,7 +1197,9 @@ def light_table(state: APPState, panel, scene, setting,
             with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
                 eye(bg_layer)
                 if background:
-                    ui.image(source=_src(background)).classes('light-thumb')
+                    ui.image(source=_src(background)).classes('light-thumb cursor-pointer') \
+                        .tooltip('Swap the background — pick another setting') \
+                        .on('click', lambda _: pick_background())
                 else:
                     ui.icon('landscape').classes('text-lg').style('width: 40px; text-align: center;')
                 ui.label(bg_label).classes('text-sm').style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
@@ -1092,6 +1266,14 @@ def light_table(state: APPState, panel, scene, setting,
                             def lay(s=s):
                                 scene.setting_id = s.setting_id
                                 storage.update_object(scene)
+                                # a new background replaces any split plate
+                                if (panel.figure_images or {}).pop('background/plate', None) is not None:
+                                    for gname in list(panel.layer_groups or {}):
+                                        panel.layer_groups[gname] = [k for k in panel.layer_groups[gname]
+                                                                     if k != 'background/plate']
+                                        if not panel.layer_groups[gname]:
+                                            panel.layer_groups.pop(gname)
+                                    storage.update_object(panel)
                                 _receipt(f"🏔 laid the **{s.name}** background on the table")
                                 dlg.close()
                                 state.refresh_details()
@@ -1199,6 +1381,8 @@ def light_table(state: APPState, panel, scene, setting,
                 for f in sorted(live, key=lambda g: {**g["blocking"], **((fresh.figure_blocking or {}).get(g["key"]) or {})}.get("z", 0)):
                     b = {**f["blocking"], **((fresh.figure_blocking or {}).get(f["key"]) or {})}
                     fig = Image.open(f["img"]).convert('RGBA')
+                    if b.get('flip'):
+                        fig = fig.transpose(Image.FLIP_LEFT_RIGHT)
                     th = H * b["h"] / 100
                     s = th / fig.height
                     fig = fig.resize((max(1, round(fig.width * s)), max(1, round(th))))

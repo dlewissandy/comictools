@@ -88,6 +88,22 @@ def view_panel(state: APPState):
             text += bottom
         return text
 
+    def rework_on_table(img: str):
+        """A take becomes the table's background layer, ready to split,
+        heal and layer over — and the table unlocks (no take selected)."""
+        panel.figure_images['background/plate'] = img
+        panel.image = None
+        storage.update_object(panel)
+        try:
+            from gui.avatars import comic_chat_message
+            with state.history:
+                with comic_chat_message(name='You', sent=True).classes('w-full'):
+                    ui.markdown("🛠 laid a take on the table as the background layer")
+            state.history.scroll_to(percent=100)
+        except Exception:
+            pass
+        state.refresh_details()
+
     def open_editor():
         if not panel.image:
             ui.notify("No artwork to edit yet — render the panel first.", type="warning")
@@ -122,6 +138,8 @@ def view_panel(state: APPState):
                 featured=featured,
                 actions=[
                     ('edit', 'Open this artwork in the image editor', lambda _: open_editor()),
+                    ('layers', 'Rework this take on the table — it becomes the background layer',
+                     lambda _: rework_on_table(featured)),
                     ('brush', 'Render a new take', lambda _: post_user_message(state, "I would like to render this panel.")),
                     ('delete', 'Delete this artwork', lambda _: post_user_message(state, "I would like to delete the currently selected panel image.")),
                 ])
@@ -137,6 +155,10 @@ def view_panel(state: APPState):
                             ui.image(source=img).props('fit=cover').classes('absolute inset-0 w-full h-full')
                             if img == featured:
                                 ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10')
+                            ui.button(icon='layers').props('flat round dense size=xs') \
+                                .classes('absolute bottom-1 right-1 z-10 bg-white/70 dark:bg-black/50') \
+                                .tooltip('Rework this take on the table (becomes the background layer)') \
+                                .on('click.stop', lambda _, img=img: rework_on_table(img))
                         take.on('click', lambda _, img=img: set_image(img))
 
                 def on_upload_take(e):

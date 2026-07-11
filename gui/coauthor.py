@@ -84,7 +84,7 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                 return (None, chips + ["Add a panel", "Reorder the panels"])
 
             case "panel":
-                return (None, ["Render this panel", "Punch up the dialogue", "Change the framing"])
+                return (None, ["Compose this panel: …", "Render this panel", "Punch up the dialogue"])
 
             case "character":
                 series_id, character_id = sel[-2].id, sel[-1].id
