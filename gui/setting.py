@@ -66,17 +66,18 @@ def view_setting(state: APPState):
 
         markdown_field_editor(state, "Description", setting.description)
 
-        # Props that dress the setting
-        view_attributes(
-            state=state,
-            caption="Props",
-            attributes=[
-                Attribute(caption=prop.name, get_value=lambda prop=prop: prop.description)
-                for prop in setting.props
-            ] or [Attribute(caption="props", get_value=lambda: None)],
-            individual_icons=False,
-            header_size=2,
-        )
+        # Props that dress the setting: chips with ✕ — removal is as easy as
+        # adding.  Descriptions live in the tooltip; the prop asset keeps them.
+        from gui.elements import removable_chips
+
+        def _remove_prop(key):
+            setting.props = [p for p in setting.props if p.name != key]
+            storage.update_object(data=setting)
+
+        with ui.column().classes('w-full q-px-sm').style('gap: 2px;'):
+            removable_chips(state, "Props",
+                [(p.name, p.name) for p in (setting.props or [])],
+                _remove_prop, icon='category')
 
         # Master backgrounds, one per comic style.  Panels set in this setting
         # reuse these backgrounds so the setting stays consistent.
