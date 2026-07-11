@@ -174,10 +174,22 @@ def view_scene(state: APPState):
                 "issue_id": issue_id,
                 "scene_id": scene_id
             }, order_by='panel_number')
+            def upload_panel(e: UploadEventArguments):
+                # Save the uploaded file and ask the coauthor for a panel.
+                locator = storage.upload_reference_image(
+                    obj=scene,
+                    name=e.name,
+                    data=e.content,
+                    mime_type=e.type
+                )
+                post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
+
+            from gui.elements import ruled_page, uploader_card, HEADER_CLASSES
             if not panels or panels == []:
-                ui.markdown("No panels available for this scene.")
+                with ruled_page() as packer:
+                    uploader_card(state, on_upload=upload_panel, packer=packer,
+                                  variants=[(3, 3)], label='Drop image to create a panel')
             else:
-                from gui.elements import ruled_page, HEADER_CLASSES
                 page_ctx = ruled_page()
                 packer = page_ctx.__enter__()
                 for panel in panels:
@@ -237,19 +249,9 @@ def view_scene(state: APPState):
                                 ui.button(icon='chevron_right').props('flat round dense size=xs') \
                                     .tooltip('Move later in the reading order') \
                                     .on('click.stop', lambda _, pid=panel.panel_id, n=panel.panel_number: _nudge(pid, 1, n))
-                # A card for uploading an image to create a new panel
-                def on_upload(e:UploadEventArguments):
-                    # Save the uploaded file to the data/uploads directory with a unique name
-                    locator = storage.upload_reference_image(
-                        obj=scene,
-                        name=e.name,
-                        data=e.content,
-                        mime_type=e.type
-                    )
-
-                    post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
-                from gui.elements import uploader_card
-                uploader_card(state, on_upload=on_upload, packer=packer,
-                              label='Drop image to create a panel')
+                # A drop box for creating a new panel: same band height as
+                # the panels, so it packs into their rows
+                uploader_card(state, on_upload=upload_panel, packer=packer,
+                              variants=[(3, 3)], label='Drop image to create a panel')
                 page_ctx.__exit__(None, None, None)
         page.__exit__(None, None, None)
