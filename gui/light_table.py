@@ -995,7 +995,23 @@ def light_table(state: APPState, panel, scene, setting,
                 for m in sorted(members, key=lambda g: -g["blocking"].get("z", 0)):
                     figure_row(m, indent=True)
             for r in references:
-                layer_row('attachment', f"Reference — {os.path.basename(r['img'])}", r, thumb=r["img"])
+                with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
+                    eye(r)
+                    ui.image(source=_src(r["img"])).classes('light-thumb')
+                    ui.label(f"Reference — {os.path.basename(r['img'])}").classes('text-sm') \
+                        .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
+                    ui.space()
+
+                    def drop_reference(path=r["img"]):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+                        _receipt(f"✂️ took the reference **{os.path.basename(path)}** off the table")
+                        state.refresh_details()
+                    ui.button(icon='close').props('flat round dense size=xs') \
+                        .tooltip('Remove this reference for good') \
+                        .on('click', lambda _, p=r["img"]: drop_reference(p))
 
             def heal_background():
                 from gui.selection import SelectionItem, SelectedKind
