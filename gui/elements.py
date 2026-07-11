@@ -873,84 +873,177 @@ def flow_caption(state: APPState, caption: str, message: str, span: int = 3):
 
 
 # ---------------------------------------------------------------------------
-# THE PAGE PACKER: cards are placed like ruled comic panels — left to right,
-# top to bottom, on a 12-unit-wide grid of square units.  Each card TYPE has
-# a fixed size vocabulary (characters 3x2; covers 2x3/3x2, scalable 4x6/6x4;
-# logos 2x2); the packer picks the variant that fits the current row best.
+# THE PAGE PACKER: the page is a stack of BLOCKS — bands of cards whose top
+# and bottom edges rule straight across.  Cards fill each band left-to-right,
+# top-to-bottom in slices; scalable art picks among its legal sizes
+# (portrait 2:3 -> 2x3, 8/3x4, 4x6; landscape 3:2 -> 3x2, 4x8/3, 6x4;
+# characters always 3x2; logos 2x2; text takes whatever its slice needs).
+# Each band then scales UNIFORMLY so it fills the full 12-unit page width —
+# the unit is arbitrary, so every band picks its own.
 # ---------------------------------------------------------------------------
 class PagePacker:
+    SUB = 6          # subcolumns per unit: thirds (8/3-wide covers) stay on-grid
+    MAX_SCALE = 1.5  # never blow a sparse band up more than this
+
     def __init__(self, width: int = 12):
         self.width = width
-        self.skyline = [0] * width
-        self.placements: list[list] = []  # [element, x, y, w, h, fudge]
+        self.requests: list[list] = []  # [cell, variants, flexible]
 
-    def _candidate(self, w: int, h: int):
-        """Best (y, x) for a w×h rectangle: lowest top edge, then leftmost."""
-        best = None
-        for x in range(0, self.width - w + 1):
-            y = max(self.skyline[x:x + w])
-            if best is None or (y, x) < best[:2]:
-                best = (y, x)
-        return best  # (y, x)
-
-    def place(self, variants: list[tuple[int, int]]) -> tuple[int, int, int, int]:
-        """
-        Choose the variant/position reading-order first (lowest y, then x);
-        ties keep the earlier (preferred) variant.  Returns (x, y, w, h).
-        """
-        chosen = None
-        for w, h in variants:
-            if w > self.width:
-                continue
-            y, x = self._candidate(w, h)
-            if chosen is None or (y, x) < (chosen[1], chosen[0]):
-                chosen = (x, y, w, h)
-        x, y, w, h = chosen
-        for i in range(x, x + w):
-            self.skyline[i] = y + h
-        return x, y, w, h
-
-    def place_cell(self, variants: list[tuple[int, int]], fudge: bool = True):
-        """Place and return a positioned grid cell element."""
-        x, y, w, h = self.place(variants)
-        cell = ui.element('div').style(
-            f'grid-column: {x + 1} / span {w}; grid-row: {y + 1} / span {h};')
-        self.placements.append([cell, x, y, w, h, fudge])
+    def place_cell(self, variants: list[tuple[float, float]], fudge: bool = True):
+        """Register a card cell; actual placement happens in finalize()."""
+        cell = ui.element('div')
+        self.requests.append([cell, list(variants), fudge])
         return cell
 
+    # -- classification ------------------------------------------------
+    @staticmethod
+    def _is_portrait(variants) -> bool:
+        """A 2:3 cover/issue card — scalable to 2x3, 8/3x4, 4x6."""
+        return any(abs(w / h - 2 / 3) < 0.01 for w, h in variants)
+
+    @staticmethod
+    def _is_landscape_scalable(variants) -> bool:
+        """3:2 art that ships more than one size — scalable to 3x2, 4x8/3, 6x4."""
+        return (len(set(variants)) > 1
+                and all(abs(w / h - 1.5) < 0.01 for w, h in variants))
+
+    @staticmethod
+    def _nominal(variants) -> tuple[float, float]:
+        return variants[0]
+
+    # -- band construction ----------------------------------------------
+    def _row_band(self, reqs, i):
+        """A simple one-slice band: consecutive same-height cards, reading
+        left to right; text cards stretch to close the right margin."""
+        cell, variants, flex = reqs[i]
+        w0, h0 = self._nominal(variants)
+        row = [[cell, 0.0, 0.0, float(w0), float(h0), flex]]
+        x = float(w0)
+        j = i + 1
+        while j < len(reqs) and x < self.width - 1e-6:
+            c2, v2, f2 = reqs[j]
+            if self._is_portrait(v2):
+                break
+            w2, h2 = self._nominal(v2)
+            if h2 != h0 or x + w2 > self.width + 1e-6:
+                break
+            row.append([c2, x, 0.0, float(w2), float(h2), f2])
+            x += w2
+            j += 1
+        flexes = [r for r in row if r[5]]
+        if x < self.width - 1e-6 and flexes:
+            extra = (self.width - x) / len(flexes)
+            shift = 0.0
+            for r in row:
+                r[1] += shift
+                if r[5]:
+                    r[3] += extra
+                    shift += extra
+            x = self.width
+        return {'W': x, 'cells': [tuple(r[:5]) for r in row], 'next': j}
+
+    def _try_cover_band(self, reqs, i, H):
+        """A band led by cover(s) at height H, the region beside them filled
+        with slices: rows of nominal cards, or one landscape card scaled to
+        take the whole remaining slice."""
+        w0 = 2 * H / 3
+        cells = []
+        x = 0.0
+        j = i
+        # the run of covers, side by side
+        while (j < len(reqs) and self._is_portrait(reqs[j][1])
+               and (j == i or x + w0 <= self.width + 1 / 3 + 1e-6)):
+            cells.append((reqs[j][0], x, 0.0, w0, float(H)))
+            x += w0
+            j += 1
+        budget = self.width + 1 / 3 - x
+        # the region beside the covers, filled slice by slice
+        R = 0.0
+        first_slice = []
+        while H > 3 and j < len(reqs):
+            c2, v2, f2 = reqs[j]
+            if self._is_portrait(v2):
+                break
+            w2, h2 = self._nominal(v2)
+            if h2 != 2 or R + w2 > budget + 1e-6:
+                break
+            first_slice.append([c2, x + R, 0.0, float(w2), 2.0, f2])
+            R += w2
+            j += 1
+        if first_slice:
+            cells += [tuple(r[:5]) for r in first_slice]
+            y = 2.0
+            while y < H - 1e-6 and j < len(reqs):
+                left = H - y
+                c2, v2, f2 = reqs[j]
+                if self._is_portrait(v2):
+                    break
+                # a landscape card may scale to take the whole slice
+                if self._is_landscape_scalable(v2) and abs(left - R * 2 / 3) < 1e-6:
+                    cells.append((c2, x, y, R, left))
+                    y = H
+                    j += 1
+                    continue
+                w2, h2 = self._nominal(v2)
+                if h2 > left + 1e-6:
+                    break
+                rx = 0.0
+                row = []
+                jj = j
+                while jj < len(reqs) and rx < R - 1e-6:
+                    c3, v3, f3 = reqs[jj]
+                    w3, h3 = self._nominal(v3)
+                    if self._is_portrait(v3) or h3 != h2 or rx + w3 > R + 1e-6:
+                        break
+                    row.append([c3, x + rx, y, float(w3), float(h3), f3])
+                    rx += w3
+                    jj += 1
+                if row and rx < R - 1e-6:
+                    flexes = [r for r in row if r[5]]
+                    if flexes:
+                        extra = (R - rx) / len(flexes)
+                        shift = 0.0
+                        for r in row:
+                            r[1] += shift
+                            if r[5]:
+                                r[3] += extra
+                                shift += extra
+                        rx = R
+                if not row or rx < R - 1e-6:
+                    break  # can't close this slice — the band ends here
+                cells += [tuple(r[:5]) for r in row]
+                y += h2
+                j = jj
+        return {'W': x + R, 'cells': cells, 'next': j}
+
+    def _cover_band(self, reqs, i):
+        """Pick the cover height whose band comes closest to a full page width."""
+        best = None
+        for H in (6, 4, 3):
+            cand = self._try_cover_band(reqs, i, H)
+            score = abs(cand['W'] - self.width)
+            if best is None or score < best[0]:
+                best = (score, cand)
+        return best[1]
+
     def finalize(self):
-        """
-        Fudge the gutters like a letterer ruling a real page: after every
-        panel is placed, stretch a panel downward (at most 2 units) when that
-        makes its bottom edge share a rule with a horizontally-adjacent
-        neighbor and the space below it is dead anyway.
-        """
-        if not self.placements:
-            return
-        page_h = max(y + h for _, x, y, w, h, _ in self.placements)
-        occupied = [[False] * self.width for _ in range(page_h)]
-        for _, x, y, w, h, _ in self.placements:
-            for r in range(y, y + h):
-                for c in range(x, x + w):
-                    occupied[r][c] = True
-        for p in self.placements:
-            cell, x, y, w, h, fudge = p
-            if not fudge:
-                continue
-            for delta in (1, 2):
-                new_bottom = y + h + delta
-                if new_bottom > page_h:
-                    break
-                if any(occupied[r][c] for r in range(y + h, new_bottom) for c in range(x, x + w)):
-                    break
-                # a neighbor sharing a vertical gutter whose bottom rule we'd meet
-                aligns = any(
-                    (q[1] + q[3] == x or q[1] == x + w) and q[2] + q[4] == new_bottom and q[2] < new_bottom
-                    for q in self.placements if q is not p)
-                if aligns:
-                    for r in range(y + h, new_bottom):
-                        for c in range(x, x + w):
-                            occupied[r][c] = True
-                    p[4] = new_bottom - y
-                    cell.style(f'grid-row: {y + 1} / span {p[4]};')
-                    break
+        """Build the bands and emit them: each band is its own grid whose
+        unit is sized so the band spans the full page width."""
+        reqs = self.requests
+        i = 0
+        while i < len(reqs):
+            if self._is_portrait(reqs[i][1]):
+                band = self._cover_band(reqs, i)
+            else:
+                band = self._row_band(reqs, i)
+            cols = max(round(band['W'] * self.SUB),
+                       round(self.width * self.SUB / self.MAX_SCALE))
+            wrap = ui.element('div').classes('comic-block').style(
+                f'grid-template-columns: repeat({cols}, 1fr); '
+                f'grid-auto-rows: calc(100cqw / {cols});')
+            for cell, x, y, w, h in band['cells']:
+                cell.move(wrap)
+                cell.style(
+                    f'grid-column: {round(x * self.SUB) + 1} / span {round(w * self.SUB)}; '
+                    f'grid-row: {round(y * self.SUB) + 1} / span {round(h * self.SUB)};')
+            i = band['next']

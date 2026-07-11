@@ -115,17 +115,17 @@ def init_layout(logger):
         .flow-caption { display: flex; flex-direction: column; align-items: flex-start;
                         justify-content: center; gap: 6px; min-height: 90px; }
 
-        /* THE MOSAIC: card groups share one 2D grid — row units equal column
-           units (via container query), each panel spans cols AND rows by its
-           aspect, dense flow fills holes in both directions. */
-        .comic-mosaic { display: grid;
-                        /* minmax(0,1fr): a card's intrinsic min-content must
-                           never widen its tracks — the RULING is law */
-                        grid-template-columns: repeat(12, minmax(0, 1fr));
-                        gap: 12px;
-                        /* SQUARE units: rows equal columns, sized from the
-                           ANCESTOR container's width. */
-                        grid-auto-rows: calc((100cqw - 132px) / 12); }
+        /* THE MOSAIC: a stack of BLOCKS.  Each block is a band of cards whose
+           top and bottom edges rule straight across; each band is its own
+           grid, scaled uniformly so it fills the full page width — the unit
+           is arbitrary, so every band picks its own. */
+        .comic-mosaic { display: flex; flex-direction: column; width: 100%; }
+        .comic-block { display: grid; width: 100%; gap: 0;
+                       /* columns/rows are set inline per band: subunits of
+                          1/6 unit keep 8/3-wide covers exactly on-grid */ }
+        /* gutters come from cell padding, so a frame's aspect stays EXACT */
+        .comic-block > * { min-width: 0; min-height: 0; padding: 6px;
+                           position: relative; }
         .rspan-2 { grid-row: span 2; } .rspan-3 { grid-row: span 3; }
         .rspan-4 { grid-row: span 4; } .rspan-5 { grid-row: span 5; }
         .rspan-6 { grid-row: span 6; } .rspan-7 { grid-row: span 7; }
