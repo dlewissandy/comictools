@@ -125,19 +125,18 @@ async def test_asset_catalog_drawer(user: User) -> None:
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
     user.find("Assets").click()
-    await user.should_see("Asset Catalog")
-    await user.should_see("Fortune Teller Tent")     # a setting card
-    await user.should_see("Use here")                # the conversational action
+    await user.should_see("in the studio")           # header with total count
+    await user.should_see("Fortune Teller Tent")     # a setting tile
 
     # filter by type: styles shows studio-wide styles, hides the props
     from nicegui import ui as _ui
     kind_toggle = user.find(_ui.toggle).elements.pop()
-    kind_toggle.set_value("styles")
+    kind_toggle.set_value("style")
     await user.should_see("studio-wide")
     await user.should_not_see("cracked crystal ball")
     # props: drawn from the settings' prop lists
-    kind_toggle.set_value("props")
+    kind_toggle.set_value("prop")
     await user.should_see("cracked crystal ball")
     # variants: wardrobe per character, e.g. Brassic's gnome disguise
-    kind_toggle.set_value("variants")
+    kind_toggle.set_value("variant")
     await user.should_see("Gnome Disguise")

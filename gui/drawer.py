@@ -1,11 +1,13 @@
 """
-The asset catalog drawer: a visual, image-first palette of every reusable
-asset in the studio — characters, settings, props, styles — summonable from
-any view and filterable by type.  You flip through it while you work; you
-don't travel to it.
+The asset catalog drawer: the studio's palette, on the left of every view.
 
-Cards act through the conversation: "Use here" posts a message to the CURRENT
-view's coauthor, which imports/attaches the asset as the context demands.
+Designed like a contact sheet: a dense thumbnail grid so many assets are
+visible at once, grouped by type, filterable and searchable.  Clicking a tile
+IS the action — it asks the current view's coauthor to use that asset here.
+A small corner icon opens the asset in a new window instead.
+
+Reusable creative assets only (characters, variants, settings, props,
+styles).  Issue work-products (panels, covers, pages) are never listed.
 """
 import os
 from loguru import logger
@@ -14,99 +16,125 @@ from nicegui import ui
 from schema import CharacterModel, CharacterVariant, ComicStyle, Series, Setting
 from storage.generic import GenericStorage
 
-KINDS = ["all", "characters", "variants", "settings", "props", "styles"]
+# type -> (plural label, icon) in display order
+KIND_META = {
+    "character": ("Characters", "🎭"),
+    "variant":   ("Variants", "👤"),
+    "setting":   ("Settings", "🏛️"),
+    "prop":      ("Props", "🎗️"),
+    "style":     ("Styles", "🎨"),
+}
 
 
 def _catalog(storage: GenericStorage):
     """
     Yield catalog entries: (kind, title, subtitle, image, use_message, open_url).
-    kind is singular ('character', 'setting', 'prop', 'style').
     """
     for series in storage.read_all_objects(Series, order_by="name"):
         sid = series.series_id
         for c in storage.read_all_objects(CharacterModel, {"series_id": sid}):
-            yield ("character", c.name, f"character · {series.name}",
+            yield ("character", c.name, f"{series.name}",
                    storage.find_character_image(series_id=sid, character_id=c.character_id),
                    f"Use the character '{c.name}' (id: {c.character_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
                    f"/series/{sid}/character/{c.character_id}")
             for v in storage.read_all_objects(CharacterVariant, {"series_id": sid, "character_id": c.character_id}):
                 vimg = storage.find_variant_image(series_id=sid, character_id=c.character_id, variant_id=v.variant_id)
-                yield ("variant", f"{c.name} — {v.name}", f"variant · {series.name}", vimg,
+                yield ("variant", f"{c.name} — {v.name}", f"{series.name}", vimg,
                        f"Use the variant '{v.name}' (id: {v.variant_id}) of character '{c.name}' "
                        f"(id: {c.character_id}) from the series '{sid}' here as the wardrobe.  "
                        f"Import the character into this series first if needed.",
                        f"/series/{sid}/character/{c.character_id}/variant/{v.variant_id}")
         for s in storage.read_all_objects(Setting, {"series_id": sid}):
             img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
-            yield ("setting", s.name, f"setting · {series.name}", img,
+            yield ("setting", s.name, f"{series.name}", img,
                    f"Use the setting '{s.name}' (id: {s.setting_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
                    f"/series/{sid}/setting/{s.setting_id}")
             for prop in (s.props or []):
-                yield ("prop", prop.name, f"prop · {s.name} · {series.name}", img,
+                yield ("prop", prop.name, f"{s.name} · {series.name}", img,
                        f"Use the prop '{prop.name}' (from the setting '{s.setting_id}' in series '{sid}') here: {prop.description}",
                        f"/series/{sid}/setting/{s.setting_id}")
 
     for style in storage.read_all_objects(ComicStyle, order_by="name"):
         img = style.image.get("art") if isinstance(style.image, dict) else None
         img = img if img and os.path.exists(img) else None
-        yield ("style", style.name, "style · studio-wide", img,
+        yield ("style", style.name, "studio-wide", img,
                f"Use the comic style '{style.name}' (id: {style.style_id}) here.",
                f"/styles/{style.style_id}")
 
 
-_ICONS = {"character": "🎭", "variant": "👤", "setting": "🏛️", "prop": "🎗️", "style": "🎨"}
-
-
 def build_asset_drawer(state):
-    """Create the right-hand catalog drawer and return its toggle callback."""
+    """Create the left-hand catalog drawer and return its toggle callback."""
     from gui.messaging import post_user_message
 
-    drawer = ui.left_drawer(value=False, fixed=True).props('bordered overlay width=340') \
+    drawer = ui.left_drawer(value=False, fixed=True).props('bordered overlay width=480') \
         .classes('bg-gray-100 dark:bg-gray-900')
 
     def refresh():
         drawer.clear()
+        entries = list(_catalog(state.storage))
+        counts = {k: sum(1 for e in entries if e[0] == k) for k in KIND_META}
+
         with drawer:
-            with ui.row().classes('w-full items-center'):
-                ui.label('Asset Catalog').classes('text-lg font-bold')
+            with ui.row().classes('w-full items-center q-px-sm'):
+                ui.label('Assets').classes('text-lg font-bold')
+                ui.label(f"{len(entries)} in the studio").classes('text-xs text-gray-500')
                 ui.space()
                 ui.button(icon='refresh', on_click=refresh).props('flat round dense')
-            search = ui.input(placeholder='search…').props('dense outlined clearable').classes('w-full')
-            kind_filter = ui.toggle(KINDS, value="all").props('dense no-caps spread').classes('w-full')
-            grid = ui.column().classes('w-full').style('gap: 10px;')
+            search = ui.input(placeholder='search assets…') \
+                .props('dense outlined clearable').classes('w-full q-px-sm')
+            kind_filter = ui.toggle(
+                {"all": "all", **{k: f"{icon} {counts[k]}" for k, (_, icon) in KIND_META.items()}},
+                value="all").props('dense no-caps unelevated toggle-color=primary').classes('q-px-sm')
+            body = ui.column().classes('w-full q-px-sm').style('gap: 4px;')
 
-            entries = list(_catalog(state.storage))
+            def tile(kind, title, subtitle, img, use_msg, url):
+                with ui.element('div').classes('cursor-pointer').style(
+                        'width: 31%; min-width: 130px;') as card:
+                    with ui.element('div').classes('relative rounded-md overflow-hidden border '
+                                                   'border-gray-300 dark:border-gray-700'):
+                        if img:
+                            ui.image(source=img).style('aspect-ratio: 1/1; object-fit: cover; display:block;')
+                        else:
+                            ui.label(KIND_META[kind][1]).classes('flex items-center justify-center w-full') \
+                                .style('aspect-ratio: 1/1; font-size: 42px; background: rgba(127,127,127,.12);')
+                        ui.button(icon='open_in_new').props('flat round dense size=xs') \
+                            .classes('absolute top-0 right-0 bg-white/70 dark:bg-black/50') \
+                            .on('click.stop', lambda _, u=url: ui.run_javascript(f"window.open('{u}', '_blank');"))
+                    ui.label(title).classes('text-xs font-medium w-full').style(
+                        'white-space: nowrap; overflow: hidden; text-overflow: ellipsis;')
+                    ui.label(subtitle).classes('text-xs text-gray-500 w-full').style(
+                        'white-space: nowrap; overflow: hidden; text-overflow: ellipsis;')
+                    ui.tooltip(f"Add to what you're working on — {title} ({subtitle})")
+
+                def _use(msg=use_msg):
+                    post_user_message(state, msg)
+                    drawer.hide()
+                card.on('click', lambda _, m=use_msg: _use(m))
 
             def render():
-                grid.clear()
+                body.clear()
                 term = (search.value or "").lower()
-                kind = (kind_filter.value or "all").rstrip("s")  # 'characters' -> 'character'
-                with grid:
+                selected = kind_filter.value or "all"
+                with body:
                     shown = 0
-                    for k, title, subtitle, img, use_msg, url in entries:
-                        if kind != "all" and k != kind:
+                    for kind, (label, icon) in KIND_META.items():
+                        if selected != "all" and kind != selected:
                             continue
-                        if term and term not in title.lower() and term not in subtitle.lower():
+                        matches = [e for e in entries if e[0] == kind and
+                                   (not term or term in e[1].lower() or term in e[2].lower())]
+                        if not matches:
                             continue
-                        shown += 1
-                        with ui.card().tight().classes('w-full'):
-                            if img:
-                                ui.image(source=img).style('height: 120px; object-fit: cover;')
-                            with ui.card_section().classes('q-pa-sm w-full'):
-                                ui.label(f"{_ICONS.get(k, '📦')} {title}").classes('font-bold text-sm')
-                                ui.label(subtitle).classes('text-xs text-gray-500')
-                                with ui.row().classes('w-full q-mt-xs').style('gap: 6px;'):
-                                    def _use(msg=use_msg):
-                                        post_user_message(state, msg)
-                                        drawer.hide()
-                                    ui.button('Use here', on_click=lambda _, m=use_msg: _use(m)) \
-                                        .props('dense outline no-caps size=sm')
-                                    ui.button('Open', on_click=lambda _, u=url: ui.run_javascript(
-                                        f"window.open('{u}', '_blank');")).props('dense flat no-caps size=sm')
+                        shown += len(matches)
+                        if selected == "all":
+                            ui.label(f"{label} ({len(matches)})").classes(
+                                'text-xs uppercase text-gray-500 q-mt-sm')
+                        with ui.row().classes('w-full').style('gap: 2%; row-gap: 10px;'):
+                            for e in matches:
+                                tile(*e)
                     if not shown:
-                        ui.label('nothing matches').classes('text-sm text-gray-500')
+                        ui.label('nothing matches').classes('text-sm text-gray-500 q-mt-md')
 
             search.on_value_change(render)
             kind_filter.on_value_change(render)
