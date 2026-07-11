@@ -597,8 +597,10 @@ def takes_row(state, board, featured: str | None):
 
     def tear_up_take(img: str):
         # into the wastebasket, not gone: dot-prefixed files vanish from the
-        # takes wall and the receipt's UNDO chip brings them back
-        trash = os.path.join(os.path.dirname(img), f".trash--{os.path.basename(img)}")
+        # takes wall and the receipt's UNDO chip brings them back (unique
+        # names so tearing up a same-named take never clobbers an older one)
+        from uuid import uuid4
+        trash = os.path.join(os.path.dirname(img), f".trash--{uuid4().hex[:6]}--{os.path.basename(img)}")
         try:
             os.replace(img, trash)
         except OSError:
@@ -1712,7 +1714,9 @@ def light_table(state: APPState, panel, scene, setting,
                     def drop_reference(path=r["img"]):
                         # into the wastebasket, not gone: a dot-prefixed file
                         # disappears from listings and comes back on undo
-                        trash = os.path.join(os.path.dirname(path), f".trash--{os.path.basename(path)}")
+                        from uuid import uuid4
+                        trash = os.path.join(os.path.dirname(path),
+                                             f".trash--{uuid4().hex[:6]}--{os.path.basename(path)}")
                         try:
                             os.replace(path, trash)
                         except OSError:

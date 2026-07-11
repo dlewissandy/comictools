@@ -489,8 +489,11 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
         data=raw_image,
     )
     logger.debug(f"Cover image uploaded successfully with locator: {locator}")
-    cover.image = locator
-    storage.update_object(data=cover)
+    # persist onto a FRESH read: the render takes minutes and the author may
+    # have kept working on the cover meanwhile — never write back a stale copy
+    fresh = storage.read_object(cls=Cover, primary_key=cover.primary_key) or cover
+    fresh.image = locator
+    storage.update_object(data=fresh)
     note = ""
     if missing:
         note = "  NOTE: rendered without: " + "; ".join(missing) + ".  Generate those references and re-render for better consistency."
@@ -1550,8 +1553,11 @@ panels composed on top of this background match the rest of the issue.
         name=f"{setting_id}-{style_id}-background",
     )
 
-    setting.images[style_id] = locator
-    storage.update_object(data=setting)
+    # persist onto a FRESH read: the render takes minutes and the author may
+    # have kept working on the setting meanwhile
+    fresh = storage.read_object(cls=Setting, primary_key=setting.primary_key) or setting
+    fresh.images[style_id] = locator
+    storage.update_object(data=fresh)
     state.is_dirty = True
     return f"Master background for '{setting.name}' rendered in style '{style_id}': {locator}"
 
@@ -1768,8 +1774,11 @@ must look; keep them strictly on-model."""
         name=f"{panel_id}-render",
     )
 
-    panel.image = locator
-    storage.update_object(data=panel)
+    # persist onto a FRESH read: the render takes minutes and the author may
+    # have kept working on the panel meanwhile — never write back a stale copy
+    fresh = storage.read_object(cls=Panel, primary_key=panel.primary_key) or panel
+    fresh.image = locator
+    storage.update_object(data=fresh)
     state.is_dirty = True
 
     note = ""
@@ -2104,8 +2113,11 @@ This is a cut-out acetate to be layered over a background."""
     with open(filepath, "wb") as f:
         f.write(image_bytes)
 
-    panel.figure_images[f"{character_id}/{variant_id}"] = filepath
-    storage.update_object(data=panel)
+    # persist onto a FRESH read of the board (panel or cover): the pose takes
+    # a while and the author kept arranging the table meanwhile
+    fresh = storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
+    fresh.figure_images[f"{character_id}/{variant_id}"] = filepath
+    storage.update_object(data=fresh)
     state.is_dirty = True
     return f"Posed figure acetate for {character_id} ({variant_id}): {filepath}"
 
@@ -2442,12 +2454,29 @@ else must remain PIXEL-IDENTICAL — same composition, same style, same colors."
     group_name = ('background' if layer == 'background'
                   else layer.split('/', 1)[-1].replace('-', ' '))
     members = list(lifted_keys)
-    members.append('background/plate' if kind == 'background' else layer)
-    existing = dict(panel.layer_groups or {})
-    existing[f"{group_name} (split)"] = members
-    panel.layer_groups = existing
+    base_key = 'background/plate' if kind == 'background' else layer
+    members.append(base_key)
 
-    storage.update_object(data=panel)
+    # persist the split's DELTAS onto a fresh read of the board: the renders
+    # above take minutes and the author kept working the table meanwhile
+    fresh = storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
+    if fresh is not panel:
+        for k in lifted_keys:
+            if k in (panel.figure_images or {}):
+                fresh.figure_images[k] = panel.figure_images[k]
+            if k in (panel.figure_blocking or {}):
+                fresh.figure_blocking[k] = panel.figure_blocking[k]
+        if base_key in (panel.figure_images or {}):
+            fresh.figure_images[base_key] = panel.figure_images[base_key]
+        for r in (panel.character_references or []):
+            if not any(c.character_id == r.character_id and c.variant_id == r.variant_id
+                       for c in (fresh.character_references or [])):
+                fresh.character_references = (fresh.character_references or []) + [r]
+    groups = dict(fresh.layer_groups or {})
+    groups[f"{group_name} (split)"] = members
+    fresh.layer_groups = groups
+
+    storage.update_object(data=fresh)
     state.is_dirty = True
     matched = f"  Recognized cast: {'; '.join(identified)}." if identified else ""
     return (f"Split layer '{layer}' into {len(lifted)} acetate(s): {names} "

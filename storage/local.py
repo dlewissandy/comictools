@@ -364,7 +364,12 @@ class LocalStorage(GenericStorage):
 
         if not os.path.exists(path):
             os.makedirs(path)
+        # never clobber an existing image: same-named uploads get a unique stem
+        name = os.path.basename(name)
         filepath = os.path.join(path, name)
+        if os.path.exists(filepath):
+            stem, ext = os.path.splitext(name)
+            filepath = os.path.join(path, f"{stem}--{uuid4().hex[:6]}{ext}")
         with open(filepath, 'wb') as f:
             f.write(data.read())
             f.flush()

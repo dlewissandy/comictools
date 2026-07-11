@@ -118,7 +118,13 @@ def _apply(state: APPState):
         ui.notify("Original image is missing.", type="negative")
         return
 
+    # THE ORIGINAL GOES TO THE WASTEBASKET FIRST: applying an edit must
+    # never be the only copy's last moment (dot-prefixed files are invisible
+    # to listings; the receipt's UNDO chip restores the pre-edit art).
+    backup = os.path.join(os.path.dirname(original),
+                          f".trash--{uuid4().hex[:6]}--{os.path.basename(original)}")
     try:
+        shutil.copyfile(original, backup)
         shutil.copyfile(chosen, original)
     except Exception as e:
         logger.exception("Failed to overwrite original image")
@@ -128,6 +134,11 @@ def _apply(state: APPState):
     _cleanup_choices(state, keep_original=True)
     state.image_editor_image = original
     state.is_dirty = True
+
+    def undo(backup=backup, original=original):
+        shutil.copyfile(backup, original)
+    from gui.light_table import table_receipt
+    table_receipt(state, "🖌 applied the edit — the artwork was repainted in place", undo=undo)
 
     # Return to editor view
     new_sel = [s for s in state.selection if s.kind != SelectedKind.IMAGE_EDITOR_CHOICES]

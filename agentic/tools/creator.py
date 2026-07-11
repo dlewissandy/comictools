@@ -88,9 +88,26 @@ def creator(wrapper: RunContextWrapper, obj: BaseModel, overwrite: bool=False) -
 
     pk = obj.primary_key
 
-    if storage.read_object(cls=obj.__class__, primary_key=pk) is not None and not overwrite:
+    existing = storage.read_object(cls=obj.__class__, primary_key=pk)
+    if existing is not None and not overwrite:
         logger.error(f"{obj.__class__.__name__} with key '{obj.primary_key}' already exists.")
         return f"{obj.__class__.__name__} with key '{obj.primary_key}' already exists."
+    if existing is not None:
+        # overwriting an existing asset: snapshot its JSON into the
+        # wastebasket first — a re-created setting/prop/outfit must never
+        # silently erase the prose and image locators of the old one
+        try:
+            import os
+            import shutil
+            from storage.filepath import obj_to_filepath
+            fp = obj_to_filepath(existing, base_path=storage.base_path)
+            if os.path.exists(fp):
+                bkp = os.path.join(os.path.dirname(fp),
+                                   f".trash--{uuid4().hex[:6]}--{os.path.basename(fp)}")
+                shutil.copyfile(fp, bkp)
+                logger.info(f"pre-overwrite snapshot: {bkp}")
+        except Exception as e:
+            logger.warning(f"pre-overwrite snapshot skipped: {e}")
 
     logger.info(f"The key '{obj.primary_key}' is available.")
     storage.create_object(data=obj, overwrite=overwrite)

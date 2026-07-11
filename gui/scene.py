@@ -242,13 +242,31 @@ def view_scene(state: APPState):
                             # copy: a new panel that starts from THIS panel's
                             # table (layers, blocking, letters), not blank
                             def _copy(src_panel=panel):
+                                import shutil
                                 from uuid import uuid4
+                                from storage.filepath import obj_to_imagepath
                                 dup = src_panel.model_copy(deep=True)
                                 dup.panel_id = str(uuid4())
                                 dup.panel_number = max((p.panel_number for p in panels), default=0) + 1
                                 dup.name = f"{src_panel.name} (copy)"
                                 dup.image = None   # the copy starts unlocked
                                 storage.create_object(dup)
+                                # the copy gets its OWN acetate files — sharing
+                                # the original's would break the copy the day
+                                # the original is deleted or its figures redone
+                                fig_dir = os.path.join(os.path.dirname(
+                                    obj_to_imagepath(obj=dup, base_path=storage.base_path)), 'figures')
+                                os.makedirs(fig_dir, exist_ok=True)
+                                for key, path in list((dup.figure_images or {}).items()):
+                                    if not (path and os.path.exists(path)):
+                                        continue
+                                    new_path = os.path.join(fig_dir, os.path.basename(path))
+                                    try:
+                                        shutil.copyfile(path, new_path)
+                                        dup.figure_images[key] = new_path
+                                    except OSError:
+                                        pass
+                                storage.update_object(dup)
                                 try:
                                     with state.history:
                                         with comic_chat_message(name='You', sent=True).classes('w-full'):
