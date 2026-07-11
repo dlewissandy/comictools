@@ -151,7 +151,8 @@ PERSONAS = {
         make sure the scene has the right setting (read_all_settings, then
         update_scene_setting — create_setting only if nothing fits); add
         scene props if named (update_scene_props); write minimal purposeful
-        letters (update_panel_dialogue); then render a take with
+        letters (update_panel_dialogue); pose each cast member with
+        generate_figure_acetate; then render a take with
         generate_panel_image.   Report what you laid on the table in one
         short summary.
         """,

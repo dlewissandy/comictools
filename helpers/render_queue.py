@@ -28,8 +28,9 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
 
     def _announce(text: str, image: str | None = None):
         try:
+            from gui.avatars import comic_chat_message
             with state.history:
-                with ui.chat_message(name=role, sent=False).classes('w-full'):
+                with comic_chat_message(name=role, sent=False).classes('w-full'):
                     ui.markdown(text)
                     if image:
                         ui.image(source=image).classes('rounded-md q-mt-xs').style('max-width: 320px;')

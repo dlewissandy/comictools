@@ -39,9 +39,13 @@ def light_table(state: APPState, panel, scene, setting,
 
     figures = []
     for i, ref in enumerate(panel.character_references or []):
-        img = storage.find_variant_image(series_id=series_id, character_id=ref.character_id,
-                                         variant_id=ref.variant_id)
-        figures.append({"ref": ref, "img": img if img and os.path.exists(img) else None,
+        key = f"{ref.character_id}/{ref.variant_id}"
+        posed = (panel.figure_images or {}).get(key)
+        posed = posed if posed and os.path.exists(posed) else None
+        sheet = storage.find_variant_image(series_id=series_id, character_id=ref.character_id,
+                                           variant_id=ref.variant_id)
+        sheet = sheet if sheet and os.path.exists(sheet) else None
+        figures.append({"ref": ref, "img": posed or sheet, "posed": posed is not None,
                         "on": True, "pos": ["left", "center", "right"][i % 3]})
 
     props = [{"name": p.name, "on": True} for p in ((scene.props or []) if scene is not None else [])]
@@ -68,8 +72,9 @@ def light_table(state: APPState, panel, scene, setting,
 
             visible = [f for f in figures if f["on"] and f["img"]]
             for f in visible:
+                cls = 'rough-figure rough-figure-posed' if f["posed"] else 'rough-figure'
                 ui.image(source=f["img"]).props('fit=contain') \
-                    .classes('rough-figure').style(f'left: {_POS_X[f["pos"]]}%; z-index: 2;')
+                    .classes(cls).style(f'left: {_POS_X[f["pos"]]}%; z-index: 2;')
 
             live_props = [p["name"] for p in props if p["on"]]
             if live_props:
@@ -96,6 +101,17 @@ def light_table(state: APPState, panel, scene, setting,
                         .style(f'left: {x}%; top: {top_y + (i % 2) * 16}%; z-index: 4;')
                 for n in [n for n in panel.narration if n.position.value == 'bottom'][:1]:
                     ui.label(n.text).classes('rough-narration').style('bottom: 4%; z-index: 4;')
+
+    # ---- POSE: render the figure acetate in the background ---------------
+    def pose_figure(character_id: str, variant_id: str):
+        from agentic.tools.imaging import generate_figure_acetate_body
+        from helpers.render_queue import enqueue_renders
+        enqueue_renders(state, [(
+            f"posing {character_id} for panel {panel.panel_number}",
+            lambda: generate_figure_acetate_body(
+                state, series_id, panel.issue_id, panel.scene_id,
+                panel.panel_id, character_id, variant_id),
+        )], role="the Penciller")
 
     # ---- one acetate row on the table -----------------------------------
     def eye(layer: dict):
@@ -192,7 +208,11 @@ def light_table(state: APPState, panel, scene, setting,
                             .on('click', lambda _, ref=f["ref"]: pick_variant(ref))
                     else:
                         ui.icon('person').classes('text-lg').style('width: 40px; text-align: center;')
-                    ui.label(f["ref"].character_id.replace('-', ' ').title()).classes('text-sm')
+                    name_lbl = f["ref"].character_id.replace('-', ' ').title()
+                    ui.label(name_lbl + ('' if f["posed"] else ' — unposed')).classes('text-sm')
+                    ui.button(icon='accessibility_new').props('flat round dense size=xs') \
+                        .tooltip('Pose this figure for the shot' if not f["posed"] else 'Re-pose for the shot') \
+                        .on('click', lambda _, r=f["ref"]: pose_figure(r.character_id, r.variant_id))
                     ui.space()
                     sel = ui.select(['left', 'center', 'right'], value=f["pos"]).props('dense borderless options-dense')
 
@@ -256,8 +276,9 @@ def light_table(state: APPState, panel, scene, setting,
                                     panel.character_references = (panel.character_references or []) + [
                                         CharacterRef(series_id=series_id, character_id=ch.character_id, variant_id=v.id)]
                                     storage.update_object(panel)
-                                    _receipt(f"🎭 laid **{ch.name}** ({v.id}) on the table")
+                                    _receipt(f"🎭 laid **{ch.name}** ({v.id}) on the table — posing them for the shot…")
                                     dlg.close()
+                                    pose_figure(ch.character_id, v.id)
                                     state.refresh_details()
                                 card.on('click', lambda _, ch=ch, v=v: lay(ch, v))
                 dlg.open()
@@ -328,7 +349,7 @@ def light_table(state: APPState, panel, scene, setting,
 
             ui.button('Ink this rough', icon='brush').props('unelevated dense') \
                 .classes('q-mt-sm self-start').on('click', lambda _: ink())
-        with ui.column().classes('flex-grow').style('min-width: 0;'):
+        with ui.column().style('flex: 1 1 0; min-width: 0;'):
             with ui.row().classes('w-full items-center flex-nowrap').style('gap: 4px;'):
                 ui.label('THE ROUGH').classes('comic-label-sm')
                 ui.space()
@@ -351,7 +372,7 @@ def light_table(state: APPState, panel, scene, setting,
             from gui.elements import markdown_field_editor
             markdown_field_editor(state, "Visual Description", panel.description, header_size=3)
         if featured is not None:
-            with ui.column().classes('flex-grow').style('min-width: 0;'):
+            with ui.column().style('flex: 1 1 0; min-width: 0;'):
                 ui.label('THE PRINT').classes('comic-label-sm')
                 with ui.element('div').classes('rough-canvas').style(f'aspect-ratio: {aspect};'):
                     ui.image(source=featured).props('fit=cover') \

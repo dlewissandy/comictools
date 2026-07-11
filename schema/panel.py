@@ -25,6 +25,7 @@ class Panel(BaseModel):
     
     # IMAGES
     image: str | None = Field(None, description="The selected image for this panel.  default to None")
+    figure_images: dict[str, str] = Field(default_factory=dict, description="Posed figure acetates for this panel: maps 'character_id/variant_id' to a transparent cut-out image posed for this moment.  Default to empty dict.")
     reference_images: list[ReferenceImage] = Field(..., description="The reference images for the panel.  default to empty list")
 
     @property

@@ -100,6 +100,7 @@ from .navigation import (
 )
 
 from .imaging import (
+    generate_figure_acetate,
     generate_publisher_logo_reference_image,
     delete_publisher_logo_reference_image,
     generate_cover_image,
@@ -174,6 +175,7 @@ __all__ = [
     "update_scene_setting",
     "update_scene_cast",
     "update_panel_cast",
+    "generate_figure_acetate",
     "update_panel_dialogue",
     "update_scene_blocking",
     "update_scene_props",

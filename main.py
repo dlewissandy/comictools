@@ -165,6 +165,10 @@ def init_layout(logger):
         .rough-figure { position: absolute; bottom: 2%; height: 52%;
                         max-width: 46%; transform: translateX(-50%);
                         filter: drop-shadow(2px 2px 0 rgba(0,0,0,.25)); }
+        /* a POSED acetate is a real cut-out: it stands taller and grounded */
+        .rough-figure.rough-figure-posed { height: 78%; bottom: 0;
+                        max-width: 40%;
+                        filter: drop-shadow(3px 3px 2px rgba(0,0,0,.3)); }
         .rough-balloon { position: absolute; transform: translateX(-50%);
                          background: #fff; color: #1a1512;
                          border: 2px solid var(--ink); border-radius: 12px;

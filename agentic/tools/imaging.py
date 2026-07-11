@@ -1867,3 +1867,98 @@ def render_missing_panels(wrapper: RunContextWrapper[APPState], series_id: str, 
     enqueue_renders(state, jobs, role="the Penciller")
     return (f"Started rendering {len(jobs)} panel(s) in the background — receipts will land in the "
             f"chat as each one finishes.  The conversation stays open meanwhile.")
+
+
+# ---------------------------------------------------------------------------
+# FIGURE ACETATES: a posed, scene-scaled cut-out of one character for one
+# panel — the figure layer the light table stacks over the background.
+# ---------------------------------------------------------------------------
+def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id: str,
+                                 panel_id: str, character_id: str, variant_id: str) -> str:
+    """Render a transparent posed figure for a panel and remember it on the
+    panel.  Callable directly from the GUI (background job) or via the tool."""
+    from storage.filepath import obj_to_imagepath
+    from helpers.generator import invoke_edit_image_api
+
+    storage: GenericStorage = state.storage
+    panel: Panel = storage.read_object(cls=Panel, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
+    if panel is None:
+        return f"Panel '{panel_id}' not found."
+    scene: SceneModel = storage.read_object(cls=SceneModel, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
+    style: ComicStyle = storage.read_object(cls=ComicStyle, primary_key={"style_id": scene.style_id}) if scene else None
+    variant: CharacterVariant = storage.read_object(cls=CharacterVariant, primary_key={
+        "series_id": series_id, "character_id": character_id, "variant_id": variant_id})
+    if variant is None:
+        return f"Variant '{variant_id}' of '{character_id}' not found."
+
+    # the best on-model reference we have: styled sheet, else any sheet
+    sheet = variant.images.get(scene.style_id) if (scene and variant.images) else None
+    if not (sheet and os.path.exists(sheet)):
+        sheet = storage.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant_id)
+    if not (sheet and os.path.exists(sheet)):
+        return (f"No reference art for '{character_id}' ({variant_id}) yet — "
+                f"create the variant's reference sheet first.")
+
+    prompt = f"""A single FULL-BODY figure of {character_id.replace('-', ' ')} exactly as shown on
+the reference sheet: same face, same costume, same colors — strictly on-model.
+
+Pose the figure for THIS moment:
+# Beat
+{panel.beat or scene.story if scene else panel.beat}
+# Panel description
+{panel.description}
+{f"# Blocking{chr(10)}{scene.blocking}" if scene and scene.blocking else ""}
+
+Render ONLY the figure — full body, head to toe, feet at the bottom edge —
+on a COMPLETELY TRANSPARENT background.  No scenery, no ground plane, no
+shadow beyond a small contact shadow at the feet, no frame, no text, no
+speech balloons.  This is a cut-out acetate to be layered over a background.
+
+{format_comic_style(style, include_bubble_styles=False, heading_level=1) if style else ""}
+"""
+    image_bytes = invoke_edit_image_api(
+        prompt,
+        reference_images=[sheet],
+        size="1024x1536",
+        quality=IMAGE_QUALITY.MEDIUM,
+        background="transparent",
+    )
+
+    images_dir = obj_to_imagepath(obj=panel, base_path=storage.base_path)
+    figures_dir = os.path.join(os.path.dirname(images_dir), "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    filepath = os.path.join(figures_dir, f"{character_id}--{variant_id}.png")
+    with open(filepath, "wb") as f:
+        f.write(image_bytes)
+
+    panel.figure_images[f"{character_id}/{variant_id}"] = filepath
+    storage.update_object(data=panel)
+    state.is_dirty = True
+    return f"Posed figure acetate for {character_id} ({variant_id}): {filepath}"
+
+
+@function_tool
+def generate_figure_acetate(wrapper: RunContextWrapper, series_id: str, issue_id: str,
+                            scene_id: str, panel_id: str, character_id: str, variant_id: str) -> str:
+    """
+    Render a POSED FIGURE ACETATE for one character in one panel: a full-body,
+    transparent-background cut-out of the character posed for this panel's
+    moment, scaled for layering over the setting's master background on the
+    light table.   Use after casting a character into the panel, or to re-pose
+    a figure when the beat/blocking changes.
+
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the issue.
+        scene_id: The ID of the scene the panel belongs to.
+        panel_id: The ID of the panel.
+        character_id: The character to pose.
+        variant_id: The variant (wardrobe) they wear.
+
+    Returns:
+        A status message with the acetate's locator.
+    """
+    return generate_figure_acetate_body(wrapper.context, series_id, issue_id, scene_id,
+                                        panel_id, character_id, variant_id)
