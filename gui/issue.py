@@ -5,7 +5,7 @@ from gui.elements import (
     markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes, crud_button, post_user_message,
     CrudButtonKind
     )
-from schema import ComicStyle, Issue, Cover, SceneModel, StyleExample
+from schema import ComicStyle, Issue, Cover, Panel, SceneModel, StyleExample
 from gui.state import APPState
 from gui.messaging import post_user_message
 from gui.selection import SelectionItem, SelectedKind
@@ -42,9 +42,24 @@ def view_issue(state:APPState):
             logger.warning(f"Issue {issue.id} has style set to {issue.style_id  } but style not found.")
 
     
+    # Production pulse: rendered/total panels across the issue's scenes.
+    def _scene_counts(scene_id):
+        panels = storage.read_all_objects(Panel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
+        done = sum(1 for p in panels if p.image and os.path.exists(p.image))
+        return done, len(panels)
+
+    scenes_all = storage.read_all_objects(SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id})
+    done_total = total = 0
+    for sc in scenes_all:
+        d, t = _scene_counts(sc.scene_id)
+        done_total += d; total += t
+
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
+            if total:
+                color = 'green' if done_total == total else 'orange'
+                ui.badge(f"{done_total}/{total} panels rendered", color=color).classes('self-center q-ml-md')
             ui.space()
             ui.button('Read', icon='menu_book').props('rounded') \
                 .tooltip('Read the issue front to back') \
@@ -112,7 +127,7 @@ def view_issue(state:APPState):
                 get_image_locator=lambda scene: storage.find_scene_image(series_id=series_id, issue_id=issue_id, scene_id=scene.scene_id),
                 kind=SelectedKind.SCENE,
                 aspect_ratio="16/9",
-                get_name=lambda i,scene: f"Scene {i+1}:{scene.name}",
+                get_name=lambda i,scene: (lambda d,t: f"Scene {i+1}: {scene.name}" + (f"  ·  {d}/{t} 🎨" if t else "  ·  no panels"))(*_scene_counts(scene.scene_id)),
                 get_markdown=lambda scene: scene.story,
                 number_of_columns=3
             )                

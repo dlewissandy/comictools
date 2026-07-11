@@ -1593,3 +1593,33 @@ def export_issue_pdf(wrapper: RunContextWrapper[APPState], series_id: str, issue
         note = f"  Still missing for a complete issue: " + "; ".join(missing)
     state.is_dirty = True
     return f"Issue '{issue.name}' bound to {output} ({page_count} pages).{note}"
+
+
+@function_tool
+def preflight_issue(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+    """
+    Production preflight: everything standing between this issue and a complete,
+    bindable book — unrendered panels, missing covers.   Run this before export,
+    or whenever the user asks 'what's left?'.
+
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the issue.
+
+    Returns:
+        A human-readable completeness report.
+    """
+    from helpers.binder import collect_issue
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    front, panels, back, missing = collect_issue(storage, series_id, issue_id)
+    total = len(panels) + len(missing) - (0 if front else 1)
+    report = [f"Rendered panels: {len(panels)}",
+              f"Front cover: {'rendered' if front else 'MISSING'}",
+              f"Back cover: {'rendered' if back else 'none'}"]
+    if missing:
+        report.append("To complete the issue:")
+        report += [f"  - {m}" for m in missing]
+    else:
+        report.append("The issue is complete — ready to export (export_issue_pdf).")
+    return "\n".join(report)

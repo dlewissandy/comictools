@@ -74,7 +74,7 @@ from agentic.tools.updater import (
     update_setting_props,
     update_cover_setting,
 )
-from agentic.tools.imaging import generate_setting_background, generate_panel_image, export_issue_pdf
+from agentic.tools.imaging import generate_setting_background, generate_panel_image, export_issue_pdf, preflight_issue
 from agentic.tools.library import list_library_assets, import_character, import_setting
 from agentic.tools.imaging import (
     delete_character_style_example,
@@ -230,6 +230,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Reorder
         move_scene,
         # Publish
+        preflight_issue,
         export_issue_pdf,
         # Delete
         delete_issue,
