@@ -25,7 +25,7 @@ def view_all_publishers(state: APPState):
     storage: GenericStorage = state.storage
     with state.details:
         packer = PagePacker(12)
-        with ui.element('div').classes('comic-mosaic w-full q-mt-md'):
+        with ui.element('div').classes('mosaic-host q-mt-md'), ui.element('div').classes('comic-mosaic w-full'):
             view_all_instances(
                 state=state,
                 get_image_locator=lambda publisher: publisher.image,

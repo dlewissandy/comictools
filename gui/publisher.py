@@ -71,7 +71,7 @@ def view_publisher(state: APPState):
         from schema import Series
         from gui.elements import PagePacker
         packer = PagePacker(12)
-        with ui.element('div').classes('comic-mosaic w-full'):
+        with ui.element('div').classes('mosaic-host'), ui.element('div').classes('comic-mosaic w-full'):
             view_all_instances(
                 state=state,
                 get_instances=lambda: [s for s in storage.read_all_objects(Series, order_by="name")

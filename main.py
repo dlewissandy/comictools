@@ -105,9 +105,13 @@ def init_layout(logger):
                         margin-bottom: 10px; }
 
         /* the page grid: panels stitched with gutters, nothing floating */
+        /* the page is the size container: cq units inside children resolve
+           against ITS width (container units on the container itself fall
+           back to the viewport — that was the scaling bug). */
         .comic-page { display: grid; grid-template-columns: repeat(12, 1fr);
                       gap: 12px; width: 100%; align-items: stretch;
-                      grid-auto-flow: dense; }
+                      grid-auto-flow: dense; container-type: inline-size; }
+        .mosaic-host { container-type: inline-size; width: 100%; }
         .flow-caption { display: flex; flex-direction: column; align-items: flex-start;
                         justify-content: center; gap: 6px; min-height: 90px; }
 
@@ -115,10 +119,9 @@ def init_layout(logger):
            units (via container query), each panel spans cols AND rows by its
            aspect, dense flow fills holes in both directions. */
         .comic-mosaic { display: grid; grid-template-columns: repeat(12, 1fr);
-                        gap: 12px; grid-auto-flow: dense;
-                        container-type: inline-size;
-                        /* SQUARE units: rows equal columns; the packer rules
-                           the page with explicit placements. */
+                        gap: 12px;
+                        /* SQUARE units: rows equal columns, sized from the
+                           ANCESTOR container's width. */
                         grid-auto-rows: calc((100cqw - 132px) / 12); }
         .rspan-2 { grid-row: span 2; } .rspan-3 { grid-row: span 3; }
         .rspan-4 { grid-row: span 4; } .rspan-5 { grid-row: span 5; }
@@ -127,7 +130,8 @@ def init_layout(logger):
         .rspan-10 { grid-row: span 10; } .rspan-12 { grid-row: span 12; }
         /* the panel FRAME fills its region; the art sits inside untouched —
            object-fit: contain never crops or distorts */
-        .mosaic-card { width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .mosaic-card { width: 100%; height: 100%; display: flex;
+                       flex-direction: column; margin: 0 !important; }
         .mosaic-card .q-img { flex: 1 1 0; min-height: 0; }
         .mosaic-card .q-img__image { object-fit: contain; }
         .comic-page > * { min-width: 0; }
