@@ -538,6 +538,34 @@ def create_styled_image_for_character_variant(
         style_description=style_description
     )
     
+    # A variant is a composition: base character + outfit + props.  Their
+    # reference art anchors the render, same as panels composite the setting.
+    from schema import Outfit, PropAsset
+    reference_images: list[str] = []
+    missing: list[str] = []
+    if variant.outfit_id:
+        outfit = storage.read_object(Outfit, {"series_id": series_id, "outfit_id": variant.outfit_id})
+        if outfit is None:
+            missing.append(f"outfit '{variant.outfit_id}' (asset not found)")
+        else:
+            art = outfit.images.get(style_id)
+            if art and os.path.exists(art):
+                reference_images.append(art)
+            else:
+                missing.append(f"reference art for outfit '{outfit.name}' in style '{style_id}' (generate_outfit_reference)")
+            prompt += f"\n\n## Outfit: {outfit.name}\n{outfit.description}"
+    for pid in (variant.prop_ids or []):
+        prop = storage.read_object(PropAsset, {"series_id": series_id, "prop_id": pid})
+        if prop is None:
+            missing.append(f"prop '{pid}' (asset not found)")
+            continue
+        art = prop.images.get(style_id)
+        if art and os.path.exists(art):
+            reference_images.append(art)
+        else:
+            missing.append(f"reference art for prop '{prop.name}' in style '{style_id}' (generate_prop_reference)")
+        prompt += f"\n\n## Carried prop: {prop.name}\n{prop.description}"
+
     styled_variant = StyledVariant(
         style_id=style_id,
         variant_id=variant_id,
@@ -550,6 +578,7 @@ def create_styled_image_for_character_variant(
         wrapper=wrapper,
         obj=styled_variant,
         prompt=prompt,
+        reference_images=reference_images,
         aspect_ratio=FrameLayout.LANDSCAPE,
         image_quality=IMAGE_QUALITY.HIGH,
         name=f"{character.name}-{variant.name}-{style.name}-styled-image"
@@ -559,7 +588,10 @@ def create_styled_image_for_character_variant(
     variant.images[style.style_id] = locator
     storage.update_object(data=variant)
 
-    return f"Styled image created successfully with locator: {locator}"
+    note = ""
+    if missing:
+        note = "  NOTE: rendered without: " + "; ".join(missing) + ".  Generate those references and re-render for better consistency."
+    return f"Styled image created successfully with locator: {locator}.{note}"
 
 @function_tool
 def create_art_style_example_image(
@@ -1676,3 +1708,79 @@ def layout_issue_pages(wrapper: RunContextWrapper[APPState], series_id: str, iss
     note = f"  NOTE: {leftover} panel(s) of the issue are not placed on any page." if leftover > 0 else ""
     state.is_dirty = True
     return f"Laid out {len(pages)} pages ({placed} panels placed).{note}"
+
+
+def _render_asset_reference(wrapper, cls, key, series_id, asset_id, style_id, subject_line, guidance):
+    """Shared renderer: reference art for a prop/outfit in a style, anchored to the style's art example."""
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    asset = storage.read_object(cls, {"series_id": series_id, key: asset_id})
+    if asset is None:
+        return f"{cls.__name__} '{asset_id}' not found in series '{series_id}'."
+    style: ComicStyle = storage.read_object(ComicStyle, {"style_id": style_id})
+    if style is None:
+        return f"Style '{style_id}' not found."
+
+    reference_images = []
+    art_anchor = style.image.get("art") if isinstance(style.image, dict) else None
+    if art_anchor and os.path.exists(art_anchor):
+        reference_images.append(art_anchor)
+    reference_images.extend(storage.list_uploads(obj=asset))
+
+    prompt = f"""Render comic reference art of {subject_line}: "{asset.name}".
+{guidance}
+The rendering must strictly follow the comic style below so that composites
+using this reference match the rest of the issue.
+
+# {asset.name}
+{asset.description}
+
+{format_comic_style(style, include_bubble_styles=False, include_character_style=False, heading_level=1)}
+"""
+    locator = generate_object_image(
+        wrapper=wrapper, obj=asset, prompt=prompt,
+        reference_images=reference_images,
+        aspect_ratio=FrameLayout.SQUARE, image_quality=IMAGE_QUALITY.HIGH,
+        name=f"{asset_id}-{style_id}-reference")
+    asset.images[style_id] = locator
+    storage.update_object(data=asset)
+    state.is_dirty = True
+    return f"Reference art for '{asset.name}' rendered in style '{style_id}': {locator}"
+
+
+@function_tool
+def generate_prop_reference(wrapper: RunContextWrapper[APPState], series_id: str, prop_id: str, style_id: str) -> str:
+    """
+    Render a prop's reference art in a comic style: the prop alone on a neutral
+    background, from a clear three-quarter view.   Stored on the prop keyed by
+    style; composited into settings, variant sheets, and panels that use it.
+
+    Args:
+        series_id: The series that owns the prop.
+        prop_id: The prop to render.
+        style_id: The comic style to render in.
+    """
+    from schema import PropAsset
+    return _render_asset_reference(
+        wrapper, PropAsset, "prop_id", series_id, prop_id, style_id,
+        "a single prop",
+        "Show ONLY the prop on a neutral background — no characters, no scene — in a clear three-quarter view.")
+
+
+@function_tool
+def generate_outfit_reference(wrapper: RunContextWrapper[APPState], series_id: str, outfit_id: str, style_id: str) -> str:
+    """
+    Render an outfit's reference art in a comic style: the attire presented on
+    a neutral display form (no face, no identity), front and back.   Stored on
+    the outfit keyed by style; composited into variant reference sheets.
+
+    Args:
+        series_id: The series that owns the outfit.
+        outfit_id: The outfit to render.
+        style_id: The comic style to render in.
+    """
+    from schema import Outfit
+    return _render_asset_reference(
+        wrapper, Outfit, "outfit_id", series_id, outfit_id, style_id,
+        "an outfit (wardrobe)",
+        "Present the attire on a neutral, featureless display form — NO character identity, no face — front view and back view side by side, neutral background.")

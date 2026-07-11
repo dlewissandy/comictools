@@ -17,7 +17,7 @@ from loguru import logger
 from gui.state import APPState
 from storage.generic import GenericStorage
 from storage.filepath import obj_to_path
-from schema import CharacterModel, Setting, Series, AssetOrigin
+from schema import CharacterModel, Outfit, PropAsset, Setting, Series, AssetOrigin
 
 
 def _copy_asset_tree(src_dir: str, dst_dir: str, source_series: str, target_series: str):
@@ -71,6 +71,18 @@ def list_library_assets(wrapper: RunContextWrapper[APPState], kind: str = "all")
                                "description": c.description, "series_id": series.series_id,
                                "series_name": series.name, "publisher_id": series.publisher_id,
                                "origin": c.origin.model_dump() if c.origin else None})
+        if kind in ("all", "prop"):
+            for p in storage.read_all_objects(PropAsset, {"series_id": series.series_id}):
+                assets.append({"kind": "prop", "id": p.prop_id, "name": p.name,
+                               "description": p.description, "series_id": series.series_id,
+                               "series_name": series.name, "publisher_id": series.publisher_id,
+                               "origin": p.origin.model_dump() if p.origin else None})
+        if kind in ("all", "outfit"):
+            for o in storage.read_all_objects(Outfit, {"series_id": series.series_id}):
+                assets.append({"kind": "outfit", "id": o.outfit_id, "name": o.name,
+                               "description": o.description, "series_id": series.series_id,
+                               "series_name": series.name, "publisher_id": series.publisher_id,
+                               "origin": o.origin.model_dump() if o.origin else None})
         if kind in ("all", "setting"):
             for s in storage.read_all_objects(Setting, {"series_id": series.series_id}):
                 assets.append({"kind": "setting", "id": s.setting_id, "name": s.name,
@@ -94,8 +106,9 @@ def _import_asset(storage, cls, source_series_id: str, asset_id: str, target_ser
     dst_dir = obj_to_path(tgt_obj, base_path=str(storage.base_path))
     _copy_asset_tree(src_dir, dst_dir, source_series_id, target_series_id)
 
-    # stamp provenance on the asset's own json (character.json / setting.json)
-    json_name = "character.json" if cls is CharacterModel else "setting.json"
+    # stamp provenance on the asset's own json
+    json_name = {"CharacterModel": "character.json", "Setting": "setting.json",
+                 "PropAsset": "prop.json", "Outfit": "outfit.json"}[cls.__name__]
     _stamp_origin(os.path.join(dst_dir, json_name), source_series_id, asset_id)
     logger.info(f"Imported {cls.__name__} {asset_id} from {source_series_id} into {target_series_id}")
     return None  # success
@@ -150,3 +163,41 @@ def import_setting(wrapper: RunContextWrapper[APPState], source_series_id: str, 
     return (f"Imported setting '{setting_id}' (with props and master backgrounds) into "
             f"'{target_series_id}'.  NOTE: if the target series uses styles the setting has no "
             f"master background for, render them (generate_setting_background).")
+
+
+@function_tool
+def import_prop(wrapper: RunContextWrapper[APPState], source_series_id: str, prop_id: str, target_series_id: str) -> str:
+    """
+    Import a prop asset (with its reference art) from another series into the
+    target series, stamped with its origin.
+
+    Args:
+        source_series_id: The series the prop lives in.
+        prop_id: The prop to import.
+        target_series_id: The series to import it into.
+    """
+    state: APPState = wrapper.context
+    err = _import_asset(state.storage, PropAsset, source_series_id, prop_id, target_series_id, "prop_id")
+    if err:
+        return err
+    state.is_dirty = True
+    return f"Imported prop '{prop_id}' into '{target_series_id}'."
+
+
+@function_tool
+def import_outfit(wrapper: RunContextWrapper[APPState], source_series_id: str, outfit_id: str, target_series_id: str) -> str:
+    """
+    Import an outfit (wardrobe asset, with its reference art) from another
+    series into the target series, stamped with its origin.
+
+    Args:
+        source_series_id: The series the outfit lives in.
+        outfit_id: The outfit to import.
+        target_series_id: The series to import it into.
+    """
+    state: APPState = wrapper.context
+    err = _import_asset(state.storage, Outfit, source_series_id, outfit_id, target_series_id, "outfit_id")
+    if err:
+        return err
+    state.is_dirty = True
+    return f"Imported outfit '{outfit_id}' into '{target_series_id}'."

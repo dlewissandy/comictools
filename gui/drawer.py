@@ -13,13 +13,14 @@ import os
 from loguru import logger
 from nicegui import ui
 
-from schema import CharacterModel, CharacterVariant, ComicStyle, Series, Setting
+from schema import CharacterModel, CharacterVariant, ComicStyle, Outfit, PropAsset, Series, Setting
 from storage.generic import GenericStorage
 
 # type -> (plural label, icon) in display order
 KIND_META = {
     "character": ("Characters", "🎭"),
     "variant":   ("Variants", "👤"),
+    "outfit":    ("Outfits", "🧥"),
     "setting":   ("Settings", "🏛️"),
     "prop":      ("Props", "🎗️"),
     "style":     ("Styles", "🎨"),
@@ -51,10 +52,18 @@ def _catalog(storage: GenericStorage):
                    f"Use the setting '{s.name}' (id: {s.setting_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
                    f"/series/{sid}/setting/{s.setting_id}")
-            for prop in (s.props or []):
-                yield ("prop", prop.name, f"{s.name} · {series.name}", img,
-                       f"Use the prop '{prop.name}' (from the setting '{s.setting_id}' in series '{sid}') here: {prop.description}",
-                       f"/series/{sid}/setting/{s.setting_id}")
+        for p in storage.read_all_objects(PropAsset, {"series_id": sid}):
+            pimg = next((i for i in (p.images or {}).values() if i and os.path.exists(i)), None)
+            yield ("prop", p.name, f"{series.name}", pimg,
+                   f"Use the prop '{p.name}' (id: {p.prop_id}) from the series '{sid}' here.  "
+                   f"Import it into this series first if it isn't already part of it.",
+                   f"/series/{sid}")
+        for o in storage.read_all_objects(Outfit, {"series_id": sid}):
+            oimg = next((i for i in (o.images or {}).values() if i and os.path.exists(i)), None)
+            yield ("outfit", o.name, f"{series.name}", oimg,
+                   f"Use the outfit '{o.name}' (id: {o.outfit_id}) from the series '{sid}' here — "
+                   f"e.g. compose a character variant wearing it.  Import it first if needed.",
+                   f"/series/{sid}")
 
     for style in storage.read_all_objects(ComicStyle, order_by="name"):
         img = style.image.get("art") if isinstance(style.image, dict) else None

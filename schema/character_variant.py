@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -26,6 +27,11 @@ class CharacterVariant(BaseModel):
     behavior: str  = Field(..., description="Notes on the The character's behavior")
     appearance: str  = Field(..., description="Notes on the The character's physical appearance and attributes")
     images: dict[str,str] = Field(..., description="The reference images that can be used by artists to draw this character.   defaults {}")
+
+    # COMPOSITION (a variant is constructed like a panel: base character +
+    # wardrobe + props; these reference the studio assets it is built from)
+    outfit_id: Optional[str] = Field(None, description="The Outfit (wardrobe asset) this variant wears.  Its description/reference art drive the attire.  Default to None.")
+    prop_ids: list[str] = Field(default_factory=list, description="Props this variant carries (PropAsset ids).  Default to empty list.")
 
     @property
     def primary_key(self) -> dict[str, str]:

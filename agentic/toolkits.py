@@ -75,7 +75,13 @@ from agentic.tools.updater import (
     update_cover_setting,
 )
 from agentic.tools.imaging import generate_setting_background, generate_panel_image, export_issue_pdf, preflight_issue, layout_issue_pages
-from agentic.tools.library import list_library_assets, import_character, import_setting
+from agentic.tools.library import list_library_assets, import_character, import_setting, import_prop, import_outfit
+from agentic.tools.assets import (
+    create_prop, read_all_props, update_prop_description, delete_prop,
+    create_outfit, read_all_outfits, update_outfit_description, delete_outfit,
+    compose_character_variant,
+)
+from agentic.tools.imaging import generate_prop_reference, generate_outfit_reference
 from agentic.tools.imaging import (
     delete_character_style_example,
     delete_dialog_style_example,
@@ -176,6 +182,11 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_character_variant,
         create_variant,
         create_variant_from_image,
+        compose_character_variant,
+        read_all_outfits,
+        read_all_props,
+        create_outfit,
+        create_prop,
     ],
     "cover": [
         # Create
@@ -335,6 +346,19 @@ TOOLKITS: dict[str,list[Tool]] = {
         list_library_assets,
         import_character,
         import_setting,
+        import_prop,
+        import_outfit,
+        # Assets
+        create_prop,
+        read_all_props,
+        update_prop_description,
+        delete_prop,
+        create_outfit,
+        read_all_outfits,
+        update_outfit_description,
+        delete_outfit,
+        generate_prop_reference,
+        generate_outfit_reference,
         # Update
         update_series_name,
         update_series_description,
@@ -400,6 +424,10 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_character_variant,
         # Imaging
         create_styled_image_for_character_variant,
+        generate_outfit_reference,
+        generate_prop_reference,
+        read_all_outfits,
+        read_all_props,
     ],
     "image-editor": [
         inpaint_image_region,

@@ -24,3 +24,18 @@ def tmp_data():
 def storage(tmp_data):
     from storage.local import LocalStorage
     return LocalStorage(base_path=tmp_data)
+
+
+@pytest.fixture()
+def mock_imaging(monkeypatch):
+    from io import BytesIO
+    from PIL import Image
+    import agentic.tools.imaging as imaging
+    calls = []
+    def _jpeg():
+        buf = BytesIO(); Image.new("RGB", (16, 16), (60, 120, 200)).save(buf, "JPEG"); return buf.getvalue()
+    monkeypatch.setattr(imaging, "invoke_generate_image_api",
+                        lambda prompt, **kw: calls.append(("generate", prompt, [])) or _jpeg())
+    monkeypatch.setattr(imaging, "invoke_edit_image_api",
+                        lambda prompt, reference_images=None, **kw: calls.append(("edit", prompt, list(reference_images or []))) or _jpeg())
+    return calls

@@ -46,14 +46,6 @@ def _jpeg():
     return buf.getvalue()
 
 
-@pytest.fixture()
-def mock_imaging(monkeypatch):
-    calls = []
-    monkeypatch.setattr(imaging, "invoke_generate_image_api",
-                        lambda prompt, **kw: calls.append(("generate", prompt, [])) or _jpeg())
-    monkeypatch.setattr(imaging, "invoke_edit_image_api",
-                        lambda prompt, reference_images=None, **kw: calls.append(("edit", prompt, list(reference_images or []))) or _jpeg())
-    return calls
 
 
 def _invoke(tool, state, **args):

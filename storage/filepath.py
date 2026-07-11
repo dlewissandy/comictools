@@ -33,6 +33,10 @@ ROOT_PATH_TEMPLATES[SelectedKind.SERIES.value] = os.path.join("{base_path}", "se
 PATH_TEMPLATES[SelectedKind.SERIES.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.SERIES.value], "{series_id}")
 ROOT_PATH_TEMPLATES[SelectedKind.CHARACTER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "characters")
 PATH_TEMPLATES[SelectedKind.CHARACTER.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.CHARACTER.value], "{character_id}")
+ROOT_PATH_TEMPLATES["PropAsset"] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "props")
+PATH_TEMPLATES["PropAsset"] = os.path.join(ROOT_PATH_TEMPLATES["PropAsset"], "{prop_id}")
+ROOT_PATH_TEMPLATES["Outfit"] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "outfits")
+PATH_TEMPLATES["Outfit"] = os.path.join(ROOT_PATH_TEMPLATES["Outfit"], "{outfit_id}")
 ROOT_PATH_TEMPLATES[SelectedKind.SETTING.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "settings")
 PATH_TEMPLATES[SelectedKind.SETTING.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.SETTING.value], "{setting_id}")
 ROOT_PATH_TEMPLATES[SelectedKind.VARIANT.value] = os.path.join(PATH_TEMPLATES[SelectedKind.CHARACTER.value], "variants")
@@ -80,6 +84,8 @@ FILEPATH_TEMPLATES[SelectedKind.PUBLISHER.value] = os.path.join(PATH_TEMPLATES[S
 FILEPATH_TEMPLATES[SelectedKind.SERIES.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "series.json")
 FILEPATH_TEMPLATES[SelectedKind.STYLE.value] = os.path.join(PATH_TEMPLATES[SelectedKind.STYLE.value], "style.json")
 FILEPATH_TEMPLATES[SelectedKind.CHARACTER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.CHARACTER.value], "character.json")
+FILEPATH_TEMPLATES["PropAsset"] = os.path.join(PATH_TEMPLATES["PropAsset"], "prop.json")
+FILEPATH_TEMPLATES["Outfit"] = os.path.join(PATH_TEMPLATES["Outfit"], "outfit.json")
 FILEPATH_TEMPLATES[SelectedKind.SETTING.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SETTING.value], "setting.json")
 FILEPATH_TEMPLATES[SelectedKind.VARIANT.value] = os.path.join(PATH_TEMPLATES[SelectedKind.VARIANT.value], "variant.json")
 FILEPATH_TEMPLATES[SelectedKind.ISSUE.value] = os.path.join(PATH_TEMPLATES[SelectedKind.ISSUE.value], "issue.json")
@@ -112,6 +118,8 @@ IMAGE_PATH_TEMPLATES[Publisher.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.PUB
 # Style example images live at styles/{style_id}/images/{example_type}/ on disk.
 IMAGE_PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value] = PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
 IMAGE_PATH_TEMPLATES[StyleExample.__name__] = PATH_TEMPLATES[SelectedKind.STYLE_EXAMPLE.value]
+IMAGE_PATH_TEMPLATES["PropAsset"] = os.path.join(PATH_TEMPLATES["PropAsset"], "images")
+IMAGE_PATH_TEMPLATES["Outfit"] = os.path.join(PATH_TEMPLATES["Outfit"], "images")
 # Setting background plates are style-keyed, like styled variants.
 IMAGE_PATH_TEMPLATES[SelectedKind.SETTING.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SETTING.value], "images")
 IMAGE_PATH_TEMPLATES[Setting.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.SETTING.value]
@@ -134,6 +142,8 @@ UPLOAD_PATH_TEMPLATES[SelectedKind.CHARACTER.value] = os.path.join(PATH_TEMPLATE
 UPLOAD_PATH_TEMPLATES[CharacterModel.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.CHARACTER.value]
 UPLOAD_PATH_TEMPLATES[SelectedKind.SETTING.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SETTING.value], "uploads")
 UPLOAD_PATH_TEMPLATES[Setting.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.SETTING.value]
+UPLOAD_PATH_TEMPLATES["PropAsset"] = os.path.join(PATH_TEMPLATES["PropAsset"], "uploads")
+UPLOAD_PATH_TEMPLATES["Outfit"] = os.path.join(PATH_TEMPLATES["Outfit"], "uploads")
 
 
 def get_basenames(path: str, exts: list[str] = None) -> list[str]:
