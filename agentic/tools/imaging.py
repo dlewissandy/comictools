@@ -1502,31 +1502,12 @@ def outpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str
 # -------------------------------------------------------------------------
 from schema import Setting, SceneModel
 
-@function_tool
-def generate_setting_background(
-    wrapper: RunContextWrapper[APPState],
-    series_id: str,
-    setting_id: str,
-    style_id: str,
-) -> str:
-    """
-    Render the master background for a setting in a given comic style: the empty
-    setting, dressed with its props, with NO characters.   The master background is
-    stored on the setting keyed by style and is reused as the shared background for
-    every panel that takes place there — ink the setting once, reuse it across pages.
-
-    If reference images have been uploaded for the setting, they are used to
-    steer the rendering for real-world or previously-established looks.
-
-    Args:
-        series_id: The ID of the series the setting belongs to.
-        setting_id: The ID of the setting to render.
-        style_id: The comic style to render the master background in.
-
-    Returns:
-        A status message with the locator of the rendered master background.
-    """
-    state: APPState = wrapper.context
+def generate_setting_background_body(state, series_id: str, setting_id: str, style_id: str) -> str:
+    """Render a setting's master background in one style — callable directly
+    from the GUI (background job) or via the tool."""
+    class _W:  # minimal wrapper shim for generate_object_image
+        context = state
+    wrapper = _W()
     storage: GenericStorage = state.storage
 
     setting: Setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": setting_id})
@@ -1573,6 +1554,33 @@ panels composed on top of this background match the rest of the issue.
     storage.update_object(data=setting)
     state.is_dirty = True
     return f"Master background for '{setting.name}' rendered in style '{style_id}': {locator}"
+
+
+@function_tool
+def generate_setting_background(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    setting_id: str,
+    style_id: str,
+) -> str:
+    """
+    Render the master background for a setting in a given comic style: the empty
+    setting, dressed with its props, with NO characters.   The master background is
+    stored on the setting keyed by style and is reused as the shared background for
+    every panel that takes place there — ink the setting once, reuse it across pages.
+
+    If reference images have been uploaded for the setting, they are used to
+    steer the rendering for real-world or previously-established looks.
+
+    Args:
+        series_id: The ID of the series the setting belongs to.
+        setting_id: The ID of the setting to render.
+        style_id: The comic style to render the master background in.
+
+    Returns:
+        A status message with the locator of the rendered master background.
+    """
+    return generate_setting_background_body(wrapper.context, series_id, setting_id, style_id)
 
 
 def render_panel_impl(state: APPState, series_id: str, issue_id: str, scene_id: str, panel_id: str) -> str:

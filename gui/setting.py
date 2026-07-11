@@ -80,21 +80,46 @@ def view_setting(state: APPState):
                 _remove_prop, icon='category')
 
         # Master backgrounds, one per comic style.  Panels set in this setting
-        # reuse these backgrounds so the setting stays consistent.
+        # reuse these backgrounds so the setting stays consistent.  Styles the
+        # setting hasn't been inked in yet appear as GHOST CARDS — one click
+        # sends the render to the drawing board.
         with ui.expansion(value=True).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Master Backgrounds", "I would like to render a master background for this setting.")
             from gui.elements import ruled_page, HEADER_CLASSES
+            from schema import ComicStyle
             rendered = {style_id: img for style_id, img in (setting.images or {}).items() if img and os.path.exists(img)}
-            if not rendered:
-                ui.markdown("No master backgrounds rendered yet.  Ask me to render one in a comic style.")
-            else:
-                with ruled_page() as packer:
-                    for style_id, img in rendered.items():
-                        with packer.place_cell([(4, 8/3), (3, 2), (6, 4)], fudge=False):
-                            with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'):
-                                ui.label(style_id.replace('-', ' ').title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
-                                ui.image(source=img).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+
+            def ink_in_style(st):
+                from agentic.tools.imaging import generate_setting_background_body
+                from helpers.render_queue import enqueue_renders
+                ui.notify(f"Inking {setting.name.title()} in {st.name.title()} — "
+                          f"the master lands here when it's done.", type='info')
+                enqueue_renders(state, [(
+                    f"master background — {setting.name} in {st.name}",
+                    lambda: generate_setting_background_body(state, series_id, setting.setting_id, st.style_id),
+                )], role='the Background Artist')
+
+            with ruled_page() as packer:
+                for style_id, img in rendered.items():
+                    with packer.place_cell([(4, 8/3), (3, 2), (6, 4)], fudge=False):
+                        with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'):
+                            ui.label(style_id.replace('-', ' ').title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                            ui.image(source=img).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                for st in storage.read_all_objects(ComicStyle, order_by='name'):
+                    if st.style_id in rendered:
+                        continue
+                    with packer.place_cell([(4, 8/3), (3, 2), (6, 4)], fudge=False):
+                        with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative ghost-card'):
+                            art = st.image.get('art') if isinstance(st.image, dict) else st.image
+                            if art and os.path.exists(art):
+                                ui.image(source=art).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                            ui.label(st.name.title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                            with ui.column().classes('absolute inset-0 items-center justify-center z-10'):
+                                ui.button(f'Ink it in {st.name.title()}', icon='brush') \
+                                    .props('unelevated dense no-caps size=sm') \
+                                    .tooltip('Render this setting\'s master background in this style') \
+                                    .on('click', lambda _, st=st: ink_in_style(st))
 
         # Reference image uploads (sketches, photos, prior art) steer the rendering.
         with ui.expansion(value=True).classes('w-full section-flat') as expansion:

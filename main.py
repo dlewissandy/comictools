@@ -263,6 +263,9 @@ def init_layout(logger):
                              white-space: nowrap; }
         .style-swatch-current { outline: 3px solid var(--accent, #c62828);
                                 outline-offset: 2px; }
+        /* GHOST CARDS: work not yet inked — dashed frame, faded art, one CTA */
+        .ghost-card { border-style: dashed !important; }
+        .ghost-card .q-img { opacity: .3; filter: grayscale(55%); }
         .comic-page > * { min-width: 0; }
         .cpanel { position: relative; background: var(--panel);
                   border: 2.5px solid var(--ink); border-radius: 2px;
