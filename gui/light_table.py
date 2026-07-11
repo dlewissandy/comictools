@@ -148,6 +148,26 @@ def light_table(state: APPState, panel, scene, setting):
                     sel.on_value_change(reposition)
             layer_row('landscape', f"Background — {setting.name if setting else 'no setting yet'}",
                       bg_layer, thumb=background)
+
+            # LAY A NEW ACETATE: each button asks the coauthor to add that
+            # kind of layer to the composition.
+            with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 2px;'):
+                ui.label('lay a new acetate:').classes('text-xs text-gray-500')
+
+                def _ask(icon: str, tip: str, message: str):
+                    ui.button(icon=icon).props('flat round dense size=sm').tooltip(tip) \
+                        .on('click', lambda _, m=message: post_user_message(state, m))
+
+                _ask('person_add', 'A figure — cast a character into this panel',
+                     'I would like to add a character to this panel.')
+                _ask('category', 'A foreground prop',
+                     'I would like to add a prop to this panel.')
+                _ask('landscape', 'A background — give the scene a setting'
+                     if setting is None else 'A different background — change the setting',
+                     'I would like to pick the setting for this scene.')
+                _ask('chat_bubble', 'Letters — write narration or dialogue for this panel',
+                     'I would like to add dialogue or narration to this panel.')
+
             ui.button('Ink this rough', icon='brush').props('unelevated dense') \
                 .classes('q-mt-sm self-start').on('click', lambda _: ink())
         with ui.column().classes('flex-grow').style('min-width: 0;'):
