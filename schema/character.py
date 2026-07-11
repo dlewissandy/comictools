@@ -8,6 +8,7 @@ from helpers.file import generate_unique_id, get_folder_contents, subfolders
 from helpers.image import IMAGE_QUALITY
 
 from schema.style.comic import ComicStyle
+from schema.setting import AssetOrigin
 
 class CharacterModel( BaseModel):
     # Note: The character name:variant is used as the key in the characters dictionary and must be unique
@@ -15,6 +16,7 @@ class CharacterModel( BaseModel):
     series_id: str = Field(..., description="The comic book series (title) that the character belongs to.  Default to empty string")
     description: str = Field(..., description="A 1-2 sentence description of the character.  This should be sufficient to distinguish the character from others.")
     name: str = Field(..., description="The name of the character")
+    origin: Optional["AssetOrigin"] = Field(None, description="Provenance if this character was imported from another series' collection.  Default to None.")
     
     @property
     def primary_key(self) -> dict[str, str]:

@@ -208,6 +208,10 @@ def publishers_page():
 def publisher_page(tail: str):
     _page_from_path('publishers/' + tail)
 
+@ui.page('/library')
+def library_page():
+    _page_from_path('library')
+
 @ui.page('/styles')
 def styles_page():
     _page_from_path('styles')

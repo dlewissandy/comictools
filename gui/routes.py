@@ -41,6 +41,7 @@ _ROOTS = {
     SelectedKind.ALL_SERIES: "/",
     SelectedKind.ALL_PUBLISHERS: "/publishers",
     SelectedKind.ALL_STYLES: "/styles",
+    SelectedKind.LIBRARY: "/library",
 }
 
 
@@ -104,6 +105,9 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
         if len(parts) == 2:
             return sel + [_named(storage, SelectedKind.STYLE, parts[1], ComicStyle, {"style_id": parts[1]})]
         return None
+
+    if parts[0] == "library" and len(parts) == 1:
+        return [SelectionItem(name="Library", id=None, kind=SelectedKind.LIBRARY)]
 
     if parts[0] == "publishers":
         sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]

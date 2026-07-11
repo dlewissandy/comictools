@@ -368,6 +368,9 @@ class APPState:
                 return view_all_publishers(self)
             case "all-styles":
                 return view_all_styles(self)
+            case "library":
+                from gui.library import view_library
+                return view_library(self)
             case "style":
                 return view_style(self)
             case "series":
@@ -454,17 +457,20 @@ def breadcrumb_selector(state: APPState):
         all_series = ui.item("Series")
         all_publishers = ui.item("Publishers")
         all_styles = ui.item("Styles")
+        library = ui.item("Library")
 
     
     new_sel = [selection[0]]
     series_sel = [SelectionItem(kind=SelectedKind.ALL_SERIES, name="Series", id=None)]
     publishers_sel = [SelectionItem(kind=SelectedKind.ALL_PUBLISHERS, name="Publishers", id=None)]
     styles_sel = [SelectionItem(kind=SelectedKind.ALL_STYLES, name="Styles", id=None)]
+    library_sel = [SelectionItem(kind=SelectedKind.LIBRARY, name="Library", id=None)]
 
     primary_selection.on("click", lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
     all_series.on_click(lambda _, new_sel=series_sel: state.change_selection( new=new_sel))
     all_publishers.on_click( lambda _, new_sel=publishers_sel: state.change_selection( new=new_sel))
     all_styles.on_click( lambda _, new_sel=styles_sel: state.change_selection( new=new_sel))
+    library.on_click( lambda _, new_sel=library_sel: state.change_selection( new=new_sel))
     return primary_selection
 
 

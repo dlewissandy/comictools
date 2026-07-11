@@ -75,6 +75,7 @@ from agentic.tools.updater import (
     update_cover_setting,
 )
 from agentic.tools.imaging import generate_setting_background, generate_panel_image, export_issue_pdf
+from agentic.tools.library import list_library_assets, import_character, import_setting
 from agentic.tools.imaging import (
     delete_character_style_example,
     delete_dialog_style_example,
@@ -320,6 +321,10 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_setting,
         read_all_settings,
 
+        # Library
+        list_library_assets,
+        import_character,
+        import_setting,
         # Update
         update_series_name,
         update_series_description,
@@ -395,6 +400,18 @@ TOOLKITS: dict[str,list[Tool]] = {
         outpaint_image_region,
     ],
 }
+
+TOOLKITS["library"] = [
+    # Browse
+    list_library_assets,
+    read_all_series,
+    read_all_publishers,
+    read_character,
+    read_setting,
+    # Import
+    import_character,
+    import_setting,
+]
 
 TOOLKITS["setting"] = [
     # Read

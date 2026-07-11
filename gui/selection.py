@@ -10,6 +10,7 @@ class SelectedKind(StrEnum):
     ALL_SERIES = "all-series"
     ALL_PUBLISHERS = "all-publishers"
     ALL_STYLES = "all-styles"
+    LIBRARY = "library"
 
     SERIES = "series"
     SETTING = "setting"
@@ -99,6 +100,8 @@ def selection_to_context(
             case SelectedKind.ALL_SERIES.value:
                 continue
             case SelectedKind.ALL_STYLES.value:
+                continue
+            case SelectedKind.LIBRARY.value:
                 continue
             case SelectedKind.IMAGE_EDITOR.value:
                 continue

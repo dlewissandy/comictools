@@ -1,4 +1,16 @@
+from typing import Optional
 from pydantic import BaseModel, Field
+
+
+class AssetOrigin(BaseModel):
+    """
+    Provenance stamp for an asset imported from another series' collection.
+    Records where the copy came from so drift can later be detected and, when
+    storage becomes canonical, copies can be reconciled into links.
+    """
+    series_id: str = Field(..., description="The series the asset was imported from.")
+    asset_id: str = Field(..., description="The id of the source asset in its home series.")
+    imported_at: str = Field(..., description="ISO timestamp of the import.")
 
 
 class Prop(BaseModel):
@@ -22,6 +34,7 @@ class Setting(BaseModel):
     description: str = Field(..., description="A detailed visual description of the setting: architecture, layout, lighting, mood, era, and palette.   Detailed enough that different artists would draw the same place.")
     interior: bool = Field(True, description="True for interior settings, False for exterior settings.")
     props: list[Prop] = Field(default_factory=list, description="The props that dress this setting.  Default to empty list.")
+    origin: Optional[AssetOrigin] = Field(None, description="Provenance if this setting was imported from another series' collection.  Default to None.")
     images: dict[str, str] = Field(default_factory=dict, description="Style-keyed master backgrounds: maps style_id to the filepath of the rendered background for that style.  Default to empty dict.")
 
     @property
