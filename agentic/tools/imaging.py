@@ -2125,48 +2125,91 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str,
     figures_dir = os.path.join(os.path.dirname(images_dir), "figures")
     os.makedirs(figures_dir, exist_ok=True)
 
-    # where does this layer sit on the rough?  Entities inherit placement
-    # from their recognized bounds mapped through the layer's blocking.
+    # FIDELITY RULE: the recomposited stack must look like the original.
+    # So we don't re-render entities free-form — we CROP the source at the
+    # recognized bounds, erase everything around the entity to transparency
+    # (input_fidelity keeps its exact pixels/style), and place the acetate
+    # exactly where the crop came from.
+    from PIL import Image as _ImgSrc
+    src_img = _ImgSrc.open(source).convert('RGBA')
+    W0, H0 = src_img.size
+    canvas_ar = {"landscape": 1.5, "portrait": 2 / 3, "square": 1.0}[panel.aspect.value]
     layer_blocking = dict((panel.figure_blocking or {}).get(layer) or {})
     lifted = []
     for e in entities:
         name = e["name"]
         slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "element"
-        cut_bytes = invoke_edit_image_api(
-            f"""Render ONLY the {name} exactly as it appears in the reference image —
-same angle, same colors, same lighting, same art style, complete and uncropped
-(include any parts hidden behind other objects, drawn consistently).
-Nothing else.   COMPLETELY TRANSPARENT background: a cut-out acetate.""",
-            reference_images=[source],
-            size="1024x1024",
-            quality=IMAGE_QUALITY.MEDIUM,
-            background="transparent",
-        )
+        box = e.get("box") or {}
+        crop_rect = None
+        if box:
+            pad = 0.08
+            left = int(max(0.0, float(box.get("x", 0)) / 100 - pad) * W0)
+            top = int(max(0.0, float(box.get("y", 0)) / 100 - pad) * H0)
+            right = int(min(1.0, (float(box.get("x", 0)) + float(box.get("w", 100))) / 100 + pad) * W0)
+            bottom = int(min(1.0, (float(box.get("y", 0)) + float(box.get("h", 100))) / 100 + pad) * H0)
+            if right - left >= 32 and bottom - top >= 32:
+                crop_rect = (left, top, right, bottom)
+
+        if crop_rect:
+            crop = src_img.crop(crop_rect)
+            tmp = os.path.join(figures_dir, f"crop-{uuid4().hex[:6]}.png")
+            crop.save(tmp)
+            ar = crop.width / crop.height
+            size = "1536x1024" if ar > 1.2 else ("1024x1536" if ar < 0.83 else "1024x1024")
+            try:
+                cut_bytes = invoke_edit_image_api(
+                    f"""Reproduce this image EXACTLY — identical pixels, identical style,
+identical scale and position within the frame — but keep ONLY the {name}:
+erase everything that is not part of the {name} to FULL TRANSPARENCY.
+Do not redraw, restyle, move or resize the {name}.""",
+                    reference_images=[tmp],
+                    size=size,
+                    quality=IMAGE_QUALITY.MEDIUM,
+                    background="transparent",
+                    input_fidelity="high",
+                )
+            finally:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+        else:
+            cut_bytes = invoke_edit_image_api(
+                f"""Render ONLY the {name} exactly as it appears in the reference image —
+same angle, same colors, same lighting, same art style.   Nothing else.
+COMPLETELY TRANSPARENT background: a cut-out acetate.""",
+                reference_images=[source],
+                size="1024x1024",
+                quality=IMAGE_QUALITY.MEDIUM,
+                background="transparent",
+                input_fidelity="high",
+            )
         cut_path = os.path.join(figures_dir, f"element--{slug}--{uuid4().hex[:8]}.png")
         with open(cut_path, "wb") as f:
             f.write(cut_bytes)
         key = f"element/{slug}"
         panel.figure_images[key] = cut_path
 
-        # initial blocking from the recognized bounds
-        box = e.get("box") or {}
-        if box and kind == 'background':
-            h = float(box.get("h", 40))
-            panel.figure_blocking[key] = {
-                "x": round(float(box.get("x", 30)) + float(box.get("w", 40)) / 2, 1),
-                "y": round(max(0.0, 100.0 - (float(box.get("y", 30)) + h)), 1),
-                "h": round(h, 1), "z": 40}
-        elif box and layer_blocking:
-            # map entity bounds through the parent figure's placement
-            fh = float(layer_blocking.get("h", 60))
-            fx = float(layer_blocking.get("x", 50))
-            fy = float(layer_blocking.get("y", 0))
-            eh = float(box.get("h", 40)) / 100 * fh
-            ex = fx + (float(box.get("x", 30)) + float(box.get("w", 40)) / 2 - 50) / 100 * fh
-            ey = fy + (100 - float(box.get("y", 30)) - float(box.get("h", 40))) / 100 * fh
-            panel.figure_blocking[key] = {"x": round(ex, 1), "y": round(max(0.0, ey), 1),
-                                          "h": round(eh, 1),
-                                          "z": int(layer_blocking.get("z", 0)) + 1}
+        # place the acetate exactly where its crop came from
+        if crop_rect:
+            left, top, right, bottom = crop_rect
+            cx_pct = (left + right) / 2 / W0 * 100
+            h_pct = (bottom - top) / H0 * 100
+            y_pct = 100 - bottom / H0 * 100
+            if kind == 'background':
+                panel.figure_blocking[key] = {"x": round(cx_pct, 1), "y": round(y_pct, 1),
+                                              "h": round(h_pct, 1), "z": 40}
+            else:
+                # map through the parent figure's placement on the canvas
+                fh = float(layer_blocking.get("h", 60))
+                fx = float(layer_blocking.get("x", 50))
+                fy = float(layer_blocking.get("y", 0))
+                fig_w = fh * ((W0 / H0) / canvas_ar)   # display width in canvas %
+                panel.figure_blocking[key] = {
+                    "x": round(fx + (cx_pct - 50) / 100 * fig_w, 1),
+                    "y": round(fy + y_pct / 100 * fh, 1),
+                    "h": round(h_pct / 100 * fh, 1),
+                    "z": int(layer_blocking.get("z", 0)) + 1}
+        else:
+            panel.figure_blocking[key] = {"x": 50, "y": 0, "h": 45, "z": 40}
         lifted.append(name)
 
     # repaint the base with everything lifted removed — revealing what was
@@ -2183,11 +2226,12 @@ Nothing else.   COMPLETELY TRANSPARENT background: a cut-out acetate.""",
 Reveal and draw what lies BENEATH each removed item, consistent with the
 image (a garment removed reveals the body/clothing beneath it, drawn
 on-model; a prop removed reveals the scenery behind it).   Keep everything
-else exactly as it is, same art style.""",
+else must remain PIXEL-IDENTICAL — same composition, same style, same colors.""",
         reference_images=[source],
         size=base_size,
         quality=IMAGE_QUALITY.MEDIUM,
         background="transparent" if kind != 'background' else None,
+        input_fidelity="high",
     )
     if kind == 'background':
         base_path = os.path.join(figures_dir, f"plate--{uuid4().hex[:8]}.png")
