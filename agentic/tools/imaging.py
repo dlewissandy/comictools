@@ -220,15 +220,17 @@ def _compose_table_rough(storage, board, scene) -> str | None:
     def on(key, default=1):
         return bool((blk.get(key) or {}).get('on', default))
 
+    # blocking defaults MUST match what the light table displays with — the
+    # rough the inker receives has to look like the rough the author saw
     layers = []
-    for ref in (board.character_references or []):
+    for i, ref in enumerate(board.character_references or []):
         key = f"{ref.character_id}/{ref.variant_id}"
         path = (board.figure_images or {}).get(key)
         if path and os.path.exists(path) and on(key):
-            layers.append((key, path))
+            layers.append((key, path, {"x": (18, 50, 82)[i % 3], "y": 0, "h": 78, "z": i}))
     for key, path in (board.figure_images or {}).items():
         if key.startswith('element/') and path and os.path.exists(path) and on(key):
-            layers.append((key, path))
+            layers.append((key, path, {"x": 50, "y": 0, "h": 45, "z": 40}))
     # a reworked take laid down as the plate is authored content too — even
     # with no figure acetates over it, it IS the rough
     plate = (board.figure_images or {}).get('background/plate')
@@ -247,9 +249,12 @@ def _compose_table_rough(storage, board, scene) -> str | None:
     else:
         base = Image.new('RGBA', dims, (250, 246, 236, 255))
 
-    defaults = {"x": 50, "y": 0, "h": 60, "z": 0}
-    for key, path in sorted(layers, key=lambda kp: (blk.get(kp[0]) or {}).get('z', 0)):
-        b = {**defaults, **(blk.get(key) or {})}
+    def _z(entry):
+        key, _, dflt = entry
+        return (blk.get(key) or {}).get('z', dflt['z'])
+
+    for key, path, dflt in sorted(layers, key=_z):
+        b = {**dflt, **(blk.get(key) or {})}
         fig = Image.open(path).convert('RGBA')
         if b.get('flip'):
             fig = fig.transpose(Image.FLIP_LEFT_RIGHT)
@@ -280,6 +285,10 @@ def _table_layout_brief(board) -> str:
     for ref in (board.character_references or []):
         b = blk.get(f"{ref.character_id}/{ref.variant_id}") or {}
         if not b:
+            continue
+        if not b.get('on', 1):
+            # the author lifted this acetate off the table — honor that
+            lines.append(f"* OMIT {ref.character_id} from this image entirely")
             continue
         h = float(b.get('h', 60))
         depth = "in the near foreground, large" if h >= 88 else ("far in the background, small" if h <= 45 else "in the mid-ground")
@@ -332,7 +341,9 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
         logger.error(f"Style {cover.style_id} not found")
         return f"Style {cover.style_id} not found"
 
-    characters: dict[str,CharacterVariant] = {}
+    # a LIST, not a dict keyed by name — the same character can appear
+    # in two variants on a cover and both must reach the artist
+    characters: list[tuple[str, CharacterVariant]] = []
     for char_ref in cover.character_references:
         char_ref: CharacterRef = char_ref
         character = storage.read_object(cls=CharacterModel, primary_key={"series_id": series_id, "character_id": char_ref.character_id})
@@ -344,7 +355,7 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
         if not variant:
             logger.error(f"Character variant {char_ref.variant_id} for character {char_ref.character_id} not found in series {series_id}.")
             return f"Character variant {char_ref.variant_id} for character {char_ref.character_id} not found in series {series_id}."
-        characters[character.name] = variant
+        characters.append((character.name, variant))
 
     # Gather reference images the same way panels do: the setting's master
     # background comes FIRST, then character reference sheets, then uploads.
@@ -366,7 +377,7 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
                 missing.append(f"master background for '{setting.name}' in style '{cover.style_id}' (generate_setting_background)")
             setting_information = f"# Setting\n{'Interior' if setting.interior else 'Exterior'}: {setting.name}\n{setting.description}\n"
 
-    for name, variant in characters.items():
+    for name, variant in characters:
         # Append the character's styled image if it exists.
         if variant.images.get(cover.style_id, None) is not None:
             reference_image_locators.append(variant.images[cover.style_id])
@@ -384,7 +395,7 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
 
     character_information = ""
     if len(characters) > 0:
-        for name, variant in characters.items():
+        for name, variant in characters:
             character_information += format_character_variant(name, variant, 2) + "\n"
     # Text elements use a standard comic layout unless the caller supplies custom
     # placement/styling instructions.
@@ -1659,12 +1670,14 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
 
     # 1) The setting's master background is shared by every panel in the scene.
     setting: Setting | None = None
+    background_first = False
     if scene.setting_id:
         setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": scene.setting_id})
         if setting is not None:
             background = setting.images.get(scene.style_id)
             if background and os.path.exists(background):
                 reference_images.append(background)
+                background_first = True
             else:
                 missing.append(f"master background for '{setting.name}' in style '{scene.style_id}' (generate_setting_background)")
 
@@ -1733,10 +1746,13 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
 composition assembled on the light table.   Treat it as the pencils: keep every
 figure and element at its position, scale and facing; finish and ink it in the
 style below.   The remaining references show the setting and the on-model cast."""
-    else:
-        ref_guidance = """The FIRST reference image (when present) is the setting's master background: use it
+    elif background_first:
+        ref_guidance = """The FIRST reference image is the setting's master background: use it
 as the panel's setting — same architecture, same props, same palette — reframed as
 the panel requires.   The character reference sheets show exactly how each character
+must look; keep them strictly on-model."""
+    else:
+        ref_guidance = """The character reference sheets show exactly how each character
 must look; keep them strictly on-model."""
 
     prompt = f"""Render a single comic book panel.  Aspect/orientation: {panel.aspect.value}.
@@ -2403,16 +2419,22 @@ COMPLETELY TRANSPARENT background: a cut-out acetate.""",
                 panel.figure_blocking[key] = {"x": round(cx_pct, 1), "y": round(y_pct, 1),
                                               "h": round(h_pct, 1), "z": 40}
             else:
-                # map through the parent figure's placement on the canvas
+                # map through the parent figure's placement on the canvas —
+                # a MIRRORED parent shows its crop on the opposite side, and
+                # the lifted acetate inherits the mirroring to keep the look
                 fh = float(layer_blocking.get("h", 60))
                 fx = float(layer_blocking.get("x", 50))
                 fy = float(layer_blocking.get("y", 0))
                 fig_w = fh * ((W0 / H0) / canvas_ar)   # display width in canvas %
+                rel = (cx_pct - 50)
+                if layer_blocking.get('flip'):
+                    rel = -rel
                 panel.figure_blocking[key] = {
-                    "x": round(fx + (cx_pct - 50) / 100 * fig_w, 1),
+                    "x": round(fx + rel / 100 * fig_w, 1),
                     "y": round(fy + y_pct / 100 * fh, 1),
                     "h": round(h_pct / 100 * fh, 1),
-                    "z": int(layer_blocking.get("z", 0)) + 1}
+                    "z": int(layer_blocking.get("z", 0)) + 1,
+                    **({"flip": 1} if layer_blocking.get('flip') else {})}
         else:
             panel.figure_blocking[key] = {"x": 50, "y": 0, "h": 45, "z": 40}
         lifted.append(name)
@@ -2423,10 +2445,9 @@ COMPLETELY TRANSPARENT background: a cut-out acetate.""",
     names = ", ".join(lifted)
     from PIL import Image as _Img
     with _Img.open(source) as _s:
-        if kind == 'background':
-            base_size = "1536x1024" if _s.width > _s.height else ("1024x1536" if _s.height > _s.width else "1024x1024")
-        else:
-            base_size = "1024x1536"
+        # the repaint keeps the SOURCE's orientation — figure acetates are
+        # not always portrait (a lifted element can be any shape)
+        base_size = "1536x1024" if _s.width > _s.height else ("1024x1536" if _s.height > _s.width else "1024x1024")
     base_bytes = invoke_edit_image_api(
         f"""Remove the following from this image ENTIRELY: {names}.
 Reveal and draw what lies BENEATH each removed item, consistent with the

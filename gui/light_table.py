@@ -515,7 +515,7 @@ def lay_figure_on_table(state, panel, character_id: str, variant_id: str,
             series_id=panel.series_id, character_id=character_id, variant_id=variant_id)]
         state.storage.update_object(panel)
     table_receipt(state, f"🎭 laid **{name or character_id.replace('-', ' ')}** on the table "
-                         f"— posing them for the shot…")
+                         f"— posing them for the beat…")
     pose_figure_bg(state, panel, character_id, variant_id)
     state.refresh_details()
 
@@ -616,6 +616,36 @@ TAKE_SHAPES = {FrameLayout.LANDSCAPE: (3, 2), FrameLayout.PORTRAIT: (2, 3), Fram
 DROP_SHAPES = {FrameLayout.LANDSCAPE: (3, 2), FrameLayout.PORTRAIT: (3, 3), FrameLayout.SQUARE: (3, 3)}
 
 
+def tear_up_take(state, board, img: str):
+    """Tear up one of the board's takes.  Into the wastebasket, not gone:
+    dot-prefixed files vanish from the takes wall and the receipt's UNDO
+    chip brings them back (unique names so tearing up a same-named take
+    never clobbers an older wastebasket copy)."""
+    from uuid import uuid4
+    storage = state.storage
+    trash = os.path.join(os.path.dirname(img), f".trash--{uuid4().hex[:6]}--{os.path.basename(img)}")
+    try:
+        os.replace(img, trash)
+    except OSError:
+        ui.notify('Could not tear up that take.', type='warning')
+        return
+    was_featured = bool(board.image and (
+        board.image == img or storage.find_image(obj=board, locator=board.image) == img))
+    saved_locator = board.image
+    if was_featured:
+        board.image = None
+        storage.update_object(board)
+
+    def undo():
+        os.replace(trash, img)
+        if was_featured:
+            b = storage.read_object(cls=type(board), primary_key=board.primary_key) or board
+            b.image = saved_locator
+            storage.update_object(b)
+    table_receipt(state, '🗑 tore up a take — the receipt can bring it back', undo=undo)
+    state.refresh_details()
+
+
 def takes_row(state, board, featured: str | None):
     """Every render of this board on one wall; click a take to feature it
     (locking the table); the layers overlay lays it back down to rework."""
@@ -625,33 +655,7 @@ def takes_row(state, board, featured: str | None):
     def set_image(locator: str):
         board.image = locator
         storage.update_object(board)
-        state.refresh_details()
-
-    def tear_up_take(img: str):
-        # into the wastebasket, not gone: dot-prefixed files vanish from the
-        # takes wall and the receipt's UNDO chip brings them back (unique
-        # names so tearing up a same-named take never clobbers an older one)
-        from uuid import uuid4
-        trash = os.path.join(os.path.dirname(img), f".trash--{uuid4().hex[:6]}--{os.path.basename(img)}")
-        try:
-            os.replace(img, trash)
-        except OSError:
-            ui.notify('Could not tear up that take.', type='warning')
-            return
-        was_featured = bool(board.image and (
-            board.image == img or storage.find_image(obj=board, locator=board.image) == img))
-        saved_locator = board.image
-        if was_featured:
-            board.image = None
-            storage.update_object(board)
-
-        def undo():
-            os.replace(trash, img)
-            if was_featured:
-                b = storage.read_object(cls=type(board), primary_key=board.primary_key) or board
-                b.image = saved_locator
-                storage.update_object(b)
-        table_receipt(state, '🗑 tore up a take — the receipt can bring it back', undo=undo)
+        table_receipt(state, '📌 featured a take — the table is locked to its arrangement')
         state.refresh_details()
 
     takes = [img for img in storage.list_images(board) if os.path.exists(img)]
@@ -666,7 +670,7 @@ def takes_row(state, board, featured: str | None):
                     ui.button(icon='delete').props('flat round dense size=xs') \
                         .classes('absolute top-1 left-1 z-10 bg-white/70 dark:bg-black/50') \
                         .tooltip('Tear up this take') \
-                        .on('click.stop', lambda _, img=img: tear_up_take(img))
+                        .on('click.stop', lambda _, img=img: tear_up_take(state, board, img))
                     ui.button(icon='layers').props('flat round dense size=xs') \
                         .classes('absolute bottom-1 right-1 z-10 bg-white/70 dark:bg-black/50') \
                         .tooltip('Rework this take on the table (becomes the background layer)') \
@@ -1528,7 +1532,7 @@ def light_table(state: APPState, panel, scene, setting,
 
                     if f["img"]:
                         ui.image(source=_src(f["img"])).classes('light-thumb cursor-pointer') \
-                            .tooltip('Swap wardrobe/variant') \
+                            .tooltip('Swap their look (wardrobe variant)') \
                             .on('click', lambda _, ref=f["ref"]: pick_variant(ref))
                     else:
                         ui.icon('person').classes('text-lg').style('width: 40px; text-align: center;')

@@ -18,7 +18,7 @@ from gui.elements import (
     comic_page, cpanel, ccell, CrudButtonKind,
 )
 from gui.messaging import post_user_message
-from gui.light_table import light_table, rework_take_on_table, takes_row
+from gui.light_table import light_table, rework_take_on_table, takes_row, tear_up_take
 from storage.generic import GenericStorage
 
 
@@ -86,7 +86,8 @@ def view_cover(state: APPState):
                     ('layers', 'Rework this take on the table — it becomes the background layer',
                      lambda _: rework_take_on_table(state, cover, featured)),
                     ('brush', 'Render a new take', lambda _: post_user_message(state, "I would like to render this cover.")),
-                    ('delete', 'Delete this artwork', lambda _: post_user_message(state, "I would like to delete the currently selected cover image.")),
+                    ('delete', 'Tear up this take (the receipt can bring it back)',
+                     lambda _: tear_up_take(state, cover, featured)),
                 ])
 
         # TAKES: every render; click one to feature it on the table.

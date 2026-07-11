@@ -101,7 +101,7 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                 series_id, setting_id = sel[-2].id, sel[-1].id
                 setting = storage.read_object(Setting, {"series_id": series_id, "setting_id": setting_id})
                 if setting is not None and not setting.images:
-                    return ("This setting has no master backgrounds yet — render one per style and every panel shot here will share it.",
+                    return ("This setting has no master backgrounds yet — render one per style and every panel set here will share it.",
                             ["Render a master background", "Add props"])
                 return (None, ["Render a master background in another style", "Update the props"])
 

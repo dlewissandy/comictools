@@ -842,7 +842,7 @@ class PanelSpec(BaseModel):
     """One panel in a scene's panel layout, used by create_scene_panels."""
     name: str = Field(..., description="A short (3-5 word) name for the panel.")
     beat: str = Field(..., description="The narrative beat: what changes or happens in this moment (1-3 sentences).")
-    description: str = Field(..., description="A detailed visual description of the shot: framing, camera angle, foreground/background, character poses and expressions.")
+    description: str = Field(..., description="A detailed visual description of the panel: framing, point of view, foreground/background, character poses and expressions.  Use comics vocabulary (panel, frame, figure), never film vocabulary (shot, camera, footage).")
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel: landscape, portrait or square.")
     characters: list[CharacterRef] = Field(default_factory=list, description="The characters in frame, with the variant (wardrobe) used as visual reference.")
     narration: list[Narration] = Field(default_factory=list, description="Narration boxes for the panel.")
