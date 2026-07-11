@@ -184,6 +184,8 @@ def init_layout(logger):
         /* a selected take LOCKS the table; only Unlock stays live */
         .table-locked > * { pointer-events: none; opacity: .55; }
         .table-locked > .table-unlock { pointer-events: auto; opacity: 1; }
+        /* a locked element itself (e.g. the style swatch) also goes quiet */
+        .style-swatch.table-locked { pointer-events: none; opacity: .55; }
         .stack-row { cursor: grab; }
         /* drop ONTO a row to nest under it; drop at an edge to reorder */
         .stack-row.stack-drop-onto { outline: 2px solid #3b82f6; outline-offset: -2px;

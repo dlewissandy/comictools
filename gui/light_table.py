@@ -126,14 +126,24 @@ if (!window._roughDragInit) {
       });
     });
   };
-  const startTailObserver = () => new MutationObserver(
-      () => requestAnimationFrame(window.roughDrawTails))
-    .observe(document.body, {childList: true, subtree: true});
+  const startTailObserver = () => new MutationObserver((muts) => {
+      // tails redraw mutates its own SVG — never let that re-trigger us
+      if (muts.every(m => m.target.closest && m.target.closest('.rough-tails'))) return;
+      requestAnimationFrame(window.roughDrawTails);
+    }).observe(document.body, {childList: true, subtree: true});
   if (document.body) startTailObserver();
   else document.addEventListener('DOMContentLoaded', startTailObserver);
 
   // SELECTION: border + corner grab handles, the familiar canvas metaphor
+  function flushNudge() {
+    // a pending nudge write must land before the selection moves on
+    if (window._nudgeT) { clearTimeout(window._nudgeT); window._nudgeT = null; }
+    const p = window._nudgePending;
+    window._nudgePending = null;
+    if (p) report(p.f, p.c);
+  }
   function deselect() {
+    flushNudge();
     document.querySelectorAll('.rough-sel-box').forEach(b => b.remove());
     window._roughSel = null;
   }
@@ -156,6 +166,7 @@ if (!window._roughDragInit) {
   let resize = null;
   let tailDrag = null;
   document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;               // primary button only
     if (e.target.isContentEditable) return;   // typing, not dragging
     if (e.target.classList && e.target.classList.contains('rh-tip')) {
       const key = e.target.dataset.for;
@@ -183,8 +194,16 @@ if (!window._roughDragInit) {
     if (!canvas) return;
     e.preventDefault();
     select(fig);
-    drag = {fig, canvas, z: fig.style.zIndex};
-    fig.style.zIndex = 99;  // ride above the stack while dragging
+    // grab offset: you drag from where you GRABBED, the figure doesn't
+    // teleport its center to the cursor; a ~3px threshold keeps clicks
+    // (and double-click jitter) from displacing anything at all
+    const r0 = canvas.getBoundingClientRect();
+    const hh0 = parseFloat(fig.style.height);
+    const cx0 = ((e.clientX - r0.left) / r0.width) * 100;
+    const cy0 = ((r0.bottom - e.clientY) / r0.height) * 100 - (isNaN(hh0) ? 2 : hh0 / 2);
+    drag = {fig, canvas, z: fig.style.zIndex, sx: e.clientX, sy: e.clientY,
+            offX: (parseFloat(fig.style.left) || 50) - cx0,
+            offY: (parseFloat(fig.style.bottom) || 0) - cy0, live: false};
   });
   document.addEventListener('pointermove', (e) => {
     if (tailDrag) {
@@ -206,10 +225,15 @@ if (!window._roughDragInit) {
       return;
     }
     if (!drag) return;
+    if (!drag.live) {
+      if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 3) return;
+      drag.live = true;
+      drag.fig.style.zIndex = 99;  // ride above the stack while dragging
+    }
     const r = drag.canvas.getBoundingClientRect();
     const hh = parseFloat(drag.fig.style.height);
-    let x = ((e.clientX - r.left) / r.width) * 100;
-    let y = ((r.bottom - e.clientY) / r.height) * 100 - (isNaN(hh) ? 2 : hh / 2);
+    let x = ((e.clientX - r.left) / r.width) * 100 + drag.offX;
+    let y = ((r.bottom - e.clientY) / r.height) * 100 - (isNaN(hh) ? 2 : hh / 2) + drag.offY;
     x = Math.max(-20, Math.min(120, x));
     y = Math.max(-80, Math.min(95, y));   // negative: peek up from below the frame
     drag.fig.style.left = x + '%';
@@ -238,8 +262,12 @@ if (!window._roughDragInit) {
     }
     if (!drag) return;
     drag.fig.style.zIndex = drag.z;
-    report(drag.fig, drag.canvas);
+    if (drag.live) report(drag.fig, drag.canvas);  // a mere click moves nothing
     drag = null;
+  });
+  document.addEventListener('pointercancel', () => {
+    if (drag) drag.fig.style.zIndex = drag.z;
+    drag = resize = tailDrag = null;
   });
   document.addEventListener('wheel', (e) => {
     const fig = pickFigure(e);
@@ -255,7 +283,9 @@ if (!window._roughDragInit) {
       h = Math.max(15, Math.min(140, h * (e.deltaY < 0 ? 1.06 : 0.94)));
       setH(fig, h);
     }
-    report(fig, canvas);
+    // persist once the scaling settles — not one write per wheel tick
+    clearTimeout(window._wheelT);
+    window._wheelT = setTimeout(() => report(fig, canvas), 300);
   }, {passive: false});
   // STACK REORDER: drag rows; the stack order IS the z-order
   let stackDrag = null;
@@ -323,8 +353,10 @@ if (!window._roughDragInit) {
     fig.style.bottom = (Math.max(-80, Math.min(95, (parseFloat(fig.style.bottom) || 0) + dy))) + '%';
     fig.style.top = 'auto';
     if (fig.dataset.kind === 'balloon') window.roughDrawTails();
-    clearTimeout(window._nudgeT);   // persist once the nudging settles
-    window._nudgeT = setTimeout(() => report(fig, canvas), 400);
+    // persist once the nudging settles; a selection switch flushes it
+    window._nudgePending = {f: fig, c: canvas};
+    clearTimeout(window._nudgeT);
+    window._nudgeT = setTimeout(() => { window._nudgePending = null; report(fig, canvas); }, 400);
   });
 
   // double-click a balloon or caption: edit the words IN PLACE
@@ -715,14 +747,24 @@ def light_table(state: APPState, panel, scene, setting,
             mode = a.get('mode', 'before')
             src_k, dst_k = a['src'], a['dst']
             fig_keys = [f"{r.character_id}/{r.variant_id}" for r in (p.character_references or [])]
+            # the display defaults z to the cast index — the reorder baseline
+            # must match or the first restack inverts the un-dragged stack
+            cast_default_z = {k: i for i, k in enumerate(fig_keys)}
             fig_keys += [k for k in sorted(p.figure_images or {}) if k.startswith('element/')]
 
             def z(k):
-                return ((p.figure_blocking or {}).get(k) or {}).get('z', 0)
+                b = (p.figure_blocking or {}).get(k) or {}
+                if 'z' in b:
+                    return b['z']
+                return cast_default_z.get(k, 40)
 
             def disp(k):
                 return (k.split('/', 1)[1] if k.startswith('element/') else k.split('/')[0]).replace('-', ' ')
 
+            # non-figure members (the split plate) can't be dragged but must
+            # never be stripped from their group by a restack
+            extras = {n: [k for k in ks if k not in fig_keys]
+                      for n, ks in (p.layer_groups or {}).items()}
             groups = {n: sorted([k for k in ks if k in fig_keys], key=lambda k: -z(k))
                       for n, ks in (p.layer_groups or {}).items()}
             groups = {n: ks for n, ks in groups.items() if ks}
@@ -788,8 +830,15 @@ def light_table(state: APPState, panel, scene, setting,
                     idx = seq.index(anchor) if anchor in seq else len(seq)
                     seq.insert(idx + offset, block)
 
-            # persist: groups + z from the flattened display order
-            p.layer_groups = {n: ks for n, ks in groups.items() if ks}
+            # persist: groups + z from the flattened display order, with the
+            # undraggable members (the plate) merged back into their groups
+            merged = {}
+            for n in list(groups) + [n for n, ex in extras.items() if ex]:
+                if n in merged:
+                    continue
+                merged[n] = list(groups.get(n, [])) + \
+                    [k for k in extras.get(n, []) if k not in groups.get(n, [])]
+            p.layer_groups = {n: ks for n, ks in merged.items() if ks}
             flat = []
             for t, i in seq:
                 if t == 'g':
@@ -1271,14 +1320,18 @@ def light_table(state: APPState, panel, scene, setting,
                                 .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
                             ui.space()
 
-                            def drop_caption(n=n):
+                            def drop_caption(n=n, pos=pos, i=i):
                                 saved_narration = list(panel.narration)
+                                saved_blk = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()}
                                 panel.narration = [x for x in panel.narration if x is not n]
+                                # keep caption blocking aligned, same as balloons
+                                remap_letter_blocking(f'caption/{pos}/', i)
                                 storage.update_object(panel)
 
                                 def undo():
                                     p = _fresh()
                                     p.narration = saved_narration
+                                    p.figure_blocking = saved_blk
                                     storage.update_object(p)
                                 _receipt('✂️ removed a narrator box', undo=undo)
                                 state.refresh_details()
@@ -1732,7 +1785,8 @@ def light_table(state: APPState, panel, scene, setting,
 
             def heal_background():
                 from gui.selection import SelectionItem, SelectedKind
-                itm = SelectionItem(name=f"Edit {setting.name} background", id=background,
+                nm = setting.name if setting is not None else 'the split plate'
+                itm = SelectionItem(name=f"Edit {nm} background", id=background,
                                     kind=SelectedKind.IMAGE_EDITOR)
                 state.change_selection(new=[*state.selection, itm])
 
@@ -1934,7 +1988,8 @@ def light_table(state: APPState, panel, scene, setting,
                     def as_reference():
                         import io as _io
                         data = flatten_bytes()
-                        storage.upload_reference_image(panel, f"flattened-{panel.panel_id[:6]}.png",
+                        bid = panel.cover_id if cover_mode else panel.panel_id
+                        storage.upload_reference_image(panel, f"flattened-{bid[:6]}.png",
                                                        _io.BytesIO(data), 'image/png')
                         _receipt('🗜 flattened the table onto a reference acetate')
                         dlg.close()
@@ -1970,9 +2025,12 @@ def light_table(state: APPState, panel, scene, setting,
                 ui.label('THE ROUGH').classes('comic-label-sm')
 
                 # THE STYLE SWATCH: taped to the board like a printer's color
-                # chip — the style every take printed here wears
+                # chip — the style every take printed here wears (locked
+                # tables keep their arrangement; unlock to reshape/restyle)
                 if scene is not None:
-                    style_swatch(state, scene)
+                    sw = style_swatch(state, scene)
+                    if locked:
+                        sw.classes('table-locked')
                 ui.space()
                 # the frame's SHAPE, switched right on the rough — panels
                 # come in landscape/portrait/square; covers only landscape
@@ -1988,10 +2046,15 @@ def light_table(state: APPState, panel, scene, setting,
                 if not cover_mode:
                     shapes.append(('crop_square', _FL.SQUARE, 'Square frame'))
                 for icon, shape, tip in shapes:
-                    b = ui.button(icon=icon).props('flat round dense size=sm').tooltip(tip)
+                    b = ui.button(icon=icon).props('flat round dense size=sm')
                     if panel.aspect == shape:
                         b.props('color=primary')
-                    b.on('click', lambda _, s=shape: reshape(s))
+                    if locked and panel.aspect != shape:
+                        b.props('disable')
+                        b.tooltip(f'{tip} — unlock the table to reshape')
+                    else:
+                        b.tooltip(tip)
+                        b.on('click', lambda _, s=shape: reshape(s))
             rough()
             # the margin notes: the visual description IS the textual rough
             from gui.elements import markdown_field_editor
