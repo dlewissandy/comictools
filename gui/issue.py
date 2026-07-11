@@ -3,7 +3,7 @@ from loguru import logger
 from nicegui import ui
 from gui.elements import (
     markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes, crud_button, post_user_message,
-    CrudButtonKind
+    CrudButtonKind, comic_page, cpanel, ccell
     )
 from schema import ComicStyle, Issue, Cover, Panel, SceneModel, StyleExample
 from gui.state import APPState
@@ -81,9 +81,13 @@ def view_issue(state:APPState):
                     f"window.open('/series/{series_id}/issue/{issue_id}/read', '_blank');"))
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current issue."))
 
-        # Production dashboard: each amber step is one click from underway.
-        with ui.row().classes('w-full items-center q-pa-sm border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800').style('gap: 8px;'):
-            ui.label('Production').classes('text-xs uppercase text-gray-500')
+        # THE PAGE: everything below stitches into a 12-column comic page.
+        page = comic_page()
+        page.__enter__()
+
+        # Production dashboard: a slim full-width panel of pills.
+        with cpanel(12), ui.row().classes('w-full items-center').style('gap: 8px;'):
+            ui.label('Production').classes('comic-label-sm')
             _pill(bool(issue.story), 'story', 'Help me write the story for this issue.')
             _pill(len(scenes_all) > 0, 'scenes', 'Break my story into scenes.')
             _pill(total > 0, 'panels', 'Break the scenes into panels.')
@@ -96,13 +100,10 @@ def view_issue(state:APPState):
             _pill(everything and os.path.exists(export_path), 'bound PDF', 'Export the issue as a PDF.')
 
         
-        with ui.row().classes('w-full flex-nowrap'):
-            with ui.column().classes('w-3/4'):
-                markdown_field_editor(state, "Story", issue.story)
-                
-
-            with ui.column().classes('w-1/4'):
-                image_field_editor(
+        with cpanel(8):
+            markdown_field_editor(state, "Story", issue.story)
+        with cpanel(4):
+            image_field_editor(
                     state=state, 
                     kind=SelectedKind.PICK_STYLE, 
                     get_caption=lambda: "Style", 
@@ -124,7 +125,8 @@ def view_issue(state:APPState):
                 storage.update_object(data=issue)
             return setter
 
-        view_attributes(
+        with ccell(12):
+            view_attributes(
                     state = state,
                     caption="Attributes",
                     attributes = [
@@ -141,9 +143,8 @@ def view_issue(state:APPState):
         COVER_ORDER = ["front", "inside-front", "inside-back", "back"]
         order_by = lambda cover: COVER_ORDER.index(cover.location.value) if cover.location.value in COVER_ORDER else -1
 
-        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
-            with expansion.add_slot('header'):
-                new_item_messager(state, "Covers","I would like to create a new cover for this issue.")
+        with ccell(12):
+            new_item_messager(state, "Covers","I would like to create a new cover for this issue.")
             view_all_instances(
                 state=state,
                 get_instances = lambda: storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id}, order_by=order_by),
@@ -153,9 +154,8 @@ def view_issue(state:APPState):
                 aspect_ratio="6/9"
             )
 
-        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
-            with expansion.add_slot('header'):
-                new_item_messager(state, "Scenes","I would like to create a new scene for this issue.")
+        with ccell(12):
+            new_item_messager(state, "Scenes","I would like to create a new scene for this issue.")
             view_all_instances(
                 state=state,
                 get_instances = lambda: storage.read_all_objects(SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id}, order_by="scene_number"),
@@ -165,5 +165,6 @@ def view_issue(state:APPState):
                 get_name=lambda i,scene: (lambda d,t: f"Scene {i+1}: {scene.name}" + (f"  ·  {d}/{t} 🎨" if t else "  ·  no panels"))(*_scene_counts(scene.scene_id)),
                 get_markdown=lambda scene: scene.story,
                 number_of_columns=3
-            )                
+            )
+        page.__exit__(None, None, None)                
         

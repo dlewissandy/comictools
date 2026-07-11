@@ -80,11 +80,14 @@ def view_scene(state: APPState):
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current scene."), size=1)
 
-        # ONE production strip: chips for what's attached (✕ removes), amber
-        # pills only for what's missing, plus the artwork counter.
-        from gui.elements import removable_chips_inline
-        with ui.row().classes('w-full items-center q-pa-sm border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800').style('gap: 8px;'):
-            ui.label('Production').classes('text-xs uppercase text-gray-500')
+        # THE PAGE: the scene stitches into a 12-column comic page.
+        from gui.elements import removable_chips_inline, comic_page, cpanel, ccell
+        page = comic_page()
+        page.__enter__()
+
+        # ONE production strip: chips attached, amber pills missing.
+        with cpanel(12), ui.row().classes('w-full items-center').style('gap: 8px;'):
+            ui.label('Production').classes('comic-label-sm')
             if not scene.setting_id:
                 _todo('setting', 'Give this scene a setting.')
             if not scene.cast:
@@ -121,17 +124,15 @@ def view_scene(state: APPState):
                 [(p.name, p.name) for p in (scene.props or [])],
                 _remove_prop, icon='category')
 
-        with ui.row().classes('w-full flex-nowrap'):
-            with ui.column().classes('w-3/4'):
-                # TODO: Add button to convert story into multiple panels
-                markdown_field_editor(
+        with cpanel(8):
+            markdown_field_editor(
                     state=state, 
                     name = "Story", 
                     value = scene.story, 
                     header_size = 2
                 )
-            with ui.column().classes('w-1/4'):
-                image_field_editor(
+        with cpanel(4):
+            image_field_editor(
                     state=state,
                     kind=SelectedKind.PICK_STYLE,
                     get_caption = lambda: "Style",
@@ -147,7 +148,8 @@ def view_scene(state: APPState):
 
         # Production details (collapsed): the prose that doesn't need to be
         # visible at all times.
-        view_attributes(
+        with ccell(12):
+            view_attributes(
             state=state,
             caption="Production",
             attributes=[
@@ -161,12 +163,11 @@ def view_scene(state: APPState):
 
 
 
-        with ui.expansion().classes('w-full section-flat') as expansion:
-            with expansion.add_slot('header'):
+        with ccell(12):
+            with ui.row().classes('w-full items-center'):
                 header("Panels", 2)
                 ui.space()
                 crud_button(CrudButtonKind.CREATE, lambda: post_user_message(state, "I would like to add a new panel to the scene."))
-            expansion.value = True
 
             panels = storage.read_all_objects(Panel, primary_key={
                 "series_id": series_id,
@@ -264,3 +265,4 @@ def view_scene(state: APPState):
                     # Visible caption in center
                     with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
                         ui.label('Drop image to upload').classes('text-lg text-gray-600')
+        page.__exit__(None, None, None)

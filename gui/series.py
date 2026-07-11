@@ -57,14 +57,15 @@ def view_series(state: APPState):
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current series."),size=1)
             
-        # create a row with two colunms.
-        with ui.row().classes('w-full flex-nowrap'):
-            # The first column is 3/4 of the width and has a markdown text field for the series description.
-            with ui.column().classes('w-3/4'):
-                markdown_field_editor(state, "Description", series.description)
-            with ui.column().classes('w-1/4'):
-                # The second column is 1/4 of the width and has a cardwall displaying the publisher info.
-                image_field_editor(
+        # THE PAGE: the series stitches into a 12-column comic page.
+        from gui.elements import comic_page, cpanel, ccell
+        page = comic_page()
+        page.__enter__()
+
+        with cpanel(8):
+            markdown_field_editor(state, "Description", series.description)
+        with cpanel(4):
+            image_field_editor(
                     state=state, 
                     kind = SelectedKind.PICK_PUBLISHER, 
                     get_caption=lambda: "Publisher", 
@@ -73,9 +74,8 @@ def view_series(state: APPState):
                     caption_size=2)
         
         # A cardwall for viewing and adding issues of the comic.
-        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
-            with expansion.add_slot('header'):
-                new_item_messager(state, "Issues", "I would like to create a new issue")
+        with ccell(12):
+            new_item_messager(state, "Issues", "I would like to create a new issue")
             def _issue_label(_i, issue):
                 from schema import SceneModel, Panel
                 done = total = 0
@@ -97,9 +97,8 @@ def view_series(state: APPState):
                 ).style('margin-top: 0px; margin-bottom: 0px')
 
         # A cardwall for viewing and adding characters to the comic series.
-        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
-            with expansion.add_slot('header'):
-                new_item_messager(state, "Characters", "I would like to create a new character")
+        with ccell(12):
+            new_item_messager(state, "Characters", "I would like to create a new character")
             with view_all_instances(
                 state=state, 
                 get_instances = lambda: storage.read_all_objects(CharacterModel, primary_key={"series_id": series.series_id}), 
@@ -119,9 +118,8 @@ def view_series(state: APPState):
             # Show the first rendered master background, if any.
             return next((img for img in (loc.images or {}).values() if img and os.path.exists(img)), None)
 
-        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
-            with expansion.add_slot('header'):
-                new_item_messager(state, "Settings", "I would like to create a new setting")
+        with ccell(12):
+            new_item_messager(state, "Settings", "I would like to create a new setting")
             view_all_instances(
                 state=state,
                 get_instances=lambda: storage.read_all_objects(Setting, primary_key={"series_id": series.series_id}, order_by="name"),
@@ -130,4 +128,5 @@ def view_series(state: APPState):
                 aspect_ratio="3/2",
                 get_name=lambda _, x: x.name
                 ).style('margin-top: 0px; margin-bottom: 0px')
+        page.__exit__(None, None, None)
         

@@ -100,6 +100,22 @@ def init_layout(logger):
                         border-radius: 0 !important; box-shadow: none !important;
                         margin-bottom: 10px; }
 
+        /* the page grid: panels stitched with gutters, nothing floating */
+        .comic-page { display: grid; grid-template-columns: repeat(12, 1fr);
+                      gap: 12px; width: 100%; align-items: stretch; }
+        .comic-page > * { min-width: 0; }
+        .cpanel { position: relative; background: var(--panel);
+                  border: 2.5px solid var(--ink); border-radius: 2px;
+                  box-shadow: 3px 3px 0 rgba(0,0,0,.4); padding: 10px; }
+        .cspan-3 { grid-column: span 3; } .cspan-4 { grid-column: span 4; }
+        .cspan-6 { grid-column: span 6; } .cspan-8 { grid-column: span 8; }
+        .cspan-9 { grid-column: span 9; } .cspan-12 { grid-column: span 12; }
+        @media (max-width: 900px) {
+          .cspan-3, .cspan-4, .cspan-6, .cspan-8, .cspan-9 { grid-column: span 12; }
+        }
+        /* markdown inside panels: no extra air */
+        .cpanel .q-pa-md { padding: 4px 2px !important; }
+
         /* the conversation is speech balloons */
         .q-message-text { border: 2px solid var(--ink); border-radius: 10px;
                           box-shadow: 2px 2px 0 rgba(0,0,0,.35);

@@ -775,3 +775,20 @@ def removable_chips_inline(state: APPState, items: list[tuple[str, str]],
         ui.chip(label, removable=True, icon=icon).props('dense outline') \
             .tooltip(f'✕ detaches {label}') \
             .on('remove', lambda _, k=key: _remove(k))
+
+
+# ---------------------------------------------------------------------------
+# THE PAGE GRID: views compose like comic pages — panels with column spans,
+# stitched by gutters.  cpanel = inked panel; ccell = bare cell (cardwalls
+# pour their own panels straight onto the paper).
+# ---------------------------------------------------------------------------
+def comic_page():
+    return ui.element('div').classes('comic-page w-full')
+
+
+def cpanel(span: int = 12):
+    return ui.element('div').classes(f'cpanel cspan-{span}')
+
+
+def ccell(span: int = 12):
+    return ui.element('div').classes(f'cspan-{span}')
