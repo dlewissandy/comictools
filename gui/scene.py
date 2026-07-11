@@ -245,6 +245,13 @@ def view_scene(state: APPState):
                             state.refresh_details()
 
                         with card:
+                            # delete rides the top corner of the art; the ask
+                            # goes through the coauthor, like every deletion
+                            ui.button(icon='delete').props('flat round dense size=xs') \
+                                .classes('absolute top-1 right-1 z-10 bg-white/70 dark:bg-black/50') \
+                                .tooltip('Delete this panel') \
+                                .on('click.stop', lambda _, n=panel.panel_number, nm=panel.name:
+                                    post_user_message(state, f"I would like to delete panel {n} ('{nm}') from this scene."))
                             # reading-order controls ride ON the art
                             with ui.row().classes('absolute bottom-1 left-0 right-0 z-10 justify-between items-center').style('padding: 0 6px;'):
                                 ui.button(icon='chevron_left').props('flat round dense size=xs') \
