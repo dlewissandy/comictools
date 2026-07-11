@@ -11,10 +11,10 @@ import os
 from loguru import logger
 from nicegui import ui
 
-from schema import CharacterModel, ComicStyle, Series, Setting
+from schema import CharacterModel, CharacterVariant, ComicStyle, Series, Setting
 from storage.generic import GenericStorage
 
-KINDS = ["all", "characters", "settings", "props", "styles"]
+KINDS = ["all", "characters", "variants", "settings", "props", "styles"]
 
 
 def _catalog(storage: GenericStorage):
@@ -30,6 +30,13 @@ def _catalog(storage: GenericStorage):
                    f"Use the character '{c.name}' (id: {c.character_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
                    f"/series/{sid}/character/{c.character_id}")
+            for v in storage.read_all_objects(CharacterVariant, {"series_id": sid, "character_id": c.character_id}):
+                vimg = storage.find_variant_image(series_id=sid, character_id=c.character_id, variant_id=v.variant_id)
+                yield ("variant", f"{c.name} — {v.name}", f"variant · {series.name}", vimg,
+                       f"Use the variant '{v.name}' (id: {v.variant_id}) of character '{c.name}' "
+                       f"(id: {c.character_id}) from the series '{sid}' here as the wardrobe.  "
+                       f"Import the character into this series first if needed.",
+                       f"/series/{sid}/character/{c.character_id}/variant/{v.variant_id}")
         for s in storage.read_all_objects(Setting, {"series_id": sid}):
             img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
             yield ("setting", s.name, f"setting · {series.name}", img,
@@ -49,14 +56,14 @@ def _catalog(storage: GenericStorage):
                f"/styles/{style.style_id}")
 
 
-_ICONS = {"character": "🎭", "setting": "🏛️", "prop": "🎗️", "style": "🎨"}
+_ICONS = {"character": "🎭", "variant": "👤", "setting": "🏛️", "prop": "🎗️", "style": "🎨"}
 
 
 def build_asset_drawer(state):
     """Create the right-hand catalog drawer and return its toggle callback."""
     from gui.messaging import post_user_message
 
-    drawer = ui.right_drawer(value=False, fixed=True).props('bordered overlay width=340') \
+    drawer = ui.left_drawer(value=False, fixed=True).props('bordered overlay width=340') \
         .classes('bg-gray-100 dark:bg-gray-900')
 
     def refresh():

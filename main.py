@@ -179,8 +179,9 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     from gui.drawer import build_asset_drawer
     toggle_assets = build_asset_drawer(state)
     with breadcrumbs.parent_slot.parent:  # the header row
-        ui.button('Assets', icon='collections_bookmark', on_click=lambda _: toggle_assets()) \
-            .props('flat no-caps').tooltip('Browse the studio asset catalog')
+        assets_btn = ui.button('Assets', icon='collections_bookmark', on_click=lambda _: toggle_assets()) \
+            .props('unelevated no-caps').tooltip('Browse the studio asset catalog')
+    assets_btn.move(breadcrumbs.parent_slot.parent, target_index=0)  # primary: leftmost
 
     # Browser back/forward re-resolves the selection from the URL.
     ui.add_body_html("<script>window.addEventListener('popstate', () => location.reload());</script>")

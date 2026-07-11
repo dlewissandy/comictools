@@ -138,3 +138,6 @@ async def test_asset_catalog_drawer(user: User) -> None:
     # props: drawn from the settings' prop lists
     kind_toggle.set_value("props")
     await user.should_see("cracked crystal ball")
+    # variants: wardrobe per character, e.g. Brassic's gnome disguise
+    kind_toggle.set_value("variants")
+    await user.should_see("Gnome Disguise")
