@@ -45,7 +45,7 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
 
         markdown_field_editor(state, "Description", asset.description)
 
-        with ui.expansion(value=True).classes('w-full border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as exp:
+        with ui.expansion(value=True).classes('w-full section-flat') as exp:
             with exp.add_slot('header'):
                 new_item_messager(state, "Reference Art", render_hint)
             with ui.row().classes('w-full'):
@@ -57,7 +57,7 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
                         ui.image(source=img).style('top-padding: 0; bottom-padding:0;')
                         ui.label(style_id.replace('-', ' ').title()).classes('text-sm')
 
-        with ui.expansion(value=True).classes('w-full border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as exp:
+        with ui.expansion(value=True).classes('w-full section-flat') as exp:
             with exp.add_slot('header'):
                 header("Uploads", 2)
             with ui.row().classes('w-full'):

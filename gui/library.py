@@ -45,7 +45,7 @@ def view_library(state: APPState):
             if not characters and not settings:
                 continue
 
-            with ui.expansion(value=True).classes('w-full border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as exp:
+            with ui.expansion(value=True).classes('w-full section-flat') as exp:
                 with exp.add_slot('header'):
                     header(f"{series.name}", 2)
                     ui.label(f"published by {pub_name}").classes('text-sm text-gray-500 self-center q-ml-md')

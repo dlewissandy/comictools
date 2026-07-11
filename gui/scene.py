@@ -161,7 +161,7 @@ def view_scene(state: APPState):
 
 
 
-        with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion().classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 header("Panels", 2)
                 ui.space()
@@ -196,7 +196,7 @@ def view_scene(state: APPState):
                         image = storage.find_image(obj=panel, locator=panel.image)
                     with row:
                         # Create a new card that is panel_width/8 wide
-                        with ui.card().classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800').style(f'; width: {panel_width*12.25}%; aspect-ratio: {aspect}').classes('mb-2 p-2 break-inside-avoid ') as card:
+                        with ui.card().classes('soft-card').style(f'; width: {panel_width*12.25}%; aspect-ratio: {aspect}').classes('mb-2 p-2 break-inside-avoid ') as card:
                             if image is not None:
                                 ui.image(source=image).style(f'top-padding: 0; bottom-padding:0; aspect-ratio: {aspect};')
                             else:

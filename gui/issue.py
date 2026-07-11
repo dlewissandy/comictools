@@ -141,7 +141,7 @@ def view_issue(state:APPState):
         COVER_ORDER = ["front", "inside-front", "inside-back", "back"]
         order_by = lambda cover: COVER_ORDER.index(cover.location.value) if cover.location.value in COVER_ORDER else -1
 
-        with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Covers","I would like to create a new cover for this issue.")
             view_all_instances(
@@ -153,7 +153,7 @@ def view_issue(state:APPState):
                 aspect_ratio="6/9"
             )
 
-        with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Scenes","I would like to create a new scene for this issue.")
             view_all_instances(

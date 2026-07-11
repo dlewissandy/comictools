@@ -37,7 +37,7 @@ CRUD_ICON = {
     'render': 'brush'
 }
 
-DARK_MODE_STYLES = "border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800"
+DARK_MODE_STYLES = "soft-card"
 
 CRUD_BUTTON_STYLES = {
      "1": "font-size: 1.25em; height: 1.25em; aspect-ratio: 1/1; padding: 0; line-height: inherit; margin: 0;",
@@ -482,7 +482,7 @@ class Attribute(TypedDict, total=False):
 
 def view_attributes(state: APPState, caption: str, attributes: list[Attribute], expanded: bool=False, individual_icons: bool = True, header_size: int=1):
     with ui.element().classes('w-full') as container:
-        with ui.expansion( value=expanded ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion( value=expanded ).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 header(caption, header_size)
                 if not individual_icons:
@@ -656,7 +656,7 @@ def view_character_references(state: APPState, parent: BaseModel):
                                        if not (c.character_id == ref.character_id and c.variant_id == ref.variant_id)]
         storage.update_object(data=parent)
 
-    with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+    with ui.expansion().classes('w-full section-flat') as expansion:
         with expansion.add_slot('header'):
             header("Characters", 2)
             ui.space()
@@ -681,7 +681,7 @@ def view_reference_images(state: APPState, parent: BaseModel, get_images: Callab
         redraw()
 
     def redraw():
-        with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion().classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 header("Reference Images", 2)
                 ui.space()

@@ -73,7 +73,7 @@ def view_series(state: APPState):
                     caption_size=2)
         
         # A cardwall for viewing and adding issues of the comic.
-        with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Issues", "I would like to create a new issue")
             def _issue_label(_i, issue):
@@ -97,7 +97,7 @@ def view_series(state: APPState):
                 ).style('margin-top: 0px; margin-bottom: 0px')
 
         # A cardwall for viewing and adding characters to the comic series.
-        with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Characters", "I would like to create a new character")
             with view_all_instances(
@@ -119,7 +119,7 @@ def view_series(state: APPState):
             # Show the first rendered master background, if any.
             return next((img for img in (loc.images or {}).values() if img and os.path.exists(img)), None)
 
-        with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Settings", "I would like to create a new setting")
             view_all_instances(

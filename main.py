@@ -56,6 +56,17 @@ def init_layout(logger):
     | User Input Field and Send Button                         |  Footer Region
     +----------------------------------------------------------+
     """
+    # Simple, clean chrome: sections are flat with a hairline separator;
+    # cards get one soft border and no fill.  Defined once, used everywhere.
+    ui.add_css("""
+        .section-flat { background: transparent !important; border: none !important;
+                        border-bottom: 1px solid rgba(127,127,127,.25) !important;
+                        border-radius: 0 !important; box-shadow: none !important; }
+        .soft-card { background: transparent !important;
+                     border: 1px solid rgba(127,127,127,.3) !important;
+                     border-radius: 6px !important; box-shadow: none !important; }
+    """)
+
     # SET THE DARK MODE BASED ON THE ENVIRONMENT VARIABLE
     dark_mode = os.getenv('DARK_MODE', 'False').lower() in ['true', '1', 'yes']
     # INITIALIZE THE WINDOW LAYOUT

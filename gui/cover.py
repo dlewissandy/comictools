@@ -53,7 +53,7 @@ def view_cover(state: APPState):
                 markdown_field_editor(state, "Description", cover.description)
                 
 
-            with ui.card().classes('mb-2 p-2 w-1/4 bg-blue-100 dark:bg-gray-800 break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
+            with ui.card().classes('mb-2 p-2 w-1/4 soft-card break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
                 aspect_ratio_picker(
                     state,
                     parent=col2,
@@ -107,7 +107,7 @@ def view_cover(state: APPState):
             storage.update_object(cover)
 
         k = cover.location.value.lower().replace(" ", "-")
-        with ui.card().classes(TAILWIND_CARD).style('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800'):
+        with ui.card().classes(TAILWIND_CARD):
             full_width_image_selector_grid(
                 state=state,
                 image_kind_name="cover image",

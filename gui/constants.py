@@ -1,1 +1,1 @@
-TAILWIND_CARD = 'mb-2 p-2 w-full bg-blue-100 dark:bg-gray-800 break-inside-avoid text-gray-900 dark:text-gray-300'
+TAILWIND_CARD = 'mb-2 p-2 w-full soft-card break-inside-avoid text-gray-900 dark:text-gray-300'

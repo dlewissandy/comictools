@@ -54,7 +54,7 @@ def view_character(state:APPState):
         markdown_field_editor(state, "Description", character.description)        
 
 
-        with ui.expansion( value=True ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion( value=True ).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state=state, caption="Variants", message="I would like to create a new variant for this character.")
             view_all_instances(

@@ -81,7 +81,7 @@ def view_setting(state: APPState):
 
         # Master backgrounds, one per comic style.  Panels set in this setting
         # reuse these backgrounds so the setting stays consistent.
-        with ui.expansion(value=True).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion(value=True).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 new_item_messager(state, "Master Backgrounds", "I would like to render a master background for this setting.")
             with ui.row().classes('w-full'):
@@ -94,7 +94,7 @@ def view_setting(state: APPState):
                         ui.label(style_id.replace('-', ' ').title()).classes('text-sm')
 
         # Reference image uploads (sketches, photos, prior art) steer the rendering.
-        with ui.expansion(value=True).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion(value=True).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 header("Reference Images", 2)
             with ui.row().classes('w-full'):

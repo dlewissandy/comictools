@@ -111,7 +111,7 @@ def view_style(state: APPState):
 
 
 
-        with ui.expansion(value=True).classes('w-full border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
+        with ui.expansion(value=True).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):
                 header("Dialog Style", 2)     
 

@@ -28,7 +28,7 @@ def panel_selector(state: APPState, container: ui.element, image_filepath, new_i
     with container:
         if image_id is not None and image_id != "":
             if image_filepath:
-                card = ui.card().classes('mb-2 p-2 bg-blue-100 break-inside-avoid')
+                card = ui.card().classes('mb-2 p-2 soft-card break-inside-avoid')
                 with card:
                     ui.image(source=image_filepath)
                 card.on('click', lambda _, new_sel=new_sel: state.change_selection(new=new_sel))
@@ -147,11 +147,11 @@ def view_panel(state: APPState):
             with ui.column().classes('w-3/4'):
                 markdown_field_editor(state, "Beat", panel.beat)
                 markdown_field_editor(state, "Visual Description", panel.description)
-            with ui.card().classes('mb-2 p-2 w-1/4 bg-blue-100 dark:bg-gray-800 break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
+            with ui.card().classes('mb-2 p-2 w-1/4 soft-card break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
                 aspect_ratio_picker(state,parent=col2, caption="Aspect Ratio",set_aspect_ratio=lambda x: panel.set_aspect(x), get_aspect_ratio  = lambda: panel.aspect,)    
         markdown_field_editor(state, "Narration and Dialogue", format_dialogue(panel))
 
-        with ui.card().classes(TAILWIND_CARD).style('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800'):
+        with ui.card().classes(TAILWIND_CARD):
             # TODO: When there are no images, the drop field has wrong aspect ratio
             # TODO: Add ability to reorder (drag?) the cards.
             full_width_image_selector_grid(
