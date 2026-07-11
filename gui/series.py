@@ -77,6 +77,8 @@ def view_series(state: APPState):
         from gui.elements import caption_action, CrudButtonKind as _CK
         def _cap(text, msg):
             return lambda: caption_action(text, _CK.CREATE, lambda _, m=msg: post_user_message(state, m), 3)
+        mosaic = ui.element('div').classes('comic-mosaic cspan-12')
+        mosaic.__enter__()
         if True:
             def _issue_label(_i, issue):
                 from schema import SceneModel, Panel
@@ -113,7 +115,7 @@ def view_series(state: APPState):
                 overlap_caption=_cap("Characters", "I would like to create a new character")
                 ):
                 pass
-        with ccell(3):
+        with ui.element('div').classes('cspan-3 rspan-3'):
             uploader_card(
                 state=state,
                 on_upload=lambda e: on_upload(e),
@@ -136,5 +138,6 @@ def view_series(state: APPState):
                 flow_span=3,
                 overlap_caption=_cap("Settings", "I would like to create a new setting")
                 ).style('margin-top: 0px; margin-bottom: 0px')
+        mosaic.__exit__(None, None, None)
         page.__exit__(None, None, None)
         

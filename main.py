@@ -110,6 +110,21 @@ def init_layout(logger):
                       grid-auto-flow: dense; }
         .flow-caption { display: flex; flex-direction: column; align-items: flex-start;
                         justify-content: center; gap: 6px; min-height: 90px; }
+
+        /* THE MOSAIC: card groups share one 2D grid — row units equal column
+           units (via container query), each panel spans cols AND rows by its
+           aspect, dense flow fills holes in both directions. */
+        .comic-mosaic { display: grid; grid-template-columns: repeat(12, 1fr);
+                        gap: 12px; grid-auto-flow: dense;
+                        container-type: inline-size;
+                        grid-auto-rows: calc((100cqw - 132px) / 12); }
+        .rspan-2 { grid-row: span 2; } .rspan-3 { grid-row: span 3; }
+        .rspan-4 { grid-row: span 4; } .rspan-5 { grid-row: span 5; }
+        .rspan-6 { grid-row: span 6; } .rspan-8 { grid-row: span 8; }
+        .mosaic-card { height: 100%; width: 100%; display: flex;
+                       flex-direction: column; }
+        .mosaic-card .q-img { flex: 1 1 0; min-height: 0; }
+        .mosaic-card .q-img__image { object-fit: cover; }
         .comic-page > * { min-width: 0; }
         .cpanel { position: relative; background: var(--panel);
                   border: 2.5px solid var(--ink); border-radius: 2px;

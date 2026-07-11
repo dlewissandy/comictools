@@ -146,6 +146,8 @@ def view_issue(state:APPState):
         from gui.elements import caption_action, CrudButtonKind as _CK
         def _cap(text, msg):
             return lambda: caption_action(text, _CK.CREATE, lambda _, m=msg: post_user_message(state, m), 3)
+        mosaic = ui.element('div').classes('comic-mosaic cspan-12')
+        mosaic.__enter__()
         if True:
             view_all_instances(
                 state=state,
@@ -171,5 +173,6 @@ def view_issue(state:APPState):
                 flow_span=3,
                 overlap_caption=_cap("Scenes", "I would like to create a new scene for this issue.")
             )
+        mosaic.__exit__(None, None, None)
         page.__exit__(None, None, None)                
         
