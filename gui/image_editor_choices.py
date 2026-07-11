@@ -8,7 +8,7 @@ from loguru import logger
 from nicegui import ui
 
 from gui.elements import header, TAILWIND_CARD
-from gui.selection import SelectionItem, SelectedKind
+from gui.selection import SelectedKind
 from gui.state import APPState
 
 

@@ -14,8 +14,6 @@ from gui.elements import (
     header,
     crud_button,
     markdown_field_editor,
-    view_attributes,
-    Attribute,
     uploader_card,
     CrudButtonKind,
     TAILWIND_CARD,

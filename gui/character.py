@@ -1,4 +1,3 @@
-import os
 from loguru import logger
 from nicegui import ui
 from nicegui.events import UploadEventArguments
@@ -9,10 +8,8 @@ from gui.elements import (
     markdown_field_editor,
     view_all_instances,
     CrudButtonKind,
-    DARK_MODE_STYLES,
     )
 
-from gui.messaging import new_item_messager
 from gui.messaging import post_user_message
 from gui.state import APPState
 from storage.generic import GenericStorage

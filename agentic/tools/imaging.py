@@ -212,7 +212,6 @@ def _compose_table_rough(storage, board, scene) -> str | None:
     image, or None when nothing is blocked on the table (then the render is
     composed free-form from the text brief alone)."""
     from uuid import uuid4
-    from PIL import Image
     from storage.filepath import obj_to_imagepath
 
     blk = board.figure_blocking or {}
@@ -237,33 +236,11 @@ def _compose_table_rough(storage, board, scene) -> str | None:
     if not layers and not (plate and os.path.exists(plate) and on('background')):
         return None
 
-    dims = {"landscape": (1536, 1024), "portrait": (1024, 1536), "square": (1024, 1024)}[board.aspect.value]
-    W, H = dims
+    from helpers.compositor import base_canvas, paste_acetates
     src, _ = _resolve_layer_source(board, scene, storage, board.series_id, 'background')
-    if src and on('background'):
-        base = Image.open(src).convert('RGBA')
-        s = max(W / base.width, H / base.height)
-        base = base.resize((max(1, round(base.width * s)), max(1, round(base.height * s))))
-        left, top = (base.width - W) // 2, (base.height - H) // 2
-        base = base.crop((left, top, left + W, top + H))
-    else:
-        base = Image.new('RGBA', dims, (250, 246, 236, 255))
-
-    def _z(entry):
-        key, _, dflt = entry
-        return (blk.get(key) or {}).get('z', dflt['z'])
-
-    for key, path, dflt in sorted(layers, key=_z):
-        b = {**dflt, **(blk.get(key) or {})}
-        fig = Image.open(path).convert('RGBA')
-        if b.get('flip'):
-            fig = fig.transpose(Image.FLIP_LEFT_RIGHT)
-        th = H * float(b["h"]) / 100
-        s = th / fig.height
-        fig = fig.resize((max(1, round(fig.width * s)), max(1, round(th))))
-        cx = W * float(b["x"]) / 100
-        bottom = H - H * float(b["y"]) / 100
-        base.paste(fig, (round(cx - fig.width / 2), round(bottom - fig.height)), fig)
+    base = base_canvas(board.aspect.value, src if (src and on('background')) else None)
+    paste_acetates(base, board.aspect.value,
+                   [(path, {**dflt, **(blk.get(key) or {})}) for key, path, dflt in layers])
 
     figures_dir = os.path.join(os.path.dirname(obj_to_imagepath(obj=board, base_path=storage.base_path)), "figures")
     os.makedirs(figures_dir, exist_ok=True)

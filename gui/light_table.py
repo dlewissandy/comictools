@@ -441,6 +441,121 @@ def is_cover(board) -> bool:
     return hasattr(board, 'cover_id')
 
 
+def apply_stack_reorder(p, src_k: str, dst_k: str, mode: str = 'before') -> None:
+    """THE STACK IS THE Z-ORDER.  Apply one drag of the acetate stack to the
+    board in place: 'onto' nests into (or forms) a group, 'before'/'after'
+    restack; groups move as blocks; dragging the last member out dissolves
+    its group; undraggable members (the split plate) stay in their groups.
+    Pure board-in/board-out — the caller persists."""
+    fig_keys = [f"{r.character_id}/{r.variant_id}" for r in (p.character_references or [])]
+    # the display defaults z to the cast index — the reorder baseline
+    # must match or the first restack inverts the un-dragged stack
+    cast_default_z = {k: i for i, k in enumerate(fig_keys)}
+    fig_keys += [k for k in sorted(p.figure_images or {}) if k.startswith('element/')]
+
+    def z(k):
+        b = (p.figure_blocking or {}).get(k) or {}
+        if 'z' in b:
+            return b['z']
+        return cast_default_z.get(k, 40)
+
+    def disp(k):
+        return (k.split('/', 1)[1] if k.startswith('element/') else k.split('/')[0]).replace('-', ' ')
+
+    # non-figure members (the split plate) can't be dragged but must
+    # never be stripped from their group by a restack
+    extras = {n: [k for k in ks if k not in fig_keys]
+              for n, ks in (p.layer_groups or {}).items()}
+    groups = {n: sorted([k for k in ks if k in fig_keys], key=lambda k: -z(k))
+              for n, ks in (p.layer_groups or {}).items()}
+    groups = {n: ks for n, ks in groups.items() if ks}
+    parent = {k: n for n, ks in groups.items() for k in ks}
+
+    # top-level sequence: ('g', name) and ('l', key), by current z
+    entries = [('g', n, max(z(k) for k in ks)) for n, ks in groups.items()]
+    entries += [('l', k, z(k)) for k in fig_keys if k not in parent]
+    entries.sort(key=lambda t: -t[2])
+    seq = [(t, i) for t, i, _ in entries]
+
+    def remove_src():
+        nonlocal seq
+        if src_k.startswith('group:'):
+            name = src_k[6:]
+            seq = [b for b in seq if b != ('g', name)]
+            return ('g', name)
+        if src_k in parent:
+            groups[parent[src_k]].remove(src_k)
+            if not groups[parent[src_k]]:
+                gname = parent[src_k]
+                groups.pop(gname)
+                seq = [b for b in seq if b != ('g', gname)]
+        else:
+            seq = [b for b in seq if b != ('l', src_k)]
+        return ('l', src_k)
+
+    if mode == 'onto':
+        kind_, name_ = remove_src()
+        moving = groups.pop(name_) if kind_ == 'g' else [src_k]
+        if kind_ == 'g':
+            seq = [b for b in seq if b != ('g', name_)]
+        if dst_k.startswith('group:'):
+            tname = dst_k[6:]
+        elif dst_k in parent and parent[dst_k] in groups:
+            tname = parent[dst_k]
+        else:
+            tname = disp(dst_k)
+            while tname in groups:
+                tname += ' •'
+            groups[tname] = [dst_k]
+            seq = [('g', tname) if b == ('l', dst_k) else b for b in seq]
+        if tname in groups:
+            tgt = groups[tname]
+            at = tgt.index(dst_k) + 1 if dst_k in tgt else 0
+            for m in moving:
+                if m not in tgt:
+                    tgt.insert(at, m)
+                    at += 1
+            if ('g', tname) not in seq:
+                seq.append(('g', tname))
+    else:
+        kind_, name_ = remove_src()
+        block = ('g', name_) if kind_ == 'g' else ('l', src_k)
+        offset = 0 if mode == 'before' else 1
+        if kind_ == 'l' and not dst_k.startswith('group:') and dst_k in parent and parent[dst_k] in groups:
+            # between members: inherit the target's group
+            ms = groups[parent[dst_k]]
+            ms.insert(ms.index(dst_k) + offset, src_k)
+        else:
+            anchor = ('g', dst_k[6:]) if dst_k.startswith('group:') else \
+                     (('g', parent[dst_k]) if dst_k in parent else ('l', dst_k))
+            idx = seq.index(anchor) if anchor in seq else len(seq)
+            seq.insert(idx + offset, block)
+
+    # persist: groups + z from the flattened display order, with the
+    # undraggable members (the plate) merged back into their groups
+    merged = {}
+    for n in list(groups) + [n for n, ex in extras.items() if ex]:
+        if n in merged:
+            continue
+        merged[n] = list(groups.get(n, [])) + \
+            [k for k in extras.get(n, []) if k not in groups.get(n, [])]
+    p.layer_groups = {n: ks for n, ks in merged.items() if ks}
+    flat = []
+    for t, i in seq:
+        if t == 'g':
+            flat += groups.get(i, [])
+        else:
+            flat.append(i)
+    for k in fig_keys:
+        if k not in flat:
+            flat.append(k)
+    n = len(flat)
+    for i, k in enumerate(flat):
+        cur = dict((p.figure_blocking or {}).get(k) or {})
+        cur['z'] = n - i
+        p.figure_blocking[k] = cur
+
+
 def board_label(board) -> str:
     """How the board reads in receipts and job labels."""
     if is_cover(board):
@@ -748,115 +863,7 @@ def light_table(state: APPState, panel, scene, setting,
             p = read_board(state.storage, a)
             if p is None:
                 return
-            mode = a.get('mode', 'before')
-            src_k, dst_k = a['src'], a['dst']
-            fig_keys = [f"{r.character_id}/{r.variant_id}" for r in (p.character_references or [])]
-            # the display defaults z to the cast index — the reorder baseline
-            # must match or the first restack inverts the un-dragged stack
-            cast_default_z = {k: i for i, k in enumerate(fig_keys)}
-            fig_keys += [k for k in sorted(p.figure_images or {}) if k.startswith('element/')]
-
-            def z(k):
-                b = (p.figure_blocking or {}).get(k) or {}
-                if 'z' in b:
-                    return b['z']
-                return cast_default_z.get(k, 40)
-
-            def disp(k):
-                return (k.split('/', 1)[1] if k.startswith('element/') else k.split('/')[0]).replace('-', ' ')
-
-            # non-figure members (the split plate) can't be dragged but must
-            # never be stripped from their group by a restack
-            extras = {n: [k for k in ks if k not in fig_keys]
-                      for n, ks in (p.layer_groups or {}).items()}
-            groups = {n: sorted([k for k in ks if k in fig_keys], key=lambda k: -z(k))
-                      for n, ks in (p.layer_groups or {}).items()}
-            groups = {n: ks for n, ks in groups.items() if ks}
-            parent = {k: n for n, ks in groups.items() for k in ks}
-
-            # top-level sequence: ('g', name) and ('l', key), by current z
-            entries = [('g', n, max(z(k) for k in ks)) for n, ks in groups.items()]
-            entries += [('l', k, z(k)) for k in fig_keys if k not in parent]
-            entries.sort(key=lambda t: -t[2])
-            seq = [(t, i) for t, i, _ in entries]
-
-            def remove_src():
-                nonlocal seq
-                if src_k.startswith('group:'):
-                    name = src_k[6:]
-                    seq = [b for b in seq if b != ('g', name)]
-                    return ('g', name)
-                if src_k in parent:
-                    groups[parent[src_k]].remove(src_k)
-                    if not groups[parent[src_k]]:
-                        gname = parent[src_k]
-                        groups.pop(gname)
-                        seq = [b for b in seq if b != ('g', gname)]
-                else:
-                    seq = [b for b in seq if b != ('l', src_k)]
-                return ('l', src_k)
-
-            if mode == 'onto':
-                kind_, name_ = remove_src()
-                moving = groups.pop(name_) if kind_ == 'g' else [src_k]
-                if kind_ == 'g':
-                    seq = [b for b in seq if b != ('g', name_)]
-                if dst_k.startswith('group:'):
-                    tname = dst_k[6:]
-                elif dst_k in parent and parent[dst_k] in groups:
-                    tname = parent[dst_k]
-                else:
-                    tname = disp(dst_k)
-                    while tname in groups:
-                        tname += ' •'
-                    groups[tname] = [dst_k]
-                    seq = [('g', tname) if b == ('l', dst_k) else b for b in seq]
-                if tname in groups:
-                    tgt = groups[tname]
-                    at = tgt.index(dst_k) + 1 if dst_k in tgt else 0
-                    for m in moving:
-                        if m not in tgt:
-                            tgt.insert(at, m)
-                            at += 1
-                    if ('g', tname) not in seq:
-                        seq.append(('g', tname))
-            else:
-                kind_, name_ = remove_src()
-                block = ('g', name_) if kind_ == 'g' else ('l', src_k)
-                offset = 0 if mode == 'before' else 1
-                if kind_ == 'l' and not dst_k.startswith('group:') and dst_k in parent and parent[dst_k] in groups:
-                    # between members: inherit the target's group
-                    ms = groups[parent[dst_k]]
-                    ms.insert(ms.index(dst_k) + offset, src_k)
-                else:
-                    anchor = ('g', dst_k[6:]) if dst_k.startswith('group:') else \
-                             (('g', parent[dst_k]) if dst_k in parent else ('l', dst_k))
-                    idx = seq.index(anchor) if anchor in seq else len(seq)
-                    seq.insert(idx + offset, block)
-
-            # persist: groups + z from the flattened display order, with the
-            # undraggable members (the plate) merged back into their groups
-            merged = {}
-            for n in list(groups) + [n for n, ex in extras.items() if ex]:
-                if n in merged:
-                    continue
-                merged[n] = list(groups.get(n, [])) + \
-                    [k for k in extras.get(n, []) if k not in groups.get(n, [])]
-            p.layer_groups = {n: ks for n, ks in merged.items() if ks}
-            flat = []
-            for t, i in seq:
-                if t == 'g':
-                    flat += groups.get(i, [])
-                else:
-                    flat.append(i)
-            for k in fig_keys:
-                if k not in flat:
-                    flat.append(k)
-            n = len(flat)
-            for i, k in enumerate(flat):
-                cur = dict((p.figure_blocking or {}).get(k) or {})
-                cur['z'] = n - i
-                p.figure_blocking[k] = cur
+            apply_stack_reorder(p, a['src'], a['dst'], a.get('mode', 'before'))
             state.storage.update_object(p)
             state.refresh_details()
         ui.on('stack_reorder', _on_reorder)
@@ -1578,7 +1585,7 @@ def light_table(state: APPState, panel, scene, setting,
 
             def flatten_group(gname):
                 from uuid import uuid4
-                from PIL import Image as _Img
+                from helpers.compositor import DIMS, base_canvas, paste_acetates
                 # capture everything the flatten touches, for the undo chip
                 saved_imgs = dict(panel.figure_images or {})
                 saved_blk = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()}
@@ -1591,33 +1598,17 @@ def light_table(state: APPState, panel, scene, setting,
                 live = [fkeys[k] for k in keys if k in fkeys
                         and ((fresh.figure_blocking or {}).get(k) or {}).get('on', 1)
                         and fkeys[k]["img"]]
-                dims = {'landscape': (1536, 1024), 'portrait': (1024, 1536), 'square': (1024, 1024)}[panel.aspect.value]
-                W, H = dims
+                W, H = DIMS[panel.aspect.value]
                 if has_plate:
                     plate_path = (panel.figure_images or {}).get('background/plate')
-                    if plate_path and os.path.exists(plate_path):
-                        base = _Img.open(plate_path).convert('RGBA')
-                        s = max(W / base.width, H / base.height)
-                        base = base.resize((max(1, round(base.width * s)), max(1, round(base.height * s))))
-                        lft, tp = (base.width - W) // 2, (base.height - H) // 2
-                        base = base.crop((lft, tp, lft + W, tp + H))
-                    else:
-                        base = _Img.new('RGBA', dims, (250, 246, 236, 255))
+                    base = base_canvas(panel.aspect.value,
+                                       plate_path if (plate_path and os.path.exists(plate_path)) else None)
                 else:
-                    base = _Img.new('RGBA', dims, (0, 0, 0, 0))
-                boxes = []
-                for m in sorted(live, key=lambda g: {**g["blocking"], **((fresh.figure_blocking or {}).get(g["key"]) or {})}.get('z', 0)):
-                    b = {**m["blocking"], **((fresh.figure_blocking or {}).get(m["key"]) or {})}
-                    img = _Img.open(m["img"]).convert('RGBA')
-                    if b.get('flip'):
-                        img = img.transpose(_Img.FLIP_LEFT_RIGHT)
-                    th = H * b["h"] / 100
-                    s = th / img.height
-                    img = img.resize((max(1, round(img.width * s)), max(1, round(th))))
-                    cx = W * b["x"] / 100
-                    bottom = H - H * b["y"] / 100
-                    base.paste(img, (round(cx - img.width / 2), round(bottom - img.height)), img)
-                    boxes.append((cx - img.width / 2, bottom - img.height, cx + img.width / 2, bottom))
+                    base = base_canvas(panel.aspect.value, None, transparent=True)
+                boxes = paste_acetates(base, panel.aspect.value,
+                                       [(m["img"], {**m["blocking"],
+                                                    **((fresh.figure_blocking or {}).get(m["key"]) or {})})
+                                        for m in live])
                 from storage.filepath import obj_to_imagepath
                 figures_dir = os.path.join(os.path.dirname(obj_to_imagepath(obj=panel, base_path=storage.base_path)), 'figures')
                 os.makedirs(figures_dir, exist_ok=True)
@@ -1946,30 +1937,15 @@ def light_table(state: APPState, panel, scene, setting,
 
             def flatten_bytes() -> bytes:
                 import io
-                from PIL import Image
-                dims = {'landscape': (1536, 1024), 'portrait': (1024, 1536), 'square': (1024, 1024)}[panel.aspect.value]
-                W, H = dims
-                if bg_layer["on"] and background:
-                    base = Image.open(background).convert('RGBA')
-                    s = max(W / base.width, H / base.height)
-                    base = base.resize((max(1, round(base.width * s)), max(1, round(base.height * s))))
-                    left, top = (base.width - W) // 2, (base.height - H) // 2
-                    base = base.crop((left, top, left + W, top + H))
-                else:
-                    base = Image.new('RGBA', dims, (250, 246, 236, 255))
+                from helpers.compositor import base_canvas, paste_acetates
                 fresh = storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
+                base = base_canvas(panel.aspect.value,
+                                   background if (bg_layer["on"] and background) else None)
                 live = [f for f in figures if f["on"] and f["img"]]
-                for f in sorted(live, key=lambda g: {**g["blocking"], **((fresh.figure_blocking or {}).get(g["key"]) or {})}.get("z", 0)):
-                    b = {**f["blocking"], **((fresh.figure_blocking or {}).get(f["key"]) or {})}
-                    fig = Image.open(f["img"]).convert('RGBA')
-                    if b.get('flip'):
-                        fig = fig.transpose(Image.FLIP_LEFT_RIGHT)
-                    th = H * b["h"] / 100
-                    s = th / fig.height
-                    fig = fig.resize((max(1, round(fig.width * s)), max(1, round(th))))
-                    cx = W * b["x"] / 100
-                    bottom = H - H * b["y"] / 100
-                    base.paste(fig, (round(cx - fig.width / 2), round(bottom - fig.height)), fig)
+                paste_acetates(base, panel.aspect.value,
+                               [(f["img"], {**f["blocking"],
+                                            **((fresh.figure_blocking or {}).get(f["key"]) or {})})
+                                for f in live])
                 buf = io.BytesIO()
                 base.save(buf, 'PNG')
                 return buf.getvalue()

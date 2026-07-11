@@ -1,10 +1,9 @@
 import os
 from nicegui import ui
 from gui.avatars import comic_chat_message
-from loguru import logger
 from nicegui.events import UploadEventArguments
-from gui.selection import SelectionItem, SelectedKind
-from gui.elements import markdown, DARK_MODE_STYLES, markdown_field_editor, header, crud_button, CrudButtonKind, view_attributes, Attribute, removable_chips
+from gui.selection import SelectionItem
+from gui.elements import markdown, markdown_field_editor, header, crud_button, CrudButtonKind, view_attributes, Attribute
 from gui.messaging import post_user_message
 from schema import SceneModel, Panel, FrameLayout
 from gui.state import APPState
