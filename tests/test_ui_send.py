@@ -114,3 +114,17 @@ async def test_conversations_persist_per_object(user: User) -> None:
     # a different object's conversation does not contain it
     await user.open("/series/joey")
     await user.should_not_see("ZEBRA-99")
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_asset_catalog_drawer(user: User) -> None:
+    """The Assets button summons the visual catalog on any view."""
+    main.LocalStorage = _TmpStorage
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    user.find("Assets").click()
+    await user.should_see("Asset Catalog")
+    await user.should_see("Fortune Teller Tent")     # a setting card
+    await user.should_see("Use here")                # the conversational action

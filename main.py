@@ -175,6 +175,13 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     state.change_selection(selection)   # update the selection to force the redraw of the breadcrumbs
     state.refresh_details()             # Redraw the details based on the current selection
 
+    # The asset catalog drawer: summonable palette on every view.
+    from gui.drawer import build_asset_drawer
+    toggle_assets = build_asset_drawer(state)
+    with breadcrumbs.parent_slot.parent:  # the header row
+        ui.button('Assets', icon='collections_bookmark', on_click=lambda _: toggle_assets()) \
+            .props('flat no-caps').tooltip('Browse the studio asset catalog')
+
     # Browser back/forward re-resolves the selection from the URL.
     ui.add_body_html("<script>window.addEventListener('popstate', () => location.reload());</script>")
 

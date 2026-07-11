@@ -57,6 +57,16 @@ library becomes authoritative. B is not a detour; it is A's first phase.
 
 ---
 
+## Revision (2026-07-10): catalog drawer, not a page
+
+The /library top-level page was rejected in review: assets are a palette you draw
+from while working, not a destination.  The catalog is now a summonable right-hand
+DRAWER on every view (`gui/drawer.py`, "Assets" in the header): image-first cards,
+search, and two actions per card — "Use here" posts a conversational request to the
+current view's coauthor (which imports/attaches as context demands), "Open" deep-links
+in a new window.  The import tools remain the plumbing and are available to the
+series, issue, and scene agents.  The /library route stays as a dormant deep link.
+
 ## MVP slice (phase 1)
 
 1. **Library root** — a fourth top-level section beside Series/Publishers/Styles:

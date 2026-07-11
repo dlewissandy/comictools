@@ -203,6 +203,10 @@ TOOLKITS: dict[str,list[Tool]] = {
         create_scene,
         create_scene_panels,
         create_setting,
+        # Library
+        list_library_assets,
+        import_character,
+        import_setting,
         # Read
         read_issue,
         read_style,
@@ -280,6 +284,10 @@ TOOLKITS: dict[str,list[Tool]] = {
         create_panel,
         create_scene_panels,
         create_setting,
+        # Library
+        list_library_assets,
+        import_character,
+        import_setting,
         # Read
         read_scene,
         read_panel,
