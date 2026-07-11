@@ -177,8 +177,8 @@ async def test_palette_and_chip_removal(user: User) -> None:
         "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
     # attached assets render as chips
-    await user.should_see("Fortune Teller Tent (Interior)")
-    await user.should_see("ezra (base)")
+    await user.should_see("Fortune Teller Tent")
+    await user.should_see("ezra")
 
     # remove Ezra from the cast via the chip's ✕
     from nicegui import ui as _ui

@@ -386,9 +386,10 @@ def render_object_cards(
                     ui.image(source=image).style('top-padding: 0; bottom-padding:0')
                 else:
                     if get_markdown is None:
-                        header("No image available",5)
+                        ui.label('no artwork yet').classes('text-xs text-gray-500')
                     else:
-                        markdown(get_markdown(instance))
+                        markdown(get_markdown(instance)).classes('text-sm').style(
+                            'display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;')
                 
             # Fix lambda by creating a closure with the current value of new_sel
             card.on('click', lambda _, new_sel=new_sel: state.change_selection( new_sel))
@@ -480,7 +481,7 @@ class Attribute(TypedDict, total=False):
 
 
 def view_attributes(state: APPState, caption: str, attributes: list[Attribute], expanded: bool=False, individual_icons: bool = True, header_size: int=1):
-    with ui.element().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as container:
+    with ui.element().classes('w-full') as container:
         with ui.expansion( value=expanded ).classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
                 header(caption, header_size)
@@ -745,3 +746,26 @@ def removable_chips(state: APPState, caption: str, items: list[tuple[str, str]],
             ui.chip(label, removable=True, icon=icon).props('dense outline') \
                 .tooltip(f'✕ removes {label} from {caption.lower()}') \
                 .on('remove', lambda _, k=key: _remove(k))
+
+
+def removable_chips_inline(state: APPState, items: list[tuple[str, str]],
+                           remover: Callable, icon: str = "sell"):
+    """removable_chips without caption or placeholder — for compact strips."""
+    for key, label in items:
+        def _remove(key=key, label=label):
+            try:
+                remover(key)
+            except Exception as e:
+                ui.notify(f"Couldn't remove {label}: {e}", type='warning')
+                return
+            try:
+                with state.history:
+                    with ui.chat_message(name='You', sent=True).classes('w-full'):
+                        ui.markdown(f"✂️ removed **{label}**")
+                state.history.scroll_to(percent=100)
+            except Exception:
+                pass
+            state.refresh_details()
+        ui.chip(label, removable=True, icon=icon).props('dense outline') \
+            .tooltip(f'✕ detaches {label}') \
+            .on('remove', lambda _, k=key: _remove(k))

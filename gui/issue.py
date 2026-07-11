@@ -74,9 +74,6 @@ def view_issue(state:APPState):
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
-            if total:
-                color = 'green' if done_total == total else 'orange'
-                ui.badge(f"{done_total}/{total} panels rendered", color=color).classes('self-center q-ml-md')
             ui.space()
             ui.button('Read', icon='menu_book').props('rounded') \
                 .tooltip('Read the issue front to back') \

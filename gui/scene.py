@@ -65,15 +65,14 @@ def view_scene(state: APPState):
     panels_all = storage.read_all_objects(Panel, primary_key={
         "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
     rendered_ct = sum(1 for p in panels_all if p.image and os.path.exists(p.image))
+    from schema import Setting
+    setting_obj = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": scene.setting_id}) if scene.setting_id else None
 
-    def _pill(ok: bool, label: str, fix_message: str | None = None):
-        if ok:
-            ui.chip(label, icon='check_circle', color='green').props('dense outline')
-        else:
-            chip = ui.chip(label, icon='radio_button_unchecked', color='orange').props('dense clickable')
-            if fix_message:
-                chip.tooltip("Click and I'll get started")
-                chip.on('click', lambda _, m=fix_message: post_user_message(state, m))
+    def _todo(label: str, fix_message: str):
+        """Amber pill: shown ONLY while the step is missing (attached things show as chips)."""
+        chip = ui.chip(label, icon='radio_button_unchecked', color='orange').props('dense clickable')
+        chip.tooltip("Click and I'll get started")
+        chip.on('click', lambda _, m=fix_message: post_user_message(state, m))
 
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
@@ -81,15 +80,46 @@ def view_scene(state: APPState):
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current scene."), size=1)
 
-        # Production strip: what stands between this scene and finished pages.
+        # ONE production strip: chips for what's attached (✕ removes), amber
+        # pills only for what's missing, plus the artwork counter.
+        from gui.elements import removable_chips_inline
         with ui.row().classes('w-full items-center q-pa-sm border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800').style('gap: 8px;'):
             ui.label('Production').classes('text-xs uppercase text-gray-500')
-            _pill(bool(scene.setting_id), 'setting', 'Give this scene a setting.')
-            _pill(bool(scene.cast), 'cast', 'Cast the characters for this scene.')
-            _pill(len(panels_all) > 0, 'panels', 'Break this scene into panels.')
-            _pill(len(panels_all) > 0 and rendered_ct == len(panels_all),
-                  f'artwork {rendered_ct}/{len(panels_all)}' if panels_all else 'artwork',
-                  'Render the missing panels.')
+            if not scene.setting_id:
+                _todo('setting', 'Give this scene a setting.')
+            if not scene.cast:
+                _todo('cast', 'Cast the characters for this scene.')
+            if not panels_all:
+                _todo('panels', 'Break this scene into panels.')
+            elif rendered_ct < len(panels_all):
+                _todo(f'artwork {rendered_ct}/{len(panels_all)}', 'Render the missing panels.')
+            else:
+                ui.chip(f'artwork {rendered_ct}/{len(panels_all)}', icon='check_circle', color='green').props('dense outline')
+
+            def _save_scene():
+                storage.update_object(data=scene)
+
+            def _remove_setting(_key):
+                scene.setting_id = None
+                _save_scene()
+
+            def _remove_cast(key):
+                scene.cast = [c for c in scene.cast if f"{c.character_id}/{c.variant_id}" != key]
+                _save_scene()
+
+            def _remove_prop(key):
+                scene.props = [p for p in scene.props if p.name != key]
+                _save_scene()
+
+            if setting_obj:
+                removable_chips_inline(state,
+                    [(setting_obj.setting_id, setting_obj.name)], _remove_setting, icon='location_on')
+            removable_chips_inline(state,
+                [(f"{c.character_id}/{c.variant_id}", c.character_id) for c in (scene.cast or [])],
+                _remove_cast, icon='theater_comedy')
+            removable_chips_inline(state,
+                [(p.name, p.name) for p in (scene.props or [])],
+                _remove_prop, icon='category')
 
         with ui.row().classes('w-full flex-nowrap'):
             with ui.column().classes('w-3/4'):
@@ -115,9 +145,8 @@ def view_scene(state: APPState):
                             ), style.image.get("art",None)) if style else None
                 )
 
-        # Production details: setting, cast (with wardrobe), props and blocking.
-        from schema import Setting
-        setting_obj = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": scene.setting_id}) if scene.setting_id else None
+        # Production details (collapsed): the prose that doesn't need to be
+        # visible at all times.
         view_attributes(
             state=state,
             caption="Production",
@@ -130,32 +159,7 @@ def view_scene(state: APPState):
             header_size=2,
         )
 
-        # Attached assets: chips with an ✕ — removal is as easy as adding.
-        def _save_scene():
-            storage.update_object(data=scene)
 
-        def _remove_setting(_key):
-            scene.setting_id = None
-            _save_scene()
-
-        def _remove_cast(key):
-            scene.cast = [c for c in scene.cast if f"{c.character_id}/{c.variant_id}" != key]
-            _save_scene()
-
-        def _remove_prop(key):
-            scene.props = [p for p in scene.props if p.name != key]
-            _save_scene()
-
-        with ui.column().classes('w-full q-px-sm').style('gap: 2px;'):
-            removable_chips(state, "Setting",
-                [(setting_obj.setting_id, f"{setting_obj.name} ({'Interior' if setting_obj.interior else 'Exterior'})")] if setting_obj else [],
-                _remove_setting, icon='location_on')
-            removable_chips(state, "Cast",
-                [(f"{c.character_id}/{c.variant_id}", f"{c.character_id} ({c.variant_id})") for c in (scene.cast or [])],
-                _remove_cast, icon='theater_comedy')
-            removable_chips(state, "Props",
-                [(p.name, p.name) for p in (scene.props or [])],
-                _remove_prop, icon='category')
 
         with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):
