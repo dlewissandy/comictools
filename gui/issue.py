@@ -162,6 +162,32 @@ def view_issue(state:APPState):
                 overlap_caption=_cap("Covers", "I would like to create a new cover for this issue.")
             )
 
+        def _scene_overlay(scene):
+            # reading-order controls ride ON the card, like the panel walls
+            def _nudge(sc, d):
+                sibs = sorted(storage.read_all_objects(SceneModel, primary_key={
+                    "series_id": series_id, "issue_id": issue_id}), key=lambda s: s.scene_number)
+                i = next((j for j, s in enumerate(sibs) if s.scene_id == sc.scene_id), None)
+                if i is None or not (0 <= i + d < len(sibs)):
+                    return
+                other = sibs[i + d]
+                sc.scene_number, other.scene_number = other.scene_number, sc.scene_number
+                storage.update_object(sc)
+                storage.update_object(other)
+                from gui.light_table import table_receipt
+                table_receipt(state, f"↔️ moved **{sc.name}** {'earlier' if d < 0 else 'later'} in the issue")
+                state.refresh_details()
+            with ui.row().classes('absolute bottom-1 left-0 right-0 z-10 justify-between items-center').style('padding: 0 6px;'):
+                ui.button(icon='chevron_left').props('flat round dense size=xs') \
+                    .classes('bg-white/70 dark:bg-black/50') \
+                    .tooltip('Move earlier in the reading order') \
+                    .on('click.stop', lambda _, sc=scene: _nudge(sc, -1))
+                ui.label(f"#{scene.scene_number}").classes('text-xs self-center px-2 rounded bg-white/70 dark:bg-black/50')
+                ui.button(icon='chevron_right').props('flat round dense size=xs') \
+                    .classes('bg-white/70 dark:bg-black/50') \
+                    .tooltip('Move later in the reading order') \
+                    .on('click.stop', lambda _, sc=scene: _nudge(sc, 1))
+
         if True:
             view_all_instances(
                 state=state,
@@ -173,7 +199,8 @@ def view_issue(state:APPState):
                 get_markdown=lambda scene: scene.story,
                 number_of_columns=3,
                 packer=packer, variants=[(3, 2), (6, 4)],
-                overlap_caption=_cap("Scenes", "I would like to create a new scene for this issue.")
+                overlap_caption=_cap("Scenes", "I would like to create a new scene for this issue."),
+                card_overlay=_scene_overlay
             )
         packer.finalize()
         mosaic.__exit__(None, None, None)

@@ -542,27 +542,48 @@ def style_page(tail: str):
 @ui.page('/series/{series_id}/issue/{issue_id}/read')
 def read_issue_page(series_id: str, issue_id: str):
     """
-    The reader: the bound issue, front to back — cover first, then every
-    scene's panels in reading order.  Read-only; no chat.
+    THE READING ROOM: the bound issue, front to back — cover first, then
+    every page in reading order.  Lights down, pages as paper sheets;
+    arrow keys (or PageUp/PageDown) turn the pages.  Read-only; no chat.
     """
     from helpers.binder import collect_issue
     from schema import Issue
     storage = LocalStorage(base_path="data")
     issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
-    with ui.column().classes('mx-auto items-center').style('max-width: 900px; width: 100%; padding: 24px 12px;'):
+    # lights down: this page alone reads against a dark tabletop
+    ui.add_css("""
+        .reading-room { background: #211d1a !important; }
+        .reader-sheet { background: #fff; border-radius: 2px;
+                        box-shadow: 0 10px 32px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4); }
+    """)
+    ui.query('body').classes('reading-room')
+    ui.add_body_html("""<script>
+    document.addEventListener('keydown', (e) => {
+      if (!['ArrowRight','ArrowLeft','PageDown','PageUp'].includes(e.key)) return;
+      const sheets = [...document.querySelectorAll('.reader-sheet')];
+      if (!sheets.length) return;
+      e.preventDefault();
+      const fwd = (e.key === 'ArrowRight' || e.key === 'PageDown');
+      const cur = sheets.filter(s => s.getBoundingClientRect().top < 80).length - 1;
+      const next = fwd ? Math.min(sheets.length - 1, cur + 1) : Math.max(0, cur - 1);
+      sheets[next].scrollIntoView({behavior: 'smooth', block: 'start'});
+    });
+    </script>""")
+    with ui.column().classes('mx-auto items-center').style('max-width: 900px; width: 100%; padding: 32px 12px; gap: 28px;'):
         if issue is None:
-            ui.markdown(f"Issue `{issue_id}` not found.")
+            ui.markdown(f"Issue `{issue_id}` not found.").style('color: #e8e2d8;')
             return
         from helpers.binder import layout_pages
         front, panel_images, back, missing = collect_issue(storage, series_id, issue_id)
-        ui.label(f"{issue.name}").classes('text-3xl font-bold')
+        ui.label(f"{issue.name}").classes('text-3xl font-bold').style('color: #e8e2d8;')
+        ui.label('← → turn the pages').classes('text-xs').style('color: #8a8378;')
         if front:
-            ui.image(source=front).classes('w-full').style('max-width: 700px;')
+            ui.image(source=front).classes('w-full reader-sheet').style('max-width: 700px;')
         layout = layout_pages(storage, series_id, issue_id)
         if layout:
             # Designed pages: each page is a sheet of rows; panels share row height.
             for pm, rows in layout:
-                with ui.card().classes('w-full q-pa-md').style('background: white; aspect-ratio: 994/1538; overflow: hidden;'):
+                with ui.card().classes('w-full q-pa-md reader-sheet').style('aspect-ratio: 994/1538; overflow: hidden;'):
                     for row in rows:
                         with ui.row().classes('w-full flex-nowrap items-stretch').style('gap: 8px;'):
                             for img in row:
@@ -570,18 +591,19 @@ def read_issue_page(series_id: str, issue_id: str):
                                     ui.image(source=img).style('flex: 1; min-width: 0;')
                                 else:
                                     ui.element('div').style('flex: 1; background: #eee; border: 2px dashed #bbb; min-height: 120px;')
-                ui.label(f"page {pm.page_number}").classes('text-xs text-gray-500 self-center')
+                ui.label(f"page {pm.page_number}").classes('text-xs self-center').style('color: #8a8378; margin-top: -18px;')
         else:
             for img in panel_images:
-                ui.image(source=img).classes('w-full')
+                ui.image(source=img).classes('w-full reader-sheet')
         if back:
-            ui.image(source=back).classes('w-full').style('max-width: 700px;')
+            ui.image(source=back).classes('w-full reader-sheet').style('max-width: 700px;')
         if missing:
-            with ui.expansion(f"{len(missing)} piece(s) still missing from a complete issue").classes('w-full'):
+            with ui.expansion(f"{len(missing)} piece(s) still missing from a complete issue") \
+                    .classes('w-full').style('color: #e8e2d8;'):
                 for m in missing:
                     ui.markdown(f"* {m}")
         if not front and not panel_images:
-            ui.markdown("Nothing rendered yet — render covers and panels, then come back.")
+            ui.markdown("Nothing rendered yet — render covers and panels, then come back.").style('color: #e8e2d8;')
 
 
 @ui.page('/series/{tail:path}')

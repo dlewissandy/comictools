@@ -376,7 +376,8 @@ def render_object_cards(
         flow_span: Optional[int] = None,
         overlap_caption: Optional[Callable] = None,
         packer: Optional["PagePacker"] = None,
-        variants: Optional[list[tuple[int, int]]] = None):
+        variants: Optional[list[tuple[int, int]]] = None,
+        card_overlay: Optional[Callable] = None):
     
     selection = state.selection
     if (packer is not None and variants) or flow_span:
@@ -459,6 +460,9 @@ def render_object_cards(
                     else:
                         markdown(get_markdown(instance)).classes('text-sm').style(
                             'display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;')
+                if card_overlay is not None:
+                    # per-card controls riding ON the art (reorder, copy, ...)
+                    card_overlay(instance)
                 
             # Fix lambda by creating a closure with the current value of new_sel
             card.on('click', lambda _, new_sel=new_sel: state.change_selection( new_sel))
@@ -488,7 +492,8 @@ def view_all_instances(
         flow_span: Optional[int] = None,
         overlap_caption: Optional[Callable] = None,
         packer: Optional["PagePacker"] = None,
-        variants: Optional[list[tuple[int, int]]] = None): 
+        variants: Optional[list[tuple[int, int]]] = None,
+        card_overlay: Optional[Callable] = None): 
     """
     A gui shortcut to view all the instances of a given kind.
 
@@ -557,7 +562,8 @@ def view_all_instances(
             flow_span=flow_span,
             overlap_caption=overlap_caption,
             packer=packer,
-            variants=variants
+            variants=variants,
+            card_overlay=card_overlay
         )
 
 class Attribute(TypedDict, total=False):

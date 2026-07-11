@@ -761,6 +761,81 @@ def tear_up_take(state, board, img: str):
     state.refresh_details()
 
 
+def wastebasket_chip(state, board):
+    """Torn-up takes and removed references outlive their chat receipts as
+    dot-prefixed wastebasket files.  This quiet chip opens the basket and
+    puts things back — nothing destructive is ever more than a click from
+    recovery, even after a restart."""
+    from uuid import uuid4
+    from storage.filepath import obj_to_imagepath, obj_to_reference_path
+    storage = state.storage
+    img_dir = obj_to_imagepath(board, base_path=storage.base_path)
+    dirs = [(img_dir, 'take'),
+            (os.path.join(os.path.dirname(img_dir), 'figures'), 'acetate'),
+            (obj_to_reference_path(board, base_path=storage.base_path), 'reference')]
+    entries = []
+    for d, kind in dirs:
+        if d and os.path.isdir(d):
+            for f in sorted(os.listdir(d)):
+                if f.startswith('.trash--'):
+                    entries.append((os.path.join(d, f), kind))
+    if not entries:
+        return
+
+    def open_basket():
+        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 760px;'):
+            ui.label('The wastebasket').classes('caption-box caption-box-sm')
+            ui.label('Torn-up takes, replaced art and removed references — '
+                     'put any of them back.').classes('text-sm q-mt-sm')
+            with ui.row().classes('w-full q-mt-sm').style('gap: 10px;'):
+                for path, kind in entries:
+                    with ui.column().classes('items-center').style('width: 150px; gap: 4px;'):
+                        ui.image(source=_src(path)).style('max-height: 100px; width: 100%;').props('fit=contain')
+                        name = os.path.basename(path).split('--', 2)[-1]
+                        ui.label(f"{kind} · {name[:20]}").classes('text-xs text-gray-500') \
+                            .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;')
+
+                        def put_back(path=path, kind=kind):
+                            base = os.path.basename(path).split('--', 2)[-1]
+                            dest = os.path.join(os.path.dirname(path), base)
+                            if os.path.exists(dest):
+                                stem, ext = os.path.splitext(base)
+                                dest = os.path.join(os.path.dirname(path),
+                                                    f"{stem}--{uuid4().hex[:6]}{ext}")
+                            os.replace(path, dest)
+                            table_receipt(state, f"♻️ put a {kind} back from the wastebasket")
+                            dlg.close()
+                            state.refresh_details()
+                        ui.button('Put it back', icon='restore').props('outline dense size=sm no-caps') \
+                            .on('click', lambda _, p=path, k=kind: put_back(p, k))
+
+            def empty_it():
+                for path, _k in entries:
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
+                table_receipt(state, f"🗑 emptied the wastebasket — {len(entries)} piece(s) gone for good")
+                dlg.close()
+                state.refresh_details()
+            with ui.row().classes('w-full justify-end q-mt-sm'):
+                eb = ui.button('Empty the wastebasket', icon='delete_forever', color='negative') \
+                    .props('outline dense no-caps')
+
+                def confirm_empty(_e, eb=eb):
+                    # two clicks for the only action with no way back
+                    if 'Really' in (eb.text or ''):
+                        empty_it()
+                    else:
+                        eb.set_text('Really empty it? This is forever')
+                eb.on('click', confirm_empty)
+        dlg.open()
+
+    ui.chip(f'wastebasket · {len(entries)}', icon='delete_outline').props('dense clickable outline') \
+        .tooltip('Torn-up takes and removed references — restore them here') \
+        .on('click', lambda _: open_basket())
+
+
 def takes_row(state, board, featured: str | None):
     """Every render of this board on one wall; click a take to feature it
     (locking the table); the layers overlay lays it back down to rework."""
@@ -774,7 +849,9 @@ def takes_row(state, board, featured: str | None):
         state.refresh_details()
 
     takes = [img for img in storage.list_images(board) if os.path.exists(img)]
-    header("Takes", 4)
+    with ui.row().classes('w-full items-center').style('gap: 10px;'):
+        header("Takes", 4)
+        wastebasket_chip(state, board)
     with ruled_page() as packer:
         for img in takes:
             with packer.place_cell([TAKE_SHAPES[board.aspect]], fudge=False):
