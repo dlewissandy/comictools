@@ -124,3 +124,35 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
     except Exception as e:  # never let the greeter break the page
         logger.debug(f"coauthor opener skipped: {e}")
     return (None, [])
+
+
+# The studio staff: who you're talking to on each view.  The coauthor is a
+# person with a role, not a "Bot".
+ROLE_NAMES = {
+    "all-series": "the Editor",
+    "all-publishers": "the Editor",
+    "all-styles": "the Art Director",
+    "library": "the Librarian",
+    "series": "the Editor",
+    "issue": "the Editor",
+    "scene": "the Layout Artist",
+    "panel": "the Penciller",
+    "character": "the Character Designer",
+    "variant": "the Character Designer",
+    "styled-variant": "the Character Designer",
+    "setting": "the Background Artist",
+    "cover": "the Cover Artist",
+    "front-cover": "the Cover Artist",
+    "back-cover": "the Cover Artist",
+    "inside-front-cover": "the Cover Artist",
+    "inside-back-cover": "the Cover Artist",
+    "style": "the Art Director",
+    "publisher": "the Editor",
+    "image-editor": "the Inker",
+    "image-editor-choices": "the Inker",
+}
+
+
+def coauthor_name(selection) -> str:
+    kind = selection[-1].kind.value if selection else "all-series"
+    return ROLE_NAMES.get(kind, "the Coauthor")

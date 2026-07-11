@@ -219,10 +219,18 @@ async def send(state: APPState):
         divider = ui.row().classes('w-full')
 
     # Initialize the UI elements for the response message handling
-        with ui.chat_message(name='Bot', sent=False).classes('w-full'):
+        from gui.coauthor import coauthor_name
+        with ui.chat_message(name=coauthor_name(state.selection), sent=False).classes('w-full'):
             with ui.column().classes('w-full'):
                 response_markdown = ui.markdown("").classes('w-full')
-                spinner = ui.spinner('dots', size="2em")
+                with ui.row().classes('items-center').style('gap: 8px;') as spinner:
+                    ui.spinner('dots', size="1.5em")
+                    working = ui.label('thinking…').classes('text-xs text-gray-500 italic')
+                import itertools, random
+                verbs = itertools.cycle(random.sample([
+                    'thumbnailing…', 'penciling…', 'inking…', 'coloring…',
+                    'lettering…', 'checking the references…', 'flatting…'], 7))
+                ticker = ui.timer(2.4, lambda: working.set_text(next(verbs)))
     
     history.scroll_to(percent=100)
     
@@ -232,6 +240,7 @@ async def send(state: APPState):
     finally:
         # Now that we are done, clean up the ui and re-enable the send button
         # even if the agent run raised, so the user is never left stuck.
+        ticker.cancel()
         spinner.delete()
         send_button.enable()
 

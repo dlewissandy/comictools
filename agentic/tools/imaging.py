@@ -1453,6 +1453,13 @@ panels composed on top of this background match the rest of the issue.
     return f"Master background for '{setting.name}' rendered in style '{style_id}': {locator}"
 
 
+def render_panel_impl(state: APPState, series_id: str, issue_id: str, scene_id: str, panel_id: str) -> str:
+    """Implementation of the panel render (see generate_panel_image)."""
+    class _W:  # minimal wrapper shim for generate_object_image
+        context = state
+    return _generate_panel_image_body(_W(), series_id, issue_id, scene_id, panel_id)
+
+
 @function_tool
 def generate_panel_image(
     wrapper: RunContextWrapper[APPState],
@@ -1483,6 +1490,10 @@ def generate_panel_image(
     Returns:
         A status message with the locator of the rendered panel image.
     """
+    return _generate_panel_image_body(wrapper, series_id, issue_id, scene_id, panel_id)
+
+
+def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id: str, panel_id: str) -> str:
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
 
@@ -1784,3 +1795,54 @@ def generate_outfit_reference(wrapper: RunContextWrapper[APPState], series_id: s
         wrapper, Outfit, "outfit_id", series_id, outfit_id, style_id,
         "an outfit (wardrobe)",
         "Present the attire on a neutral, featureless display form — NO character identity, no face — front view and back view side by side, neutral background.")
+
+
+@function_tool
+def render_missing_panels(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str,
+                          scene_id: Optional[str] = None, confirm: bool = False) -> str:
+    """
+    Render every unrendered panel of a scene (or the whole issue) in the
+    BACKGROUND: the conversation stays open, each finished panel posts a
+    receipt into the chat, and a summary lands at the end.
+
+    Costs real money per image, so the first call returns a quote; call again
+    with confirm=true after the user agrees.
+
+    Args:
+        series_id: The series.
+        issue_id: The issue.
+        scene_id: Limit to one scene (omit for the whole issue).
+        confirm: Set true only after the user has approved the quoted batch.
+
+    Returns:
+        A quote (confirm=false) or a started-in-background message.
+    """
+    from functools import partial
+    from helpers.render_queue import enqueue_renders
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+
+    scenes = ([storage.read_object(SceneModel, {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})]
+              if scene_id else
+              storage.read_all_objects(SceneModel, {"series_id": series_id, "issue_id": issue_id}, order_by="scene_number"))
+    scenes = [s for s in scenes if s is not None]
+    if not scenes:
+        return "No such scene(s) found."
+
+    jobs = []
+    for scene in scenes:
+        for p in storage.read_all_objects(Panel, {"series_id": series_id, "issue_id": issue_id, "scene_id": scene.scene_id}, order_by="panel_number"):
+            if not (p.image and os.path.exists(p.image)):
+                jobs.append((f"Panel {p.panel_number} of '{scene.name}'",
+                             partial(render_panel_impl, state, series_id, issue_id, scene.scene_id, p.panel_id)))
+
+    if not jobs:
+        return "Nothing to render — every panel already has artwork."
+    if not confirm:
+        est = len(jobs) * 0.20
+        return (f"{len(jobs)} panel(s) need rendering.  Estimated cost ≈ ${est:.2f} "
+                f"(high-quality images).  Ask the user to confirm, then call again with confirm=true.")
+
+    enqueue_renders(state, jobs, role="the Penciller")
+    return (f"Started rendering {len(jobs)} panel(s) in the background — receipts will land in the "
+            f"chat as each one finishes.  The conversation stays open meanwhile.")

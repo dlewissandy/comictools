@@ -92,11 +92,11 @@ def init_layout(logger):
         user_input = ui.input(placeholder=placeholder).props('rounded outlined input-class=mx-3 ') \
             .classes('w-full self-center stt-input').style('flex-grow: 1; width: 100vh;')
 
-        mic_button = ui.button('Dictate').props('rounded').classes('q-ml-md')
-        stop_mic_button = ui.button('Stop').props('rounded').classes('q-ml-md')
-        speak_button = ui.button('Speak').props('rounded').classes('q-ml-md')
-        stop_speak_button = ui.button('Mute').props('rounded').classes('q-ml-md')
-        send_button = ui.button('Send').props('rounded').classes('q-ml-md')
+        mic_button = ui.button(icon='mic').props('flat round').classes('q-ml-sm').tooltip('Dictate')
+        stop_mic_button = ui.button(icon='mic_off').props('flat round').tooltip('Stop dictating')
+        speak_button = ui.button(icon='volume_up').props('flat round').tooltip('Read aloud')
+        stop_speak_button = ui.button(icon='volume_off').props('flat round').tooltip('Mute')
+        send_button = ui.button('Send', icon='send').props('rounded unelevated').classes('q-ml-sm')
 
     return (
         breadcrumbs,

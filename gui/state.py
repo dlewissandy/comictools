@@ -231,10 +231,10 @@ class APPState:
         """
         messages = []
         for msg in self.get_transcript( ):
-            role = role_map.get(msg.get("name", "user").lower(), None)
-            if role is None:
-                logger.error(f"Unknown role in message: {msg}")
-                continue
+            name = msg.get("name", "user").lower()
+            # Studio staff names (the Editor, the Penciller, ...) all speak as
+            # the assistant; only the user is "You".
+            role = role_map.get(name, "user" if name == "you" else "assistant")
             content = msg.get("text_html", "")
             messages.append({"role": role, "content": content})
         return messages
@@ -262,7 +262,7 @@ class APPState:
             if name in ["Tool Call", "Tool Output"] and parent_container == history:
                 with history:
                     parent_container = ui.expansion("Thoughts", value=False).classes('w-full').classes("text-sm")
-            elif name in ["You", "Bot"] and parent_container != history:
+            elif name not in ["Tool Call", "Tool Output"] and parent_container != history:
                 parent_container = history
 
             # add the message to the history
@@ -345,10 +345,12 @@ class APPState:
             logger.debug(f"coauthor refresh skipped: {e}")
             return
 
+        from gui.coauthor import coauthor_name
+        role = coauthor_name(self.selection)
         fresh = len(self.history.default_slot.children) == 0
         if opener and fresh:
             with self.history:
-                with ui.chat_message(name='Bot', sent=False).classes('w-full'):
+                with ui.chat_message(name=role, sent=False).classes('w-full'):
                     ui.markdown(opener)
 
         if self.suggestions_row is not None:
@@ -360,6 +362,7 @@ class APPState:
                 await send(state=self)
 
             with self.suggestions_row:
+                ui.label(f"🖋 with {role}").classes('text-xs text-gray-500 italic self-center')
                 for chip in chips[:4]:
                     ui.button(chip, on_click=lambda _, t=chip: _fire(t)) \
                         .props('outline rounded dense no-caps size=sm')
