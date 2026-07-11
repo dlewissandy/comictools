@@ -117,10 +117,9 @@ def init_layout(logger):
         .comic-mosaic { display: grid; grid-template-columns: repeat(12, 1fr);
                         gap: 12px; grid-auto-flow: dense;
                         container-type: inline-size;
-                        /* HALF-unit rows (exactly half a column): spans match
-                           aspect ratios closely — a 3-col portrait (9 half-
-                           rows) tiles beside two stacked 3-col landscapes. */
-                        grid-auto-rows: calc((100cqw - 132px) / 24); }
+                        /* SQUARE units: rows equal columns; the packer rules
+                           the page with explicit placements. */
+                        grid-auto-rows: calc((100cqw - 132px) / 12); }
         .rspan-2 { grid-row: span 2; } .rspan-3 { grid-row: span 3; }
         .rspan-4 { grid-row: span 4; } .rspan-5 { grid-row: span 5; }
         .rspan-6 { grid-row: span 6; } .rspan-7 { grid-row: span 7; }

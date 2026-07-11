@@ -362,7 +362,9 @@ def render_object_cards(
         number_of_columns: int = 4,
         on_remove: Optional[Callable] = None,
         flow_span: Optional[int] = None,
-        overlap_caption: Optional[Callable] = None):
+        overlap_caption: Optional[Callable] = None,
+        packer: Optional["PagePacker"] = None,
+        variants: Optional[list[tuple[int, int]]] = None):
     
     selection = state.selection
     if flow_span:
@@ -381,23 +383,18 @@ def render_object_cards(
             logger.debug(f"Rendering card for {name} with kind {kind}")
             id = instance.id
             logger.debug(f"Creating card for {id}")
-            if flow_span:
-                # Region spans (in HALF-row units) match the art's true aspect;
-                # the card itself keeps aspect-ratio — never stretched, never
-                # cropped.  rspan = 2 * cols * h/w.
-                try:
-                    w_r, h_r = (float(x) for x in str(aspect_ratio).replace(':', '/').split('/'))
-                except Exception:
-                    w_r = h_r = 1.0
-                rspan = max(2, min(12, round(2 * flow_span * h_r / w_r)))
-                rspan = rspan if rspan in (2,3,4,5,6,7,8,9,10,12) else min((2,3,4,5,6,7,8,9,10,12), key=lambda v: abs(v-rspan))
-                cell = ui.element('div').classes(f'cspan-{flow_span} rspan-{rspan}')
+            if packer is not None and variants:
+                # THE RULED PAGE: the packer places this card left-to-right,
+                # top-to-bottom, choosing among the card type's fixed sizes.
+                cell = packer.place_cell(variants)
+            elif flow_span:
+                cell = ui.element('div').classes(f'cspan-{flow_span}')
             else:
                 cell = contextlib.nullcontext()
             with cell:
                 card = ui.card().classes(TAILWIND_CARD)
-                if flow_span:
-                    # the frame fills the region; art fits inside undistorted
+                if (packer is not None and variants) or flow_span:
+                    # frame fills its ruled region; art contains inside
                     card.classes('mosaic-card')
                 else:
                     card.style(f'aspect-ratio: {aspect_ratio}')
@@ -447,9 +444,13 @@ def render_object_cards(
             # Fix lambda by creating a closure with the current value of new_sel
             card.on('click', lambda _, new_sel=new_sel: state.change_selection( new_sel))
         if not instances and overlap_caption is not None:
-            with (ui.element('div').classes(f'cspan-{flow_span} flow-caption') if flow_span
-                  else contextlib.nullcontext()):
-                overlap_caption()
+            if packer is not None:
+                with packer.place_cell([(3, 1)]).classes('flow-caption'):
+                    overlap_caption()
+            else:
+                with (ui.element('div').classes(f'cspan-{flow_span} flow-caption') if flow_span
+                      else contextlib.nullcontext()):
+                    overlap_caption()
     return grid
 
 
@@ -466,7 +467,9 @@ def view_all_instances(
         aspect_ratio: str = "1/1",
         on_remove: Optional[Callable] = None,
         flow_span: Optional[int] = None,
-        overlap_caption: Optional[Callable] = None): 
+        overlap_caption: Optional[Callable] = None,
+        packer: Optional["PagePacker"] = None,
+        variants: Optional[list[tuple[int, int]]] = None): 
     """
     A gui shortcut to view all the instances of a given kind.
 
@@ -532,7 +535,9 @@ def view_all_instances(
             aspect_ratio=aspect_ratio,
             on_remove=on_remove,
             flow_span=flow_span,
-            overlap_caption=overlap_caption
+            overlap_caption=overlap_caption,
+            packer=packer,
+            variants=variants
         )
 
 class Attribute(TypedDict, total=False):
@@ -858,3 +863,47 @@ def flow_caption(state: APPState, caption: str, message: str, span: int = 3):
     with ui.element('div').classes(f'cspan-{span} flow-caption'):
         caption_action(caption, CrudButtonKind.CREATE,
                        lambda _: post_user_message(state, message), 2)
+
+
+# ---------------------------------------------------------------------------
+# THE PAGE PACKER: cards are placed like ruled comic panels — left to right,
+# top to bottom, on a 12-unit-wide grid of square units.  Each card TYPE has
+# a fixed size vocabulary (characters 3x2; covers 2x3/3x2, scalable 4x6/6x4;
+# logos 2x2); the packer picks the variant that fits the current row best.
+# ---------------------------------------------------------------------------
+class PagePacker:
+    def __init__(self, width: int = 12):
+        self.width = width
+        self.skyline = [0] * width
+
+    def _candidate(self, w: int, h: int):
+        """Best (y, x) for a w×h rectangle: lowest top edge, then leftmost."""
+        best = None
+        for x in range(0, self.width - w + 1):
+            y = max(self.skyline[x:x + w])
+            if best is None or (y, x) < best[:2]:
+                best = (y, x)
+        return best  # (y, x)
+
+    def place(self, variants: list[tuple[int, int]]) -> tuple[int, int, int, int]:
+        """
+        Choose the variant/position reading-order first (lowest y, then x);
+        ties keep the earlier (preferred) variant.  Returns (x, y, w, h).
+        """
+        chosen = None
+        for w, h in variants:
+            if w > self.width:
+                continue
+            y, x = self._candidate(w, h)
+            if chosen is None or (y, x) < (chosen[1], chosen[0]):
+                chosen = (x, y, w, h)
+        x, y, w, h = chosen
+        for i in range(x, x + w):
+            self.skyline[i] = y + h
+        return x, y, w, h
+
+    def place_cell(self, variants: list[tuple[int, int]]):
+        """Place and return a positioned grid cell element."""
+        x, y, w, h = self.place(variants)
+        return ui.element('div').style(
+            f'grid-column: {x + 1} / span {w}; grid-row: {y + 1} / span {h};')

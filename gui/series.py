@@ -77,6 +77,8 @@ def view_series(state: APPState):
         from gui.elements import caption_action, CrudButtonKind as _CK
         def _cap(text, msg):
             return lambda: caption_action(text, _CK.CREATE, lambda _, m=msg: post_user_message(state, m), 3)
+        from gui.elements import PagePacker
+        packer = PagePacker(12)
         mosaic = ui.element('div').classes('comic-mosaic cspan-12')
         mosaic.__enter__()
         if True:
@@ -98,7 +100,7 @@ def view_series(state: APPState):
                 kind="issue",
                 get_name=_issue_label,
                 aspect_ratio="16/27",
-                flow_span=3,
+                packer=packer, variants=[(2, 3), (4, 6)],
                 overlap_caption=_cap("Issues", "I would like to create a new issue")
                 ).style('margin-top: 0px; margin-bottom: 0px')
 
@@ -111,11 +113,11 @@ def view_series(state: APPState):
                 kind="character",
                 aspect_ratio="6/5",
                 get_name=lambda _,x: x.name,
-                flow_span=3,
+                packer=packer, variants=[(3, 2)],
                 overlap_caption=_cap("Characters", "I would like to create a new character")
                 ):
                 pass
-        with ui.element('div').classes('cspan-3 rspan-5'):
+        with packer.place_cell([(3, 2)]):
             uploader_card(
                 state=state,
                 on_upload=lambda e: on_upload(e),
@@ -135,7 +137,7 @@ def view_series(state: APPState):
                 kind="setting",
                 aspect_ratio="3/2",
                 get_name=lambda _, x: x.name,
-                flow_span=3,
+                packer=packer, variants=[(3, 2), (6, 4)],
                 overlap_caption=_cap("Settings", "I would like to create a new setting")
                 ).style('margin-top: 0px; margin-bottom: 0px')
         mosaic.__exit__(None, None, None)

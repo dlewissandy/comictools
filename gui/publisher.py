@@ -69,7 +69,9 @@ def view_publisher(state: APPState):
         # runs through its publisher.
         from gui.elements import caption_action, comic_page, CrudButtonKind as _CK
         from schema import Series
-        with comic_page():
+        from gui.elements import PagePacker
+        packer = PagePacker(12)
+        with ui.element('div').classes('comic-mosaic w-full'):
             view_all_instances(
                 state=state,
                 get_instances=lambda: [s for s in storage.read_all_objects(Series, order_by="name")
@@ -77,7 +79,7 @@ def view_publisher(state: APPState):
                 get_image_locator=lambda x: storage.find_series_image(series_id=x.series_id),
                 kind="series",
                 aspect_ratio="16/27",
-                flow_span=3,
+                packer=packer, variants=[(2, 3), (4, 6)],
                 overlap_caption=lambda: caption_action("Series", _CK.CREATE,
                     lambda _: post_user_message(state, "I would like to create a new comic book series published by this publisher."), 3)
             )
