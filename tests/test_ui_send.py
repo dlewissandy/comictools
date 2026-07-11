@@ -161,3 +161,47 @@ async def test_inline_scalar_edit_affordance(user: User) -> None:
               and any(ch.__class__.__name__ == "Tooltip" and "writer" in getattr(ch, "text", "")
                       for ch in e.default_slot.children)]
     assert labels, "editable writer label exists"
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_palette_and_chip_removal(user: User) -> None:
+    """Cmd-K palette lists objects; scene assets are removable chips."""
+    main.LocalStorage = _TmpStorage
+    # scene with attached setting + cast: the tent consultation
+    json.dump({"selection": [
+        {"name": "Series", "id": None, "kind": "all-series"},
+        {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+        {"name": "C", "id": "witchlight-carnival", "kind": "issue"},
+        {"name": "T", "id": "b3cc50eb-5a57-463c-ba10-927d941c9779", "kind": "scene"}],
+        "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    # attached assets render as chips
+    await user.should_see("Fortune Teller Tent (Interior)")
+    await user.should_see("ezra (base)")
+
+    # remove Ezra from the cast via the chip's ✕
+    from nicegui import ui as _ui
+    chips = [e for e in user.client.elements.values()
+             if e.__class__.__name__ == "Chip" and "ezra" in str(getattr(e, "text", ""))]
+    assert chips, "cast chip exists"
+    chips[0]._handle_event({"handler_id": None}) if False else None
+    # fire the 'remove' event through the element's registered handler
+    for ev in chips[0]._event_listeners.values():
+        if ev.type == "remove":
+            chips[0]._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+    await user.should_see("removed")          # the ✂️ receipt in chat
+
+    # palette: open via the search button and find the tent by name
+    search_btns = [e for e in user.client.elements.values()
+                   if e.__class__.__name__ == "Button" and getattr(e, "props", {}).get("icon") == "search"]
+    assert search_btns, "palette button exists"
+    btn = search_btns[0]
+    for ev in btn._event_listeners.values():
+        if ev.type == "click":
+            btn._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+    palette_inputs = [e for e in user.client.elements.values()
+                      if e.__class__.__name__ == "Input" and "Jump to anything" in str(getattr(e, "props", {}).get("placeholder", ""))]
+    assert palette_inputs, "palette input exists"
+    palette_inputs[-1].set_value("fortune")
+    await user.should_see("setting · Wonders of the Witchlight")

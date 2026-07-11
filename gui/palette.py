@@ -1,0 +1,123 @@
+"""
+The command palette: Cmd/Ctrl-K from anywhere, type a few letters, jump to any
+object in the studio — or hand the query to the coauthor.
+
+Navigation is direct (it changes the selection, conversations follow the
+object); anything the palette can't match becomes a message to the current
+view's coauthor, keeping conversation as the universal fallback.
+"""
+import os
+from loguru import logger
+from nicegui import ui
+
+from gui.selection import SelectionItem, SelectedKind
+from schema import (CharacterModel, CharacterVariant, ComicStyle, Issue, Outfit,
+                    PropAsset, Publisher, SceneModel, Series, Setting)
+
+S = SelectionItem
+K = SelectedKind
+
+
+def _index(storage):
+    """Build the searchable index: (icon, label, sublabel, selection)."""
+    entries = []
+    root = [S(name="Series", id=None, kind=K.ALL_SERIES)]
+    for series in storage.read_all_objects(Series, order_by="name"):
+        sid = series.series_id
+        s_sel = root + [S(name=series.name, id=sid, kind=K.SERIES)]
+        entries.append(("📚", series.name, "series", s_sel))
+        for issue in storage.read_all_objects(Issue, {"series_id": sid}):
+            i_sel = s_sel + [S(name=issue.name, id=issue.issue_id, kind=K.ISSUE)]
+            entries.append(("📖", issue.name, f"issue · {series.name}", i_sel))
+            for scene in storage.read_all_objects(SceneModel, {"series_id": sid, "issue_id": issue.issue_id}):
+                entries.append(("🎬", scene.name, f"scene · {issue.name}",
+                                i_sel + [S(name=scene.name, id=scene.scene_id, kind=K.SCENE)]))
+        for c in storage.read_all_objects(CharacterModel, {"series_id": sid}):
+            c_sel = s_sel + [S(name=c.name, id=c.character_id, kind=K.CHARACTER)]
+            entries.append(("🎭", c.name, f"character · {series.name}", c_sel))
+            for v in storage.read_all_objects(CharacterVariant, {"series_id": sid, "character_id": c.character_id}):
+                entries.append(("👤", f"{c.name} — {v.name}", f"variant · {series.name}",
+                                c_sel + [S(name=v.name, id=v.variant_id, kind=K.VARIANT)]))
+        for st in storage.read_all_objects(Setting, {"series_id": sid}):
+            entries.append(("🏛️", st.name, f"setting · {series.name}",
+                            s_sel + [S(name=st.name, id=st.setting_id, kind=K.SETTING)]))
+        for p in storage.read_all_objects(PropAsset, {"series_id": sid}):
+            entries.append(("🎗️", p.name, f"prop · {series.name}",
+                            s_sel + [S(name=p.name, id=p.prop_id, kind=K.PROP)]))
+        for o in storage.read_all_objects(Outfit, {"series_id": sid}):
+            entries.append(("🧥", o.name, f"outfit · {series.name}",
+                            s_sel + [S(name=o.name, id=o.outfit_id, kind=K.OUTFIT)]))
+    styles_root = [S(name="Styles", id=None, kind=K.ALL_STYLES)]
+    for style in storage.read_all_objects(ComicStyle, order_by="name"):
+        entries.append(("🎨", style.name, "style",
+                        styles_root + [S(name=style.name, id=style.style_id, kind=K.STYLE)]))
+    pubs_root = [S(name="Publishers", id=None, kind=K.ALL_PUBLISHERS)]
+    for pub in storage.read_all_objects(Publisher, order_by="name"):
+        entries.append(("🏢", pub.name, "publisher",
+                        pubs_root + [S(name=pub.name, id=pub.publisher_id, kind=K.PUBLISHER)]))
+    return entries
+
+
+def build_palette(state):
+    """Create the Cmd-K palette dialog; returns its open() callback."""
+    from messaging import send
+
+    dialog = ui.dialog().props('position=top')
+    with dialog, ui.card().classes('w-full').style('max-width: 640px;'):
+        box = ui.input(placeholder='Jump to anything — or ask the coauthor…') \
+            .props('dense outlined autofocus clearable').classes('w-full')
+        results = ui.column().classes('w-full').style('gap: 2px; max-height: 60vh; overflow-y: auto;')
+
+    state._palette_entries = None  # built lazily, refreshed per open
+
+    def _go(sel):
+        dialog.close()
+        state.change_selection(new=sel)
+
+    async def _ask(term: str):
+        dialog.close()
+        state.user_input.value = term
+        await send(state=state)
+
+    def render():
+        term = (box.value or "").strip().lower()
+        results.clear()
+        entries = state._palette_entries or []
+        with results:
+            matches = [e for e in entries if not term or term in e[1].lower() or term in e[2].lower()]
+            for icon, label, sublabel, sel in matches[:12]:
+                with ui.row().classes('w-full items-center cursor-pointer rounded-md q-pa-xs '
+                                      'hover:bg-gray-200 dark:hover:bg-gray-800') as row:
+                    ui.label(icon)
+                    ui.label(label).classes('font-medium text-sm')
+                    ui.label(sublabel).classes('text-xs text-gray-500')
+                row.on('click', lambda _, s=sel: _go(s))
+            if term:
+                with ui.row().classes('w-full items-center cursor-pointer rounded-md q-pa-xs '
+                                      'hover:bg-gray-200 dark:hover:bg-gray-800 border-t '
+                                      'border-gray-300 dark:border-gray-700') as ask_row:
+                    ui.label('💬')
+                    ui.label(f'Ask the coauthor: “{box.value}”').classes('text-sm italic')
+                ask_row.on('click', lambda _, t=box.value: _ask(t))
+
+    def _first():
+        term = (box.value or "").strip().lower()
+        entries = state._palette_entries or []
+        matches = [e for e in entries if not term or term in e[1].lower() or term in e[2].lower()]
+        if matches:
+            _go(matches[0][3])
+
+    box.on_value_change(render)
+    box.on('keydown.enter', lambda _: _first())
+
+    def open_palette():
+        try:
+            state._palette_entries = _index(state.storage)
+        except Exception as e:
+            logger.debug(f"palette index failed: {e}")
+            state._palette_entries = []
+        box.value = ""
+        render()
+        dialog.open()
+
+    return open_palette

@@ -183,6 +183,17 @@ def build_page(selection_override: list[SelectionItem] | None = None):
             .props('unelevated no-caps').tooltip('Browse the studio asset catalog')
     assets_btn.move(breadcrumbs.parent_slot.parent, target_index=0)  # primary: leftmost
 
+    # The command palette: Cmd/Ctrl-K jumps to any object by name.
+    from gui.palette import build_palette
+    open_palette = build_palette(state)
+    with breadcrumbs.parent_slot.parent:
+        palette_btn = ui.button(icon='search', on_click=lambda _: open_palette()) \
+            .props('flat round').tooltip('Jump to anything (Ctrl/Cmd-K)')
+    palette_btn.move(breadcrumbs.parent_slot.parent, target_index=1)
+    ui.keyboard(on_key=lambda e: open_palette()
+                if e.key.name in ('k', 'K') and (e.modifiers.ctrl or e.modifiers.meta) and e.action.keydown and not e.action.repeat
+                else None, ignore=[])
+
     # Browser back/forward re-resolves the selection from the URL.
     ui.add_body_html("<script>window.addEventListener('popstate', () => location.reload());</script>")
 

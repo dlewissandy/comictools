@@ -69,6 +69,28 @@ def view_character_variant(state:APPState):
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current character variant."), size=1)
 
 
+        # Composition: what this look is built from — chips with ✕ to detach.
+        from gui.elements import removable_chips
+        def _save_variant():
+            storage.update_object(data=variant)
+
+        def _remove_outfit(_key):
+            variant.outfit_id = None
+            _save_variant()
+
+        def _remove_prop(key):
+            variant.prop_ids = [p for p in (variant.prop_ids or []) if p != key]
+            _save_variant()
+
+        if variant.outfit_id or variant.prop_ids:
+            with ui.column().classes('w-full q-px-sm').style('gap: 2px;'):
+                removable_chips(state, "Outfit",
+                    [(variant.outfit_id, variant.outfit_id.replace('-', ' ').title())] if variant.outfit_id else [],
+                    _remove_outfit, icon='checkroom')
+                removable_chips(state, "Carried props",
+                    [(p, p.replace('-', ' ').title()) for p in (variant.prop_ids or [])],
+                    _remove_prop, icon='category')
+
         with view_attributes(state,caption="Description", attributes=[
                 Attribute(caption ="General Description", get_value= lambda: variant.description),
                 Attribute(caption="Race", get_value=lambda: variant.race),

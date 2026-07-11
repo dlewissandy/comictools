@@ -3,7 +3,7 @@ from nicegui import ui
 from loguru import logger
 from nicegui.events import UploadEventArguments
 from gui.selection import SelectionItem, SelectedKind
-from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button, CrudButtonKind, view_attributes, Attribute
+from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button, CrudButtonKind, view_attributes, Attribute, removable_chips
 from gui.messaging import post_user_message
 from schema import SceneModel, Panel, FrameLayout
 from gui.state import APPState
@@ -94,21 +94,45 @@ def view_scene(state: APPState):
 
         # Production details: setting, cast (with wardrobe), props and blocking.
         from schema import Setting
-        setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": scene.setting_id}) if scene.setting_id else None
+        setting_obj = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": scene.setting_id}) if scene.setting_id else None
         view_attributes(
             state=state,
             caption="Production",
             attributes=[
-                Attribute(caption="setting", get_value=lambda: (f"{setting.name} ({'Interior' if setting.interior else 'Exterior'})" if setting else scene.setting_id)),
                 Attribute(caption="time of day", get_value=lambda: scene.time_of_day),
                 Attribute(caption="mood", get_value=lambda: scene.mood),
-                Attribute(caption="cast", get_value=lambda: ", ".join(f"{c.character_id} ({c.variant_id})" for c in scene.cast) if scene.cast else None),
-                Attribute(caption="props", get_value=lambda: ", ".join(p.name for p in scene.props) if scene.props else None),
                 Attribute(caption="blocking", get_value=lambda: scene.blocking),
             ],
             individual_icons=False,
             header_size=2,
         )
+
+        # Attached assets: chips with an ✕ — removal is as easy as adding.
+        def _save_scene():
+            storage.update_object(data=scene)
+
+        def _remove_setting(_key):
+            scene.setting_id = None
+            _save_scene()
+
+        def _remove_cast(key):
+            scene.cast = [c for c in scene.cast if f"{c.character_id}/{c.variant_id}" != key]
+            _save_scene()
+
+        def _remove_prop(key):
+            scene.props = [p for p in scene.props if p.name != key]
+            _save_scene()
+
+        with ui.column().classes('w-full q-px-sm').style('gap: 2px;'):
+            removable_chips(state, "Setting",
+                [(setting_obj.setting_id, f"{setting_obj.name} ({'Interior' if setting_obj.interior else 'Exterior'})")] if setting_obj else [],
+                _remove_setting, icon='location_on')
+            removable_chips(state, "Cast",
+                [(f"{c.character_id}/{c.variant_id}", f"{c.character_id} ({c.variant_id})") for c in (scene.cast or [])],
+                _remove_cast, icon='theater_comedy')
+            removable_chips(state, "Props",
+                [(p.name, p.name) for p in (scene.props or [])],
+                _remove_prop, icon='category')
 
         with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
             with expansion.add_slot('header'):

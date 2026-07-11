@@ -431,6 +431,12 @@ class APPState:
                 return view_series(self)
             case "setting":
                 return view_setting(self)
+            case "prop":
+                from gui.asset_view import view_prop
+                return view_prop(self)
+            case "outfit":
+                from gui.asset_view import view_outfit
+                return view_outfit(self)
             case "character":
                 return view_character(self)
             case "issue":

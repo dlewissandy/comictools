@@ -167,6 +167,18 @@ def view_panel(state: APPState):
                 header_size=2,
             )
 
+        # Cast in frame: chips with ✕ to take a character out of the panel.
+        from gui.elements import removable_chips
+        def _remove_panel_cast(key):
+            panel.character_references = [c for c in panel.character_references
+                                          if f"{c.character_id}/{c.variant_id}" != key]
+            storage.update_object(panel)
+
+        removable_chips(state, "Cast in panel",
+            [(f"{c.character_id}/{c.variant_id}", f"{c.character_id} ({c.variant_id})")
+             for c in (panel.character_references or [])],
+            _remove_panel_cast, icon='theater_comedy')
+
         view_character_references(
             state=state, 
             parent=panel,

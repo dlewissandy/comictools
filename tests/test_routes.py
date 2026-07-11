@@ -36,3 +36,11 @@ def test_unaddressable_kinds_have_no_url():
     sel = [SelectionItem(name="Styles", id=None, kind=SelectedKind.ALL_STYLES),
            SelectionItem(name="Pick", id="x", kind=SelectedKind.PICK_STYLE)]
     assert selection_to_url(sel) is None
+
+
+def test_prop_and_outfit_routes(storage):
+    sel = selection_from_path(storage, ["series", WL, "prop", "cracked-crystal-ball"])
+    assert sel[-1].kind == SelectedKind.PROP and sel[-1].name == "cracked crystal ball"
+    assert selection_to_url(sel) == f"/series/{WL}/prop/cracked-crystal-ball"
+    sel = selection_from_path(storage, ["series", WL, "outfit", "nope"])
+    assert sel[-1].kind == SelectedKind.OUTFIT and sel[-1].id == "nope"

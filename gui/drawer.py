@@ -57,13 +57,13 @@ def _catalog(storage: GenericStorage):
             yield ("prop", p.name, f"{series.name}", pimg,
                    f"Use the prop '{p.name}' (id: {p.prop_id}) from the series '{sid}' here.  "
                    f"Import it into this series first if it isn't already part of it.",
-                   f"/series/{sid}")
+                   f"/series/{sid}/prop/{p.prop_id}")
         for o in storage.read_all_objects(Outfit, {"series_id": sid}):
             oimg = next((i for i in (o.images or {}).values() if i and os.path.exists(i)), None)
             yield ("outfit", o.name, f"{series.name}", oimg,
                    f"Use the outfit '{o.name}' (id: {o.outfit_id}) from the series '{sid}' here — "
                    f"e.g. compose a character variant wearing it.  Import it first if needed.",
-                   f"/series/{sid}")
+                   f"/series/{sid}/outfit/{o.outfit_id}")
 
     for style in storage.read_all_objects(ComicStyle, order_by="name"):
         img = style.image.get("art") if isinstance(style.image, dict) else None

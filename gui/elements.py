@@ -680,3 +680,39 @@ def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], N
             # Visible caption in center
             with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
                 ui.label('Drop image to upload').classes('text-lg text-gray-600')
+
+
+def removable_chips(state: APPState, caption: str, items: list[tuple[str, str]],
+                    remover: Callable, icon: str = "sell"):
+    """
+    Attached assets as chips with an ✕: the obvious way to take an asset back
+    OFF the thing it was added to.  Removal is direct — it severs the link,
+    persists, refreshes the view — and echoes a receipt into the conversation
+    so the coauthor stays aware.
+
+    Args:
+        items: list of (key, label) chips.
+        remover: called with the chip's key; must mutate + persist.
+    """
+    with ui.row().classes('items-center').style('gap: 6px;'):
+        ui.label(caption).classes('text-sm text-gray-500')
+        if not items:
+            ui.label('—').classes('text-sm text-gray-500')
+        for key, label in items:
+            def _remove(key=key, label=label):
+                try:
+                    remover(key)
+                except Exception as e:
+                    ui.notify(f"Couldn't remove {label}: {e}", type='warning')
+                    return
+                try:
+                    with state.history:
+                        with ui.chat_message(name='You', sent=True).classes('w-full'):
+                            ui.markdown(f"✂️ removed **{label}** from {caption.lower()}")
+                    state.history.scroll_to(percent=100)
+                except Exception:
+                    pass
+                state.refresh_details()
+            ui.chip(label, removable=True, icon=icon).props('dense outline') \
+                .tooltip(f'✕ removes {label} from {caption.lower()}') \
+                .on('remove', lambda _, k=key: _remove(k))

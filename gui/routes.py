@@ -35,6 +35,8 @@ _SEGMENTS = {
     SelectedKind.VARIANT: "variant",
     SelectedKind.STYLED_VARIANT: "styled",
     SelectedKind.SETTING: "setting",
+    SelectedKind.PROP: "prop",
+    SelectedKind.OUTFIT: "outfit",
 }
 
 _ROOTS = {
@@ -166,6 +168,16 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
 
     if rest[0] == "setting" and len(rest) == 2:
         sel.append(_named(storage, SelectedKind.SETTING, rest[1], Setting, {"series_id": sid, "setting_id": rest[1]}))
+        return sel
+
+    if rest[0] == "prop" and len(rest) == 2:
+        from schema import PropAsset
+        sel.append(_named(storage, SelectedKind.PROP, rest[1], PropAsset, {"series_id": sid, "prop_id": rest[1]}))
+        return sel
+
+    if rest[0] == "outfit" and len(rest) == 2:
+        from schema import Outfit
+        sel.append(_named(storage, SelectedKind.OUTFIT, rest[1], Outfit, {"series_id": sid, "outfit_id": rest[1]}))
         return sel
 
     return None

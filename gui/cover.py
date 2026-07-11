@@ -76,18 +76,31 @@ def view_cover(state: APPState):
                 )
             
 
-        # The setting whose master background anchors the cover render.
+        # Attached assets: chips with an ✕ — removal is as easy as adding.
         from schema import Setting
+        from gui.elements import removable_chips
         setting = storage.read_object(cls=Setting, primary_key={"series_id": cover.series_id, "setting_id": cover.setting_id}) if cover.setting_id else None
-        view_attributes(
-            state=state,
-            caption="Setting",
-            attributes=[
-                Attribute(caption="setting", get_value=lambda: (f"{setting.name} ({'Interior' if setting.interior else 'Exterior'})" if setting else cover.setting_id)),
-            ],
-            individual_icons=False,
-            header_size=2,
-        )
+
+        def _save_cover():
+            storage.update_object(data=cover)
+
+        def _remove_setting(_key):
+            cover.setting_id = None
+            _save_cover()
+
+        def _remove_cast(key):
+            cover.character_references = [c for c in cover.character_references
+                                          if f"{c.character_id}/{c.variant_id}" != key]
+            _save_cover()
+
+        with ui.column().classes('w-full q-px-sm').style('gap: 2px;'):
+            removable_chips(state, "Setting",
+                [(setting.setting_id, f"{setting.name} ({'Interior' if setting.interior else 'Exterior'})")] if setting else [],
+                _remove_setting, icon='location_on')
+            removable_chips(state, "Cast",
+                [(f"{c.character_id}/{c.variant_id}", f"{c.character_id} ({c.variant_id})")
+                 for c in (cover.character_references or [])],
+                _remove_cast, icon='theater_comedy')
 
         def set_image(image_locator: str):
             cover.image = image_locator
