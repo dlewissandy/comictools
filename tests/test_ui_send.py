@@ -84,3 +84,33 @@ async def test_coauthor_speaks_first_with_chips(user: User) -> None:
     await user.open("/")
     await user.should_see("Welcome to the studio")          # the opener
     await user.should_see("Create a new series")            # a suggestion chip
+
+
+@pytest.mark.api
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_conversations_persist_per_object(user: User) -> None:
+    """The coauthor remembers: a thread survives reload on its own object and
+    does not leak into another object's conversation."""
+    main.LocalStorage = _TmpStorage
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    user.find("message").type("Reply with exactly the word formed by joining ZEBRA and 99 with a hyphen, nothing else.")
+    user.find("Send").click()
+    await user.should_see("ZEBRA-99", retries=600)
+    # wait for the turn to fully finish (state persists at end of send())
+    send_btn = user.find("Send").elements.pop()
+    for _ in range(100):
+        if send_btn.enabled:
+            break
+        await asyncio.sleep(0.1)
+    await asyncio.sleep(0.3)
+
+    # reload the root: the home conversation is restored, not cleared
+    await user.open("/")
+    await user.should_see("ZEBRA-99")
+
+    # a different object's conversation does not contain it
+    await user.open("/series/joey")
+    await user.should_not_see("ZEBRA-99")

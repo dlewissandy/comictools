@@ -47,6 +47,10 @@ class APPState:
         self.persist = persist
         self._url_synced = False
         self.suggestions_row = suggestions_row
+        # Per-object conversations: canonical-URL key -> serialized transcript.
+        # Navigating ARCHIVES the current thread and restores the target's —
+        # the coauthor remembers every conversation (UX critique #1).
+        self.conversations: dict[str, list] = {}
 
         # Storage and logging must be initialized before agents
         self._storage = storage
@@ -284,17 +288,15 @@ class APPState:
 
         self._selection = new
 
-        # If required (like moving up in the hierarchy), we may need to clear the history.
-        if clear_history and len(new) <= len(old):
-            # TODO: if returning from a lower level, we may want to add additional dialog.
-            # If we just are going up 1 level, and the last element in the old selection
-            # has a kind that starts with "pick-", then we can assume that the user
-            # has just picked an item, and we don't have to clear the history.
-            if len(new) == len(old) - 1 and old[-1].kind.startswith("pick-"):
-                logger.debug("Not clearing history because we are returning from a pick- selection.")
-            else:
-                logger.debug("Clearing history because we are moving up in the hierarchy.")
-                self.clear_history()
+        # Archive the outgoing object's conversation and restore the target's.
+        # Pickers/editors share their addressable ancestor's thread, so
+        # returning from a pick keeps the conversation naturally.
+        old_key = self.conversation_key(old)
+        new_key = self.conversation_key(new)
+        if clear_history and old_key != new_key:
+            self.conversations[old_key] = self.get_transcript()
+            self.clear_history()
+            self.restore_history(self.conversations.get(new_key, []))
 
         self.write()
 
@@ -314,6 +316,21 @@ class APPState:
         self.refresh_details()
         self._sync_url()
         self._refresh_coauthor()
+
+    def conversation_key(self, selection: list[SelectionItem]) -> str:
+        """
+        The conversation an object owns is keyed by its canonical URL; views
+        with no address of their own (pickers, image editor) share the thread
+        of their nearest addressable ancestor.
+        """
+        from gui.routes import selection_to_url
+        sel = list(selection)
+        while sel:
+            url = selection_to_url(sel)
+            if url is not None:
+                return url
+            sel = sel[:-1]
+        return "/"
 
     def _refresh_coauthor(self):
         """
@@ -457,9 +474,12 @@ class APPState:
             return
         logger.debug("Saving state to file")
 
+        conversations = dict(self.conversations)
+        conversations[self.conversation_key(self.selection)] = self.get_transcript()
         state_json = {
             "selection": [item.model_dump() for item in self.selection],
-            "messages":  self.get_transcript(),
+            "messages":  self.get_transcript(),   # legacy field
+            "conversations": conversations,
             "dark_mode": self.dark_mode
         }
         with open(STATE_FILEPATH, "w") as f:

@@ -143,9 +143,10 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     state_data = json.load(open(STATE_FILEPATH, 'r')) if os.path.exists(STATE_FILEPATH) else {}
 
     # SYNC THE APPLICATION STATE WITH THE STORED VALUES
+    conversations = state_data.get('conversations', {}) if selection_override is None else {}
     if selection_override is None:
         selection = [SelectionItem(**item) for item in state_data.get('selection', DEFAULT_SELECTION)]
-        messages = state_data.get('messages', [])
+        messages = None  # resolved from the conversation store below
     else:
         selection = selection_override
         messages = []
@@ -163,6 +164,11 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         persist = selection_override is None,
         suggestions_row = suggestions_row,
      )
+
+    state.conversations = conversations
+    if messages is None:
+        # the selection's own thread; fall back to the legacy single history
+        messages = conversations.get(state.conversation_key(selection), state_data.get('messages', []))
 
     state.dark_mode = dark_value
     state.restore_history(messages)
