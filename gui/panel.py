@@ -201,6 +201,15 @@ def view_panel(state: APPState):
                               variants=[_DROP[panel.aspect]],
                               label='Drop image to add a take')
 
+        # THE LIGHT TABLE: compose the next take from acetate layers —
+        # letters over foreground over figures over background — and see
+        # the penciller's rough assemble live.
+        with ccell(12):
+            caption_action("The Light Table", CrudButtonKind.RENDER,
+                           lambda _: post_user_message(state, "I would like to render this panel."), 2)
+            from gui.light_table import light_table
+            light_table(state, panel, scene, setting)
+
         # THE CAST IN FRAME: which characters appear, wearing which variant.
         with ccell(12):
             view_character_references(

@@ -156,6 +156,35 @@ def init_layout(logger):
            the overlay controls */
         .panel-fill .panel-hover-caption { bottom: auto; top: 8px;
                                            z-index: 12; }
+
+        /* THE LIGHT TABLE: acetate layers and the penciller's rough */
+        .rough-canvas { position: relative; width: 100%;
+                        border: 2.5px solid var(--ink); border-radius: 2px;
+                        background: var(--paper); overflow: hidden;
+                        box-shadow: 3px 3px 0 rgba(0,0,0,.35); }
+        .rough-figure { position: absolute; bottom: 2%; height: 52%;
+                        max-width: 46%; transform: translateX(-50%);
+                        filter: drop-shadow(2px 2px 0 rgba(0,0,0,.25)); }
+        .rough-balloon { position: absolute; transform: translateX(-50%);
+                         background: #fff; color: #1a1512;
+                         border: 2px solid var(--ink); border-radius: 12px;
+                         padding: 2px 10px; font-size: .68rem; max-width: 42%;
+                         overflow: hidden; text-overflow: ellipsis;
+                         white-space: nowrap; }
+        .rough-narration { position: absolute; left: 4px;
+                           background: var(--caption); color: var(--caption-ink);
+                           border: 2px solid var(--ink); border-radius: 2px;
+                           padding: 1px 8px; font-size: .68rem; max-width: 60%;
+                           overflow: hidden; text-overflow: ellipsis;
+                           white-space: nowrap; }
+        .rough-prop { background: rgba(255,255,255,.8); color: #1a1512;
+                      border: 1.5px solid var(--ink); border-radius: 8px;
+                      padding: 0 6px; font-size: .62rem; }
+        .light-layer { border: 1.5px solid var(--ink); border-radius: 2px;
+                       background: var(--panel); padding: 2px 6px;
+                       box-shadow: 2px 2px 0 rgba(0,0,0,.2); }
+        .light-thumb { width: 40px; height: 28px; border: 1.5px solid var(--ink);
+                       border-radius: 2px; object-fit: cover; flex-shrink: 0; }
         .comic-page > * { min-width: 0; }
         .cpanel { position: relative; background: var(--panel);
                   border: 2.5px solid var(--ink); border-radius: 2px;
