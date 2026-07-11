@@ -84,70 +84,95 @@ def view_character(state:APPState):
             
 def view_character_reference(state: APPState):
     """
-    View the details of a character reference.    Here we should show all the variants for a 
-    particular character so that the user can select from them.
+    THE WARDROBE SWAP: pick which variant a cast member wears on the current
+    board (panel or cover).  The light table's figure thumbs land here; the
+    pose acetate and blocking follow the figure to its new wardrobe.
     """
-    from schema.panel import Panel, CharacterRef
+    from schema import Panel, Cover
 
     logger.trace("view_character_reference")
     storage: GenericStorage = state.storage
+    sel = state.selection
 
-    # DEREFERENCE THE DATA
-    panel_id = state.selection[-2].id
-    scene_id = state.selection[-3].id
-    issue_id = state.selection[-4].id
-    series_id,character_id, variant_id = state.selection[-1].id.split("/")
-    panel = Panel.read(series=series_id, issue=issue_id, scene=scene_id, id=int(panel_id))
-    
-    if panel is None:
+    series_id, character_id, variant_id = sel[-1].id.split("/")
+    host = sel[-2] if len(sel) > 1 else None
+
+    board = None
+    if host is not None and host.kind.value == "panel" and len(sel) >= 5:
+        board = storage.read_object(cls=Panel, primary_key={
+            "series_id": series_id, "issue_id": sel[-4].id,
+            "scene_id": sel[-3].id, "panel_id": host.id})
+    elif host is not None and host.kind.value == "cover" and len(sel) >= 4:
+        board = storage.read_object(cls=Cover, primary_key={
+            "series_id": series_id, "issue_id": sel[-3].id, "cover_id": host.id})
+
+    character = storage.read_object(cls=CharacterModel, primary_key={
+        "series_id": series_id, "character_id": character_id})
+    if board is None or character is None:
         state.clear_details()
-        message = f"Panel with ID {panel_id} not found in issue {issue_id}."
         with state.details:
-            ui.markdown(message)
-        return
-    
-    panel: Panel = panel
-    panel_character_refs = panel.characters
-    char_refs = [cv for cv in panel_character_refs if cv.character_id ==character_id]
-    if len(char_refs) == 0:
-        state.clear_details()
-        message = f"Character with ID {character_id} not found in panel {panel_id}."
-        with state.details:
-            ui.markdown(message)
-        return
-    if len(char_refs) > 1:
-        state.clear_details()
-        message = f"Multiple character references with ID {character_id} found in panel {panel_id}."
-        with state.details:
-            ui.markdown(message)
+            ui.markdown("This wardrobe swap lost its board — go back and "
+                        "click the figure's acetate on the light table again.")
         return
 
-    char_ref = char_refs[0]
-    character = CharacterModel.read(series=series_id, id=character_id)
-    
-    
+    ref = next((c for c in (board.character_references or [])
+                if c.character_id == character_id and c.variant_id == variant_id), None) \
+        or next((c for c in (board.character_references or [])
+                 if c.character_id == character_id), None)
+    if ref is None:
+        state.clear_details()
+        with state.details:
+            ui.markdown(f"**{character.name}** isn't cast on this board anymore.")
+        return
+
+    def back_to_table():
+        state.change_selection(new=sel[:-1])
+
     def get_choice():
-        return char_ref.variant_id
+        return ref.variant_id
 
-    def set_choice(id: str):
-        char_ref.variant_id = id
-        panel.write()
+    def set_choice(new_vid: str):
+        if new_vid == ref.variant_id:
+            back_to_table()
+            return
+        old_key = f"{character_id}/{ref.variant_id}"
+        new_key = f"{character_id}/{new_vid}"
+        ref.variant_id = new_vid
+        # the pose follows the figure: acetate, blocking and group membership
+        if old_key in (board.figure_images or {}):
+            board.figure_images[new_key] = board.figure_images.pop(old_key)
+        if old_key in (board.figure_blocking or {}):
+            board.figure_blocking[new_key] = board.figure_blocking.pop(old_key)
+        for g in list(board.layer_groups or {}):
+            board.layer_groups[g] = [new_key if k == old_key else k
+                                     for k in board.layer_groups[g]]
+        storage.update_object(board)
+        from gui.light_table import table_receipt
+        table_receipt(state, f"👔 **{character.name}** now wears **{new_vid.replace('-', ' ')}** — "
+                             f"re-pose them if the acetate should show the new look")
         state.is_dirty = True
+        back_to_table()
 
     with state.details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
-            header(f"{character.name}", 0)
+            header(f"{character.name.title()} — Wardrobe", 0)
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current character reference."),size=1)
+            ui.button('Back to the table', icon='arrow_back').props('outline dense') \
+                .on('click', lambda _: back_to_table())
+        ui.label('Pick the variant this figure wears; their pose and blocking follow.') \
+            .classes('text-sm text-gray-500 q-px-sm')
 
         view_all_instances(
             state,
-            get_instances= lambda: storage.read_all_objects(cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id}),
-            get_image_locator=lambda variant: storage.find_variant_image(series_id= series_id, character_id= character_id, variant_id=variant.id),
+            get_instances=lambda: storage.read_all_objects(
+                cls=CharacterVariant,
+                primary_key={"series_id": series_id, "character_id": character_id}),
+            get_image_locator=lambda variant: storage.find_variant_image(
+                series_id=series_id, character_id=character_id, variant_id=variant.id),
             kind="variant",
             aspect_ratio="3/2",
-            get_choice = lambda: get_choice(),
-            set_choice = lambda id: set_choice(id),
+            get_choice=lambda: get_choice(),
+            set_choice=lambda id: set_choice(id),
             variants=[(3, 2)],
             )
                                     
