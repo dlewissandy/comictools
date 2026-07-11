@@ -3,7 +3,7 @@ from loguru import logger
 from nicegui.events import UploadEventArguments
 from schema import Series, Issue, CharacterModel, Publisher, Setting
 from gui.elements import (
-    markdown, header, uploader_card, view_all_instances, markdown_field_editor, image_field_editor, crud_button, post_user_message, view_attributes, CrudButtonKind)
+    markdown, header, uploader_card, view_all_instances, markdown_field_editor, crud_button, post_user_message, view_attributes, CrudButtonKind)
 from nicegui import ui
 from gui.state import APPState
 from storage.generic import GenericStorage
@@ -57,30 +57,35 @@ def view_series(state: APPState):
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current series."),size=1)
             
-        # THE PAGE: the series stitches into a 12-column comic page.
-        from gui.elements import comic_page, cpanel, ccell
-        page = comic_page()
-        page.__enter__()
-
-        with cpanel(8):
-            markdown_field_editor(state, "Description", series.description)
-        with cpanel(4):
-            image_field_editor(
-                    state=state, 
-                    kind = SelectedKind.PICK_PUBLISHER, 
-                    get_caption=lambda: "Publisher", 
-                    get_id=get_id, 
-                    get_image_filepath=lambda: pub.image if pub else None,
-                    caption_size=2)
-        
-        # A cardwall for viewing and adding issues of the comic.
-        from gui.elements import caption_action, CrudButtonKind as _CK
+        # THE PAGE: everything rules onto one 12-unit comic page.
+        from gui.elements import comic_page, caption_action, CrudButtonKind as _CK, PagePacker
+        from gui.constants import TAILWIND_CARD
         def _cap(text, msg):
             return lambda: caption_action(text, _CK.CREATE, lambda _, m=msg: post_user_message(state, m), 3)
-        from gui.elements import PagePacker
+        page = comic_page()
+        page.__enter__()
         packer = PagePacker(12)
         mosaic = ui.element('div').classes('comic-mosaic cspan-12')
         mosaic.__enter__()
+
+        # Description callout — a text panel takes only the size its text needs.
+        desc = series.description or ""
+        desc_rows = max(2, min(6, 1 + (len(desc) + 269) // 270))
+        with packer.place_cell([(10, desc_rows)]):
+            with ui.card().classes(TAILWIND_CARD + ' mosaic-card').style('overflow-y: auto;'):
+                markdown_field_editor(state, "Description", series.description)
+
+        # Publisher logo — a square corner box, like the publisher mark on a cover.
+        with packer.place_cell([(2, 2)]):
+            with ui.card().classes(TAILWIND_CARD + ' mosaic-card cursor-pointer') as pub_card:
+                header("Publisher", 4)
+                pub_image = pub.image if pub else None
+                if pub_image and os.path.exists(pub_image):
+                    ui.image(source=pub_image)
+                else:
+                    ui.label("Click to select").classes('text-gray-500').style('text-align: center;')
+            pub_sel = state.selection + [SelectionItem(name="Pick Publisher", id=get_id(), kind=SelectedKind.PICK_PUBLISHER)]
+            pub_card.on('click', lambda _, s=pub_sel: state.change_selection(new=s))
         if True:
             def _issue_label(_i, issue):
                 from schema import SceneModel, Panel

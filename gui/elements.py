@@ -367,9 +367,10 @@ def render_object_cards(
         variants: Optional[list[tuple[int, int]]] = None):
     
     selection = state.selection
-    if flow_span:
-        # FLOW MODE: no private grid — each card becomes a cell of the
-        # surrounding comic page, so groups pack together like a real page.
+    if (packer is not None and variants) or flow_span:
+        # PACKED/FLOW MODE: no private grid — every card cell is a DIRECT
+        # child of the surrounding comic page, so its grid-area resolves
+        # against the page's ruled units and groups pack together.
         grid = ui.element('div').classes('hidden')  # placeholder return
         container = None
     else:

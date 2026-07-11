@@ -118,7 +118,10 @@ def init_layout(logger):
         /* THE MOSAIC: card groups share one 2D grid — row units equal column
            units (via container query), each panel spans cols AND rows by its
            aspect, dense flow fills holes in both directions. */
-        .comic-mosaic { display: grid; grid-template-columns: repeat(12, 1fr);
+        .comic-mosaic { display: grid;
+                        /* minmax(0,1fr): a card's intrinsic min-content must
+                           never widen its tracks — the RULING is law */
+                        grid-template-columns: repeat(12, minmax(0, 1fr));
                         gap: 12px;
                         /* SQUARE units: rows equal columns, sized from the
                            ANCESTOR container's width. */
@@ -131,7 +134,9 @@ def init_layout(logger):
         /* the panel FRAME fills its region; the art sits inside untouched —
            object-fit: contain never crops or distorts */
         .mosaic-card { width: 100%; height: 100%; display: flex;
-                       flex-direction: column; margin: 0 !important; }
+                       flex-direction: column; margin: 0 !important;
+                       min-width: 0; min-height: 0; overflow: hidden; }
+        .comic-mosaic > * { min-width: 0; min-height: 0; }
         .mosaic-card .q-img { flex: 1 1 0; min-height: 0; }
         .mosaic-card .q-img__image { object-fit: contain; }
         .comic-page > * { min-width: 0; }
