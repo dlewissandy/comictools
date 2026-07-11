@@ -59,6 +59,73 @@ if (!window._roughDragInit) {
     return null;
   }
 
+  // TAILS: real vector tails drawn on an SVG overlay, tip draggable
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  function tailSvg(canvas) {
+    let svg = canvas.querySelector('.rough-tails');
+    if (!svg) {
+      svg = document.createElementNS(SVGNS, 'svg');
+      svg.setAttribute('class', 'rough-tails');
+      canvas.appendChild(svg);
+    }
+    return svg;
+  }
+  window.roughDrawTails = function () {
+    document.querySelectorAll('.rough-canvas').forEach((canvas) => {
+      const svg = tailSvg(canvas);
+      const cr = canvas.getBoundingClientRect();
+      svg.setAttribute('viewBox', `0 0 ${cr.width} ${cr.height}`);
+      svg.innerHTML = '';
+      canvas.querySelectorAll('[data-kind="balloon"]').forEach((fig) => {
+        if (fig.classList.contains('rough-balloon--sound-effect')) return;
+        const br = fig.getBoundingClientRect();
+        const bx = br.left + br.width / 2 - cr.left;
+        const by = br.top + br.height / 2 - cr.top;
+        const tx = (parseFloat(fig.dataset.tx) || 50) / 100 * cr.width;
+        const ty = cr.height - (parseFloat(fig.dataset.ty) || 0) / 100 * cr.height;
+        const dx = tx - bx, dy = ty - by;
+        const len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len;
+        // base: where the center->tip ray leaves the balloon's box
+        const hw = br.width / 2, hh = br.height / 2;
+        const t = 1 / Math.max(Math.abs(ux) / hw, Math.abs(uy) / hh);
+        const ex = bx + ux * t * 0.92, ey = by + uy * t * 0.92;
+        const px = -uy, py = ux;   // perpendicular
+        if (fig.classList.contains('rough-balloon--thought')) {
+          for (const [f, r] of [[0.3, 6], [0.58, 4.5], [0.82, 3]]) {
+            const c = document.createElementNS(SVGNS, 'circle');
+            c.setAttribute('cx', ex + (tx - ex) * f);
+            c.setAttribute('cy', ey + (ty - ey) * f);
+            c.setAttribute('r', r);
+            c.setAttribute('class', 'rough-tail-shape');
+            svg.appendChild(c);
+          }
+        } else {
+          const w = Math.min(12, br.width / 4);
+          const poly = document.createElementNS(SVGNS, 'polygon');
+          poly.setAttribute('points',
+            `${ex + px * w},${ey + py * w} ${ex - px * w},${ey - py * w} ${tx},${ty}`);
+          poly.setAttribute('class', 'rough-tail-shape');
+          svg.appendChild(poly);
+        }
+        if (window._roughSel === fig) {
+          const tip = document.createElementNS(SVGNS, 'circle');
+          tip.setAttribute('cx', tx);
+          tip.setAttribute('cy', ty);
+          tip.setAttribute('r', 7);
+          tip.setAttribute('class', 'rh-tip');
+          tip.dataset.for = fig.dataset.key;
+          svg.appendChild(tip);
+        }
+      });
+    });
+  };
+  const startTailObserver = () => new MutationObserver(
+      () => requestAnimationFrame(window.roughDrawTails))
+    .observe(document.body, {childList: true, subtree: true});
+  if (document.body) startTailObserver();
+  else document.addEventListener('DOMContentLoaded', startTailObserver);
+
   // SELECTION: border + corner grab handles, the familiar canvas metaphor
   function deselect() {
     document.querySelectorAll('.rough-sel-box').forEach(b => b.remove());
@@ -74,30 +141,22 @@ if (!window._roughDragInit) {
       h.className = 'rh rh-' + c;
       box.appendChild(h);
     }
-    if (fig.dataset.kind === 'balloon') {
-      const fl = document.createElement('div');
-      fl.className = 'rh-flip';
-      fl.textContent = '⇄ tail';
-      fl.title = 'Flip the tail toward the speaker';
-      box.appendChild(fl);
-    }
     fig.appendChild(box);
     window._roughSel = fig;
+    requestAnimationFrame(window.roughDrawTails);
   }
 
   let drag = null;
   let resize = null;
+  let tailDrag = null;
   document.addEventListener('pointerdown', (e) => {
     if (e.target.isContentEditable) return;   // typing, not dragging
-    const flip = e.target.closest('.rh-flip');
-    if (flip) {
-      const fig = flip.closest('.rough-drag');
+    if (e.target.classList && e.target.classList.contains('rh-tip')) {
+      const key = e.target.dataset.for;
+      const canvas = e.target.closest('.rough-canvas');
+      const fig = canvas.querySelector(`[data-key="${CSS.escape(key)}"]`);
       e.preventDefault();
-      const t = fig.dataset.tail === 'right' ? 'left' : 'right';
-      fig.dataset.tail = t;
-      fig.classList.remove('tail-left', 'tail-right');
-      fig.classList.add('tail-' + t);
-      report(fig, fig.closest('.rough-canvas'));
+      tailDrag = {fig, canvas};
       return;
     }
     const handle = e.target.closest('.rh');
@@ -122,6 +181,15 @@ if (!window._roughDragInit) {
     fig.style.zIndex = 99;  // ride above the stack while dragging
   });
   document.addEventListener('pointermove', (e) => {
+    if (tailDrag) {
+      const r = tailDrag.canvas.getBoundingClientRect();
+      const tx = Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100));
+      const ty = Math.max(-10, Math.min(100, ((r.bottom - e.clientY) / r.height) * 100));
+      tailDrag.fig.dataset.tx = tx.toFixed(1);
+      tailDrag.fig.dataset.ty = ty.toFixed(1);
+      window.roughDrawTails();
+      return;
+    }
     if (resize) {
       const factor = Math.max(0.1, Math.hypot(e.clientX - resize.cx, e.clientY - resize.cy) / (resize.d0 || 1));
       if (resize.fig.dataset.scale === 'font') {
@@ -141,6 +209,7 @@ if (!window._roughDragInit) {
     drag.fig.style.left = x + '%';
     drag.fig.style.bottom = y + '%';
     drag.fig.style.top = 'auto';
+    if (drag.fig.dataset.kind === 'balloon') window.roughDrawTails();
   });
   const report = (fig, canvas) => emitEvent('rough_block', {
       key: fig.dataset.key, series: canvas.dataset.series, issue: canvas.dataset.issue,
@@ -148,8 +217,14 @@ if (!window._roughDragInit) {
       x: parseFloat(fig.style.left), y: parseFloat(fig.style.bottom) || 0,
       h: parseFloat(fig.style.height) || 0,
       fs: parseFloat(fig.style.fontSize) || 0,
-      tail: fig.dataset.tail || ''});
+      tx: parseFloat(fig.dataset.tx) || 0,
+      ty: parseFloat(fig.dataset.ty) || 0});
   document.addEventListener('pointerup', (e) => {
+    if (tailDrag) {
+      report(tailDrag.fig, tailDrag.canvas);
+      tailDrag = null;
+      return;
+    }
     if (resize) {
       report(resize.fig, resize.canvas);
       resize = null;
@@ -211,6 +286,17 @@ if (!window._roughDragInit) {
 """
 
 
+def _src(path: str) -> str:
+    """Serve a table image via /data with an mtime cache-buster, so the rough
+    always shows the CURRENT file (browsers cling to overwritten paths)."""
+    try:
+        v = int(os.path.getmtime(path))
+    except OSError:
+        return path
+    p = path.replace(os.sep, '/')
+    return f"/{p}?v={v}" if p.startswith('data/') else path
+
+
 def light_table(state: APPState, panel, scene, setting,
                 featured: str | None = None, actions=None):
     """
@@ -239,8 +325,9 @@ def light_table(state: APPState, panel, scene, setting,
                 cur["h"] = round(a['h'], 1)
             if a.get('fs'):
                 cur["fs"] = round(a['fs'], 1)
-            if a.get('tail'):
-                cur["tail"] = a['tail']
+            if a.get('tx') or a.get('ty'):
+                cur["tx"] = round(a.get('tx', 0), 1)
+                cur["ty"] = round(a.get('ty', 0), 1)
             p.figure_blocking[a['key']] = cur
             state.storage.update_object(p)
         ui.on('rough_block', _on_block)
@@ -326,7 +413,7 @@ def light_table(state: APPState, panel, scene, setting,
         canvas._props['data-panel'] = panel.panel_id
         with canvas:
             if bg_layer["on"] and background:
-                ui.image(source=background).props('fit=cover') \
+                ui.image(source=_src(background)).props('fit=cover') \
                     .classes('absolute inset-0 w-full h-full').style('z-index: 1;')
             else:
                 with ui.column().classes('absolute inset-0 items-center justify-center').style('z-index: 1;'):
@@ -347,7 +434,7 @@ def light_table(state: APPState, panel, scene, setting,
                 b = f["blocking"]
                 k = img_k(f["img"])
                 cls = 'rough-figure rough-drag' + (' rough-figure-posed' if f["posed"] else '')
-                fig = ui.image(source=f["img"]).props('fit=contain').classes(cls) \
+                fig = ui.image(source=_src(f["img"])).props('fit=contain').classes(cls) \
                     .style(f'left: {b["x"]}%; bottom: {b["y"]}%; height: {b["h"]}%; '
                            f'width: {b["h"] * k}%; '
                            f'z-index: {max(1, 10 + int(b.get("z", 0)))};')
@@ -362,26 +449,31 @@ def light_table(state: APPState, panel, scene, setting,
 
             pinned = [r for r in references if r["on"]]
             for i, r in enumerate(pinned[:4]):
-                ui.image(source=r["img"]).classes('rough-pin') \
+                ui.image(source=_src(r["img"])).classes('rough-pin') \
                     .style(f'top: {4 + i * 6}%; right: {3 + (i % 2) * 4}%; '
                            f'transform: rotate({(-6, 5, -3, 7)[i % 4]}deg); z-index: 71;')
 
             if letters["on"] and has_letters:
                 saved = panel.figure_blocking or {}
 
-                def letter(key, el_classes, text, dx, dy, kind, tail=None):
+                def letter(key, el_classes, text, dx, dy, kind, tail=None, emphasis=None):
                     b = saved.get(key) or {}
+                    if not b.get('on', 1):
+                        return None
                     x, y = b.get('x', dx), b.get('y', dy)
                     fs = b.get('fs', 11)
-                    t = b.get('tail', tail)
-                    cls = el_classes + ' rough-drag' + (f' tail-{t}' if t else '')
+                    cls = el_classes + ' rough-drag'
+                    if emphasis:
+                        cls += f" rough-balloon--{emphasis.replace(' ', '-')}"
                     lbl = ui.label(text).classes(cls).style(
                         f'left: {x}%; bottom: {y}%; top: auto; font-size: {fs}px; z-index: 70;')
                     lbl._props['data-key'] = key
                     lbl._props['data-scale'] = 'font'
                     lbl._props['data-kind'] = kind
-                    if t:
-                        lbl._props['data-tail'] = t
+                    if kind == 'balloon':
+                        # the tail's endpoint: aimed at the speaker by default
+                        lbl._props['data-tx'] = str(b.get('tx', x))
+                        lbl._props['data-ty'] = str(b.get('ty', max(y - 14, 2)))
                     return lbl
 
                 tops = [n for n in panel.narration if n.position.value == 'top'][:2]
@@ -393,8 +485,10 @@ def light_table(state: APPState, panel, scene, setting,
                                 if f.get("ref") and f["ref"].character_id == d.character_id), None)
                     dx = fig["blocking"]["x"] if fig else (25 + 22 * i)
                     bl = letter(f'balloon/{i}', 'rough-balloon', d.text,
-                                dx, 72 - (i % 2) * 14, 'balloon', tail='left')
-                    bl._props['title'] = f"{d.character_id} speaks — double-click to edit, drag to place"
+                                dx, 72 - (i % 2) * 14, 'balloon', tail='left',
+                                emphasis=d.emphasis.value)
+                    if bl is not None:
+                        bl._props['title'] = f"{d.character_id} speaks — double-click to edit, drag to place"
                 for i, n in enumerate([n for n in panel.narration if n.position.value == 'bottom'][:1]):
                     letter(f'caption/bottom/{i}', 'rough-narration', n.text, 2, 4, 'caption')
 
@@ -487,7 +581,7 @@ def light_table(state: APPState, panel, scene, setting,
         with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
             eye(layer)
             if thumb:
-                ui.image(source=thumb).classes('light-thumb')
+                ui.image(source=_src(thumb)).classes('light-thumb')
             else:
                 ui.icon(icon).classes('text-lg').style('width: 40px; text-align: center;')
             ui.label(label).classes('text-sm').style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
@@ -563,6 +657,81 @@ def light_table(state: APPState, panel, scene, setting,
             if has_letters:
                 layer_row('chat_bubble', 'Letters — balloons & captions', letters,
                           edit_message='I would like to edit the narration and dialogue of this panel.')
+
+                def letter_eye(key):
+                    b = dict((panel.figure_blocking or {}).get(key) or {})
+                    is_on = bool(b.get('on', 1))
+                    btn = ui.button(icon='visibility' if is_on else 'visibility_off') \
+                        .props('flat round dense size=xs')
+
+                    def toggle(key=key, btn=btn):
+                        b = dict((panel.figure_blocking or {}).get(key) or {})
+                        b['on'] = 0 if b.get('on', 1) else 1
+                        panel.figure_blocking[key] = b
+                        storage.update_object(panel)
+                        btn.props(f"icon={'visibility' if b['on'] else 'visibility_off'}")
+                        rough.refresh()
+                    btn.on('click', toggle)
+
+                from schema.dialog import DialogueEmphasis
+
+                def remap_letter_blocking(prefix, removed_idx):
+                    # keep blocking aligned when a letter is deleted mid-list
+                    keys = sorted((k for k in (panel.figure_blocking or {}) if k.startswith(prefix)),
+                                  key=lambda k: int(k.rsplit('/', 1)[1]))
+                    vals = {k: panel.figure_blocking[k] for k in keys}
+                    for k in keys:
+                        panel.figure_blocking.pop(k, None)
+                    for k, v in vals.items():
+                        i = int(k.rsplit('/', 1)[1])
+                        if i == removed_idx:
+                            continue
+                        panel.figure_blocking[f"{prefix}{i - 1 if i > removed_idx else i}"] = v
+
+                for i, d in enumerate(panel.dialogue[:4]):
+                    with ui.row().classes('light-layer w-full items-center flex-nowrap') \
+                            .style('gap: 4px; margin-left: 14px; width: calc(100% - 14px);'):
+                        letter_eye(f'balloon/{i}')
+                        ui.icon('chat_bubble').classes('text-sm')
+                        ui.label(f"{d.character_id.replace('-', ' ')}: {d.text[:22]}") \
+                            .classes('text-xs').style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
+                        ui.space()
+                        sel = ui.select([e.value for e in DialogueEmphasis], value=d.emphasis.value) \
+                            .props('dense borderless options-dense')
+
+                        def restyle(e, i=i):
+                            panel.dialogue[i].emphasis = DialogueEmphasis(e.value)
+                            storage.update_object(panel)
+                            rough.refresh()
+                        sel.on_value_change(restyle)
+
+                        def drop_balloon(i=i):
+                            panel.dialogue = [x for j, x in enumerate(panel.dialogue) if j != i]
+                            remap_letter_blocking('balloon/', i)
+                            storage.update_object(panel)
+                            _receipt('✂️ removed a balloon')
+                            state.refresh_details()
+                        ui.button(icon='close').props('flat round dense size=xs') \
+                            .tooltip('Remove this balloon').on('click', lambda _, i=i: drop_balloon(i))
+
+                for pos in ('top', 'bottom'):
+                    caps = [n for n in panel.narration if n.position.value == pos]
+                    for i, n in enumerate(caps[:2]):
+                        with ui.row().classes('light-layer w-full items-center flex-nowrap') \
+                                .style('gap: 4px; margin-left: 14px; width: calc(100% - 14px);'):
+                            letter_eye(f'caption/{pos}/{i}')
+                            ui.icon('notes').classes('text-sm')
+                            ui.label(f"narrator: {n.text[:26]}").classes('text-xs') \
+                                .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
+                            ui.space()
+
+                            def drop_caption(n=n):
+                                panel.narration = [x for x in panel.narration if x is not n]
+                                storage.update_object(panel)
+                                _receipt('✂️ removed a narrator box')
+                                state.refresh_details()
+                            ui.button(icon='close').props('flat round dense size=xs') \
+                                .tooltip('Remove this narrator box').on('click', lambda _, n=n: drop_caption(n))
             for p in props:
                 layer_row('category', f"Foreground — {p['name']}", p)
             for f in figures:
@@ -570,7 +739,7 @@ def light_table(state: APPState, panel, scene, setting,
                     # a SPLIT ELEMENT: movable, healable, removable
                     with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
                         eye(f)
-                        ui.image(source=f["img"]).classes('light-thumb')
+                        ui.image(source=_src(f["img"])).classes('light-thumb')
                         ui.label(f["name"].title()).classes('text-sm')
 
                         def heal_element(path=f["img"], nm=f["name"]):
@@ -619,7 +788,7 @@ def light_table(state: APPState, panel, scene, setting,
                         state.change_selection(new=[*state.selection, itm])
 
                     if f["img"]:
-                        ui.image(source=f["img"]).classes('light-thumb cursor-pointer') \
+                        ui.image(source=_src(f["img"])).classes('light-thumb cursor-pointer') \
                             .tooltip('Swap wardrobe/variant') \
                             .on('click', lambda _, ref=f["ref"]: pick_variant(ref))
                     else:
@@ -673,6 +842,7 @@ def light_table(state: APPState, panel, scene, setting,
                             pass
                         state.refresh_details()
                     ui.button(icon='close').props('flat round dense size=xs') \
+                        .mark('uncast') \
                         .tooltip('Take this figure off the table') \
                         .on('click', lambda _, ref=f["ref"]: uncast(ref))
             for r in references:
@@ -690,7 +860,7 @@ def light_table(state: APPState, panel, scene, setting,
             with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
                 eye(bg_layer)
                 if background:
-                    ui.image(source=background).classes('light-thumb')
+                    ui.image(source=_src(background)).classes('light-thumb')
                 else:
                     ui.icon('landscape').classes('text-lg').style('width: 40px; text-align: center;')
                 ui.label(bg_label).classes('text-sm').style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
@@ -949,7 +1119,7 @@ def light_table(state: APPState, panel, scene, setting,
             with ui.column().style('flex: 1 1 0; min-width: 0;'):
                 ui.label('THE PRINT').classes('comic-label-sm')
                 with ui.element('div').classes('rough-canvas').style(f'aspect-ratio: {aspect};'):
-                    ui.image(source=featured).props('fit=cover') \
+                    ui.image(source=_src(featured)).props('fit=cover') \
                         .classes('absolute inset-0 w-full h-full')
                     if actions:
                         with ui.row().classes('absolute top-1 right-1 z-10 items-center').style('gap: 4px;'):

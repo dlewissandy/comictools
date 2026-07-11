@@ -1902,30 +1902,29 @@ def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id:
         return (f"No reference art for '{character_id}' ({variant_id}) yet — "
                 f"create the variant's reference sheet first.")
 
-    prompt = f"""A single FULL-BODY figure of {character_id.replace('-', ' ')} exactly as shown on
-the reference sheet: same face, same costume, same colors — strictly on-model.
+    if pose_direction:
+        pose_ask = f"POSE (follow this exactly): {pose_direction}"
+    else:
+        pose_ask = (f"POSE the figure for this moment: {panel.beat or panel.description}"
+                    + (f"  Blocking: {scene.blocking}" if scene and scene.blocking else ""))
 
-Pose the figure for THIS moment:
-{f"# Pose direction (FOLLOW THIS EXACTLY){chr(10)}{pose_direction}{chr(10)}" if pose_direction else ""}
-# Beat
-{panel.beat or scene.story if scene else panel.beat}
-# Panel description
-{panel.description}
-{f"# Blocking{chr(10)}{scene.blocking}" if scene and scene.blocking else ""}
+    prompt = f"""The attached reference sheet shows {character_id.replace('-', ' ')}.
+Draw THIS character — identical face, identical costume, identical colors,
+identical proportions, same ink and palette as the sheet — in ONE new pose.
 
-Render ONLY the figure — full body, head to toe, feet at the bottom edge —
-on a COMPLETELY TRANSPARENT background.  No scenery, no ground plane, no
-shadow beyond a small contact shadow at the feet, no frame, no text, no
-speech balloons.  This is a cut-out acetate to be layered over a background.
+{pose_ask}
 
-{format_comic_style(style, include_bubble_styles=False, heading_level=1) if style else ""}
-"""
+Render a single FULL-BODY figure, head to toe, feet at the bottom edge, on a
+COMPLETELY TRANSPARENT background.  No scenery, no ground, no frame, no text,
+no speech balloons, no turnaround strip — ONE figure only, posed as directed.
+This is a cut-out acetate to be layered over a background."""
     image_bytes = invoke_edit_image_api(
         prompt,
         reference_images=[sheet],
         size="1024x1536",
         quality=IMAGE_QUALITY.MEDIUM,
         background="transparent",
+        input_fidelity="high",
     )
 
     from uuid import uuid4

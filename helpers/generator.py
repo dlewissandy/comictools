@@ -117,7 +117,8 @@ def invoke_edit_image_api(
         size: str = "1024x1024",
         quality: IMAGE_QUALITY = IMAGE_QUALITY.HIGH,
         reference_images: list[str] = [],
-        background: str | None = None
+        background: str | None = None,
+        input_fidelity: str | None = None
     ):
     """
     Invoke the OpenAI API to edit an image based on the prompt.
@@ -140,10 +141,16 @@ def invoke_edit_image_api(
         "quality": quality.name.lower(),
         "model": "gpt-image-1.5",
     }
+    extra = {}
     if background:
-        # transparent cut-outs (acetates) need png output with alpha;
+        # transparent cut-outs (acetates) need png output with alpha
+        extra.update({"background": background, "output_format": "png"})
+    if input_fidelity:
+        # preserve the reference's identity (faces, costume, colors)
+        extra["input_fidelity"] = input_fidelity
+    if extra:
         # extra_body keeps older SDK signatures happy
-        args["extra_body"] = {"background": background, "output_format": "png"}
+        args["extra_body"] = extra
 
     # Use an ExitStack so all files stay open until after the call
     args["image"] =  [filepath_to_filehandle(filepath) for filepath in reference_images]

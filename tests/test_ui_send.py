@@ -258,8 +258,8 @@ async def test_cast_card_corner_remove(user: User) -> None:
     await user.open("/")
     # the panel's cast cardwall has ✕ buttons (icon=close) on each card
     closers = [e for e in user.client.elements.values()
-               if e.__class__.__name__ == "Button" and getattr(e, "props", {}).get("icon") == "close"]
-    assert closers, "corner ✕ exists on cast cards"
+               if e.__class__.__name__ == "Button" and 'uncast' in getattr(e, "_markers", [])]
+    assert closers, "uncast ✕ exists on figure acetate rows"
     btn = closers[0]
     for ev in btn._event_listeners.values():
         if ev.type.startswith("click"):

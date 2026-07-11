@@ -187,16 +187,31 @@ def init_layout(logger):
         .rh-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
         .rough-balloon { position: absolute; transform: translateX(-50%);
                          background: #fff; color: #1a1512;
-                         border: 2px solid var(--ink); border-radius: 12px;
-                         padding: 2px 10px; font-size: .68rem; max-width: 42%;
-                         overflow: visible; text-overflow: ellipsis;
-                         white-space: nowrap; }
-        /* the tail points at the speaker; double-click a balloon to flip it */
-        .rough-balloon::after { content: ''; position: absolute; bottom: -9px;
-                                border: 5px solid transparent;
-                                border-top: 9px solid var(--ink); }
-        .rough-balloon.tail-left::after { left: 12px; }
-        .rough-balloon.tail-right::after { right: 12px; }
+                         border: 2px solid #1a1512; border-radius: 14px;
+                         padding: 3px 12px; font-size: .68rem;
+                         width: max-content; max-width: 38%;
+                         white-space: normal; text-align: center;
+                         line-height: 1.25; overflow: visible; }
+        /* the TAIL: drawn on the SVG overlay, its tip draggable */
+        .rough-tails { position: absolute; inset: 0; width: 100%; height: 100%;
+                       pointer-events: none; z-index: 69; overflow: visible; }
+        .rough-tail-shape { fill: #fff; stroke: #1a1512; stroke-width: 2; }
+        .rh-tip { fill: #fff; stroke: #3b82f6; stroke-width: 2;
+                  pointer-events: auto; cursor: move; }
+        /* EMPHASIS styles — the balloon wears its voice */
+        .rough-balloon--whisper { border-style: dashed; font-style: italic;
+                                  color: #555; }
+        .rough-balloon--shout { border-width: 3.5px; font-weight: 900;
+                                text-transform: uppercase;
+                                border-radius: 4px; transform: translateX(-50%) rotate(-1deg); }
+        .rough-balloon--thought { border-radius: 50%; padding: 8px 16px; }
+        .rough-balloon--sound-effect { background: transparent; border: none;
+                                 font-family: 'Bangers', Impact, sans-serif;
+                                 font-size: 1.3rem; letter-spacing: 1px;
+                                 color: #1a1512;
+                                 text-shadow: 1.5px 1.5px 0 #fff, -1.5px 1.5px 0 #fff,
+                                              1.5px -1.5px 0 #fff, -1.5px -1.5px 0 #fff; }
+
         /* in-place letter editing (double-click) */
         .rough-editing { outline: 2px solid #3b82f6; white-space: normal;
                          min-width: 80px; cursor: text; z-index: 99 !important; }
