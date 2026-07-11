@@ -6,6 +6,8 @@ from gui.selection import SelectionItem, SelectedKind
 from schema.enums import FrameLayout
 from schema.style.comic import ComicStyle
 from schema.style.dialog import BubbleStyle
+from schema.character_reference import CharacterRef
+from schema.dialog import Dialogue, Narration
 from storage.generic import GenericStorage
 from schema import (
     CharacterModel,
@@ -1150,3 +1152,79 @@ def update_cover_setting(wrapper: RunContextWrapper[APPState], series_id: str, i
             return f"Setting '{setting_id}' not found in series '{series_id}'.  Create it first."
     primary_key = {'cover_id': cover_id, 'series_id': series_id, 'issue_id': issue_id}
     return update_attribute(wrapper, Cover, primary_key, 'setting_id', setting_id)
+
+
+# -------------------------------------------------------------------------
+# PANEL COMPOSITION (cast in frame, dialogue, narration)
+# -------------------------------------------------------------------------
+@function_tool
+def update_panel_cast(wrapper: RunContextWrapper[APPState],
+        series_id: str, issue_id: str, scene_id: str, panel_id: str,
+        cast: list[CharacterRef]) -> str:
+    """
+    Set the CAST IN FRAME for a panel: which characters appear in this single
+    panel and which variant (wardrobe) each one wears.   Replaces the panel's
+    existing character references.   Use read_all_variants first to pick valid
+    variant ids.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue.
+        scene_id (str): The ID of the scene the panel belongs to.
+        panel_id (str): The ID of the panel.
+        cast (list[CharacterRef]): The characters in frame with their variants.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    from schema import Panel
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id}
+    panel: Panel = storage.read_object(cls=Panel, primary_key=pk)
+    if panel is None:
+        return f"Panel with ID '{panel_id}' not found."
+    panel.character_references = cast
+    storage.update_object(data=panel)
+    state.is_dirty = True
+    return f"Cast in frame for panel '{panel.name}' set to: " + (", ".join(c.name for c in cast) if cast else "nobody")
+
+
+@function_tool
+def update_panel_dialogue(wrapper: RunContextWrapper[APPState],
+        series_id: str, issue_id: str, scene_id: str, panel_id: str,
+        dialogue: Optional[list[Dialogue]] = None,
+        narration: Optional[list[Narration]] = None) -> str:
+    """
+    Set the LETTERS for a panel: its dialogue balloons and/or narration
+    captions.   Only the provided lists are replaced; pass an empty list to
+    clear one.
+
+    Args:
+        series_id (str): The ID of the comic series.
+        issue_id (str): The ID of the issue.
+        scene_id (str): The ID of the scene the panel belongs to.
+        panel_id (str): The ID of the panel.
+        dialogue (list[Dialogue], optional): Balloons — speaker, text, emphasis.
+        narration (list[Narration], optional): Captions — text and top/bottom position.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    from schema import Panel
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id}
+    panel: Panel = storage.read_object(cls=Panel, primary_key=pk)
+    if panel is None:
+        return f"Panel with ID '{panel_id}' not found."
+    changed = []
+    if dialogue is not None:
+        panel.dialogue = dialogue
+        changed.append(f"{len(dialogue)} balloon(s)")
+    if narration is not None:
+        panel.narration = narration
+        changed.append(f"{len(narration)} caption(s)")
+    storage.update_object(data=panel)
+    state.is_dirty = True
+    return f"Letters for panel '{panel.name}' updated: " + (", ".join(changed) if changed else "nothing changed")

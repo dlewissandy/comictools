@@ -68,6 +68,8 @@ from agentic.tools.deleter import delete_setting, undo_last_delete
 from agentic.tools.updater import (
     update_scene_setting,
     update_scene_cast,
+    update_panel_cast,
+    update_panel_dialogue,
     update_scene_blocking,
     update_scene_props,
     update_setting_description,
@@ -260,15 +262,24 @@ TOOLKITS: dict[str,list[Tool]] = {
     ],
     "panel": [
         # Create
+        create_prop,
+        create_setting,
         # Read
         read_panel,
         read_scene,
         read_setting,
+        read_all_settings,
+        read_all_characters,
         read_all_variants,
+        read_all_props,
         # Update
         update_panel_name,
         update_panel_beat,
         update_panel_description,
+        update_panel_cast,
+        update_panel_dialogue,
+        update_scene_setting,
+        update_scene_props,
         # Delete
         undo_last_delete,
         delete_panel,

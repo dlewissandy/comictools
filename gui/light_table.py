@@ -12,6 +12,9 @@ from nicegui import ui
 
 from gui.messaging import post_user_message
 from gui.state import APPState
+from schema import CharacterModel, Setting, PropAsset, CharacterVariant
+from schema.character_reference import CharacterRef
+from schema.setting import Prop
 
 _ASPECT = {"landscape": "3/2", "portrait": "2/3", "square": "1/1"}
 _POS_X = {"left": 18, "center": 50, "right": 82}
@@ -139,7 +142,24 @@ def light_table(state: APPState, panel, scene, setting,
         post_user_message(state, "Ink this rough into a new take of this panel — compose it with " +
                           "; ".join(parts) + ".")
 
-    # ---- the table -------------------------------------------------------
+    # ---- ONE PROMPT, WHOLE COMPOSITION -----------------------------------
+    # Describe the shot; the Penciller lays every acetate and renders a take.
+    with ui.row().classes('w-full items-center flex-nowrap q-mb-sm').style('gap: 8px;'):
+        direction = ui.input(placeholder='Describe the shot — I\'ll lay the acetates and render a take…') \
+            .props('outlined dense').classes('flex-grow')
+
+        def compose():
+            text = (direction.value or '').strip()
+            if not text:
+                ui.notify('Describe the shot first.', type='warning')
+                return
+            direction.value = ''
+            post_user_message(state,
+                f"Compose this panel: {text}")
+
+        direction.on('keydown.enter', lambda _: compose())
+        ui.button('Compose', icon='auto_awesome').props('unelevated dense').on('click', lambda _: compose())
+
     with ui.row().classes('w-full flex-nowrap').style('gap: 12px; align-items: stretch;'):
         with ui.column().classes('w-1/3').style('gap: 4px; min-width: 220px;'):
             ui.label('top of the stack prints last').classes('text-xs text-gray-500 italic')
@@ -196,24 +216,99 @@ def light_table(state: APPState, panel, scene, setting,
             layer_row('landscape', f"Background — {setting.name if setting else 'no setting yet'}",
                       bg_layer, thumb=background)
 
-            # LAY A NEW ACETATE: each button asks the coauthor to add that
-            # kind of layer to the composition.
+            # LAY A NEW ACETATE: figures, props and backgrounds lay down in
+            # ONE CLICK from a picker; letters go through the coauthor (they
+            # need writing).
+            def _receipt(text: str):
+                try:
+                    from gui.avatars import comic_chat_message
+                    with state.history:
+                        with comic_chat_message(name='You', sent=True).classes('w-full'):
+                            ui.markdown(text)
+                    state.history.scroll_to(percent=100)
+                except Exception:
+                    pass
+
+            def pick_figure():
+                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 720px;'):
+                    ui.label('Lay a figure on the table').classes('caption-box caption-box-sm')
+                    already = {(c.character_id, c.variant_id) for c in (panel.character_references or [])}
+                    with ui.row().classes('w-full').style('gap: 8px;'):
+                        for ch in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
+                            for v in storage.read_all_objects(CharacterVariant, primary_key={"series_id": series_id, "character_id": ch.character_id}):
+                                if (ch.character_id, v.id) in already:
+                                    continue
+                                img = storage.find_variant_image(series_id=series_id, character_id=ch.character_id, variant_id=v.id)
+                                with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 130px;') as card:
+                                    if img and os.path.exists(img):
+                                        ui.image(source=img).style('height: 70px;').props('fit=contain')
+                                    vname = getattr(v, 'name', None) or v.id
+                                    ui.label(f"{ch.name.title()} · {vname}").classes('text-xs text-center w-full')
+
+                                def lay(ch=ch, v=v):
+                                    panel.character_references = (panel.character_references or []) + [
+                                        CharacterRef(series_id=series_id, character_id=ch.character_id, variant_id=v.id)]
+                                    storage.update_object(panel)
+                                    _receipt(f"🎭 laid **{ch.name}** ({v.id}) on the table")
+                                    dlg.close()
+                                    state.refresh_details()
+                                card.on('click', lambda _, ch=ch, v=v: lay(ch, v))
+                dlg.open()
+
+            def pick_background():
+                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 720px;'):
+                    ui.label('Lay a background on the table').classes('caption-box caption-box-sm')
+                    with ui.row().classes('w-full').style('gap: 8px;'):
+                        for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}, order_by="name"):
+                            img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
+                            with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 150px;') as card:
+                                if img:
+                                    ui.image(source=img).style('height: 80px;').props('fit=cover')
+                                ui.label(s.name.title()).classes('text-xs text-center w-full')
+
+                            def lay(s=s):
+                                scene.setting_id = s.setting_id
+                                storage.update_object(scene)
+                                _receipt(f"🏔 laid the **{s.name}** background on the table")
+                                dlg.close()
+                                state.refresh_details()
+                            card.on('click', lambda _, s=s: lay(s))
+                dlg.open()
+
+            def pick_prop():
+                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 720px;'):
+                    ui.label('Lay a prop on the table').classes('caption-box caption-box-sm')
+                    already = {p.name for p in (scene.props or [])} if scene is not None else set()
+                    with ui.row().classes('w-full').style('gap: 8px;'):
+                        for pa in storage.read_all_objects(PropAsset, primary_key={"series_id": series_id}, order_by="name"):
+                            if pa.name in already:
+                                continue
+                            img = next((i for i in (pa.images or {}).values() if i and os.path.exists(i)), None)
+                            with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 130px;') as card:
+                                if img:
+                                    ui.image(source=img).style('height: 70px;').props('fit=contain')
+                                ui.label(pa.name.title()).classes('text-xs text-center w-full')
+
+                            def lay(pa=pa):
+                                scene.props = (scene.props or []) + [Prop(name=pa.name, description=pa.description)]
+                                storage.update_object(scene)
+                                _receipt(f"🎪 laid the **{pa.name}** prop on the table")
+                                dlg.close()
+                                state.refresh_details()
+                            card.on('click', lambda _, pa=pa: lay(pa))
+                dlg.open()
+
             with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 2px;'):
                 ui.label('lay a new acetate:').classes('text-xs text-gray-500')
-
-                def _ask(icon: str, tip: str, message: str):
-                    ui.button(icon=icon).props('flat round dense size=sm').tooltip(tip) \
-                        .on('click', lambda _, m=message: post_user_message(state, m))
-
-                _ask('person_add', 'A figure — cast a character into this panel',
-                     'I would like to add a character to this panel.')
-                _ask('category', 'A foreground prop',
-                     'I would like to add a prop to this panel.')
-                _ask('landscape', 'A background — give the scene a setting'
-                     if setting is None else 'A different background — change the setting',
-                     'I would like to pick the setting for this scene.')
-                _ask('chat_bubble', 'Letters — write narration or dialogue for this panel',
-                     'I would like to add dialogue or narration to this panel.')
+                ui.button(icon='person_add').props('flat round dense size=sm') \
+                    .tooltip('A figure — one click from the cast').on('click', lambda _: pick_figure())
+                ui.button(icon='category').props('flat round dense size=sm') \
+                    .tooltip('A foreground prop — one click from the prop shop').on('click', lambda _: pick_prop())
+                ui.button(icon='landscape').props('flat round dense size=sm') \
+                    .tooltip('A background — one click from the settings').on('click', lambda _: pick_background())
+                ui.button(icon='chat_bubble').props('flat round dense size=sm') \
+                    .tooltip('Letters — the coauthor writes narration/dialogue with you') \
+                    .on('click', lambda _: post_user_message(state, 'I would like to add dialogue or narration to this panel.'))
 
             # or just drop an image straight onto the table as a reference
             with ui.row().classes('light-layer w-full items-center justify-center relative').style('min-height: 34px;'):

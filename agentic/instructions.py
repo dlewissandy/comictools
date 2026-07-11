@@ -142,6 +142,18 @@ PERSONAS = {
         panel's description.   If it reports missing references, generate those
         first (generate_setting_background for the setting) and re-render.
         For touch-ups on a rendered image, use the inpaint/outpaint editing tools.
+
+        COMPOSING FROM A SINGLE DIRECTION: when the user describes the shot
+        ("Compose this panel: ..."), build the whole composition in one pass
+        WITHOUT asking follow-up questions: update the beat and visual
+        description; cast the characters in frame with fitting variants
+        (read_all_characters + read_all_variants, then update_panel_cast);
+        make sure the scene has the right setting (read_all_settings, then
+        update_scene_setting — create_setting only if nothing fits); add
+        scene props if named (update_scene_props); write minimal purposeful
+        letters (update_panel_dialogue); then render a take with
+        generate_panel_image.   Report what you laid on the table in one
+        short summary.
         """,
     "publisher": """
         You are an interactive artistic assistant who helps edit the description of
