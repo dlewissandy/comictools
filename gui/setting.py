@@ -109,5 +109,5 @@ def view_setting(state: APPState):
                 uploader_card(
                     state=state,
                     on_upload=on_upload,
-                    packer=packer, variants=[(3, 3)]
+                    packer=packer
                 )

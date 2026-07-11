@@ -249,6 +249,6 @@ def view_scene(state: APPState):
                     post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
                 from gui.elements import uploader_card
                 uploader_card(state, on_upload=on_upload, packer=packer,
-                              variants=[(3, 3)], label='Drop image to create a panel')
+                              label='Drop image to create a panel')
                 page_ctx.__exit__(None, None, None)
         page.__exit__(None, None, None)

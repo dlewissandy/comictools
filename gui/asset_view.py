@@ -67,7 +67,7 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
                     with packer.place_cell([(3, 3)], fudge=False):
                         with ui.card().classes(TAILWIND_CARD + ' mosaic-card'):
                             ui.image(source=upload).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
-                uploader_card(state=state, on_upload=on_upload, packer=packer, variants=[(3, 3)])
+                uploader_card(state=state, on_upload=on_upload, packer=packer)
 
 
 def view_prop(state: APPState):

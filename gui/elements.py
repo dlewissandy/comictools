@@ -793,7 +793,8 @@ def view_reference_images(state: APPState, parent: BaseModel, get_images: Callab
 def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], None], aspect_ratio: str = "3/2",
                   packer: Optional["PagePacker"] = None, variants: Optional[list[tuple[float, float]]] = None,
                   label: str = 'Drop image to upload'):
-    cell = packer.place_cell(variants or [(3, 2)]) if packer is not None else contextlib.nullcontext()
+    # drop boxes are always 3x2 units — never stretched like a text callout
+    cell = packer.place_cell(variants or [(3, 2)], fudge=False) if packer is not None else contextlib.nullcontext()
     with cell:
         card = ui.card().classes(TAILWIND_CARD + ' relative overflow-hidden')
         if packer is not None:

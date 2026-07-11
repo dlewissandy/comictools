@@ -124,12 +124,11 @@ def view_series(state: APPState):
                 overlap_caption=_cap("Characters", "I would like to create a new character")
                 ):
                 pass
-        with packer.place_cell([(3, 2)]):
-            uploader_card(
-                state=state,
-                on_upload=lambda e: on_upload(e),
-                aspect_ratio="6/5"
-            )
+        uploader_card(
+            state=state,
+            on_upload=lambda e: on_upload(e),
+            packer=packer
+        )
 
         # A cardwall for viewing and adding the recurring settings of the series.
         def setting_image(loc: Setting):

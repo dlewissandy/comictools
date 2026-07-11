@@ -50,7 +50,17 @@ async def test_quote_then_background_render(storage, mock_imaging, unrendered_pa
 
 
 @pytest.mark.asyncio
-async def test_nothing_to_render(storage, mock_imaging):
+async def test_nothing_to_render(storage, mock_imaging, tmp_path):
+    # construct the precondition rather than assuming it: give every
+    # unrendered panel artwork in the test copy of the data
+    for sc in storage.read_all_objects(SceneModel, {"series_id": WL, "issue_id": CARN}):
+        for p in storage.read_all_objects(Panel, {"series_id": WL, "issue_id": CARN, "scene_id": sc.scene_id}):
+            if not (p.image and os.path.exists(p.image)):
+                img = tmp_path / f"{p.panel_id}.png"
+                img.write_bytes(b"png")
+                p.image = str(img)
+                storage.update_object(p)
+
     st = _Stub(storage)
     out = await imaging.render_missing_panels.on_invoke_tool(
         _Ctx(st), json.dumps({"series_id": WL, "issue_id": CARN}))
