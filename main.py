@@ -92,6 +92,9 @@ def init_layout(logger):
         user_input = ui.input(placeholder=placeholder).props('rounded outlined input-class=mx-3 ') \
             .classes('w-full self-center stt-input').style('flex-grow: 1; width: 100vh;')
 
+        attach_upload = ui.upload(auto_upload=True, max_files=1).props('accept=image/*').classes('hidden')
+        attach_button = ui.button(icon='attach_file').props('flat round').classes('q-ml-sm').tooltip('Attach a reference image to what you are working on')
+        attach_button.on('click', lambda _: attach_upload.run_method('pickFiles'))
         mic_button = ui.button(icon='mic').props('flat round').classes('q-ml-sm').tooltip('Dictate')
         stop_mic_button = ui.button(icon='mic_off').props('flat round').tooltip('Stop dictating')
         speak_button = ui.button(icon='volume_up').props('flat round').tooltip('Read aloud')
@@ -105,6 +108,7 @@ def init_layout(logger):
         user_input,
         send_button,
         suggestions_row,
+        attach_upload,
         darkswitch,
         mic_button,
         stop_mic_button,
@@ -132,6 +136,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         user_input,
         send_button,
         suggestions_row,
+        attach_upload,
         darkswitch,
         mic_button,
         stop_mic_button,
@@ -204,6 +209,9 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     darkswitch.bind_value_to(state, "dark_mode")
     user_input.on('keydown.enter', lambda _ : send(state=state))
     send_button.on('click', lambda _:send(state=state))
+
+    from gui.messaging import attach_reference
+    attach_upload.on_upload(lambda e: attach_reference(state, e))
 
     mic_button.on('click', lambda _: start_listening(user_input))
     stop_mic_button.on('click', lambda _: stop_listening())

@@ -179,7 +179,7 @@ def delete_publisher_logo_reference_image(
     return f"Logo image for {publisher.name} deleted successfully."
 
 @function_tool
-def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str, cover_id: str, text_layout_instructions: Optional[str] = None) -> str:
+def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str, cover_id: str, text_layout_instructions: Optional[str] = None, takes: int = 1) -> str:
     """
     Generate a cover image for the specified comic book issue.
 
@@ -191,10 +191,22 @@ def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: s
             elements (title, subtitle, price, issue number, date, credits) should be
             placed and styled on the cover.   If omitted, a standard comic layout is
             used (title across the top, subtitle below, credits at the bottom).
+        takes (int): How many takes to render (1-4).  More takes = a contact sheet
+            in the cover's image grid for the user to choose from (each costs money).
 
     Returns:
         A string indicating the status of the rendering operation.
     """
+    takes = max(1, min(int(takes or 1), 4))
+    notes = [_generate_cover_image_body(wrapper, series_id, issue_id, cover_id, text_layout_instructions)
+             for _ in range(takes)]
+    if takes == 1:
+        return notes[0]
+    return (f"{takes} takes rendered — they're in the cover's image grid; the last is selected.  "
+            f"Ask the user to pick a favorite.  " + notes[-1])
+
+
+def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id: str, text_layout_instructions: Optional[str] = None) -> str:
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
 
@@ -1467,6 +1479,7 @@ def generate_panel_image(
     issue_id: str,
     scene_id: str,
     panel_id: str,
+    takes: int = 1,
 ) -> str:
     """
     Render the artwork for a panel by compositing its reference objects: the
@@ -1486,11 +1499,19 @@ def generate_panel_image(
         issue_id: The ID of the issue.
         scene_id: The ID of the scene the panel belongs to.
         panel_id: The ID of the panel to render.
+        takes: How many takes to render (1-4).  More takes = a contact sheet in
+            the panel's image grid for the user to choose from (each costs money).
 
     Returns:
         A status message with the locator of the rendered panel image.
     """
-    return _generate_panel_image_body(wrapper, series_id, issue_id, scene_id, panel_id)
+    takes = max(1, min(int(takes or 1), 4))
+    notes = [ _generate_panel_image_body(wrapper, series_id, issue_id, scene_id, panel_id)
+              for _ in range(takes) ]
+    if takes == 1:
+        return notes[0]
+    return (f"{takes} takes rendered — they're all in the panel's image grid; the last one is "
+            f"selected.  Ask the user to pick a favorite (or which to refine).  " + notes[-1])
 
 
 def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id: str, panel_id: str) -> str:
