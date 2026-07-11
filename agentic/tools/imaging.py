@@ -206,6 +206,67 @@ def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: s
             f"Ask the user to pick a favorite.  " + notes[-1])
 
 
+def _compose_table_rough(storage, board, scene) -> str | None:
+    """Composite the board's visible acetates into the author's ROUGH — the
+    literal pencils the inker finishes.  Returns the path of the composited
+    image, or None when nothing is blocked on the table (then the render is
+    composed free-form from the text brief alone)."""
+    from uuid import uuid4
+    from PIL import Image
+    from storage.filepath import obj_to_imagepath
+
+    blk = board.figure_blocking or {}
+
+    def on(key, default=1):
+        return bool((blk.get(key) or {}).get('on', default))
+
+    layers = []
+    for ref in (board.character_references or []):
+        key = f"{ref.character_id}/{ref.variant_id}"
+        path = (board.figure_images or {}).get(key)
+        if path and os.path.exists(path) and on(key):
+            layers.append((key, path))
+    for key, path in (board.figure_images or {}).items():
+        if key.startswith('element/') and path and os.path.exists(path) and on(key):
+            layers.append((key, path))
+    # a reworked take laid down as the plate is authored content too — even
+    # with no figure acetates over it, it IS the rough
+    plate = (board.figure_images or {}).get('background/plate')
+    if not layers and not (plate and os.path.exists(plate) and on('background')):
+        return None
+
+    dims = {"landscape": (1536, 1024), "portrait": (1024, 1536), "square": (1024, 1024)}[board.aspect.value]
+    W, H = dims
+    src, _ = _resolve_layer_source(board, scene, storage, board.series_id, 'background')
+    if src and on('background'):
+        base = Image.open(src).convert('RGBA')
+        s = max(W / base.width, H / base.height)
+        base = base.resize((max(1, round(base.width * s)), max(1, round(base.height * s))))
+        left, top = (base.width - W) // 2, (base.height - H) // 2
+        base = base.crop((left, top, left + W, top + H))
+    else:
+        base = Image.new('RGBA', dims, (250, 246, 236, 255))
+
+    defaults = {"x": 50, "y": 0, "h": 60, "z": 0}
+    for key, path in sorted(layers, key=lambda kp: (blk.get(kp[0]) or {}).get('z', 0)):
+        b = {**defaults, **(blk.get(key) or {})}
+        fig = Image.open(path).convert('RGBA')
+        if b.get('flip'):
+            fig = fig.transpose(Image.FLIP_LEFT_RIGHT)
+        th = H * float(b["h"]) / 100
+        s = th / fig.height
+        fig = fig.resize((max(1, round(fig.width * s)), max(1, round(th))))
+        cx = W * float(b["x"]) / 100
+        bottom = H - H * float(b["y"]) / 100
+        base.paste(fig, (round(cx - fig.width / 2), round(bottom - fig.height)), fig)
+
+    figures_dir = os.path.join(os.path.dirname(obj_to_imagepath(obj=board, base_path=storage.base_path)), "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    out = os.path.join(figures_dir, f"rough--{uuid4().hex[:8]}.png")
+    base.convert('RGB').save(out, 'PNG')
+    return out
+
+
 def _table_layout_brief(board) -> str:
     """The author's light-table blocking as prompt lines — figure positions,
     depths, mirroring, and element OMIT/placement notes.  A board is anything
@@ -357,6 +418,19 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
         background_guidance = ("The FIRST reference image is the setting's master background: "
                                "use it as the cover's setting — same architecture, same props, same palette — "
                                "reframed as the cover composition requires.\n")
+
+    # THE ROUGH IS THE PENCILS: when the author blocked acetates on the
+    # cover's light table, composite them and hand them to the cover artist.
+    rough_ref = _compose_table_rough(storage, cover, None)
+    if rough_ref:
+        reference_image_locators.insert(0, rough_ref)
+        background_guidance = (
+            "The FIRST reference image is the author's ROUGH of this cover — the exact "
+            "composition assembled on the light table.   Treat it as the pencils: keep every "
+            "figure and element at its position, scale and facing; finish and ink it in the "
+            "style, then letter the trade dress over it.\n"
+            + ("The NEXT reference image is the setting's master background — same architecture, "
+               "same palette, reframed as the composition requires.\n" if background_first else ""))
 
     # honor whatever the author arranged on the cover's light table
     table_layout = _table_layout_brief(cover)
@@ -1636,14 +1710,26 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
     if setting is not None:
         setting_line = f"{'Interior' if setting.interior else 'Exterior'}: {setting.name}" + (f", {scene.time_of_day}" if scene.time_of_day else "")
 
+    # THE ROUGH IS THE PENCILS: when the author blocked acetates on the light
+    # table, composite them and hand the inker the actual image to finish.
+    rough_ref = _compose_table_rough(storage, panel, scene)
+    if rough_ref:
+        reference_images.insert(0, rough_ref)
+        ref_guidance = """The FIRST reference image is the author's ROUGH of this panel — the exact
+composition assembled on the light table.   Treat it as the pencils: keep every
+figure and element at its position, scale and facing; finish and ink it in the
+style below.   The remaining references show the setting and the on-model cast."""
+    else:
+        ref_guidance = """The FIRST reference image (when present) is the setting's master background: use it
+as the panel's setting — same architecture, same props, same palette — reframed as
+the panel requires.   The character reference sheets show exactly how each character
+must look; keep them strictly on-model."""
+
     prompt = f"""Render a single comic book panel.  Aspect/orientation: {panel.aspect.value}.
 {f"Setting: {setting_line}" if setting_line else ""}
 {f"Mood: {scene.mood}" if scene.mood else ""}
 
-The FIRST reference image (when present) is the setting's master background: use it
-as the panel's setting — same architecture, same props, same palette — reframed as
-the panel requires.   The character reference sheets show exactly how each character
-must look; keep them strictly on-model.
+{ref_guidance}
 
 # Beat
 {panel.beat}

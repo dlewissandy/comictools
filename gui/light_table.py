@@ -303,10 +303,36 @@ if (!window._roughDragInit) {
     stackDrag = null;
   });
 
+  // ARROW KEYS nudge the selected acetate (Shift = coarse); Escape deselects
+  document.addEventListener('keydown', (e) => {
+    if (e.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const fig = window._roughSel;
+    if (!fig) return;
+    if (e.key === 'Escape') { deselect(); requestAnimationFrame(window.roughDrawTails); return; }
+    const step = e.shiftKey ? 5 : 1;
+    let dx = 0, dy = 0;
+    if (e.key === 'ArrowLeft') dx = -step;
+    else if (e.key === 'ArrowRight') dx = step;
+    else if (e.key === 'ArrowUp') dy = step;
+    else if (e.key === 'ArrowDown') dy = -step;
+    else return;
+    const canvas = fig.closest('.rough-canvas');
+    if (!canvas || canvas.dataset.locked) return;
+    e.preventDefault();
+    fig.style.left = (Math.max(-20, Math.min(120, (parseFloat(fig.style.left) || 50) + dx))) + '%';
+    fig.style.bottom = (Math.max(-80, Math.min(95, (parseFloat(fig.style.bottom) || 0) + dy))) + '%';
+    fig.style.top = 'auto';
+    if (fig.dataset.kind === 'balloon') window.roughDrawTails();
+    clearTimeout(window._nudgeT);   // persist once the nudging settles
+    window._nudgeT = setTimeout(() => report(fig, canvas), 400);
+  });
+
   // double-click a balloon or caption: edit the words IN PLACE
   document.addEventListener('dblclick', (e) => {
     const fig = e.target.closest('.rough-drag');
     if (!fig || !fig.dataset.kind || fig.dataset.kind === 'figure') return;
+    const canvas = fig.closest('.rough-canvas');
+    if (canvas && canvas.dataset.locked) return;   // the table is locked
     e.preventDefault();
     fig.contentEditable = 'true';
     fig.classList.add('rough-editing');
@@ -483,6 +509,30 @@ def takes_row(state, board, featured: str | None):
         storage.update_object(board)
         state.refresh_details()
 
+    def tear_up_take(img: str):
+        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 380px;'):
+            ui.label('Tear up this take?').classes('caption-box caption-box-sm')
+            ui.image(source=img).style('max-height: 180px;').props('fit=contain').classes('q-mt-sm')
+            ui.label("It goes in the wastebasket for good — this can't be undone.") \
+                .classes('text-sm q-mt-sm')
+
+            def go():
+                try:
+                    os.remove(img)
+                except OSError:
+                    pass
+                if board.image and (board.image == img or storage.find_image(obj=board, locator=board.image) == img):
+                    board.image = None
+                    storage.update_object(board)
+                table_receipt(state, '🗑 tore up a take')
+                dlg.close()
+                state.refresh_details()
+            with ui.row().classes('w-full justify-end').style('gap: 8px;'):
+                ui.button('Keep it').props('flat dense').on('click', lambda _: dlg.close())
+                ui.button('Tear it up', icon='delete', color='negative').props('unelevated dense') \
+                    .on('click', lambda _: go())
+        dlg.open()
+
     takes = [img for img in storage.list_images(board) if os.path.exists(img)]
     header("Takes", 4)
     with ruled_page() as packer:
@@ -492,6 +542,10 @@ def takes_row(state, board, featured: str | None):
                     ui.image(source=img).props('fit=cover').classes('absolute inset-0 w-full h-full')
                     if img == featured:
                         ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10')
+                    ui.button(icon='delete').props('flat round dense size=xs') \
+                        .classes('absolute top-1 left-1 z-10 bg-white/70 dark:bg-black/50') \
+                        .tooltip('Tear up this take') \
+                        .on('click.stop', lambda _, img=img: tear_up_take(img))
                     ui.button(icon='layers').props('flat round dense size=xs') \
                         .classes('absolute bottom-1 right-1 z-10 bg-white/70 dark:bg-black/50') \
                         .tooltip('Rework this take on the table (becomes the background layer)') \
@@ -607,12 +661,9 @@ def light_table(state: APPState, panel, scene, setting,
                     seq = [b for b in seq if b != ('l', src_k)]
                 return ('l', src_k)
 
-            if mode == 'onto' and not dst_k.startswith('group:') is None:
-                pass
             if mode == 'onto':
                 kind_, name_ = remove_src()
-                members = groups.get(name_, [name_ if kind_ == 'l' else None]) if False else None
-                moving = (groups.pop(name_) if kind_ == 'g' else [src_k]) if kind_ == 'g' else [src_k]
+                moving = groups.pop(name_) if kind_ == 'g' else [src_k]
                 if kind_ == 'g':
                     seq = [b for b in seq if b != ('g', name_)]
                 if dst_k.startswith('group:'):
@@ -1229,6 +1280,33 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.button(icon='content_cut').props('flat round dense size=xs') \
                             .tooltip('Split this element into ITS elements') \
                             .on('click', lambda _, k=f["key"], p=f["img"]: split_flow(k, p))
+
+                        def dup_element(key=f["key"], path=f["img"], nm=f["name"]):
+                            import shutil
+                            import re as _re
+                            from uuid import uuid4
+                            slug = _re.sub(r'[^a-z0-9]+', '-', nm.lower()).strip('-')[:36] or 'element'
+                            n = 2
+                            while f'element/{slug}-{n}' in (panel.figure_images or {}):
+                                n += 1
+                            new_key = f'element/{slug}-{n}'
+                            new_path = os.path.join(os.path.dirname(path),
+                                                    f'element--{slug}-{n}--{uuid4().hex[:8]}.png')
+                            shutil.copyfile(path, new_path)
+                            panel.figure_images[new_key] = new_path
+                            b = dict((panel.figure_blocking or {}).get(key) or {})
+                            b['x'] = min(120.0, float(b.get('x', 50)) + 8)   # land beside the original
+                            panel.figure_blocking[new_key] = b
+                            for g, ks in (panel.layer_groups or {}).items():
+                                if key in ks:   # a copy joins its original's group
+                                    ks.insert(ks.index(key), new_key)
+                                    break
+                            storage.update_object(panel)
+                            _receipt(f"👯 duplicated the **{nm}** layer")
+                            state.refresh_details()
+                        ui.button(icon='content_copy').props('flat round dense size=xs') \
+                            .tooltip('Duplicate — another copy of this element on its own acetate') \
+                            .on('click', lambda _, k=f["key"], p=f["img"], n=f["name"]: dup_element(k, p, n))
                         mirror_btn(f)
                         ui.space()
 
@@ -1302,7 +1380,6 @@ def light_table(state: APPState, panel, scene, setting,
                         .on('click', lambda _, ref=f["ref"]: uncast(ref))
 
             def flatten_group(gname):
-                import io
                 from uuid import uuid4
                 from PIL import Image as _Img
                 keys = list((panel.layer_groups or {}).get(gname, []))
@@ -1314,7 +1391,6 @@ def light_table(state: APPState, panel, scene, setting,
                         and fkeys[k]["img"]]
                 dims = {'landscape': (1536, 1024), 'portrait': (1024, 1536), 'square': (1024, 1024)}[panel.aspect.value]
                 W, H = dims
-                car = {'landscape': 1.5, 'portrait': 2 / 3, 'square': 1.0}[panel.aspect.value]
                 if has_plate:
                     plate_path = (panel.figure_images or {}).get('background/plate')
                     if plate_path and os.path.exists(plate_path):
