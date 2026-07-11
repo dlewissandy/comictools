@@ -1874,7 +1874,8 @@ def render_missing_panels(wrapper: RunContextWrapper[APPState], series_id: str, 
 # panel — the figure layer the light table stacks over the background.
 # ---------------------------------------------------------------------------
 def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id: str,
-                                 panel_id: str, character_id: str, variant_id: str) -> str:
+                                 panel_id: str, character_id: str, variant_id: str,
+                                 pose_direction: str | None = None) -> str:
     """Render a transparent posed figure for a panel and remember it on the
     panel.  Callable directly from the GUI (background job) or via the tool."""
     from storage.filepath import obj_to_imagepath
@@ -1905,6 +1906,7 @@ def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id:
 the reference sheet: same face, same costume, same colors — strictly on-model.
 
 Pose the figure for THIS moment:
+{f"# Pose direction (FOLLOW THIS EXACTLY){chr(10)}{pose_direction}{chr(10)}" if pose_direction else ""}
 # Beat
 {panel.beat or scene.story if scene else panel.beat}
 # Panel description
@@ -1941,7 +1943,8 @@ speech balloons.  This is a cut-out acetate to be layered over a background.
 
 @function_tool
 def generate_figure_acetate(wrapper: RunContextWrapper, series_id: str, issue_id: str,
-                            scene_id: str, panel_id: str, character_id: str, variant_id: str) -> str:
+                            scene_id: str, panel_id: str, character_id: str, variant_id: str,
+                            pose_direction: Optional[str] = None) -> str:
     """
     Render a POSED FIGURE ACETATE for one character in one panel: a full-body,
     transparent-background cut-out of the character posed for this panel's
@@ -1956,9 +1959,11 @@ def generate_figure_acetate(wrapper: RunContextWrapper, series_id: str, issue_id
         panel_id: The ID of the panel.
         character_id: The character to pose.
         variant_id: The variant (wardrobe) they wear.
+        pose_direction: Optional explicit description of the pose/expression/action,
+            e.g. from the user; followed exactly when given.
 
     Returns:
         A status message with the acetate's locator.
     """
     return generate_figure_acetate_body(wrapper.context, series_id, issue_id, scene_id,
-                                        panel_id, character_id, variant_id)
+                                        panel_id, character_id, variant_id, pose_direction)

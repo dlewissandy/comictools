@@ -60,6 +60,8 @@ def init_layout(logger):
     # inked panels for assets and artwork, narrator caption boxes for headings,
     # speech balloons for the conversation.  Two token classes carry it all.
     ui.add_head_html('<link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">')
+    from gui.light_table import DRAG_JS
+    ui.add_head_html(DRAG_JS)
     ui.add_css("""
         :root { --ink:#181410; --paper:#f2ead8; --panel:#fffdf4;
                 --caption:#f9df7b; --caption-ink:#181410; }
@@ -166,9 +168,12 @@ def init_layout(logger):
                         max-width: 46%; transform: translateX(-50%);
                         filter: drop-shadow(2px 2px 0 rgba(0,0,0,.25)); }
         /* a POSED acetate is a real cut-out: it stands taller and grounded */
-        .rough-figure.rough-figure-posed { height: 78%; bottom: 0;
-                        max-width: 40%;
+        .rough-figure.rough-figure-posed {
                         filter: drop-shadow(3px 3px 2px rgba(0,0,0,.3)); }
+        /* BLOCKING: grab a figure and place it; scroll on it to scale */
+        .rough-drag { cursor: grab; touch-action: none; user-select: none;
+                      max-width: none; }
+        .rough-drag:active { cursor: grabbing; }
         .rough-balloon { position: absolute; transform: translateX(-50%);
                          background: #fff; color: #1a1512;
                          border: 2px solid var(--ink); border-radius: 12px;

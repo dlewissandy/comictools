@@ -17,7 +17,56 @@ from schema.character_reference import CharacterRef
 from schema.setting import Prop
 
 _ASPECT = {"landscape": "3/2", "portrait": "2/3", "square": "1/1"}
-_POS_X = {"left": 18, "center": 50, "right": 82}
+
+# Drag a figure to block the shot; scroll on it to scale for parallax.
+# One global handler (self-guarded) serves every rough; main.py ships it
+# in the page head (head HTML cannot be added after the page loads).
+DRAG_JS = """
+<script>
+if (!window._roughDragInit) {
+  window._roughDragInit = true;
+  let drag = null;
+  document.addEventListener('pointerdown', (e) => {
+    const fig = e.target.closest('.rough-drag');
+    if (!fig) return;
+    const canvas = fig.closest('.rough-canvas');
+    if (!canvas) return;
+    e.preventDefault();
+    drag = {fig, canvas};
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const r = drag.canvas.getBoundingClientRect();
+    let x = ((e.clientX - r.left) / r.width) * 100;
+    let y = ((r.bottom - e.clientY) / r.height) * 100 - parseFloat(drag.fig.style.height) / 2;
+    x = Math.max(2, Math.min(98, x));
+    y = Math.max(0, Math.min(70, y));
+    drag.fig.style.left = x + '%';
+    drag.fig.style.bottom = y + '%';
+  });
+  const report = (fig, canvas) => emitEvent('rough_block', {
+      key: fig.dataset.key, series: canvas.dataset.series, issue: canvas.dataset.issue,
+      scene: canvas.dataset.scene, panel: canvas.dataset.panel,
+      x: parseFloat(fig.style.left), y: parseFloat(fig.style.bottom) || 0,
+      h: parseFloat(fig.style.height)});
+  document.addEventListener('pointerup', (e) => {
+    if (!drag) return;
+    report(drag.fig, drag.canvas);
+    drag = null;
+  });
+  document.addEventListener('wheel', (e) => {
+    const fig = e.target.closest('.rough-drag');
+    if (!fig) return;
+    e.preventDefault();
+    const canvas = fig.closest('.rough-canvas');
+    let h = parseFloat(fig.style.height) || 50;
+    h = Math.max(15, Math.min(115, h * (e.deltaY < 0 ? 1.06 : 0.94)));
+    fig.style.height = h + '%';
+    report(fig, canvas);
+  }, {passive: false});
+}
+</script>
+"""
 
 
 def light_table(state: APPState, panel, scene, setting,
@@ -27,6 +76,24 @@ def light_table(state: APPState, panel, scene, setting,
     """
     storage = state.storage
     series_id = panel.series_id
+
+    # BLOCKING: the drag/scale script ships in main.py's page head; here we
+    # wire the event once per client — the handler resolves the panel from
+    # the event, so it survives view changes.
+    if not getattr(state, '_rough_block_wired', False):
+        state._rough_block_wired = True
+
+        def _on_block(e):
+            from schema import Panel as _Panel
+            a = e.args
+            p = _Panel and state.storage.read_object(cls=_Panel, primary_key={
+                "series_id": a['series'], "issue_id": a['issue'],
+                "scene_id": a['scene'], "panel_id": a['panel']})
+            if p is None:
+                return
+            p.figure_blocking[a['key']] = {"x": round(a['x'], 1), "y": round(a['y'], 1), "h": round(a['h'], 1)}
+            state.storage.update_object(p)
+        ui.on('rough_block', _on_block)
 
     # ---- gather the acetates -------------------------------------------
     background = None
@@ -45,8 +112,12 @@ def light_table(state: APPState, panel, scene, setting,
         sheet = storage.find_variant_image(series_id=series_id, character_id=ref.character_id,
                                            variant_id=ref.variant_id)
         sheet = sheet if sheet and os.path.exists(sheet) else None
-        figures.append({"ref": ref, "img": posed or sheet, "posed": posed is not None,
-                        "on": True, "pos": ["left", "center", "right"][i % 3]})
+        blocking = dict((panel.figure_blocking or {}).get(key) or {})
+        blocking.setdefault("x", (18, 50, 82)[i % 3])
+        blocking.setdefault("y", 0)
+        blocking.setdefault("h", 78 if posed else 52)
+        figures.append({"ref": ref, "key": key, "img": posed or sheet,
+                        "posed": posed is not None, "on": True, "blocking": blocking})
 
     props = [{"name": p.name, "on": True} for p in ((scene.props or []) if scene is not None else [])]
 
@@ -62,7 +133,12 @@ def light_table(state: APPState, panel, scene, setting,
     # ---- THE ROUGH: the live mock --------------------------------------
     @ui.refreshable
     def rough():
-        with ui.element('div').classes('rough-canvas').style(f'aspect-ratio: {aspect};'):
+        canvas = ui.element('div').classes('rough-canvas').style(f'aspect-ratio: {aspect};')
+        canvas._props['data-series'] = series_id
+        canvas._props['data-issue'] = panel.issue_id
+        canvas._props['data-scene'] = panel.scene_id
+        canvas._props['data-panel'] = panel.panel_id
+        with canvas:
             if bg_layer["on"] and background:
                 ui.image(source=background).props('fit=cover') \
                     .classes('absolute inset-0 w-full h-full').style('z-index: 1;')
@@ -72,9 +148,11 @@ def light_table(state: APPState, panel, scene, setting,
 
             visible = [f for f in figures if f["on"] and f["img"]]
             for f in visible:
-                cls = 'rough-figure rough-figure-posed' if f["posed"] else 'rough-figure'
-                ui.image(source=f["img"]).props('fit=contain') \
-                    .classes(cls).style(f'left: {_POS_X[f["pos"]]}%; z-index: 2;')
+                b = f["blocking"]
+                cls = 'rough-figure rough-drag' + (' rough-figure-posed' if f["posed"] else '')
+                fig = ui.image(source=f["img"]).props('fit=contain').classes(cls) \
+                    .style(f'left: {b["x"]}%; bottom: {b["y"]}%; height: {b["h"]}%; z-index: 2;')
+                fig._props['data-key'] = f["key"]
 
             live_props = [p["name"] for p in props if p["on"]]
             if live_props:
@@ -96,22 +174,43 @@ def light_table(state: APPState, panel, scene, setting,
                 for i, d in enumerate(panel.dialogue[:3]):
                     # the balloon hangs near its speaker when they're on the table
                     fig = next((f for f in visible if f["ref"].character_id == d.character_id), None)
-                    x = _POS_X[fig["pos"]] if fig else (25 + 25 * i)
+                    x = fig["blocking"]["x"] if fig else (25 + 25 * i)
                     ui.label(f"{d.character_id}: {d.text}").classes('rough-balloon') \
                         .style(f'left: {x}%; top: {top_y + (i % 2) * 16}%; z-index: 4;')
                 for n in [n for n in panel.narration if n.position.value == 'bottom'][:1]:
                     ui.label(n.text).classes('rough-narration').style('bottom: 4%; z-index: 4;')
 
-    # ---- POSE: render the figure acetate in the background ---------------
-    def pose_figure(character_id: str, variant_id: str):
+    # ---- POSE: describe the pose first, then render in the background ----
+    def pose_figure(character_id: str, variant_id: str, pose_direction: str | None = None):
         from agentic.tools.imaging import generate_figure_acetate_body
         from helpers.render_queue import enqueue_renders
+        ui.notify(f"Posing {character_id.replace('-', ' ')} — the acetate lands on the table when it's ready.",
+                  type='info')
         enqueue_renders(state, [(
             f"posing {character_id} for panel {panel.panel_number}",
             lambda: generate_figure_acetate_body(
                 state, series_id, panel.issue_id, panel.scene_id,
-                panel.panel_id, character_id, variant_id),
+                panel.panel_id, character_id, variant_id, pose_direction),
         )], role="the Penciller")
+
+    def pose_dialog(character_id: str, variant_id: str):
+        name = character_id.replace('-', ' ').title()
+        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 460px;'):
+            ui.label(f"Pose {name}").classes('caption-box caption-box-sm')
+            hint = panel.beat or panel.description or ''
+            direction = ui.textarea(
+                placeholder=f"Describe the pose — e.g. from the beat: “{hint[:120]}…”" if hint
+                else 'Describe the pose, expression and action…').classes('w-full').props('outlined autofocus')
+            with ui.row().classes('w-full justify-end').style('gap: 8px;'):
+                ui.button('Let the beat decide').props('flat dense') \
+                    .on('click', lambda _: (dlg.close(), pose_figure(character_id, variant_id)))
+
+                def go():
+                    text = (direction.value or '').strip()
+                    dlg.close()
+                    pose_figure(character_id, variant_id, text or None)
+                ui.button('Pose', icon='accessibility_new').props('unelevated dense').on('click', lambda _: go())
+        dlg.open()
 
     # ---- one acetate row on the table -----------------------------------
     def eye(layer: dict):
@@ -149,8 +248,18 @@ def light_table(state: APPState, panel, scene, setting,
             parts.append("no setting background")
         on_figs = [f for f in figures if f["on"]]
         if on_figs:
+            from schema import Panel as _Panel
+            fresh = storage.read_object(cls=_Panel, primary_key=panel.primary_key) or panel
+
+            def depth(h):
+                return "near/large" if h >= 88 else ("far/small" if h <= 55 else "mid-ground")
+
+            def blk(f):
+                return {**f["blocking"], **((fresh.figure_blocking or {}).get(f["key"]) or {})}
+
             parts.append("figures: " + ", ".join(
-                f"{f['ref'].character_id} ({f['ref'].variant_id}) at {f['pos']}" for f in on_figs))
+                f"{f['ref'].character_id} ({f['ref'].variant_id}) at {round(blk(f)['x'])}% from left, "
+                f"{depth(blk(f)['h'])}" for f in on_figs))
         else:
             parts.append("no characters in frame")
         live_props = [p["name"] for p in props if p["on"]]
@@ -211,15 +320,18 @@ def light_table(state: APPState, panel, scene, setting,
                     name_lbl = f["ref"].character_id.replace('-', ' ').title()
                     ui.label(name_lbl + ('' if f["posed"] else ' — unposed')).classes('text-sm')
                     ui.button(icon='accessibility_new').props('flat round dense size=xs') \
-                        .tooltip('Pose this figure for the shot' if not f["posed"] else 'Re-pose for the shot') \
-                        .on('click', lambda _, r=f["ref"]: pose_figure(r.character_id, r.variant_id))
+                        .tooltip('Pose this figure — describe the pose' if not f["posed"] else 'Re-pose — describe the new pose') \
+                        .on('click', lambda _, r=f["ref"]: pose_dialog(r.character_id, r.variant_id))
+                    if f["posed"]:
+                        def edit_acetate(path=f["img"], name=name_lbl):
+                            from gui.selection import SelectionItem, SelectedKind
+                            itm = SelectionItem(name=f"Edit {name} acetate", id=path,
+                                                kind=SelectedKind.IMAGE_EDITOR)
+                            state.change_selection(new=[*state.selection, itm])
+                        ui.button(icon='healing').props('flat round dense size=xs') \
+                            .tooltip('Correct this acetate — fill in, fill out, replace details') \
+                            .on('click', lambda _, p=f["img"], n=name_lbl: edit_acetate(p, n))
                     ui.space()
-                    sel = ui.select(['left', 'center', 'right'], value=f["pos"]).props('dense borderless options-dense')
-
-                    def reposition(e, f=f):
-                        f["pos"] = e.value
-                        rough.refresh()
-                    sel.on_value_change(reposition)
 
                     def uncast(ref=f["ref"]):
                         panel.character_references = [
