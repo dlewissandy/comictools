@@ -108,8 +108,14 @@ def init_layout(logger):
     )
 
 
-@ui.page('/')
-def main_page(client):
+def build_page(selection_override: list[SelectionItem] | None = None):
+    """
+    Build the studio page.   With no override, the page restores the last
+    selection and chat history from the state file (the classic root behavior).
+    With an override (a deep-linked URL), the page opens on that selection with
+    a fresh conversation and does NOT persist over the root window's state —
+    each window carries its own context (see UX_ideas.md).
+    """
     # INITIALIZE THE LOGGER
     init_logger()
 
@@ -131,8 +137,12 @@ def main_page(client):
     state_data = json.load(open(STATE_FILEPATH, 'r')) if os.path.exists(STATE_FILEPATH) else {}
 
     # SYNC THE APPLICATION STATE WITH THE STORED VALUES
-    selection = [SelectionItem(**item) for item in state_data.get('selection', DEFAULT_SELECTION)]
-    messages = state_data.get('messages', [])
+    if selection_override is None:
+        selection = [SelectionItem(**item) for item in state_data.get('selection', DEFAULT_SELECTION)]
+        messages = state_data.get('messages', [])
+    else:
+        selection = selection_override
+        messages = []
     dark_value = state_data.get('dark_mode', False)
     darkswitch.value = dark_value
 
@@ -144,12 +154,16 @@ def main_page(client):
         send_button = send_button,
         selection = [] ,  # Initially set selection to empty
         storage = LocalStorage(base_path="data"),
+        persist = selection_override is None,
      )
-    
+
     state.dark_mode = dark_value
     state.restore_history(messages)
     state.change_selection(selection)   # update the selection to force the redraw of the breadcrumbs
     state.refresh_details()             # Redraw the details based on the current selection
+
+    # Browser back/forward re-resolves the selection from the URL.
+    ui.add_body_html("<script>window.addEventListener('popstate', () => location.reload());</script>")
 
     # Enable browser speech capabilities
     init_speech_support()
@@ -164,8 +178,48 @@ def main_page(client):
     speak_button.on('click', lambda _: speak(user_input.value))
     stop_speak_button.on('click', lambda _: cancel_speech())
 
-    # Set static paths
-    app.add_static_files('/data', './data')
+
+# ---------------------------------------------------------
+# ROUTES (hierarchical resource routes, UX_ideas.md Alt 1)
+# Every window/tab deep-links to its selection; reloads are safe.
+# ---------------------------------------------------------
+def _page_from_path(path: str):
+    from gui.routes import selection_from_path
+    parts = [p for p in path.split('/') if p]
+    selection = selection_from_path(LocalStorage(base_path="data"), parts)
+    if selection is None:
+        selection = [SelectionItem(**item) for item in DEFAULT_SELECTION]
+    build_page(selection_override=selection)
+
+
+# Serve the data directory (images) from app start, not first page build.
+app.add_static_files('/data', './data')
+
+
+@ui.page('/')
+def main_page(client):
+    build_page()
+
+@ui.page('/publishers')
+def publishers_page():
+    _page_from_path('publishers')
+
+@ui.page('/publishers/{tail:path}')
+def publisher_page(tail: str):
+    _page_from_path('publishers/' + tail)
+
+@ui.page('/styles')
+def styles_page():
+    _page_from_path('styles')
+
+@ui.page('/styles/{tail:path}')
+def style_page(tail: str):
+    _page_from_path('styles/' + tail)
+
+@ui.page('/series/{tail:path}')
+def series_page(tail: str):
+    _page_from_path('series/' + tail)
+
 
 ui.run()
 

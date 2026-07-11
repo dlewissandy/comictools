@@ -28,7 +28,7 @@ class APPState:
     user_input: ui.input
     send_button: ui.button
     
-    def __init__(self, breadcrumbs, details, history, user_input, send_button, storage: GenericStorage, dark_mode: bool = False, selection: list[SelectionItem] = []):
+    def __init__(self, breadcrumbs, details, history, user_input, send_button, storage: GenericStorage, dark_mode: bool = False, selection: list[SelectionItem] = [], persist: bool = True):
         from agentic import init_agents
         # GUI ELEMENTS
         self.breadcrumbs = breadcrumbs
@@ -42,6 +42,10 @@ class APPState:
         self._is_dirty = False
         self._selection = selection
         self._dark_controller = ui.dark_mode()
+        # Only the root window persists its selection/history to the state
+        # file; deep-linked windows carry their own context (UX_ideas.md).
+        self.persist = persist
+        self._url_synced = False
 
         # Storage and logging must be initialized before agents
         self._storage = storage
@@ -300,8 +304,32 @@ class APPState:
             for i,item in enumerate(self.selection[1:]):
                 new_sel = self.selection[:i+2]
                 ui.button(item.name).props('rounded').on_click(lambda _, new_sel=new_sel: self.change_selection(new=new_sel))
+            ui.space()
+            ui.button(icon='open_in_new') \
+                .props('flat round dense') \
+                .tooltip('Open this view in a new window') \
+                .on('click', lambda _: ui.run_javascript("window.open(window.location.href, '_blank');"))
 
         self.refresh_details()
+        self._sync_url()
+
+    def _sync_url(self):
+        """
+        Keep the browser URL in sync with the selection so every view is
+        deep-linkable and reload-safe (hierarchical resource routes).  The
+        first sync replaces the current history entry; later ones push.
+        """
+        from gui.routes import selection_to_url
+        import json as _json
+        url = selection_to_url(self.selection)
+        if url is None:
+            return
+        verb = "pushState" if self._url_synced else "replaceState"
+        self._url_synced = True
+        try:
+            ui.run_javascript(f"history.{verb}(null, '', {_json.dumps(url)});")
+        except Exception as e:
+            logger.debug(f"URL sync skipped: {e}")
 
     def refresh_details(self):
         logger.trace("Refreshing details")
@@ -387,8 +415,11 @@ class APPState:
 
 
     def write(self):
+        if not getattr(self, "persist", True):
+            logger.debug("Deep-linked window: not persisting state to file")
+            return
         logger.debug("Saving state to file")
-    
+
         state_json = {
             "selection": [item.model_dump() for item in self.selection],
             "messages":  self.get_transcript(),

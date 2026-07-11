@@ -12,7 +12,7 @@ class SelectedKind(StrEnum):
     ALL_STYLES = "all-styles"
 
     SERIES = "series"
-    LOCATION = "setting"
+    SETTING = "setting"
     ISSUE = "issue"
     SCENE = "scene"
     PANEL = "panel"
@@ -81,7 +81,7 @@ def selection_to_context(
             case SelectedKind.CHARACTER.value:
                 accum["character_id"] = id
                 context.append((CharacterModel, {k:v for k, v in accum.items()}))
-            case SelectedKind.LOCATION.value:
+            case SelectedKind.SETTING.value:
                 accum["setting_id"] = id
                 context.append((Setting, {k:v for k, v in accum.items()}))
             case SelectedKind.VARIANT.value:
