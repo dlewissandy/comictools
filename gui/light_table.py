@@ -109,7 +109,8 @@ def light_table(state: APPState, panel, scene, setting,
         btn.on('click', toggle)
         btn.tooltip('Lift this acetate off the table' if layer["on"] else 'Lay it back down')
 
-    def layer_row(icon: str, label: str, layer: dict, thumb: str | None = None):
+    def layer_row(icon: str, label: str, layer: dict, thumb: str | None = None,
+                  edit_message: str | None = None):
         with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
             eye(layer)
             if thumb:
@@ -117,6 +118,11 @@ def light_table(state: APPState, panel, scene, setting,
             else:
                 ui.icon(icon).classes('text-lg').style('width: 40px; text-align: center;')
             ui.label(label).classes('text-sm').style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
+            if edit_message:
+                ui.space()
+                ui.button(icon='edit').props('flat round dense size=xs') \
+                    .tooltip('Rewrite with the coauthor') \
+                    .on('click', lambda _, m=edit_message: post_user_message(state, m))
 
     # ---- INK: hand the rough to the coauthor -----------------------------
     def ink():
@@ -164,7 +170,8 @@ def light_table(state: APPState, panel, scene, setting,
         with ui.column().classes('w-1/3').style('gap: 4px; min-width: 220px;'):
             ui.label('top of the stack prints last').classes('text-xs text-gray-500 italic')
             if has_letters:
-                layer_row('chat_bubble', 'Letters — balloons & captions', letters)
+                layer_row('chat_bubble', 'Letters — balloons & captions', letters,
+                          edit_message='I would like to edit the narration and dialogue of this panel.')
             for p in props:
                 layer_row('category', f"Foreground — {p['name']}", p)
             for f in figures:
@@ -322,8 +329,27 @@ def light_table(state: APPState, panel, scene, setting,
             ui.button('Ink this rough', icon='brush').props('unelevated dense') \
                 .classes('q-mt-sm self-start').on('click', lambda _: ink())
         with ui.column().classes('flex-grow').style('min-width: 0;'):
-            ui.label('THE ROUGH').classes('comic-label-sm')
+            with ui.row().classes('w-full items-center flex-nowrap').style('gap: 4px;'):
+                ui.label('THE ROUGH').classes('comic-label-sm')
+                ui.space()
+                # the frame's SHAPE, switched right on the rough
+                from schema import FrameLayout as _FL
+
+                def reshape(shape):
+                    panel.aspect = shape
+                    storage.update_object(panel)
+                    state.refresh_details()
+                for icon, shape, tip in (('crop_landscape', _FL.LANDSCAPE, 'Landscape frame'),
+                                         ('crop_portrait', _FL.PORTRAIT, 'Portrait frame'),
+                                         ('crop_square', _FL.SQUARE, 'Square frame')):
+                    b = ui.button(icon=icon).props('flat round dense size=sm').tooltip(tip)
+                    if panel.aspect == shape:
+                        b.props('color=primary')
+                    b.on('click', lambda _, s=shape: reshape(s))
             rough()
+            # the margin notes: the visual description IS the textual rough
+            from gui.elements import markdown_field_editor
+            markdown_field_editor(state, "Visual Description", panel.description, header_size=3)
         if featured is not None:
             with ui.column().classes('flex-grow').style('min-width: 0;'):
                 ui.label('THE PRINT').classes('comic-label-sm')

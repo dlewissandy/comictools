@@ -7,7 +7,6 @@ from gui.elements import (
     header,
     crud_button,
     uploader_card,
-    aspect_ratio_picker,
     ruled_page,
     comic_page,
     cpanel,
@@ -147,19 +146,5 @@ def view_panel(state: APPState):
                 uploader_card(state, on_upload=on_upload_take, packer=packer,
                               variants=[_DROP[panel.aspect]],
                               label='Drop image to add a take')
-
-        # THE SCRIPT: the prose behind the panel — tucked away until needed.
-        with ccell(12):
-            with ui.expansion(value=False).classes('w-full section-flat') as exp:
-                with exp.add_slot('header'):
-                    header("Script", 2)
-                with ui.row().classes('w-full flex-nowrap'):
-                    with ui.column().classes('w-3/4'):
-                        markdown_field_editor(state, "Visual Description", panel.description)
-                        markdown_field_editor(state, "Narration and Dialogue", format_dialogue(panel))
-                    with ui.card().classes('mb-2 p-2 w-1/4 soft-card break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
-                        aspect_ratio_picker(state, parent=col2, caption="Aspect Ratio",
-                                            set_aspect_ratio=lambda x: panel.set_aspect(x),
-                                            get_aspect_ratio=lambda: panel.aspect)
 
         page.__exit__(None, None, None)
