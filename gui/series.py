@@ -1,7 +1,7 @@
 import os
 from loguru import logger
 from nicegui.events import UploadEventArguments
-from schema import Series, Issue, CharacterModel, Publisher, Setting
+from schema import Series, Issue, CharacterModel, Publisher, Setting, PropAsset, Outfit
 from gui.elements import (
     markdown, header, uploader_card, view_all_instances, markdown_field_editor, crud_button, post_user_message, view_attributes, CrudButtonKind)
 from nicegui import ui
@@ -27,26 +27,21 @@ def view_series(state: APPState):
     get_id = lambda : None if pub is None else pub.id
     get_image_filepath = lambda : None if pub is None else pub.image_filepath()
 
-    def on_upload(e: UploadEventArguments):
-        # dereference the series
+    def upload_and_ask(e: UploadEventArguments, request: str):
+        """Save a dropped image into the series uploads and ask the coauthor
+        to create the named asset from it."""
         images_path = os.path.join(series.path(), 'uploads')
-        # Save the uploaded image to the uploads folder.
         if not e.name:
             logger.error("No file name provided in upload event.")
         if not e.type.startswith('image/'):
             logger.error(f"Uploaded file is not an image: {e.type}")
             return
-        file_name = e.name
-        save_filepath = os.path.join(images_path, file_name)
-        # recursively create the directory if it doesn't exist
+        save_filepath = os.path.join(images_path, e.name)
         os.makedirs(images_path, exist_ok=True)
-        
         with open(save_filepath, 'wb') as f:
             f.write(e.content.read())
         logger.debug(f"Saved uploaded file to {save_filepath}")
-        # post a user message with the image.  The image should be included in the message using the markdown image anchor syntax.
-        logger.debug(f"Image saved to {save_filepath}")
-        post_user_message(state, f"I would like to create a new character using this image as a reference: ![image]({os.path.join(save_filepath)})")
+        post_user_message(state, f"{request} using this image as a reference: ![image]({save_filepath})")
 
 
     
@@ -126,8 +121,9 @@ def view_series(state: APPState):
                 pass
         uploader_card(
             state=state,
-            on_upload=lambda e: on_upload(e),
-            packer=packer
+            on_upload=lambda e: upload_and_ask(e, "I would like to create a new character"),
+            packer=packer,
+            label='Drop image to create a character'
         )
 
         # A cardwall for viewing and adding the recurring settings of the series.
@@ -146,6 +142,56 @@ def view_series(state: APPState):
                 packer=packer, variants=[(3, 2), (6, 4)],
                 overlap_caption=_cap("Settings", "I would like to create a new setting")
                 ).style('margin-top: 0px; margin-bottom: 0px')
+        uploader_card(
+            state=state,
+            on_upload=lambda e: upload_and_ask(e, "I would like to create a new setting"),
+            packer=packer,
+            label='Drop image to create a setting'
+        )
+
+        # Props and wardrobe: the reusable stuff panels are dressed with.
+        def asset_image(a):
+            return next((img for img in (a.images or {}).values() if img and os.path.exists(img)), None)
+
+        props = storage.read_all_objects(PropAsset, primary_key={"series_id": series.series_id}, order_by="name")
+        if props:
+            view_all_instances(
+                state=state,
+                get_instances=lambda: props,
+                get_image_locator=asset_image,
+                kind="prop",
+                aspect_ratio="3/2",
+                get_name=lambda _, x: x.name,
+                packer=packer, variants=[(3, 2)],
+                overlap_caption=_cap("Props", "I would like to create a new prop")
+                )
+        uploader_card(
+            state=state,
+            on_upload=lambda e: upload_and_ask(e, "I would like to create a new prop"),
+            packer=packer,
+            label='Drop image to create a prop',
+            overlap_caption=None if props else _cap("Props", "I would like to create a new prop")
+        )
+
+        outfits = storage.read_all_objects(Outfit, primary_key={"series_id": series.series_id}, order_by="name")
+        if outfits:
+            view_all_instances(
+                state=state,
+                get_instances=lambda: outfits,
+                get_image_locator=asset_image,
+                kind="outfit",
+                aspect_ratio="3/2",
+                get_name=lambda _, x: x.name,
+                packer=packer, variants=[(3, 2)],
+                overlap_caption=_cap("Wardrobe", "I would like to create a new outfit")
+                )
+        uploader_card(
+            state=state,
+            on_upload=lambda e: upload_and_ask(e, "I would like to create a new outfit"),
+            packer=packer,
+            label='Drop image to create an outfit',
+            overlap_caption=None if outfits else _cap("Wardrobe", "I would like to create a new outfit")
+        )
         packer.finalize()
         mosaic.__exit__(None, None, None)
         page.__exit__(None, None, None)

@@ -1,5 +1,6 @@
 import os
 from nicegui import ui
+from gui.avatars import comic_chat_message
 from loguru import logger
 from nicegui.events import UploadEventArguments
 from gui.selection import SelectionItem, SelectedKind
@@ -220,7 +221,7 @@ def view_scene(state: APPState):
                                     storage.update_object(x)
                             try:
                                 with state.history:
-                                    with ui.chat_message(name='You', sent=True).classes('w-full'):
+                                    with comic_chat_message(name='You', sent=True).classes('w-full'):
                                         ui.markdown(f"↔️ moved **{moved.name}** to position {idx + delta + 1}")
                                 state.history.scroll_to(percent=100)
                             except Exception:

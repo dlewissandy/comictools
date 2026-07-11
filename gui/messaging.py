@@ -1,6 +1,7 @@
 from loguru import logger
 from gui.state import APPState
 from nicegui import ui
+from gui.avatars import comic_chat_message
 
 def post_user_message(state:APPState, message: str):
     logger.debug(str)
@@ -53,7 +54,7 @@ def attach_reference(state, e) -> None:
     locator = state.storage.upload_reference_image(obj=target, name=e.name, data=e.content, mime_type=e.type)
     kind = target.__class__.__name__.replace("Model", "").replace("Asset", "").lower()
     with state.history:
-        with ui.chat_message(name='You', sent=True).classes('w-full'):
+        with comic_chat_message(name='You', sent=True).classes('w-full'):
             ui.markdown(f"📎 attached a reference image to this {kind}")
             ui.image(source=locator).classes('rounded-md q-mt-xs').style('max-width: 280px;')
     state.history.scroll_to(percent=100)

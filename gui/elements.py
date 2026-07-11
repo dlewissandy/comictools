@@ -2,6 +2,7 @@ import os
 import contextlib
 from typing import Optional, TypedDict, Callable, BinaryIO
 from nicegui import ui
+from gui.avatars import comic_chat_message
 from nicegui.events import UploadEventArguments
 from gui.constants import TAILWIND_CARD
 from gui.messaging import post_user_message
@@ -429,7 +430,7 @@ def render_object_cards(
                             return
                         try:
                             with state.history:
-                                with ui.chat_message(name='You', sent=True).classes('w-full'):
+                                with comic_chat_message(name='You', sent=True).classes('w-full'):
                                     ui.markdown(f"✂️ removed **{name}**")
                             state.history.scroll_to(percent=100)
                         except Exception:
@@ -627,7 +628,7 @@ def _inline_editable(state: APPState, name: str, value: str, setter: Callable):
                     return
                 try:
                     with state.history:
-                        with ui.chat_message(name='You', sent=True).classes('w-full'):
+                        with comic_chat_message(name='You', sent=True).classes('w-full'):
                             ui.markdown(f"✏️ set **{name}** to `{new_value}`")
                     state.history.scroll_to(percent=100)
                 except Exception:
@@ -783,7 +784,7 @@ def view_reference_images(state: APPState, parent: BaseModel, get_images: Callab
                     get_image_locator=lambda x: x.image,
                     packer=packer, variants=[(3, 2)],
                 )
-                uploader_card(state, on_upload=on_upload, packer=packer)
+                uploader_card(state, on_upload=on_upload, packer=packer, label='Drop image to add a reference')
         expansion.open()
         return expansion
     return redraw()
@@ -792,15 +793,24 @@ def view_reference_images(state: APPState, parent: BaseModel, get_images: Callab
 
 def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], None], aspect_ratio: str = "3/2",
                   packer: Optional["PagePacker"] = None, variants: Optional[list[tuple[float, float]]] = None,
-                  label: str = 'Drop image to upload'):
-    # drop boxes are n x 2: at least 3 wide, growing to close out the row
-    cell = packer.place_cell(variants or [(3, 2)], fudge=True) if packer is not None else contextlib.nullcontext()
+                  label: str = 'Drop image to upload',
+                  overlap_caption: Optional[Callable] = None):
+    # drop boxes are the SMALLEST size (3x2), so rows of them pack tight
+    cell = packer.place_cell(variants or [(3, 2)], fudge=False) if packer is not None else contextlib.nullcontext()
     with cell:
-        card = ui.card().classes(TAILWIND_CARD + ' relative overflow-hidden')
+        card = ui.card().classes(TAILWIND_CARD + ' relative')
+        if overlap_caption is None:
+            card.classes('overflow-hidden')
         if packer is not None:
             card.classes('mosaic-card')
         else:
             card.style(f'aspect-ratio: {aspect_ratio}')
+        if overlap_caption is not None:
+            # an empty group's narrator box rides its drop box, so the
+            # caption and the way to fill it stay together
+            with card:
+                with ui.element('div').classes('panel-caption'):
+                    overlap_caption()
         with card:
             uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
             uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
@@ -835,7 +845,7 @@ def removable_chips(state: APPState, caption: str, items: list[tuple[str, str]],
                     return
                 try:
                     with state.history:
-                        with ui.chat_message(name='You', sent=True).classes('w-full'):
+                        with comic_chat_message(name='You', sent=True).classes('w-full'):
                             ui.markdown(f"✂️ removed **{label}** from {caption.lower()}")
                     state.history.scroll_to(percent=100)
                 except Exception:
@@ -858,7 +868,7 @@ def removable_chips_inline(state: APPState, items: list[tuple[str, str]],
                 return
             try:
                 with state.history:
-                    with ui.chat_message(name='You', sent=True).classes('w-full'):
+                    with comic_chat_message(name='You', sent=True).classes('w-full'):
                         ui.markdown(f"✂️ removed **{label}**")
                 state.history.scroll_to(percent=100)
             except Exception:

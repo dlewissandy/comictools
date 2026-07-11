@@ -1,4 +1,5 @@
 from nicegui import ui
+from gui.avatars import comic_chat_message
 from loguru import logger
 from agents import Agent
 from agents.items import TResponseInputItem
@@ -267,7 +268,7 @@ class APPState:
 
             # add the message to the history
             with parent_container:
-                ui.chat_message(name=name, sent=sent, text=text_html, text_html=True).classes('w-full')
+                comic_chat_message(name=name, sent=sent, text=text_html, text_html=True).classes('w-full')
 
         # scroll to the bottom of the history
         history.scroll_to(percent=1)
@@ -350,7 +351,7 @@ class APPState:
         fresh = len(self.history.default_slot.children) == 0
         if opener and fresh:
             with self.history:
-                with ui.chat_message(name=role, sent=False).classes('w-full'):
+                with comic_chat_message(name=role, sent=False).classes('w-full'):
                     ui.markdown(opener)
 
         if self.suggestions_row is not None:

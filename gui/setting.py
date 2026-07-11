@@ -109,5 +109,6 @@ def view_setting(state: APPState):
                 uploader_card(
                     state=state,
                     on_upload=on_upload,
-                    packer=packer
+                    packer=packer,
+                    label='Drop image to add a setting reference'
                 )

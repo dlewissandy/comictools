@@ -161,15 +161,20 @@ def init_layout(logger):
         /* markdown inside panels: no extra air */
         .cpanel .q-pa-md { padding: 4px 2px !important; }
 
-        /* the conversation is speech balloons */
-        .q-message-text { border: 2px solid var(--ink); border-radius: 10px;
-                          box-shadow: 2px 2px 0 rgba(0,0,0,.35);
-                          background: var(--panel) !important; color: var(--ink) !important; }
-        .q-message-text::before { color: var(--ink); }
+        /* the conversation is comic dialog: each message an inked panel,
+           each speaker a drawn CHARACTER in the margin */
+        .q-message-text { border: 2.5px solid var(--ink); border-radius: 6px;
+                          box-shadow: 3px 3px 0 rgba(0,0,0,.35);
+                          background: var(--panel) !important; color: var(--ink) !important;
+                          padding: 10px 14px; }
+        .q-message-text::before { color: var(--ink); }  /* balloon tail stays inked */
         .q-message-sent .q-message-text { background: var(--caption) !important;
                                           color: var(--caption-ink) !important; }
         .q-message-name { font-weight: 800; text-transform: uppercase;
                           font-size: .7rem; letter-spacing: .5px; }
+        .q-message-avatar { width: 42px; height: 42px; min-width: 42px;
+                            border: 2.5px solid var(--ink); background: #faf6ec;
+                            box-shadow: 2px 2px 0 rgba(0,0,0,.3); }
     """)
 
     # SET THE DARK MODE BASED ON THE ENVIRONMENT VARIABLE
