@@ -135,10 +135,19 @@ def init_layout(logger):
            object-fit: contain never crops or distorts */
         .mosaic-card { width: 100%; height: 100%; display: flex;
                        flex-direction: column; margin: 0 !important;
-                       min-width: 0; min-height: 0; overflow: hidden; }
+                       min-width: 0; min-height: 0; overflow: hidden;
+                       position: relative; }
         .comic-mosaic > * { min-width: 0; min-height: 0; }
         .mosaic-card .q-img { flex: 1 1 0; min-height: 0; }
-        .mosaic-card .q-img__image { object-fit: contain; }
+        /* !important: QImg writes object-fit inline, and cropping art is a
+           firing offense in this studio */
+        .mosaic-card .q-img__image { object-fit: contain !important; }
+        /* the caption lives in the margin: it fades in when you hover the
+           panel, so frames stay a consistent ruled size */
+        .panel-hover-caption { position: absolute; left: 8px; bottom: 8px;
+                               z-index: 5; opacity: 0; pointer-events: none;
+                               transition: opacity .15s ease-in; }
+        .q-card:hover > .panel-hover-caption { opacity: 1; }
         .comic-page > * { min-width: 0; }
         .cpanel { position: relative; background: var(--panel);
                   border: 2.5px solid var(--ink); border-radius: 2px;

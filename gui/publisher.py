@@ -83,6 +83,7 @@ def view_publisher(state: APPState):
                 overlap_caption=lambda: caption_action("Series", _CK.CREATE,
                     lambda _: post_user_message(state, "I would like to create a new comic book series published by this publisher."), 3)
             )
+            packer.finalize()
 
         # Below that we have a full width row for editing the description of the
         # publisher's logo

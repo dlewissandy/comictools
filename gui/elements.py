@@ -387,7 +387,10 @@ def render_object_cards(
             if packer is not None and variants:
                 # THE RULED PAGE: the packer places this card left-to-right,
                 # top-to-bottom, choosing among the card type's fixed sizes.
-                cell = packer.place_cell(variants)
+                # Only text callouts may be fudged taller — an art panel's
+                # frame keeps its legal aspect, always.
+                is_text = get_image_locator(instance) is None
+                cell = packer.place_cell(variants, fudge=is_text)
             elif flow_span:
                 cell = ui.element('div').classes(f'cspan-{flow_span}')
             else:
@@ -432,10 +435,13 @@ def render_object_cards(
                 sel_itm = SelectionItem(name=name, id=id, kind=kind_value)
                 new_sel = [s for s in selection]+[sel_itm]
                 image = get_image_locator(instance)
-                header(name,4)
                 if image:
-                    ui.image(source=image).style('top-padding: 0; bottom-padding:0')
+                    # the panel is ALL art — the caption slides in on hover,
+                    # so every frame stays a consistent ruled size
+                    ui.label(name).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                    ui.image(source=image).props('fit=contain').style('top-padding: 0; bottom-padding:0')
                 else:
+                    header(name, 4)
                     if get_markdown is None:
                         ui.label('no artwork yet').classes('text-xs text-gray-500')
                     else:
@@ -446,7 +452,7 @@ def render_object_cards(
             card.on('click', lambda _, new_sel=new_sel: state.change_selection( new_sel))
         if not instances and overlap_caption is not None:
             if packer is not None:
-                with packer.place_cell([(3, 1)]).classes('flow-caption'):
+                with packer.place_cell([(3, 1)], fudge=False).classes('flow-caption'):
                     overlap_caption()
             else:
                 with (ui.element('div').classes(f'cspan-{flow_span} flow-caption') if flow_span
@@ -876,6 +882,7 @@ class PagePacker:
     def __init__(self, width: int = 12):
         self.width = width
         self.skyline = [0] * width
+        self.placements: list[list] = []  # [element, x, y, w, h, fudge]
 
     def _candidate(self, w: int, h: int):
         """Best (y, x) for a w×h rectangle: lowest top edge, then leftmost."""
@@ -903,8 +910,47 @@ class PagePacker:
             self.skyline[i] = y + h
         return x, y, w, h
 
-    def place_cell(self, variants: list[tuple[int, int]]):
+    def place_cell(self, variants: list[tuple[int, int]], fudge: bool = True):
         """Place and return a positioned grid cell element."""
         x, y, w, h = self.place(variants)
-        return ui.element('div').style(
+        cell = ui.element('div').style(
             f'grid-column: {x + 1} / span {w}; grid-row: {y + 1} / span {h};')
+        self.placements.append([cell, x, y, w, h, fudge])
+        return cell
+
+    def finalize(self):
+        """
+        Fudge the gutters like a letterer ruling a real page: after every
+        panel is placed, stretch a panel downward (at most 2 units) when that
+        makes its bottom edge share a rule with a horizontally-adjacent
+        neighbor and the space below it is dead anyway.
+        """
+        if not self.placements:
+            return
+        page_h = max(y + h for _, x, y, w, h, _ in self.placements)
+        occupied = [[False] * self.width for _ in range(page_h)]
+        for _, x, y, w, h, _ in self.placements:
+            for r in range(y, y + h):
+                for c in range(x, x + w):
+                    occupied[r][c] = True
+        for p in self.placements:
+            cell, x, y, w, h, fudge = p
+            if not fudge:
+                continue
+            for delta in (1, 2):
+                new_bottom = y + h + delta
+                if new_bottom > page_h:
+                    break
+                if any(occupied[r][c] for r in range(y + h, new_bottom) for c in range(x, x + w)):
+                    break
+                # a neighbor sharing a vertical gutter whose bottom rule we'd meet
+                aligns = any(
+                    (q[1] + q[3] == x or q[1] == x + w) and q[2] + q[4] == new_bottom and q[2] < new_bottom
+                    for q in self.placements if q is not p)
+                if aligns:
+                    for r in range(y + h, new_bottom):
+                        for c in range(x, x + w):
+                            occupied[r][c] = True
+                    p[4] = new_bottom - y
+                    cell.style(f'grid-row: {y + 1} / span {p[4]};')
+                    break

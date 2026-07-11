@@ -71,12 +71,12 @@ def view_series(state: APPState):
         # Description callout — a text panel takes only the size its text needs.
         desc = series.description or ""
         desc_rows = max(2, min(6, 1 + (len(desc) + 269) // 270))
-        with packer.place_cell([(10, desc_rows)]):
+        with packer.place_cell([(10, desc_rows)], fudge=False):
             with ui.card().classes(TAILWIND_CARD + ' mosaic-card').style('overflow-y: auto;'):
                 markdown_field_editor(state, "Description", series.description)
 
         # Publisher logo — a square corner box, like the publisher mark on a cover.
-        with packer.place_cell([(2, 2)]):
+        with packer.place_cell([(2, 2)], fudge=False):
             with ui.card().classes(TAILWIND_CARD + ' mosaic-card cursor-pointer') as pub_card:
                 header("Publisher", 4)
                 pub_image = pub.image if pub else None
@@ -105,7 +105,9 @@ def view_series(state: APPState):
                 kind="issue",
                 get_name=_issue_label,
                 aspect_ratio="16/27",
-                packer=packer, variants=[(2, 3), (4, 6)],
+                # 4x6 preferred: a 4x6 cover shares its bottom rule with THREE
+                # 3x2 character rows exactly (span 6 = three span-2s + gutters)
+                packer=packer, variants=[(4, 6), (2, 3)],
                 overlap_caption=_cap("Issues", "I would like to create a new issue")
                 ).style('margin-top: 0px; margin-bottom: 0px')
 
@@ -145,6 +147,7 @@ def view_series(state: APPState):
                 packer=packer, variants=[(3, 2), (6, 4)],
                 overlap_caption=_cap("Settings", "I would like to create a new setting")
                 ).style('margin-top: 0px; margin-bottom: 0px')
+        packer.finalize()
         mosaic.__exit__(None, None, None)
         page.__exit__(None, None, None)
         

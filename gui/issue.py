@@ -175,6 +175,7 @@ def view_issue(state:APPState):
                 packer=packer, variants=[(3, 2), (6, 4)],
                 overlap_caption=_cap("Scenes", "I would like to create a new scene for this issue.")
             )
+        packer.finalize()
         mosaic.__exit__(None, None, None)
         page.__exit__(None, None, None)                
         

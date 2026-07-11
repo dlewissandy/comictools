@@ -35,6 +35,7 @@ def view_all_publishers(state: APPState):
                 packer=packer, variants=[(2, 2)],
                 overlap_caption=lambda: caption_action("Publishers", _CK.CREATE,
                     lambda _: post_user_message(state, "I would like to create a new comic book publisher."), 3))
+            packer.finalize()
         
 def view_all_series(state: APPState):
     from gui.messaging import new_item_messager
