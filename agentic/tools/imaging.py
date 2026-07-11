@@ -2332,6 +2332,7 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None 
     lifted = []
     lifted_keys = []
     identified = []
+    added_refs = []   # cast the SPLIT added — the only refs the merge may re-add
     for e in entities:
         name = e["name"]
         slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "element"
@@ -2393,8 +2394,9 @@ COMPLETELY TRANSPARENT background: a cut-out acetate.""",
             from schema.character_reference import CharacterRef
             if not any(r.character_id == cid and r.variant_id == vid
                        for r in (panel.character_references or [])):
-                panel.character_references = (panel.character_references or []) + [
-                    CharacterRef(series_id=series_id, character_id=cid, variant_id=vid)]
+                ref = CharacterRef(series_id=series_id, character_id=cid, variant_id=vid)
+                panel.character_references = (panel.character_references or []) + [ref]
+                added_refs.append(ref)
             identified.append(f"{name} = {cid}")
 
         # place the acetate exactly where its crop came from
@@ -2477,7 +2479,9 @@ else must remain PIXEL-IDENTICAL — same composition, same style, same colors."
                 fresh.figure_blocking[k] = panel.figure_blocking[k]
         if base_key in (panel.figure_images or {}):
             fresh.figure_images[base_key] = panel.figure_images[base_key]
-        for r in (panel.character_references or []):
+        # only cast the split itself added — never resurrect figures the
+        # author removed while the split was on the drawing board
+        for r in added_refs:
             if not any(c.character_id == r.character_id and c.variant_id == r.variant_id
                        for c in (fresh.character_references or [])):
                 fresh.character_references = (fresh.character_references or []) + [r]

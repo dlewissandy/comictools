@@ -153,17 +153,21 @@ def view_issue(state:APPState):
         def _scene_overlay(scene):
             # reading-order controls ride ON the card, like the panel walls
             def _nudge(sc, d):
+                # work entirely on FRESH reads (the captured card object may
+                # be stale) and renumber from the sorted order first, which
+                # also heals duplicate scene numbers
                 sibs = sorted(storage.read_all_objects(SceneModel, primary_key={
                     "series_id": series_id, "issue_id": issue_id}), key=lambda s: s.scene_number)
                 i = next((j for j, s in enumerate(sibs) if s.scene_id == sc.scene_id), None)
                 if i is None or not (0 <= i + d < len(sibs)):
                     return
-                other = sibs[i + d]
-                sc.scene_number, other.scene_number = other.scene_number, sc.scene_number
-                storage.update_object(sc)
-                storage.update_object(other)
+                sibs[i], sibs[i + d] = sibs[i + d], sibs[i]
+                for j, s in enumerate(sibs):
+                    if s.scene_number != j + 1:
+                        s.scene_number = j + 1
+                        storage.update_object(s)
                 from gui.light_table import table_receipt
-                table_receipt(state, f"↔️ moved **{sc.name}** {'earlier' if d < 0 else 'later'} in the issue")
+                table_receipt(state, f"↔️ moved **{sibs[i + d].name}** {'earlier' if d < 0 else 'later'} in the issue")
                 state.refresh_details()
             with ui.row().classes('absolute bottom-1 left-0 right-0 z-10 justify-between items-center').style('padding: 0 6px;'):
                 ui.button(icon='chevron_left').props('flat round dense size=xs') \

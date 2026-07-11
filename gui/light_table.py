@@ -201,9 +201,11 @@ if (!window._roughDragInit) {
     const hh0 = parseFloat(fig.style.height);
     const cx0 = ((e.clientX - r0.left) / r0.width) * 100;
     const cy0 = ((r0.bottom - e.clientY) / r0.height) * 100 - (isNaN(hh0) ? 2 : hh0 / 2);
+    const l0 = parseFloat(fig.style.left);   // 0 is a legal position — no || here
+    const b0 = parseFloat(fig.style.bottom);
     drag = {fig, canvas, z: fig.style.zIndex, sx: e.clientX, sy: e.clientY,
-            offX: (parseFloat(fig.style.left) || 50) - cx0,
-            offY: (parseFloat(fig.style.bottom) || 0) - cy0, live: false};
+            offX: (isNaN(l0) ? 50 : l0) - cx0,
+            offY: (isNaN(b0) ? 0 : b0) - cy0, live: false};
   });
   document.addEventListener('pointermove', (e) => {
     if (tailDrag) {
@@ -283,9 +285,16 @@ if (!window._roughDragInit) {
       h = Math.max(15, Math.min(140, h * (e.deltaY < 0 ? 1.06 : 0.94)));
       setH(fig, h);
     }
-    // persist once the scaling settles — not one write per wheel tick
+    // persist once the scaling settles — not one write per wheel tick; a
+    // pending write for ANOTHER figure flushes first, never gets dropped
+    const pend = window._wheelPending;
+    if (pend && pend.f !== fig) {
+      clearTimeout(window._wheelT);
+      report(pend.f, pend.c);
+    }
+    window._wheelPending = {f: fig, c: canvas};
     clearTimeout(window._wheelT);
-    window._wheelT = setTimeout(() => report(fig, canvas), 300);
+    window._wheelT = setTimeout(() => { window._wheelPending = null; report(fig, canvas); }, 300);
   }, {passive: false});
   // STACK REORDER: drag rows; the stack order IS the z-order
   let stackDrag = null;
@@ -753,10 +762,16 @@ def tear_up_take(state, board, img: str):
         storage.update_object(board)
 
     def undo():
-        os.replace(trash, img)
+        # a newer same-named take may have landed meanwhile — never clobber
+        # it; the restored take diverts to a fresh name (both stay visible)
+        dest = img
+        if os.path.exists(dest):
+            stem, ext = os.path.splitext(os.path.basename(img))
+            dest = os.path.join(os.path.dirname(img), f"{stem}--{uuid4().hex[:6]}{ext}")
+        os.replace(trash, dest)
         if was_featured:
             b = storage.read_object(cls=type(board), primary_key=board.primary_key) or board
-            b.image = saved_locator
+            b.image = saved_locator if dest == img else dest
             storage.update_object(b)
     table_receipt(state, '🗑 tore up a take — the receipt can bring it back', undo=undo)
     state.refresh_details()
@@ -797,13 +812,24 @@ def wastebasket_chip(state, board):
                             .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;')
 
                         def put_back(path=path, kind=kind):
+                            import shutil
                             base = os.path.basename(path).split('--', 2)[-1]
                             dest = os.path.join(os.path.dirname(path), base)
-                            if os.path.exists(dest):
-                                stem, ext = os.path.splitext(base)
-                                dest = os.path.join(os.path.dirname(path),
-                                                    f"{stem}--{uuid4().hex[:6]}{ext}")
-                            os.replace(path, dest)
+                            if kind == 'acetate' and os.path.exists(dest):
+                                # the board references this exact path — swap
+                                # the art back IN, wastebasketing the current
+                                # version in turn (a uniquified orphan would
+                                # be referenced by nothing)
+                                counter = os.path.join(os.path.dirname(path),
+                                                       f".trash--{uuid4().hex[:6]}--{base}")
+                                shutil.copyfile(dest, counter)
+                                os.replace(path, dest)
+                            else:
+                                if os.path.exists(dest):
+                                    stem, ext = os.path.splitext(base)
+                                    dest = os.path.join(os.path.dirname(path),
+                                                        f"{stem}--{uuid4().hex[:6]}{ext}")
+                                os.replace(path, dest)
                             table_receipt(state, f"♻️ put a {kind} back from the wastebasket")
                             dlg.close()
                             state.refresh_details()
@@ -1383,15 +1409,21 @@ def light_table(state: APPState, panel, scene, setting,
 
                         def drop_balloon(i=i):
                             saved_dialogue = list(panel.dialogue)
-                            saved_blk = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()}
+                            saved_letters = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()
+                                             if k.startswith('balloon/') or k.startswith('caption/')}
                             panel.dialogue = [x for j, x in enumerate(panel.dialogue) if j != i]
                             remap_letter_blocking('balloon/', i)
                             storage.update_object(panel)
 
                             def undo():
+                                # restore ONLY the letter blocking — figure
+                                # moves made since the removal stay put
                                 p = _fresh()
                                 p.dialogue = saved_dialogue
-                                p.figure_blocking = saved_blk
+                                merged = {k: v for k, v in (p.figure_blocking or {}).items()
+                                          if not (k.startswith('balloon/') or k.startswith('caption/'))}
+                                merged.update(saved_letters)
+                                p.figure_blocking = merged
                                 storage.update_object(p)
                             _receipt('✂️ removed a balloon', undo=undo)
                             state.refresh_details()
@@ -1411,16 +1443,21 @@ def light_table(state: APPState, panel, scene, setting,
 
                             def drop_caption(n=n, pos=pos, i=i):
                                 saved_narration = list(panel.narration)
-                                saved_blk = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()}
+                                saved_letters = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()
+                                                 if k.startswith('balloon/') or k.startswith('caption/')}
                                 panel.narration = [x for x in panel.narration if x is not n]
                                 # keep caption blocking aligned, same as balloons
                                 remap_letter_blocking(f'caption/{pos}/', i)
                                 storage.update_object(panel)
 
                                 def undo():
+                                    # letter blocking only — see drop_balloon
                                     p = _fresh()
                                     p.narration = saved_narration
-                                    p.figure_blocking = saved_blk
+                                    merged = {k: v for k, v in (p.figure_blocking or {}).items()
+                                              if not (k.startswith('balloon/') or k.startswith('caption/'))}
+                                    merged.update(saved_letters)
+                                    p.figure_blocking = merged
                                     storage.update_object(p)
                                 _receipt('✂️ removed a narrator box', undo=undo)
                                 state.refresh_details()
@@ -1849,7 +1886,13 @@ def light_table(state: APPState, panel, scene, setting,
                             return
 
                         def undo():
-                            os.replace(trash, path)
+                            # never clobber a newer same-named reference
+                            dest = path
+                            if os.path.exists(dest):
+                                stem, ext = os.path.splitext(os.path.basename(path))
+                                dest = os.path.join(os.path.dirname(path),
+                                                    f"{stem}--{uuid4().hex[:6]}{ext}")
+                            os.replace(trash, dest)
                         _receipt(f"✂️ took the reference **{os.path.basename(path)}** off the table", undo=undo)
                         state.refresh_details()
                     ui.button(icon='close').props('flat round dense size=xs') \

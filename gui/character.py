@@ -66,8 +66,12 @@ def view_character(state:APPState):
                 ui.label('not cast in any scene yet').classes('text-xs text-gray-500')
             for iss, sc in appears[:12]:
                 def goto(iss=iss, sc=sc):
-                    base = [s for s in state.selection
-                            if s.kind.value in ('all-series', 'series')]
+                    # keep the WHOLE chain up to the series (publisher-rooted
+                    # and deep-linked chains stay routable)
+                    idx = next((i for i, s in enumerate(state.selection)
+                                if s.kind.value == 'series'), None)
+                    base = state.selection[:idx + 1] if idx is not None else \
+                        [s for s in state.selection if s.kind.value in ('all-series', 'series')]
                     state.change_selection(new=[*base,
                         SelectionItem(name=iss.name, id=iss.issue_id, kind=SelectedKind.ISSUE),
                         SelectionItem(name=sc.name, id=sc.scene_id, kind=SelectedKind.SCENE)])

@@ -136,6 +136,11 @@ def _apply(state: APPState):
     state.is_dirty = True
 
     def undo(backup=backup, original=original):
+        # the CURRENT art goes to the wastebasket in turn — an old receipt's
+        # undo must never be the newest artwork's last moment
+        counter = os.path.join(os.path.dirname(original),
+                               f".trash--{uuid4().hex[:6]}--{os.path.basename(original)}")
+        shutil.copyfile(original, counter)
         shutil.copyfile(backup, original)
     from gui.light_table import table_receipt
     table_receipt(state, "🖌 applied the edit — the artwork was repainted in place", undo=undo)
