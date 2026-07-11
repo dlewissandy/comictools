@@ -74,6 +74,13 @@ if (!window._roughDragInit) {
       h.className = 'rh rh-' + c;
       box.appendChild(h);
     }
+    if (fig.dataset.kind === 'balloon') {
+      const fl = document.createElement('div');
+      fl.className = 'rh-flip';
+      fl.textContent = '⇄ tail';
+      fl.title = 'Flip the tail toward the speaker';
+      box.appendChild(fl);
+    }
     fig.appendChild(box);
     window._roughSel = fig;
   }
@@ -81,6 +88,18 @@ if (!window._roughDragInit) {
   let drag = null;
   let resize = null;
   document.addEventListener('pointerdown', (e) => {
+    if (e.target.isContentEditable) return;   // typing, not dragging
+    const flip = e.target.closest('.rh-flip');
+    if (flip) {
+      const fig = flip.closest('.rough-drag');
+      e.preventDefault();
+      const t = fig.dataset.tail === 'right' ? 'left' : 'right';
+      fig.dataset.tail = t;
+      fig.classList.remove('tail-left', 'tail-right');
+      fig.classList.add('tail-' + t);
+      report(fig, fig.closest('.rough-canvas'));
+      return;
+    }
     const handle = e.target.closest('.rh');
     if (handle) {
       const fig = handle.closest('.rough-drag');
@@ -157,15 +176,35 @@ if (!window._roughDragInit) {
     }
     report(fig, canvas);
   }, {passive: false});
+  // double-click a balloon or caption: edit the words IN PLACE
   document.addEventListener('dblclick', (e) => {
-    const fig = pickFigure(e);
-    if (!fig || fig.dataset.kind !== 'balloon') return;
+    const fig = e.target.closest('.rough-drag');
+    if (!fig || !fig.dataset.kind || fig.dataset.kind === 'figure') return;
     e.preventDefault();
-    const flip = fig.dataset.tail === 'right' ? 'left' : 'right';
-    fig.dataset.tail = flip;
-    fig.classList.remove('tail-left', 'tail-right');
-    fig.classList.add('tail-' + flip);
-    report(fig, fig.closest('.rough-canvas'));
+    fig.contentEditable = 'true';
+    fig.classList.add('rough-editing');
+    fig.focus();
+    try { document.execCommand('selectAll', false, null); } catch (err) {}
+  });
+  function commitEdit(fig) {
+    if (fig.contentEditable !== 'true') return;
+    fig.contentEditable = 'false';
+    fig.classList.remove('rough-editing');
+    const canvas = fig.closest('.rough-canvas');
+    emitEvent('rough_text', {
+      key: fig.dataset.key, series: canvas.dataset.series, issue: canvas.dataset.issue,
+      scene: canvas.dataset.scene, panel: canvas.dataset.panel,
+      text: fig.innerText.trim()});
+  }
+  document.addEventListener('focusout', (e) => {
+    const f = e.target && e.target.closest ? e.target.closest('.rough-drag') : null;
+    if (f) commitEdit(f);
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.isContentEditable && e.target.closest('.rough-drag')) {
+      e.preventDefault();
+      e.target.blur();
+    }
   });
 }
 </script>
@@ -205,6 +244,27 @@ def light_table(state: APPState, panel, scene, setting,
             p.figure_blocking[a['key']] = cur
             state.storage.update_object(p)
         ui.on('rough_block', _on_block)
+
+        def _on_text(e):
+            from schema import Panel as _Panel
+            a = e.args
+            p = state.storage.read_object(cls=_Panel, primary_key={
+                "series_id": a['series'], "issue_id": a['issue'],
+                "scene_id": a['scene'], "panel_id": a['panel']})
+            if p is None or not a.get('text'):
+                return
+            parts = a['key'].split('/')
+            if parts[0] == 'balloon' and len(parts) == 2:
+                i = int(parts[1])
+                if i < len(p.dialogue):
+                    p.dialogue[i].text = a['text']
+            elif parts[0] == 'caption' and len(parts) == 3:
+                pos, i = parts[1], int(parts[2])
+                matching = [n for n in p.narration if n.position.value == pos]
+                if i < len(matching):
+                    matching[i].text = a['text']
+            state.storage.update_object(p)
+        ui.on('rough_text', _on_text)
 
     # ---- gather the acetates -------------------------------------------
     background = None
@@ -329,10 +389,12 @@ def light_table(state: APPState, panel, scene, setting,
                     letter(f'caption/top/{i}', 'rough-narration', n.text, 2, 88 - i * 12, 'caption')
                 for i, d in enumerate(panel.dialogue[:4]):
                     # the balloon hangs near its speaker when they're on the table
-                    fig = next((f for f in visible if f["ref"].character_id == d.character_id), None)
+                    fig = next((f for f in visible
+                                if f.get("ref") and f["ref"].character_id == d.character_id), None)
                     dx = fig["blocking"]["x"] if fig else (25 + 22 * i)
-                    letter(f'balloon/{i}', 'rough-balloon', f"{d.character_id}: {d.text}",
-                           dx, 72 - (i % 2) * 14, 'balloon', tail='left')
+                    bl = letter(f'balloon/{i}', 'rough-balloon', d.text,
+                                dx, 72 - (i % 2) * 14, 'balloon', tail='left')
+                    bl._props['title'] = f"{d.character_id} speaks — double-click to edit, drag to place"
                 for i, n in enumerate([n for n in panel.narration if n.position.value == 'bottom'][:1]):
                     letter(f'caption/bottom/{i}', 'rough-narration', n.text, 2, 4, 'caption')
 
@@ -348,6 +410,46 @@ def light_table(state: APPState, panel, scene, setting,
                 state, series_id, panel.issue_id, panel.scene_id,
                 panel.panel_id, character_id, variant_id, pose_direction),
         )], role="the Penciller")
+
+    async def split_flow(layer_key: str, source_path: str):
+        import asyncio
+        from agentic.tools.imaging import recognize_layer_entities, split_layer_body
+        from helpers.render_queue import enqueue_renders
+        ui.notify('Reading the layer — recognizing its elements…', type='info')
+        entities = await asyncio.to_thread(recognize_layer_entities, source_path)
+        if not entities:
+            ui.notify('No liftable elements recognized on that layer.', type='warning')
+            return
+        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px;'):
+            ui.label('Split this layer').classes('caption-box caption-box-sm')
+            ui.label('Pick what to lift onto its own acetate.  The layer is repainted '
+                     'with them removed — revealing what was beneath.').classes('text-sm q-mt-sm')
+            picks = []
+            for e in entities:
+                note = f" — beneath: {e['beneath']}" if e.get('beneath') else ''
+                cb = ui.checkbox(f"{e['name']}{note}", value=True)
+                picks.append((e, cb))
+            extra = ui.input(placeholder='…something else on this layer').classes('w-full').props('outlined dense')
+
+            def go():
+                chosen = [e for e, cb in picks if cb.value]
+                if (extra.value or '').strip():
+                    chosen.append({'name': extra.value.strip(), 'box': {}})
+                if not chosen:
+                    ui.notify('Pick at least one element.', type='warning')
+                    return
+                dlg.close()
+                ui.notify(f"Splitting {len(chosen)} element(s) — {len(chosen) + 1} renders, "
+                          f"the acetates land shortly.", type='info')
+                enqueue_renders(state, [(
+                    f"splitting {len(chosen)} element(s) off '{layer_key}'",
+                    lambda: split_layer_body(state, series_id, panel.issue_id, panel.scene_id,
+                                             panel.panel_id, layer_key, chosen),
+                )], role='the Background Artist')
+            with ui.row().classes('w-full justify-end'):
+                ui.button(f'Lift the selected', icon='content_cut').props('unelevated dense') \
+                    .on('click', lambda _: go())
+        dlg.open()
 
     def pose_dialog(character_id: str, variant_id: str):
         name = character_id.replace('-', ' ').title()
@@ -478,6 +580,22 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.button(icon='healing').props('flat round dense size=xs') \
                             .tooltip('Correct this element in the image editor') \
                             .on('click', lambda _, p=f["img"], n=f["name"]: heal_element(p, n))
+                        ui.button(icon='content_cut').props('flat round dense size=xs') \
+                            .tooltip('Split this element into ITS elements') \
+                            .on('click', lambda _, k=f["key"], p=f["img"]: split_flow(k, p))
+
+                        def restack_el(f=f, front=True):
+                            zs = [g["blocking"].get("z", 0) for g in figures] or [0]
+                            f["blocking"]["z"] = (max(zs) + 1) if front else (min(zs) - 1)
+                            cur = dict((panel.figure_blocking or {}).get(f["key"]) or {})
+                            cur.update(f["blocking"])
+                            panel.figure_blocking[f["key"]] = cur
+                            storage.update_object(panel)
+                            rough.refresh()
+                        ui.button(icon='flip_to_front').props('flat round dense size=xs') \
+                            .tooltip('Bring to front').on('click', lambda _, f=f: restack_el(f, True))
+                        ui.button(icon='flip_to_back').props('flat round dense size=xs') \
+                            .tooltip('Send to back').on('click', lambda _, f=f: restack_el(f, False))
 
                         def drop_element(key=f["key"], nm=f["name"]):
                             panel.figure_images.pop(key, None)
@@ -526,6 +644,10 @@ def light_table(state: APPState, panel, scene, setting,
                         .tooltip('Send to back') \
                         .on('click', lambda _, f=f: restack(f, False))
                     if f["posed"]:
+                        ui.button(icon='content_cut').props('flat round dense size=xs') \
+                            .tooltip('Split: lift props/wardrobe off this figure, revealing the character beneath') \
+                            .on('click', lambda _, k=f["key"], p=f["img"]: split_flow(k, p))
+                    if f["posed"]:
                         def edit_acetate(path=f["img"], name=name_lbl):
                             from gui.selection import SelectionItem, SelectedKind
                             itm = SelectionItem(name=f"Edit {name} acetate", id=path,
@@ -562,37 +684,6 @@ def light_table(state: APPState, panel, scene, setting,
                                     kind=SelectedKind.IMAGE_EDITOR)
                 state.change_selection(new=[*state.selection, itm])
 
-            def split_dialog():
-                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 440px;'):
-                    ui.label('Split an element off the background').classes('caption-box caption-box-sm')
-                    ui.label('Name what to lift onto its own acetate — the plate underneath '
-                             'is inpainted, so lifting it off REMOVES it.').classes('text-sm q-mt-sm')
-                    what = ui.input(placeholder="e.g. the ticket booth").classes('w-full').props('outlined dense autofocus')
-                    if scene is not None and scene.props:
-                        with ui.row().style('gap: 4px;'):
-                            for pr in scene.props[:6]:
-                                ui.chip(pr.name).props('dense clickable outline') \
-                                    .on('click', lambda _, n=pr.name: what.set_value(n))
-
-                    def go():
-                        text = (what.value or '').strip()
-                        if not text:
-                            ui.notify('Name the element first.', type='warning')
-                            return
-                        dlg.close()
-                        from agentic.tools.imaging import split_background_element_body
-                        from helpers.render_queue import enqueue_renders
-                        ui.notify(f"Splitting '{text}' — two renders, the acetates land shortly.", type='info')
-                        enqueue_renders(state, [(
-                            f"splitting '{text}' off the background",
-                            lambda: split_background_element_body(
-                                state, series_id, panel.issue_id, panel.scene_id,
-                                panel.panel_id, text),
-                        )], role="the Background Artist")
-                    with ui.row().classes('w-full justify-end'):
-                        ui.button('Split', icon='content_cut').props('unelevated dense').on('click', lambda _: go())
-                dlg.open()
-
             bg_label = f"Background — {setting.name if setting else 'no setting yet'}"
             if split_plate and background == split_plate:
                 bg_label += " (split plate)"
@@ -606,8 +697,8 @@ def light_table(state: APPState, panel, scene, setting,
                 if background:
                     ui.space()
                     ui.button(icon='content_cut').props('flat round dense size=xs') \
-                        .tooltip('Split an element off the background (lift + inpaint underneath)') \
-                        .on('click', lambda _: split_dialog())
+                        .tooltip('Split this background into its elements (recognize, lift, repaint beneath)') \
+                        .on('click', lambda _, p=background: split_flow('background', p))
                     ui.button(icon='healing').props('flat round dense size=xs') \
                         .tooltip('Inpaint/outpaint this background in the image editor') \
                         .on('click', lambda _: heal_background())
@@ -703,9 +794,47 @@ def light_table(state: APPState, panel, scene, setting,
                     .tooltip('A foreground prop — one click from the prop shop').on('click', lambda _: pick_prop())
                 ui.button(icon='landscape').props('flat round dense size=sm') \
                     .tooltip('A background — one click from the settings').on('click', lambda _: pick_background())
+                def new_letters():
+                    from schema.dialog import Dialogue, Narration, DialogueEmphasis, NarrationPosition
+                    with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 380px;'):
+                        ui.label('New letters').classes('caption-box caption-box-sm')
+
+                        def new_balloon(speaker: str):
+                            panel.dialogue = list(panel.dialogue or []) + [
+                                Dialogue(character_id=speaker, text='Say something…',
+                                         emphasis=DialogueEmphasis.CHAT)]
+                            storage.update_object(panel)
+                            _receipt(f"💬 laid a balloon for **{speaker}** — double-click it to write")
+                            dlg.close()
+                            state.refresh_details()
+
+                        def new_caption():
+                            panel.narration = list(panel.narration or []) + [
+                                Narration(text='Narration…', position=NarrationPosition.TOP)]
+                            storage.update_object(panel)
+                            _receipt("💬 laid a narrator box — double-click it to write")
+                            dlg.close()
+                            state.refresh_details()
+
+                        speakers = [r.character_id for r in (panel.character_references or [])]
+                        if not speakers and scene is not None:
+                            speakers = [c.character_id for c in (scene.cast or [])]
+                        if speakers:
+                            ui.label('A balloon — who speaks?').classes('text-sm q-mt-sm')
+                            with ui.row().style('gap: 4px;'):
+                                for s in dict.fromkeys(speakers):
+                                    ui.chip(s.replace('-', ' ')).props('dense clickable outline') \
+                                        .on('click', lambda _, s=s: new_balloon(s))
+                        ui.button('A narrator box', icon='notes').props('outline dense') \
+                            .classes('q-mt-sm').on('click', lambda _: new_caption())
+                        ui.label('Then double-click the letters on the rough to write in place; '
+                                 'the Letterer inks them when you ink the rough.') \
+                            .classes('text-xs text-gray-500 q-mt-sm')
+                    dlg.open()
+
                 ui.button(icon='chat_bubble').props('flat round dense size=sm') \
-                    .tooltip('Letters — the coauthor writes narration/dialogue with you') \
-                    .on('click', lambda _: post_user_message(state, 'I would like to add dialogue or narration to this panel.'))
+                    .tooltip('Letters — lay a balloon or narrator box on the table') \
+                    .on('click', lambda _: new_letters())
 
             # or just drop an image straight onto the table as a reference
             with ui.row().classes('light-layer w-full items-center justify-center relative overflow-hidden').style('min-height: 34px;'):

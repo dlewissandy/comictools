@@ -1972,17 +1972,88 @@ def generate_figure_acetate(wrapper: RunContextWrapper, series_id: str, issue_id
 
 
 # ---------------------------------------------------------------------------
-# LAYER SPLITTING: lift a named element off the background into its own
-# transparent acetate, and inpaint the plate underneath it — the acetate way
-# to REMOVE or REARRANGE what a layer contains.
+# LAYER SPLITTING: decompose a layer into its constituent elements.  A vision
+# pass RECOGNIZES the entities and their bounds; each chosen entity is lifted
+# onto its own transparent acetate placed at its recognized position; the base
+# is repainted with everything lifted removed — revealing what was beneath
+# (split a figure and its props/wardrobe come off, revealing the character).
 # ---------------------------------------------------------------------------
-def split_background_element_body(state, series_id: str, issue_id: str, scene_id: str,
-                                  panel_id: str, element: str) -> str:
-    """Two renders: (1) the element as a transparent cut-out acetate;
-    (2) the background plate with the element removed and the area behind it
-    inpainted.  Both attach to the panel; the plate becomes the panel's local
-    background so the setting's shared master stays untouched."""
-    import re
+def recognize_layer_entities(image_path: str, max_entities: int = 8) -> list[dict]:
+    """Vision pass: name the distinct liftable entities in a layer image and
+    their bounding boxes (percent coordinates).  Returns [{name, box}]."""
+    import base64
+    import json as _json
+    import re as _re
+
+    import openai
+    openai.api_key = os.getenv('OPENAI_API_KEY')
+    with open(image_path, 'rb') as f:
+        b64 = base64.b64encode(f.read()).decode()
+    mime = 'image/png' if image_path.lower().endswith('.png') else 'image/jpeg'
+    prompt = f"""Identify the distinct visual entities in this image that could be lifted
+onto separate layers: props, furniture, signage, garments/wardrobe pieces,
+carried objects, creatures, vehicles, distinct scenery pieces.   Skip the
+overall background itself and skip anything cut off at the image edge unless
+it is prominent.   At most {max_entities} entities, most prominent first.
+
+Respond with STRICT JSON only, no prose:
+{{"entities": [{{"name": "<2-4 word name>",
+                "box": {{"x": <left %>, "y": <top %>, "w": <width %>, "h": <height %>}},
+                "beneath": "<one phrase: what is revealed when it is removed>"}}]}}"""
+    resp = openai.chat.completions.create(
+        model=os.getenv('VISION_MODEL', 'gpt-5.2'),
+        messages=[{"role": "user", "content": [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}]}],
+    )
+    text = resp.choices[0].message.content or ""
+    m = _re.search(r"\{.*\}", text, _re.DOTALL)
+    if not m:
+        return []
+    try:
+        data = _json.loads(m.group(0))
+        out = []
+        for e in data.get("entities", [])[:max_entities]:
+            if e.get("name"):
+                out.append({"name": str(e["name"]), "box": e.get("box") or {},
+                            "beneath": e.get("beneath", "")})
+        return out
+    except Exception as ex:
+        logger.error(f"entity recognition parse failed: {ex}")
+        return []
+
+
+def _resolve_layer_source(panel, scene, storage, series_id: str, layer: str):
+    """Resolve a layer key to (image_path, kind): kind is 'background',
+    'figure' or 'element'."""
+    if layer == 'background':
+        plate = (panel.figure_images or {}).get("background/plate")
+        if plate and os.path.exists(plate):
+            return plate, 'background'
+        if scene is not None and scene.setting_id:
+            setting: Setting = storage.read_object(cls=Setting, primary_key={
+                "series_id": series_id, "setting_id": scene.setting_id})
+            if setting is not None:
+                cand = (setting.images or {}).get(scene.style_id) or next(
+                    (i for i in (setting.images or {}).values() if i and os.path.exists(i)), None)
+                if cand and os.path.exists(cand):
+                    return cand, 'background'
+        return None, 'background'
+    path = (panel.figure_images or {}).get(layer)
+    if path and os.path.exists(path):
+        return path, ('element' if layer.startswith('element/') else 'figure')
+    return None, 'figure'
+
+
+def split_layer_body(state, series_id: str, issue_id: str, scene_id: str,
+                     panel_id: str, layer: str, entities: list | None = None) -> str:
+    """Split one layer into its constituent elements.
+
+    layer: 'background', a figure key 'character_id/variant_id', or an
+    'element/<slug>' key.   entities: optional list of {name, box} dicts (or
+    plain names) chosen by the user; when None, a vision pass recognizes them.
+    """
+    import re as _re
     from uuid import uuid4
     from storage.filepath import obj_to_imagepath
     from helpers.generator import invoke_edit_image_api
@@ -1995,83 +2066,125 @@ def split_background_element_body(state, series_id: str, issue_id: str, scene_id
     scene: SceneModel = storage.read_object(cls=SceneModel, primary_key={
         "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
 
-    # source: the panel's local plate if it already split once, else the
-    # setting's master background
-    source = (panel.figure_images or {}).get("background/plate")
-    if not (source and os.path.exists(source)):
-        source = None
-        if scene is not None and scene.setting_id:
-            setting: Setting = storage.read_object(cls=Setting, primary_key={
-                "series_id": series_id, "setting_id": scene.setting_id})
-            if setting is not None:
-                cand = (setting.images or {}).get(scene.style_id) or next(
-                    (i for i in (setting.images or {}).values() if i and os.path.exists(i)), None)
-                source = cand if cand and os.path.exists(cand) else None
+    source, kind = _resolve_layer_source(panel, scene, storage, series_id, layer)
     if source is None:
-        return "No background on the table to split — lay one down first."
+        return f"Layer '{layer}' has no image to split."
+
+    if entities is None:
+        entities = recognize_layer_entities(source, max_entities=6)
+    entities = [{"name": e, "box": {}} if isinstance(e, str) else e for e in (entities or [])]
+    if not entities:
+        return "No liftable entities were recognized on that layer."
 
     images_dir = obj_to_imagepath(obj=panel, base_path=storage.base_path)
     figures_dir = os.path.join(os.path.dirname(images_dir), "figures")
     os.makedirs(figures_dir, exist_ok=True)
-    slug = re.sub(r"[^a-z0-9]+", "-", element.lower()).strip("-")[:40] or "element"
 
-    # 1) the element, lifted onto its own acetate
-    cut_bytes = invoke_edit_image_api(
-        f"""Render ONLY the {element} exactly as it appears in the reference image —
-same angle, same colors, same lighting, same art style, complete and uncropped.
-Nothing else from the scene.  COMPLETELY TRANSPARENT background: this is a
-cut-out acetate to be layered back over the image it was lifted from.""",
-        reference_images=[source],
-        size="1024x1024",
-        quality=IMAGE_QUALITY.MEDIUM,
-        background="transparent",
-    )
-    cut_path = os.path.join(figures_dir, f"element--{slug}--{uuid4().hex[:8]}.png")
-    with open(cut_path, "wb") as f:
-        f.write(cut_bytes)
+    # where does this layer sit on the rough?  Entities inherit placement
+    # from their recognized bounds mapped through the layer's blocking.
+    layer_blocking = dict((panel.figure_blocking or {}).get(layer) or {})
+    lifted = []
+    for e in entities:
+        name = e["name"]
+        slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "element"
+        cut_bytes = invoke_edit_image_api(
+            f"""Render ONLY the {name} exactly as it appears in the reference image —
+same angle, same colors, same lighting, same art style, complete and uncropped
+(include any parts hidden behind other objects, drawn consistently).
+Nothing else.   COMPLETELY TRANSPARENT background: a cut-out acetate.""",
+            reference_images=[source],
+            size="1024x1024",
+            quality=IMAGE_QUALITY.MEDIUM,
+            background="transparent",
+        )
+        cut_path = os.path.join(figures_dir, f"element--{slug}--{uuid4().hex[:8]}.png")
+        with open(cut_path, "wb") as f:
+            f.write(cut_bytes)
+        key = f"element/{slug}"
+        panel.figure_images[key] = cut_path
 
-    # 2) the plate: the same background with the element gone
+        # initial blocking from the recognized bounds
+        box = e.get("box") or {}
+        if box and kind == 'background':
+            h = float(box.get("h", 40))
+            panel.figure_blocking[key] = {
+                "x": round(float(box.get("x", 30)) + float(box.get("w", 40)) / 2, 1),
+                "y": round(max(0.0, 100.0 - (float(box.get("y", 30)) + h)), 1),
+                "h": round(h, 1), "z": 40}
+        elif box and layer_blocking:
+            # map entity bounds through the parent figure's placement
+            fh = float(layer_blocking.get("h", 60))
+            fx = float(layer_blocking.get("x", 50))
+            fy = float(layer_blocking.get("y", 0))
+            eh = float(box.get("h", 40)) / 100 * fh
+            ex = fx + (float(box.get("x", 30)) + float(box.get("w", 40)) / 2 - 50) / 100 * fh
+            ey = fy + (100 - float(box.get("y", 30)) - float(box.get("h", 40))) / 100 * fh
+            panel.figure_blocking[key] = {"x": round(ex, 1), "y": round(max(0.0, ey), 1),
+                                          "h": round(eh, 1),
+                                          "z": int(layer_blocking.get("z", 0)) + 1}
+        lifted.append(name)
+
+    # repaint the base with everything lifted removed — revealing what was
+    # beneath (a figure keeps its transparency; a background stays opaque)
+    names = ", ".join(lifted)
     from PIL import Image as _Img
     with _Img.open(source) as _s:
-        plate_size = "1536x1024" if _s.width > _s.height else ("1024x1536" if _s.height > _s.width else "1024x1024")
-    plate_bytes = invoke_edit_image_api(
-        f"""Remove the {element} from this image ENTIRELY.  Inpaint what lies behind
-and underneath it: continue the surrounding architecture, ground, sky and
-lighting seamlessly, in the same art style.  Change NOTHING else in the image.""",
+        if kind == 'background':
+            base_size = "1536x1024" if _s.width > _s.height else ("1024x1536" if _s.height > _s.width else "1024x1024")
+        else:
+            base_size = "1024x1536"
+    base_bytes = invoke_edit_image_api(
+        f"""Remove the following from this image ENTIRELY: {names}.
+Reveal and draw what lies BENEATH each removed item, consistent with the
+image (a garment removed reveals the body/clothing beneath it, drawn
+on-model; a prop removed reveals the scenery behind it).   Keep everything
+else exactly as it is, same art style.""",
         reference_images=[source],
-        size=plate_size,
+        size=base_size,
         quality=IMAGE_QUALITY.MEDIUM,
+        background="transparent" if kind != 'background' else None,
     )
-    plate_path = os.path.join(figures_dir, f"plate--{uuid4().hex[:8]}.png")
-    with open(plate_path, "wb") as f:
-        f.write(plate_bytes)
+    if kind == 'background':
+        base_path = os.path.join(figures_dir, f"plate--{uuid4().hex[:8]}.png")
+        with open(base_path, "wb") as f:
+            f.write(base_bytes)
+        panel.figure_images["background/plate"] = base_path
+    else:
+        base_path = os.path.join(figures_dir, f"base--{uuid4().hex[:8]}.png")
+        with open(base_path, "wb") as f:
+            f.write(base_bytes)
+        panel.figure_images[layer] = base_path
 
-    panel.figure_images[f"element/{slug}"] = cut_path
-    panel.figure_images["background/plate"] = plate_path
     storage.update_object(data=panel)
     state.is_dirty = True
-    return (f"Split '{element}' off the background: acetate {cut_path}; "
-            f"plate (element removed) {plate_path}.")
+    return (f"Split layer '{layer}' into {len(lifted)} acetate(s): {names}.  "
+            f"The base was repainted with them removed: {base_path}")
 
 
 @function_tool
-def split_background_element(wrapper: RunContextWrapper, series_id: str, issue_id: str,
-                             scene_id: str, panel_id: str, element: str) -> str:
+def split_layer(wrapper: RunContextWrapper, series_id: str, issue_id: str,
+                scene_id: str, panel_id: str, layer: str,
+                elements: Optional[list[str]] = None) -> str:
     """
-    SPLIT a named element off the panel's background into its own acetate
-    layer, inpainting the plate underneath it.   Afterwards the element can be
-    moved, scaled, or simply lifted off the table (removal).   Splitting again
-    works on the already-split plate, so several elements can be lifted in turn.
+    SPLIT one of a panel's layers into its constituent elements.   A vision
+    pass recognizes the entities on the layer (props, wardrobe, furniture,
+    signage...) and their bounds; each is lifted onto its own transparent
+    acetate placed where it was recognized, and the layer's base is repainted
+    with them removed — revealing what was beneath (splitting a character
+    lifts their props/garments off, revealing the character underneath).
 
     Args:
         series_id: The ID of the comic series.
         issue_id: The ID of the issue.
         scene_id: The ID of the scene the panel belongs to.
         panel_id: The ID of the panel.
-        element: What to lift, named concretely (e.g. 'the ticket booth').
+        layer: 'background', a figure key 'character_id/variant_id', or an
+            'element/<slug>' key.
+        elements: Optional list of entity names to lift; when omitted, the
+            vision pass decides (at most 6, most prominent first).
 
     Returns:
-        A status message with the acetate and plate locators.
+        A status message listing the lifted acetates and the repainted base.
     """
-    return split_background_element_body(wrapper.context, series_id, issue_id, scene_id,
-                                         panel_id, element)
+    return split_layer_body(wrapper.context, series_id, issue_id, scene_id,
+                            panel_id, layer, elements)

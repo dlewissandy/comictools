@@ -197,6 +197,14 @@ def init_layout(logger):
                                 border-top: 9px solid var(--ink); }
         .rough-balloon.tail-left::after { left: 12px; }
         .rough-balloon.tail-right::after { right: 12px; }
+        /* in-place letter editing (double-click) */
+        .rough-editing { outline: 2px solid #3b82f6; white-space: normal;
+                         min-width: 80px; cursor: text; z-index: 99 !important; }
+        .rh-flip { position: absolute; bottom: -24px; left: 50%;
+                   transform: translateX(-50%); background: #fff;
+                   border: 1.5px solid #3b82f6; border-radius: 3px;
+                   font-size: 10px; padding: 0 5px; cursor: pointer;
+                   pointer-events: auto; white-space: nowrap; }
         .rough-narration { position: absolute; left: 4px;
                            background: var(--caption); color: var(--caption-ink);
                            border: 2px solid var(--ink); border-radius: 2px;
