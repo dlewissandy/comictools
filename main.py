@@ -117,18 +117,20 @@ def init_layout(logger):
         .comic-mosaic { display: grid; grid-template-columns: repeat(12, 1fr);
                         gap: 12px; grid-auto-flow: dense;
                         container-type: inline-size;
-                        /* HALF-unit rows: spans resolve aspect ratios closely
-                           without ever distorting the art — a 3-col portrait
-                           (9 half-rows) stands beside two stacked 3-col
-                           landscapes (4+4 + gutter). */
-                        grid-auto-rows: calc(((100cqw - 132px) / 12 - 12px) / 2); }
+                        /* HALF-unit rows (exactly half a column): spans match
+                           aspect ratios closely — a 3-col portrait (9 half-
+                           rows) tiles beside two stacked 3-col landscapes. */
+                        grid-auto-rows: calc((100cqw - 132px) / 24); }
         .rspan-2 { grid-row: span 2; } .rspan-3 { grid-row: span 3; }
         .rspan-4 { grid-row: span 4; } .rspan-5 { grid-row: span 5; }
         .rspan-6 { grid-row: span 6; } .rspan-7 { grid-row: span 7; }
         .rspan-8 { grid-row: span 8; } .rspan-9 { grid-row: span 9; }
         .rspan-10 { grid-row: span 10; } .rspan-12 { grid-row: span 12; }
-        /* the card keeps its TRUE aspect, anchored to the top of its region */
-        .mosaic-card { width: 100%; align-self: start; }
+        /* the panel FRAME fills its region; the art sits inside untouched —
+           object-fit: contain never crops or distorts */
+        .mosaic-card { width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .mosaic-card .q-img { flex: 1 1 0; min-height: 0; }
+        .mosaic-card .q-img__image { object-fit: contain; }
         .comic-page > * { min-width: 0; }
         .cpanel { position: relative; background: var(--panel);
                   border: 2.5px solid var(--ink); border-radius: 2px;

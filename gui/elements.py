@@ -395,9 +395,12 @@ def render_object_cards(
             else:
                 cell = contextlib.nullcontext()
             with cell:
-                card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}')
+                card = ui.card().classes(TAILWIND_CARD)
                 if flow_span:
+                    # the frame fills the region; art fits inside undistorted
                     card.classes('mosaic-card')
+                else:
+                    card.style(f'aspect-ratio: {aspect_ratio}')
             card.classes('relative overflow-visible')
             if i == 0 and overlap_caption is not None:
                 # the group's narrator box overlaps its first panel, comic-style
