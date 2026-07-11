@@ -28,7 +28,7 @@ class APPState:
     user_input: ui.input
     send_button: ui.button
     
-    def __init__(self, breadcrumbs, details, history, user_input, send_button, storage: GenericStorage, dark_mode: bool = False, selection: list[SelectionItem] = [], persist: bool = True):
+    def __init__(self, breadcrumbs, details, history, user_input, send_button, storage: GenericStorage, dark_mode: bool = False, selection: list[SelectionItem] = [], persist: bool = True, suggestions_row=None):
         from agentic import init_agents
         # GUI ELEMENTS
         self.breadcrumbs = breadcrumbs
@@ -46,6 +46,7 @@ class APPState:
         # file; deep-linked windows carry their own context (UX_ideas.md).
         self.persist = persist
         self._url_synced = False
+        self.suggestions_row = suggestions_row
 
         # Storage and logging must be initialized before agents
         self._storage = storage
@@ -312,6 +313,39 @@ class APPState:
 
         self.refresh_details()
         self._sync_url()
+        self._refresh_coauthor()
+
+    def _refresh_coauthor(self):
+        """
+        The coauthor speaks first: on a fresh conversation, post one short
+        context-aware line, and refresh the suggestion chips above the input.
+        Chips send real messages — conversation starters, not wired buttons.
+        """
+        from gui.coauthor import opening_and_chips
+        try:
+            opener, chips = opening_and_chips(self)
+        except Exception as e:
+            logger.debug(f"coauthor refresh skipped: {e}")
+            return
+
+        fresh = len(self.history.default_slot.children) == 0
+        if opener and fresh:
+            with self.history:
+                with ui.chat_message(name='Bot', sent=False).classes('w-full'):
+                    ui.markdown(opener)
+
+        if self.suggestions_row is not None:
+            from messaging import send
+            self.suggestions_row.clear()
+
+            async def _fire(text: str):
+                self.user_input.value = text
+                await send(state=self)
+
+            with self.suggestions_row:
+                for chip in chips[:4]:
+                    ui.button(chip, on_click=lambda _, t=chip: _fire(t)) \
+                        .props('outline rounded dense no-caps size=sm')
 
     def _sync_url(self):
         """

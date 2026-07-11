@@ -72,3 +72,15 @@ async def test_send_message_updates_history(user: User) -> None:
             break
         await asyncio.sleep(0.1)
     assert send_btn.enabled, "send button was not re-enabled"
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_coauthor_speaks_first_with_chips(user: User) -> None:
+    """On a fresh conversation the coauthor greets, and suggestion chips render."""
+    main.LocalStorage = _TmpStorage
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("Welcome to the studio")          # the opener
+    await user.should_see("Create a new series")            # a suggestion chip

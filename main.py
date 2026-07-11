@@ -82,8 +82,12 @@ def init_layout(logger):
             with splitter.after:
                 history = ui.scroll_area().classes("h-full w-full "+MIDDLE_STYLING_CLASSES+" border").style('padding-left:12px; padding-right:12px;')
 
-    # Footer region has the user input field and the send button
+    # Footer region has the suggestion chips and the user input field
     with footer:
+        with ui.column().classes('w-full').style('gap: 2px;'):
+            suggestions_row = ui.row().classes('w-full').style('gap: 6px; min-height: 0;')
+            input_row = ui.row().classes('w-full flex-nowrap items-center')
+    with input_row:
         placeholder = "message"
         user_input = ui.input(placeholder=placeholder).props('rounded outlined input-class=mx-3 ') \
             .classes('w-full self-center stt-input').style('flex-grow: 1; width: 100vh;')
@@ -100,6 +104,7 @@ def init_layout(logger):
         history,
         user_input,
         send_button,
+        suggestions_row,
         darkswitch,
         mic_button,
         stop_mic_button,
@@ -126,6 +131,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         history,
         user_input,
         send_button,
+        suggestions_row,
         darkswitch,
         mic_button,
         stop_mic_button,
@@ -155,6 +161,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         selection = [] ,  # Initially set selection to empty
         storage = LocalStorage(base_path="data"),
         persist = selection_override is None,
+        suggestions_row = suggestions_row,
      )
 
     state.dark_mode = dark_value
