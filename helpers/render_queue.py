@@ -5,6 +5,8 @@ studio role that did the work) and refreshes the details pane; a summary lands
 at the end.  The user keeps talking while the studio works.
 """
 import asyncio
+import os
+import re
 from loguru import logger
 
 
@@ -24,14 +26,21 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
     """
     from nicegui import ui
 
-    def _announce(text: str):
+    def _announce(text: str, image: str | None = None):
         try:
             with state.history:
                 with ui.chat_message(name=role, sent=False).classes('w-full'):
                     ui.markdown(text)
+                    if image:
+                        ui.image(source=image).classes('rounded-md q-mt-xs').style('max-width: 320px;')
             state.history.scroll_to(percent=100)
         except Exception as e:
             logger.debug(f"render-queue announce skipped: {e}")
+
+    def _image_in(note: str) -> str | None:
+        """Pull a rendered image path out of a job's status note, if present."""
+        m = re.search(r"[\w\-./]+\.(?:jpg|jpeg|png)", note)
+        return m.group(0) if m and os.path.exists(m.group(0)) else None
 
     async def run():
         done, failed = 0, 0
@@ -43,7 +52,7 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                 extra = ""
                 if "NOTE:" in note:
                     extra = "  ⚠️ " + note.split("NOTE:", 1)[1].strip()
-                _announce(f"🎨 **{label}** — done ({i}/{len(jobs)}).{extra}")
+                _announce(f"🎨 **{label}** — done ({i}/{len(jobs)}).{extra}", image=_image_in(note))
             except Exception as e:
                 failed += 1
                 logger.error(f"render job '{label}' failed: {e}")

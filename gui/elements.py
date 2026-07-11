@@ -450,9 +450,10 @@ def view_all_instances(
             aspect_ratio=aspect_ratio
         )
 
-class Attribute(TypedDict):
+class Attribute(TypedDict, total=False):
     caption: str
     get_value: str | Callable
+    set_value: Callable  # optional: enables inline editing of scalar fields
 
 
 def view_attributes(state: APPState, caption: str, attributes: list[Attribute], expanded: bool=False, individual_icons: bool = True, header_size: int=1):
@@ -476,10 +477,59 @@ def view_attributes(state: APPState, caption: str, attributes: list[Attribute], 
                         ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(state, f"I would like to edit the {caption} date."))
                     header(attr_name,4)
                     value = attr.get("get_value")()
-                    if value is None: 
+                    if value is None:
                         value = ""
-                    ui.label(value)
+                    setter = attr.get("set_value")
+                    if setter is None:
+                        ui.label(value)
+                    else:
+                        _inline_editable(state, attr_name, str(value), setter)
     return container
+
+
+def _inline_editable(state: APPState, name: str, value: str, setter: Callable):
+    """
+    A scalar value you can edit in place: click the text, type, Enter saves.
+    The change is echoed into the conversation as a receipt so the coauthor
+    stays aware — direct manipulation for trivial fields, conversation for
+    everything substantive.
+    """
+    holder = ui.element('div')
+
+    def show_label():
+        holder.clear()
+        with holder:
+            ui.label(value if value else '—').classes('cursor-pointer border-b border-dashed border-gray-400') \
+                .tooltip(f'Click to edit {name}') \
+                .on('click', lambda _: show_input())
+
+    def show_input():
+        holder.clear()
+        with holder:
+            box = ui.input(value=value).props('dense outlined autofocus').classes('text-sm')
+
+            def save():
+                new_value = box.value
+                try:
+                    setter(new_value)
+                except Exception as e:
+                    ui.notify(f"Couldn't set {name}: {e}", type='warning')
+                    show_label()
+                    return
+                try:
+                    with state.history:
+                        with ui.chat_message(name='You', sent=True).classes('w-full'):
+                            ui.markdown(f"✏️ set **{name}** to `{new_value}`")
+                    state.history.scroll_to(percent=100)
+                except Exception:
+                    pass
+                state.refresh_details()
+
+            box.on('keydown.enter', lambda _: save())
+            box.on('blur', lambda _: show_label())
+
+    show_label()
+    return holder
 
 
 def image_drop_field_editor(

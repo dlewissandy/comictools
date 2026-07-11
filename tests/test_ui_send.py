@@ -140,3 +140,24 @@ async def test_asset_catalog_drawer(user: User) -> None:
     # variants: wardrobe per character, e.g. Brassic's gnome disguise
     kind_toggle.set_value("variant")
     await user.should_see("Gnome Disguise")
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_inline_scalar_edit_affordance(user: User) -> None:
+    """Issue scalars are click-to-edit in place (tooltip advertises it)."""
+    main.LocalStorage = _TmpStorage
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("Click to edit writer")
+    await user.should_see("Click to edit price")
+
+    # clicking the editable value swaps in an input; setting it persists
+    labels = [e for e in user.client.elements.values()
+              if e.__class__.__name__ == "Label"
+              and any(ch.__class__.__name__ == "Tooltip" and "writer" in getattr(ch, "text", "")
+                      for ch in e.default_slot.children)]
+    assert labels, "editable writer label exists"

@@ -89,16 +89,23 @@ def view_issue(state:APPState):
                 )
 
 
+        def _set(field):
+            # click-to-edit: write the scalar directly, receipt lands in chat
+            def setter(value):
+                setattr(issue, field, value or None)
+                storage.update_object(data=issue)
+            return setter
+
         view_attributes(
                     state = state,
                     caption="Attributes",
                     attributes = [
-                        Attribute(caption="publication date", get_value =lambda: issue.publication_date),
-                        Attribute(caption="price", get_value =lambda: issue.price),
-                        Attribute(caption="writer", get_value=lambda: issue.writer),
-                        Attribute(caption="artist", get_value=lambda: issue.artist),
-                        Attribute(caption="colorist", get_value=lambda: issue.colorist),
-                        Attribute(caption="creative minds", get_value=lambda: issue.creative_minds)
+                        Attribute(caption="publication date", get_value=lambda: issue.publication_date, set_value=_set("publication_date")),
+                        Attribute(caption="price", get_value=lambda: issue.price, set_value=lambda v: (setattr(issue, "price", float(v) if v else None), storage.update_object(data=issue))),
+                        Attribute(caption="writer", get_value=lambda: issue.writer, set_value=_set("writer")),
+                        Attribute(caption="artist", get_value=lambda: issue.artist, set_value=_set("artist")),
+                        Attribute(caption="colorist", get_value=lambda: issue.colorist, set_value=_set("colorist")),
+                        Attribute(caption="creative minds", get_value=lambda: issue.creative_minds, set_value=_set("creative_minds"))
                     ],
                     individual_icons=False,
                 )
