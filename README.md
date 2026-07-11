@@ -70,7 +70,7 @@ Each comic style includes distinct visual treatments for different dialog types 
 
 ### AI-First Design
 
-The application is built on the **OpenAI Agents SDK** with function-calling tools, not a simple chat wrapper. Each of the 14 agent types has:
+The application is built on the **OpenAI Agents SDK** with function-calling tools, not a simple chat wrapper. The coauthor is a **studio staff of 21 named roles** — the Editor on issues, the Layout Artist on scenes, the Penciller on panels, the Background Artist on settings, the Librarian in the asset catalog — each with:
 
 - A **custom persona** with system instructions tailored to its role (story editor, character designer, cover artist, etc.)
 - A **filtered toolkit** — only the tools relevant to the current context are available, preventing hallucinated actions
@@ -78,7 +78,7 @@ The application is built on the **OpenAI Agents SDK** with function-calling tool
 
 This means you can say *"make the dialogue punchier"* while viewing a panel, and the agent knows exactly which panel, which scene it belongs to, what characters are in frame, and what the art style is — without you specifying any of it.
 
-### 60+ Function Tools
+### 120+ Function Tools
 
 Tools cover the full CRUD lifecycle plus specialized creative operations:
 
@@ -156,6 +156,7 @@ Every entity is a Pydantic model with full validation. The hierarchy is navigabl
 5. **Panel by panel** — Define each panel's beat, visual description, dialogue, and narration. The AI drafts from scene context.
 6. **Generate art** — Render panel images and covers. The system builds prompts from structured data: character descriptions, scene context, style parameters, and reference images.
 7. **Refine** — Use conversational image editing (inpainting/outpainting) to adjust generated art. Select finals from the image grid.
+8. **Lay out and bind** — Assign panels to page grids (splash pages, 2-up rows — pacing at the page turn), read the issue front-to-back in the built-in reader, and export a print-trim PDF.
 
 Every step is conversational. You're never filling out a form — you're talking to a collaborator who happens to have a structured understanding of your entire project.
 
@@ -192,12 +193,16 @@ The app launches a local web server (default: http://localhost:8080).
 - **Agents over endpoints.** Instead of REST APIs behind buttons, the system uses function-calling agents that reason about which tools to invoke based on natural language input and current context.
 - **Style as a first-class entity.** Styles aren't filters applied after the fact. They're structured definitions (art, character, dialog) that propagate through every generation call, ensuring visual coherence across an entire series.
 - **Reference images as creative guardrails.** Uploaded references and generated style examples are fed into every image generation call, giving the AI visual context alongside textual descriptions.
+- **Composition all the way down.** A panel is composed from its setting's *master background* plus the cast's reference sheets — build the set once, reuse it across every panel so the tent in panel 3 is the same tent in panel 9. Variants are composed the same way: base character + outfit + props, never re-described. Every render reports exactly which references it's missing.
+- **The coauthor remembers and speaks first.** Conversations persist per object (leave a scene, come back — the thread is where you left it; child agents inherit the parent discussion). Each view opens with a production-aware line and suggestion chips ("5 panels unrendered — want me to work through them?").
+- **A studio, not a chatbot.** Assets — characters, variants, outfits, settings, props, styles — live in a catalog drawer summonable from any view: filter, search, click a tile and the coauthor puts it to work. Batch renders quote their cost first, then run in the background, posting each finished panel into the chat while you keep talking.
+- **Every view is a URL.** Hierarchical routes (`/series/…/issue/…/scene/…/panel/…`) make every object deep-linkable, reload-safe, and multi-window friendly.
 
 ---
 
 ## Project Status
 
-This is an active experiment in AI-first application design and collaborative creative workflows. The core loop — from series creation through panel image generation — is functional and producing real output. It's not production software; it's a working exploration of what co-creation with AI can look like when the AI is treated as a peer rather than a tool.
+This is an active experiment in AI-first application design and collaborative creative workflows. The full loop — paste a story into an issue, get a script breakdown (settings, cast, blocking), panelize, render composited artwork, lay out pages, and export the bound PDF — is functional and producing real output, with a 40+ test suite covering the pipeline. It's not production software; it's a working exploration of what co-creation with AI can look like when the AI is treated as a peer rather than a tool.
 
 ---
 
