@@ -102,7 +102,10 @@ def init_layout(logger):
 
         /* the page grid: panels stitched with gutters, nothing floating */
         .comic-page { display: grid; grid-template-columns: repeat(12, 1fr);
-                      gap: 12px; width: 100%; align-items: stretch; }
+                      gap: 12px; width: 100%; align-items: stretch;
+                      grid-auto-flow: dense; }
+        .flow-caption { display: flex; flex-direction: column; align-items: flex-start;
+                        justify-content: center; gap: 6px; min-height: 90px; }
         .comic-page > * { min-width: 0; }
         .cpanel { position: relative; background: var(--panel);
                   border: 2.5px solid var(--ink); border-radius: 2px;

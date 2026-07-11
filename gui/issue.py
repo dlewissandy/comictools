@@ -143,19 +143,21 @@ def view_issue(state:APPState):
         COVER_ORDER = ["front", "inside-front", "inside-back", "back"]
         order_by = lambda cover: COVER_ORDER.index(cover.location.value) if cover.location.value in COVER_ORDER else -1
 
-        with ccell(12):
-            new_item_messager(state, "Covers","I would like to create a new cover for this issue.")
+        from gui.elements import flow_caption
+        flow_caption(state, "Covers", "I would like to create a new cover for this issue.")
+        if True:
             view_all_instances(
                 state=state,
                 get_instances = lambda: storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id}, order_by=order_by),
                 get_image_locator=lambda cover: cover.image,
                 kind=SelectedKind.COVER,
                 get_name=lambda _,cover: f"{cover.location.replace('_', ' ').title()} Cover",
-                aspect_ratio="6/9"
+                aspect_ratio="6/9",
+                flow_span=3
             )
 
-        with ccell(12):
-            new_item_messager(state, "Scenes","I would like to create a new scene for this issue.")
+        flow_caption(state, "Scenes", "I would like to create a new scene for this issue.", span=3)
+        if True:
             view_all_instances(
                 state=state,
                 get_instances = lambda: storage.read_all_objects(SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id}, order_by="scene_number"),
@@ -164,7 +166,8 @@ def view_issue(state:APPState):
                 aspect_ratio="16/9",
                 get_name=lambda i,scene: (lambda d,t: f"Scene {i+1}: {scene.name}" + (f"  ·  {d}/{t} 🎨" if t else "  ·  no panels"))(*_scene_counts(scene.scene_id)),
                 get_markdown=lambda scene: scene.story,
-                number_of_columns=3
+                number_of_columns=3,
+                flow_span=3
             )
         page.__exit__(None, None, None)                
         

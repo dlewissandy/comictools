@@ -74,8 +74,9 @@ def view_series(state: APPState):
                     caption_size=2)
         
         # A cardwall for viewing and adding issues of the comic.
-        with ccell(12):
-            new_item_messager(state, "Issues", "I would like to create a new issue")
+        from gui.elements import flow_caption
+        flow_caption(state, "Issues", "I would like to create a new issue")
+        if True:
             def _issue_label(_i, issue):
                 from schema import SceneModel, Panel
                 done = total = 0
@@ -93,40 +94,45 @@ def view_series(state: APPState):
                 get_image_locator=lambda x: storage.find_issue_image(series_id=series.series_id, issue_id=x.issue_id),
                 kind="issue",
                 get_name=_issue_label,
-                aspect_ratio="16/27"
+                aspect_ratio="16/27",
+                flow_span=3
                 ).style('margin-top: 0px; margin-bottom: 0px')
 
         # A cardwall for viewing and adding characters to the comic series.
-        with ccell(12):
-            new_item_messager(state, "Characters", "I would like to create a new character")
+        flow_caption(state, "Characters", "I would like to create a new character")
+        if True:
             with view_all_instances(
                 state=state, 
                 get_instances = lambda: storage.read_all_objects(CharacterModel, primary_key={"series_id": series.series_id}), 
                 get_image_locator=lambda x: storage.find_character_image(series_id=series.series_id, character_id=x.character_id),
                 kind="character",
                 aspect_ratio="6/5",
-                get_name=lambda _,x: x.name
+                get_name=lambda _,x: x.name,
+                flow_span=3
                 ):
-                uploader_card(
-                    state=state,
-                    on_upload=lambda e: on_upload(e),
-                    aspect_ratio="6/5"
-                )
+                pass
+        with ccell(3):
+            uploader_card(
+                state=state,
+                on_upload=lambda e: on_upload(e),
+                aspect_ratio="6/5"
+            )
 
         # A cardwall for viewing and adding the recurring settings of the series.
         def setting_image(loc: Setting):
             # Show the first rendered master background, if any.
             return next((img for img in (loc.images or {}).values() if img and os.path.exists(img)), None)
 
-        with ccell(12):
-            new_item_messager(state, "Settings", "I would like to create a new setting")
+        flow_caption(state, "Settings", "I would like to create a new setting")
+        if True:
             view_all_instances(
                 state=state,
                 get_instances=lambda: storage.read_all_objects(Setting, primary_key={"series_id": series.series_id}, order_by="name"),
                 get_image_locator=setting_image,
                 kind="setting",
                 aspect_ratio="3/2",
-                get_name=lambda _, x: x.name
+                get_name=lambda _, x: x.name,
+                flow_span=3
                 ).style('margin-top: 0px; margin-bottom: 0px')
         page.__exit__(None, None, None)
         

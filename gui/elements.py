@@ -348,17 +348,29 @@ def render_object_cards(
         get_name: Callable[[int,BaseModel], str] = lambda i,x: x.name, 
         get_markdown: Optional[Callable] = None, 
         number_of_columns: int = 4,
-        on_remove: Optional[Callable] = None):
+        on_remove: Optional[Callable] = None,
+        flow_span: Optional[int] = None):
     
     selection = state.selection
-    with ui.element().classes('w-full').style(
-            f"display: grid; grid-template-columns: repeat(auto-fill, minmax({_GRID_MIN.get(number_of_columns, '180px')}, 1fr)); gap: 10px;") as grid:
+    if flow_span:
+        # FLOW MODE: no private grid — each card becomes a cell of the
+        # surrounding comic page, so groups pack together like a real page.
+        grid = ui.element('div').classes('hidden')  # placeholder return
+        container = None
+    else:
+        container = ui.element().classes('w-full').style(
+            f"display: grid; grid-template-columns: repeat(auto-fill, minmax({_GRID_MIN.get(number_of_columns, '180px')}, 1fr)); gap: 10px;")
+        grid = container
+    import contextlib
+    with (container if container is not None else contextlib.nullcontext()):
         for i,instance in enumerate(instances):
             name = get_name(i,instance)
             logger.debug(f"Rendering card for {name} with kind {kind}")
             id = instance.id
             logger.debug(f"Creating card for {id}")
-            card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}')
+            cell = ui.element('div').classes(f'cspan-{flow_span}') if flow_span else contextlib.nullcontext()
+            with cell:
+                card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}')
             card.classes('relative overflow-visible')
             with card:
                 if on_remove is not None:
@@ -413,7 +425,8 @@ def view_all_instances(
         get_markdown: Optional[Callable] = None,
         number_of_columns: int=4,
         aspect_ratio: str = "1/1",
-        on_remove: Optional[Callable] = None): 
+        on_remove: Optional[Callable] = None,
+        flow_span: Optional[int] = None): 
     """
     A gui shortcut to view all the instances of a given kind.
 
@@ -477,7 +490,8 @@ def view_all_instances(
             get_image_locator=get_image_locator, 
             number_of_columns=number_of_columns,
             aspect_ratio=aspect_ratio,
-            on_remove=on_remove
+            on_remove=on_remove,
+            flow_span=flow_span
         )
 
 class Attribute(TypedDict, total=False):
@@ -792,3 +806,15 @@ def cpanel(span: int = 12):
 
 def ccell(span: int = 12):
     return ui.element('div').classes(f'cspan-{span}')
+
+
+def flow_caption(state: APPState, caption: str, message: str, span: int = 3):
+    """
+    A narrator box sitting IN the page flow: a small grid cell holding the
+    group's caption and its create button, with the group's panels flowing
+    right after it — so short groups share rows, like a real comic page.
+    """
+    with ui.element('div').classes(f'cspan-{span} flow-caption'):
+        header(caption, 2)
+        crud_button(kind=CrudButtonKind.CREATE,
+                    action=lambda _: post_user_message(state, message), size=2)
