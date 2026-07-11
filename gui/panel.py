@@ -1,13 +1,11 @@
 import os
 from loguru import logger
 from nicegui import ui
-from schema import Panel, SceneModel, Setting, FrameLayout, Narration, BubbleStyle, NarrationPosition
+from schema import Panel, SceneModel, Setting, Narration, BubbleStyle, NarrationPosition
 from gui.elements import (
     markdown_field_editor,
     header,
     crud_button,
-    uploader_card,
-    ruled_page,
     comic_page,
     cpanel,
     ccell,
@@ -16,12 +14,8 @@ from gui.elements import (
 from gui.selection import SelectionItem, SelectedKind
 from gui.state import APPState
 from gui.messaging import post_user_message
-from gui.light_table import light_table
+from gui.light_table import light_table, rework_take_on_table, takes_row
 from storage.generic import GenericStorage
-
-# Frame sizes per panel shape — every frame the exact shape of its art.
-_SMALL = {FrameLayout.LANDSCAPE: (3, 2), FrameLayout.PORTRAIT: (2, 3), FrameLayout.SQUARE: (3, 3)}
-_DROP = {FrameLayout.LANDSCAPE: (3, 2), FrameLayout.PORTRAIT: (3, 3), FrameLayout.SQUARE: (3, 3)}
 
 
 def view_panel(state: APPState):
@@ -64,11 +58,6 @@ def view_panel(state: APPState):
         setting = storage.read_object(Setting, primary_key={
             "series_id": series_id, "setting_id": scene.setting_id})
 
-    def set_image(locator: str):
-        panel.image = locator
-        storage.update_object(panel)
-        state.refresh_details()
-
     def format_bubble_style(dialogue: BubbleStyle):
         return f"**{dialogue.character_id}** ({dialogue.emphasis.value}): {dialogue.text}"
 
@@ -87,22 +76,6 @@ def view_panel(state: APPState):
         if bottom:
             text += bottom
         return text
-
-    def rework_on_table(img: str):
-        """A take becomes the table's background layer, ready to split,
-        heal and layer over — and the table unlocks (no take selected)."""
-        panel.figure_images['background/plate'] = img
-        panel.image = None
-        storage.update_object(panel)
-        try:
-            from gui.avatars import comic_chat_message
-            with state.history:
-                with comic_chat_message(name='You', sent=True).classes('w-full'):
-                    ui.markdown("🛠 laid a take on the table as the background layer")
-            state.history.scroll_to(percent=100)
-        except Exception:
-            pass
-        state.refresh_details()
 
     def open_editor():
         if not panel.image:
@@ -139,34 +112,13 @@ def view_panel(state: APPState):
                 actions=[
                     ('edit', 'Open this artwork in the image editor', lambda _: open_editor()),
                     ('layers', 'Rework this take on the table — it becomes the background layer',
-                     lambda _: rework_on_table(featured)),
+                     lambda _: rework_take_on_table(state, panel, featured)),
                     ('brush', 'Render a new take', lambda _: post_user_message(state, "I would like to render this panel.")),
                     ('delete', 'Delete this artwork', lambda _: post_user_message(state, "I would like to delete the currently selected panel image.")),
                 ])
 
         # TAKES: every render; click one to feature it on the table.
         with ccell(12):
-            takes = [img for img in storage.list_images(panel) if os.path.exists(img)]
-            header("Takes", 4)
-            with ruled_page() as packer:
-                for img in takes:
-                    with packer.place_cell([_SMALL[panel.aspect]], fudge=False):
-                        with ui.card().classes('soft-card p-2 mosaic-card relative panel-fill cursor-pointer') as take:
-                            ui.image(source=img).props('fit=cover').classes('absolute inset-0 w-full h-full')
-                            if img == featured:
-                                ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10')
-                            ui.button(icon='layers').props('flat round dense size=xs') \
-                                .classes('absolute bottom-1 right-1 z-10 bg-white/70 dark:bg-black/50') \
-                                .tooltip('Rework this take on the table (becomes the background layer)') \
-                                .on('click.stop', lambda _, img=img: rework_on_table(img))
-                        take.on('click', lambda _, img=img: set_image(img))
-
-                def on_upload_take(e):
-                    locator = storage.upload_image(obj=panel, name=e.name, data=e.content, mime_type=e.type)
-                    set_image(locator)
-
-                uploader_card(state, on_upload=on_upload_take, packer=packer,
-                              variants=[_DROP[panel.aspect]],
-                              label='Drop image to add a take')
+            takes_row(state, panel, featured)
 
         page.__exit__(None, None, None)

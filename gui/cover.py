@@ -1,153 +1,96 @@
+"""
+The cover workbench — the SAME light table as the panel page.  A cover is
+its own scene: it owns its style and setting directly, so it rides the
+table as both the subject and the scene-role.  Cover design (the brief) up
+top, then the acetate stack, the rough and the print side by side, takes
+below.  Trade dress (title, issue number, price, credits) is lettered by
+the Cover Artist at render time.
+"""
+import os
 from nicegui import ui
 from loguru import logger
+
 from gui.selection import SelectionItem, SelectedKind
-from schema import Cover, ComicStyle, StyleExample
+from schema import Cover, Setting
 from gui.state import APPState
 from gui.elements import (
-    header, crud_button,
-    view_reference_images, view_character_references, Attribute, view_attributes, markdown_field_editor, image_field_editor, full_width_image_selector_grid, aspect_ratio_picker, TAILWIND_CARD,
-    CrudButtonKind
+    header, crud_button, markdown_field_editor,
+    comic_page, cpanel, ccell, CrudButtonKind,
 )
 from gui.messaging import post_user_message
+from gui.light_table import light_table, rework_take_on_table, takes_row
 from storage.generic import GenericStorage
+
 
 def view_cover(state: APPState):
     """
-    View the cover of a comic book issue.
-    
+    View the cover of a comic book issue, pivoted around THE LIGHT TABLE.
+
     Args:
         state: The GUI elements containing the details and selection.
     """
     storage: GenericStorage = state.storage
     details = state.details
-   
+
     selection = state.selection
     cover_id = selection[-1].id
     issue_id = selection[-2].id
     series_id = selection[-3].id if len(selection) > 2 else None
     logger.debug(f"series: {series_id} issue: {issue_id} cover: {cover_id}")
 
-    cover:Cover  = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
+    cover: Cover = storage.read_object(cls=Cover, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
     if cover is None:
         details.clear()
         with details:
             ui.markdown(f"Cover with ID {cover_id} not found in issue {issue_id}.")
         return
 
-    if cover.style_id is None:
-        logger.debug(f"Issue {cover.id} has no style set.")
-        style = None
-    else:
-        style: ComicStyle | None= storage.read_object(cls=ComicStyle, primary_key={"style_id": cover.style_id}) if cover.style_id  else None
-        if style is None:
-            logger.warning(f"Issue {cover.id} has style set to {cover.style} but style not found.")
+    # a cover IS its own scene: setting and style hang off the cover itself
+    setting: Setting = None
+    if cover.setting_id:
+        setting = storage.read_object(cls=Setting, primary_key={
+            "series_id": series_id, "setting_id": cover.setting_id})
 
+    def open_editor():
+        if not cover.image:
+            ui.notify("No artwork to edit yet — render the cover first.", type="warning")
+            return
+        new_itm = SelectionItem(name="Edit Cover Image", id=cover.image, kind=SelectedKind.IMAGE_EDITOR)
+        state.change_selection(new=[*state.selection, new_itm])
+
+    details.clear()
     with details:
-        # The title for the viewer is the Publisher name
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
-            header(cover.location.value.title()+ " Cover", 0)
+            header(cover.location.value.replace('-', ' ').title() + " Cover", 0)
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current cover."),size=1)    
-        with ui.row().classes('w-full flex-nowrap'):
-            with ui.column().classes('w-3/4'):
-                markdown_field_editor(state, "Description", cover.description)
-                
+            crud_button(kind=CrudButtonKind.DELETE,
+                        action=lambda _: post_user_message(state, "I would like to delete the current cover."),
+                        size=1)
 
-            with ui.card().classes('mb-2 p-2 w-1/4 soft-card break-inside-avoid text-gray-900 dark:text-gray-300') as col2:
-                aspect_ratio_picker(
-                    state,
-                    parent=col2,
-                    caption="Aspect Ratio",
-                    set_aspect_ratio=lambda x: cover.set_aspect(x),
-                    get_aspect_ratio  = lambda: cover.aspect,)    
-                
-                image_field_editor(
-                    state=state, 
-                    kind=SelectedKind.PICK_STYLE, 
-                    get_caption=lambda: "Style", 
-                    get_id =lambda: style.style_id if style else None, 
-                    get_image_filepath=lambda: storage.find_image(
-                        StyleExample(
-                            style_id=style.style_id,
-                            example_type="art",
-                            image_id=style.image.get("art"),
-                            mime_type="image/jpeg"
-                            ), style.image.get("art", None)) if style else None
-                )
-            
+        page = comic_page()
+        page.__enter__()
 
-        # Attached assets: chips with an ✕ — removal is as easy as adding.
-        from schema import Setting
-        from gui.elements import removable_chips
-        setting = storage.read_object(cls=Setting, primary_key={"series_id": cover.series_id, "setting_id": cover.setting_id}) if cover.setting_id else None
+        # THE LIGHT TABLE: same table as panels — the cover doubles as its
+        # own scene (it owns style_id and setting_id).  The cover design
+        # brief rides under the rough as the table's margin notes.
+        with ccell(12):
+            featured = storage.find_image(obj=cover, locator=cover.image) if cover.image else None
+            if featured and not os.path.exists(featured):
+                featured = None
+            light_table(
+                state, cover, cover, setting,
+                featured=featured,
+                actions=[
+                    ('edit', 'Open this artwork in the image editor', lambda _: open_editor()),
+                    ('layers', 'Rework this take on the table — it becomes the background layer',
+                     lambda _: rework_take_on_table(state, cover, featured)),
+                    ('brush', 'Render a new take', lambda _: post_user_message(state, "I would like to render this cover.")),
+                    ('delete', 'Delete this artwork', lambda _: post_user_message(state, "I would like to delete the currently selected cover image.")),
+                ])
 
-        def _save_cover():
-            storage.update_object(data=cover)
+        # TAKES: every render; click one to feature it on the table.
+        with ccell(12):
+            takes_row(state, cover, featured)
 
-        def _remove_setting(_key):
-            cover.setting_id = None
-            _save_cover()
-
-        def _remove_cast(key):
-            cover.character_references = [c for c in cover.character_references
-                                          if f"{c.character_id}/{c.variant_id}" != key]
-            _save_cover()
-
-        with ui.column().classes('w-full q-px-sm').style('gap: 2px;'):
-            removable_chips(state, "Setting",
-                [(setting.setting_id, f"{setting.name} ({'Interior' if setting.interior else 'Exterior'})")] if setting else [],
-                _remove_setting, icon='location_on')
-            removable_chips(state, "Cast",
-                [(f"{c.character_id}/{c.variant_id}", f"{c.character_id} ({c.variant_id})")
-                 for c in (cover.character_references or [])],
-                _remove_cast, icon='theater_comedy')
-
-        def set_image(image_locator: str):
-            cover.image = image_locator
-            storage.update_object(cover)
-
-        k = cover.location.value.lower().replace(" ", "-")
-        with ui.card().classes(TAILWIND_CARD):
-            full_width_image_selector_grid(
-                state=state,
-                image_kind_name="cover image",
-                upload_image=lambda name, data, mime_type: storage.upload_image(cover, name=name, data=data, mime_type=mime_type),
-                get_images=lambda k=k: storage.list_images(cover),
-                get_selection=lambda k=k: cover.image,
-                set_selection=lambda img_id, k=k: set_image(img_id),
-                
-                aspect_ratio="2/3",
-                columns=4,
-                header_size=2
-            )
-
-        view_character_references(
-            state=state, 
-            parent=cover,
-        )
-
-        def upload_image(name: str, data: bytes, mime_type: str):
-            """
-            Upload an image for the cover.
-            
-            Args:
-                name: The name of the image file.
-                data: The binary data of the image.
-                mime_type: The MIME type of the image.
-            """
-            filepath = storage.upload_reference_image(
-                cover, 
-                name=name, 
-                data=data, 
-                mime_type=mime_type
-            )
-            state.is_dirty = True
-            post_user_message(state, f"I would like to add a new reference image for the cover: ![image]({filepath})")
-
-        view_reference_images(
-            state=state,
-            get_images=lambda: cover.reference_images,
-            upload_image=upload_image,
-            parent=cover,
-        )
-    
+        page.__exit__(None, None, None)

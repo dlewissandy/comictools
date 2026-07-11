@@ -206,6 +206,37 @@ def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: s
             f"Ask the user to pick a favorite.  " + notes[-1])
 
 
+def _table_layout_brief(board) -> str:
+    """The author's light-table blocking as prompt lines — figure positions,
+    depths, mirroring, and element OMIT/placement notes.  A board is anything
+    composed on the light table: a panel or a cover."""
+    blk = board.figure_blocking or {}
+
+    def _pct(v):
+        return f"{round(float(v))}%"
+
+    lines = []
+    for ref in (board.character_references or []):
+        b = blk.get(f"{ref.character_id}/{ref.variant_id}") or {}
+        if not b:
+            continue
+        h = float(b.get('h', 60))
+        depth = "in the near foreground, large" if h >= 88 else ("far in the background, small" if h <= 45 else "in the mid-ground")
+        lines.append(f"* {ref.character_id} stands at {_pct(b.get('x', 50))} from left, {depth}"
+                     + (f", raised {_pct(b['y'])} above the frame bottom" if float(b.get('y', 0)) > 5 else "")
+                     + ("; only partly in frame, rising from below the bottom edge" if float(b.get('y', 0)) < -5 else "")
+                     + ("; MIRRORED left-to-right versus their reference sheet" if b.get('flip') else ""))
+    for key, path in sorted((board.figure_images or {}).items()):
+        if not key.startswith('element/'):
+            continue
+        b = blk.get(key) or {}
+        if not b.get('on', 1):
+            lines.append(f"* OMIT the {key.split('/', 1)[1].replace('-', ' ')} entirely")
+        elif b:
+            lines.append(f"* the {key.split('/', 1)[1].replace('-', ' ')} sits at {_pct(b.get('x', 50))} from left")
+    return "\n".join(lines)
+
+
 def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id: str, text_layout_instructions: Optional[str] = None) -> str:
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
@@ -327,6 +358,9 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
                                "use it as the cover's setting — same architecture, same props, same palette — "
                                "reframed as the cover composition requires.\n")
 
+    # honor whatever the author arranged on the cover's light table
+    table_layout = _table_layout_brief(cover)
+
     prompt = f"""
     Create a comic book {location_name} cover.   The image should be have a {cover.aspect.value} orientation/aspect ratio.
 {background_guidance}
@@ -349,6 +383,8 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
 
 # Cover Design
 {cover.description}
+
+{f"# Layout — the author BLOCKED this on the light table; honor positions and depths{chr(10)}{table_layout}" if table_layout else ""}
 """
 
     try:
@@ -1594,26 +1630,7 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
     script = "\n".join(script_lines)
 
     # The author's figure blocking from the light table.
-    blocking_lines = []
-    for ref in panel.character_references:
-        b = blk.get(f"{ref.character_id}/{ref.variant_id}") or {}
-        if not b:
-            continue
-        h = float(b.get('h', 60))
-        depth = "in the near foreground, large" if h >= 88 else ("far in the background, small" if h <= 45 else "in the mid-ground")
-        blocking_lines.append(f"* {ref.character_id} stands at {_pct(b.get('x', 50))} from left, {depth}"
-                              + (f", raised {_pct(b['y'])} above the panel bottom" if float(b.get('y', 0)) > 5 else "")
-                              + ("; only partly in frame, rising from below the bottom edge" if float(b.get('y', 0)) < -5 else "")
-                              + ("; MIRRORED left-to-right versus their reference sheet" if b.get('flip') else ""))
-    for key, path in sorted((panel.figure_images or {}).items()):
-        if not key.startswith('element/'):
-            continue
-        b = blk.get(key) or {}
-        if not b.get('on', 1):
-            blocking_lines.append(f"* OMIT the {key.split('/', 1)[1].replace('-', ' ')} entirely")
-        elif b:
-            blocking_lines.append(f"* the {key.split('/', 1)[1].replace('-', ' ')} sits at {_pct(b.get('x', 50))} from left")
-    table_layout = "\n".join(blocking_lines)
+    table_layout = _table_layout_brief(panel)
 
     setting_line = ""
     if setting is not None:
@@ -1920,29 +1937,39 @@ def render_missing_panels(wrapper: RunContextWrapper[APPState], series_id: str, 
 # FIGURE ACETATES: a posed, scene-scaled cut-out of one character for one
 # panel — the figure layer the light table stacks over the background.
 # ---------------------------------------------------------------------------
-def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id: str,
-                                 panel_id: str, character_id: str, variant_id: str,
-                                 pose_direction: str | None = None) -> str:
-    """Render a transparent posed figure for a panel and remember it on the
-    panel.  Callable directly from the GUI (background job) or via the tool."""
+def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id: str | None = None,
+                                 panel_id: str | None = None, character_id: str = "", variant_id: str = "",
+                                 pose_direction: str | None = None,
+                                 cover_id: str | None = None) -> str:
+    """Render a transparent posed figure for a board (a panel, or a cover when
+    cover_id is given) and remember it there.  Callable directly from the GUI
+    (background job) or via the tool."""
     from storage.filepath import obj_to_imagepath
     from helpers.generator import invoke_edit_image_api
 
     storage: GenericStorage = state.storage
-    panel: Panel = storage.read_object(cls=Panel, primary_key={
-        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
-    if panel is None:
-        return f"Panel '{panel_id}' not found."
-    scene: SceneModel = storage.read_object(cls=SceneModel, primary_key={
-        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
-    style: ComicStyle = storage.read_object(cls=ComicStyle, primary_key={"style_id": scene.style_id}) if scene else None
+    if cover_id:
+        panel = storage.read_object(cls=Cover, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
+        if panel is None:
+            return f"Cover '{cover_id}' not found."
+        scene = None
+    else:
+        panel = storage.read_object(cls=Panel, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
+        if panel is None:
+            return f"Panel '{panel_id}' not found."
+        scene = storage.read_object(cls=SceneModel, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
+    # a cover is its own scene: style comes from the scene, or the board itself
+    style_id = getattr(scene if scene is not None else panel, 'style_id', None)
     variant: CharacterVariant = storage.read_object(cls=CharacterVariant, primary_key={
         "series_id": series_id, "character_id": character_id, "variant_id": variant_id})
     if variant is None:
         return f"Variant '{variant_id}' of '{character_id}' not found."
 
     # the best on-model reference we have: styled sheet, else any sheet
-    sheet = variant.images.get(scene.style_id) if (scene and variant.images) else None
+    sheet = variant.images.get(style_id) if (style_id and variant.images) else None
     if not (sheet and os.path.exists(sheet)):
         sheet = storage.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant_id)
     if not (sheet and os.path.exists(sheet)):
@@ -1952,8 +1979,8 @@ def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id:
     if pose_direction:
         pose_ask = f"POSE (follow this exactly): {pose_direction}"
     else:
-        pose_ask = (f"POSE the figure for this moment: {panel.beat or panel.description}"
-                    + (f"  Blocking: {scene.blocking}" if scene and scene.blocking else ""))
+        pose_ask = (f"POSE the figure for this moment: {getattr(panel, 'beat', None) or panel.description}"
+                    + (f"  Blocking: {scene.blocking}" if scene is not None and scene.blocking else ""))
 
     prompt = f"""The attached reference sheet shows {character_id.replace('-', ' ')}.
 Draw THIS character — identical face, identical costume, identical colors,
@@ -2101,16 +2128,18 @@ def series_cast_roster(storage, series_id: str) -> list[dict]:
 
 def _resolve_layer_source(panel, scene, storage, series_id: str, layer: str):
     """Resolve a layer key to (image_path, kind): kind is 'background',
-    'figure' or 'element'."""
+    'figure' or 'element'.  Setting/style come from the scene — or from the
+    board itself when it IS its own scene (a cover)."""
+    owner = scene if scene is not None else panel
     if layer == 'background':
         plate = (panel.figure_images or {}).get("background/plate")
         if plate and os.path.exists(plate):
             return plate, 'background'
-        if scene is not None and scene.setting_id:
+        if getattr(owner, 'setting_id', None):
             setting: Setting = storage.read_object(cls=Setting, primary_key={
-                "series_id": series_id, "setting_id": scene.setting_id})
+                "series_id": series_id, "setting_id": owner.setting_id})
             if setting is not None:
-                cand = (setting.images or {}).get(scene.style_id) or next(
+                cand = (setting.images or {}).get(getattr(owner, 'style_id', None)) or next(
                     (i for i in (setting.images or {}).values() if i and os.path.exists(i)), None)
                 if cand and os.path.exists(cand):
                     return cand, 'background'
@@ -2121,9 +2150,11 @@ def _resolve_layer_source(panel, scene, storage, series_id: str, layer: str):
     return None, 'figure'
 
 
-def split_layer_body(state, series_id: str, issue_id: str, scene_id: str,
-                     panel_id: str, layer: str, entities: list | None = None) -> str:
-    """Split one layer into its constituent elements.
+def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None = None,
+                     panel_id: str | None = None, layer: str = 'background',
+                     entities: list | None = None, cover_id: str | None = None) -> str:
+    """Split one layer of a board (a panel, or a cover when cover_id is given)
+    into its constituent elements.
 
     layer: 'background', a figure key 'character_id/variant_id', or an
     'element/<slug>' key.   entities: optional list of {name, box} dicts (or
@@ -2135,12 +2166,19 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str,
     from helpers.generator import invoke_edit_image_api
 
     storage: GenericStorage = state.storage
-    panel: Panel = storage.read_object(cls=Panel, primary_key={
-        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
-    if panel is None:
-        return f"Panel '{panel_id}' not found."
-    scene: SceneModel = storage.read_object(cls=SceneModel, primary_key={
-        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
+    if cover_id:
+        panel = storage.read_object(cls=Cover, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
+        if panel is None:
+            return f"Cover '{cover_id}' not found."
+        scene = None
+    else:
+        panel = storage.read_object(cls=Panel, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
+        if panel is None:
+            return f"Panel '{panel_id}' not found."
+        scene = storage.read_object(cls=SceneModel, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
 
     source, kind = _resolve_layer_source(panel, scene, storage, series_id, layer)
     if source is None:

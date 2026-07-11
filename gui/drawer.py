@@ -90,12 +90,12 @@ def build_asset_drawer(state):
                 return item.id, item.name
         return None, None
 
-    def _current_panel():
-        """The panel being worked on (and its scene) when the panel page is
-        open — drawer tiles then lay assets straight onto the light table."""
-        from schema import Panel, SceneModel
+    def _current_board():
+        """The board on the light table (a panel, or a cover — which is its
+        own scene) — drawer tiles then lay assets straight onto the table."""
+        from schema import Panel, SceneModel, Cover
         sel = state.selection or []
-        if not sel or sel[-1].kind.value != "panel":
+        if not sel:
             return None, None
         ids = {}
         for item in sel:
@@ -108,19 +108,27 @@ def build_asset_drawer(state):
                     ids["scene_id"] = item.id
                 case "panel":
                     ids["panel_id"] = item.id
-        if len(ids) < 4:
-            return None, None
-        panel = state.storage.read_object(cls=Panel, primary_key=ids)
-        scene = state.storage.read_object(cls=SceneModel, primary_key={
-            k: v for k, v in ids.items() if k != "panel_id"})
-        return panel, scene
+                case "cover":
+                    ids["cover_id"] = item.id
+        last = sel[-1].kind.value
+        if last == "panel" and {"series_id", "issue_id", "scene_id", "panel_id"} <= ids.keys():
+            panel = state.storage.read_object(cls=Panel, primary_key={
+                k: ids[k] for k in ("series_id", "issue_id", "scene_id", "panel_id")})
+            scene = state.storage.read_object(cls=SceneModel, primary_key={
+                k: ids[k] for k in ("series_id", "issue_id", "scene_id")})
+            return panel, scene
+        if last == "cover" and {"series_id", "issue_id", "cover_id"} <= ids.keys():
+            cover = state.storage.read_object(cls=Cover, primary_key={
+                k: ids[k] for k in ("series_id", "issue_id", "cover_id")})
+            return cover, cover   # a cover is its own scene
+        return None, None
 
     def refresh():
         drawer.clear()
         entries = list(_catalog(state.storage))
         counts = {k: sum(1 for e in entries if e[0] == k) for k in KIND_META}
         cur_sid, cur_name = _current_series()
-        cur_panel, cur_scene = _current_panel()
+        cur_panel, cur_scene = _current_board()
 
         with drawer:
             with ui.row().classes('w-full items-center q-px-sm'):
@@ -129,7 +137,8 @@ def build_asset_drawer(state):
                 ui.space()
                 ui.button(icon='refresh', on_click=refresh).props('flat round dense')
             if cur_panel is not None:
-                ui.label('a panel is on the light table — clicking a tile lays the asset straight on it') \
+                noun = 'cover' if hasattr(cur_panel, 'cover_id') else 'panel'
+                ui.label(f'a {noun} is on the light table — clicking a tile lays the asset straight on it') \
                     .classes('text-xs text-primary q-px-sm italic')
             # Scope: default to the series you're working in; flip the
             # switch to browse the whole studio.
@@ -147,10 +156,13 @@ def build_asset_drawer(state):
 
             def tile(kind, title, subtitle, sid, aid, img, use_msg, url):
                 # a tile lays its asset straight on the light table when a
-                # panel is open and the asset is from that panel's series
-                # (styles are studio-wide); otherwise it asks the coauthor
-                direct = (cur_panel is not None
-                          and kind in ("character", "variant", "setting", "prop", "style")
+                # board (panel or cover) is open and the asset is from its
+                # series (styles are studio-wide); otherwise it asks the
+                # coauthor.  Covers have no scene props — that kind falls
+                # back to chat.
+                layable = ("character", "variant", "setting", "style") + \
+                          (("prop",) if hasattr(cur_scene, "props") else ())
+                direct = (cur_panel is not None and kind in layable
                           and (sid is None or sid == cur_panel.series_id))
                 with ui.element('div').classes('cursor-pointer').style(
                         'width: 31%; min-width: 130px;') as card:

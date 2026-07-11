@@ -12,7 +12,7 @@ from nicegui import ui
 
 from gui.messaging import post_user_message
 from gui.state import APPState
-from schema import CharacterModel, ComicStyle, Setting, PropAsset, CharacterVariant
+from schema import CharacterModel, ComicStyle, FrameLayout, Setting, PropAsset, CharacterVariant
 from schema.character_reference import CharacterRef
 from schema.setting import Prop
 
@@ -219,7 +219,7 @@ if (!window._roughDragInit) {
   });
   const report = (fig, canvas) => emitEvent('rough_block', {
       key: fig.dataset.key, series: canvas.dataset.series, issue: canvas.dataset.issue,
-      scene: canvas.dataset.scene, panel: canvas.dataset.panel,
+      scene: canvas.dataset.scene, panel: canvas.dataset.panel, cover: canvas.dataset.cover,
       x: parseFloat(fig.style.left), y: parseFloat(fig.style.bottom) || 0,
       h: parseFloat(fig.style.height) || 0,
       fs: parseFloat(fig.style.fontSize) || 0,
@@ -296,7 +296,7 @@ if (!window._roughDragInit) {
     emitEvent('stack_reorder', {
       src: src.dataset.key, dst: row.dataset.key, mode: dropMode(e, row),
       series: stack.dataset.series, issue: stack.dataset.issue,
-      scene: stack.dataset.scene, panel: stack.dataset.panel});
+      scene: stack.dataset.scene, panel: stack.dataset.panel, cover: stack.dataset.cover});
   });
   document.addEventListener('dragend', () => {
     clearDropMarks();
@@ -320,7 +320,7 @@ if (!window._roughDragInit) {
     const canvas = fig.closest('.rough-canvas');
     emitEvent('rough_text', {
       key: fig.dataset.key, series: canvas.dataset.series, issue: canvas.dataset.issue,
-      scene: canvas.dataset.scene, panel: canvas.dataset.panel,
+      scene: canvas.dataset.scene, panel: canvas.dataset.panel, cover: canvas.dataset.cover,
       text: fig.innerText.trim()});
   }
   document.addEventListener('focusout', (e) => {
@@ -350,6 +350,35 @@ def _src(path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# BOARDS: anything composed on the light table.  A PANEL composes on top of
+# its scene (style/setting/props live there); a COVER is its own scene — it
+# owns style_id and setting_id directly, so it rides the table as both the
+# subject AND the scene-role.
+# ---------------------------------------------------------------------------
+def is_cover(board) -> bool:
+    return hasattr(board, 'cover_id')
+
+
+def board_label(board) -> str:
+    """How the board reads in receipts and job labels."""
+    if is_cover(board):
+        return f"the {board.location.value.replace('-', ' ')} cover"
+    return f"panel {board.panel_number}"
+
+
+def read_board(storage, a: dict):
+    """Resolve a rough/stack event back to its board (panel or cover)."""
+    if a.get('cover'):
+        from schema import Cover as _Cover
+        return storage.read_object(cls=_Cover, primary_key={
+            "series_id": a['series'], "issue_id": a['issue'], "cover_id": a['cover']})
+    from schema import Panel as _Panel
+    return storage.read_object(cls=_Panel, primary_key={
+        "series_id": a['series'], "issue_id": a['issue'],
+        "scene_id": a['scene'], "panel_id": a['panel']})
+
+
+# ---------------------------------------------------------------------------
 # LAYING ASSETS ON THE TABLE: one-click direct writes, shared by the table's
 # own pickers AND the assets drawer (a drawer tile lays its asset right here
 # when a panel is open — the drawer IS part of the table).
@@ -366,16 +395,19 @@ def table_receipt(state, text: str):
         pass
 
 
-def pose_figure_bg(state, panel, character_id: str, variant_id: str,
+def pose_figure_bg(state, board, character_id: str, variant_id: str,
                    pose_direction: str | None = None):
-    """Queue a posed-acetate render for a figure on this panel."""
+    """Queue a posed-acetate render for a figure on this board (panel or cover)."""
     from agentic.tools.imaging import generate_figure_acetate_body
     from helpers.render_queue import enqueue_renders
+    kw = ({"cover_id": board.cover_id} if is_cover(board)
+          else {"scene_id": board.scene_id, "panel_id": board.panel_id})
     enqueue_renders(state, [(
-        f"posing {character_id} for panel {panel.panel_number}",
+        f"posing {character_id} for {board_label(board)}",
         lambda: generate_figure_acetate_body(
-            state, panel.series_id, panel.issue_id, panel.scene_id,
-            panel.panel_id, character_id, variant_id, pose_direction),
+            state, board.series_id, board.issue_id,
+            character_id=character_id, variant_id=variant_id,
+            pose_direction=pose_direction, **kw),
     )], role="the Penciller")
 
 
@@ -425,8 +457,59 @@ def wear_style_on_table(state, scene, style):
     state.refresh_details()
 
 
+def rework_take_on_table(state, board, img: str):
+    """A take becomes the table's background layer, ready to split, heal
+    and layer over — and the table unlocks (no take selected)."""
+    board.figure_images['background/plate'] = img
+    board.image = None
+    state.storage.update_object(board)
+    table_receipt(state, "🛠 laid a take on the table as the background layer")
+    state.refresh_details()
+
+
+# TAKES: frame sizes per board shape — every frame the exact shape of its art.
+TAKE_SHAPES = {FrameLayout.LANDSCAPE: (3, 2), FrameLayout.PORTRAIT: (2, 3), FrameLayout.SQUARE: (3, 3)}
+DROP_SHAPES = {FrameLayout.LANDSCAPE: (3, 2), FrameLayout.PORTRAIT: (3, 3), FrameLayout.SQUARE: (3, 3)}
+
+
+def takes_row(state, board, featured: str | None):
+    """Every render of this board on one wall; click a take to feature it
+    (locking the table); the layers overlay lays it back down to rework."""
+    from gui.elements import header, ruled_page, uploader_card
+    storage = state.storage
+
+    def set_image(locator: str):
+        board.image = locator
+        storage.update_object(board)
+        state.refresh_details()
+
+    takes = [img for img in storage.list_images(board) if os.path.exists(img)]
+    header("Takes", 4)
+    with ruled_page() as packer:
+        for img in takes:
+            with packer.place_cell([TAKE_SHAPES[board.aspect]], fudge=False):
+                with ui.card().classes('soft-card p-2 mosaic-card relative panel-fill cursor-pointer') as take:
+                    ui.image(source=img).props('fit=cover').classes('absolute inset-0 w-full h-full')
+                    if img == featured:
+                        ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10')
+                    ui.button(icon='layers').props('flat round dense size=xs') \
+                        .classes('absolute bottom-1 right-1 z-10 bg-white/70 dark:bg-black/50') \
+                        .tooltip('Rework this take on the table (becomes the background layer)') \
+                        .on('click.stop', lambda _, img=img: rework_take_on_table(state, board, img))
+                take.on('click', lambda _, img=img: set_image(img))
+
+        def on_upload_take(e):
+            locator = storage.upload_image(obj=board, name=e.name, data=e.content, mime_type=e.type)
+            set_image(locator)
+
+        uploader_card(state, on_upload=on_upload_take, packer=packer,
+                      variants=[DROP_SHAPES[board.aspect]],
+                      label='Drop image to add a take')
+
+
 def light_table(state: APPState, panel, scene, setting,
-                featured: str | None = None, actions=None):
+                featured: str | None = None, actions=None,
+                description_label: str = "Visual Description"):
     """
     actions: optional list of (icon, tooltip, handler) riding THE PRINT.
     A selected take LOCKS the table (the print corresponds to this exact
@@ -435,6 +518,9 @@ def light_table(state: APPState, panel, scene, setting,
     storage = state.storage
     series_id = panel.series_id
     locked = featured is not None
+    cover_mode = is_cover(panel)   # a cover is a board like any other
+    board_attrs = ({'data-cover': panel.cover_id} if cover_mode
+                   else {'data-scene': panel.scene_id, 'data-panel': panel.panel_id})
 
     # BLOCKING: the drag/scale script ships in main.py's page head; here we
     # wire the event once per client — the handler resolves the panel from
@@ -443,11 +529,8 @@ def light_table(state: APPState, panel, scene, setting,
         state._rough_block_wired = True
 
         def _on_block(e):
-            from schema import Panel as _Panel
             a = e.args
-            p = _Panel and state.storage.read_object(cls=_Panel, primary_key={
-                "series_id": a['series'], "issue_id": a['issue'],
-                "scene_id": a['scene'], "panel_id": a['panel']})
+            p = read_board(state.storage, a)
             if p is None:
                 return
             cur = dict((p.figure_blocking or {}).get(a['key']) or {})
@@ -464,12 +547,9 @@ def light_table(state: APPState, panel, scene, setting,
         ui.on('rough_block', _on_block)
 
         def _on_text(e):
-            from schema import Panel as _Panel
             a = e.args
-            p = state.storage.read_object(cls=_Panel, primary_key={
-                "series_id": a['series'], "issue_id": a['issue'],
-                "scene_id": a['scene'], "panel_id": a['panel']})
-            if p is None or not a.get('text'):
+            p = read_board(state.storage, a)
+            if p is None or not a.get('text') or not hasattr(p, 'dialogue'):
                 return
             parts = a['key'].split('/')
             if parts[0] == 'balloon' and len(parts) == 2:
@@ -485,11 +565,8 @@ def light_table(state: APPState, panel, scene, setting,
         ui.on('rough_text', _on_text)
 
         def _on_reorder(e):
-            from schema import Panel as _Panel
             a = e.args
-            p = state.storage.read_object(cls=_Panel, primary_key={
-                "series_id": a['series'], "issue_id": a['issue'],
-                "scene_id": a['scene'], "panel_id": a['panel']})
+            p = read_board(state.storage, a)
             if p is None:
                 return
             mode = a.get('mode', 'before')
@@ -632,7 +709,8 @@ def light_table(state: APPState, panel, scene, setting,
                         "on": bool(blocking.get("on", 1)), "blocking": blocking,
                         "name": key.split("/", 1)[1].replace("-", " ")})
 
-    props = [{"name": p.name, "on": True} for p in ((scene.props or []) if scene is not None else [])]
+    props = [{"name": p.name, "on": True}
+             for p in (getattr(scene, 'props', None) or [])]
 
     references = [{"img": u, "on": True} for u in storage.list_uploads(panel)
                   if u and os.path.exists(u)]
@@ -640,10 +718,15 @@ def light_table(state: APPState, panel, scene, setting,
     def _key_on(key, default=1):
         return bool(((panel.figure_blocking or {}).get(key) or {}).get('on', default))
 
-    has_letters = bool(panel.narration or panel.dialogue)
-    letter_keys = [f'balloon/{i}' for i in range(len((panel.dialogue or [])[:4]))]
+    # LETTERS live on panels; covers carry their trade dress in the render
+    # instead — the whole letters experience simply doesn't apply to them.
+    supports_letters = hasattr(panel, 'dialogue')
+    board_dialogue = getattr(panel, 'dialogue', None) or []
+    board_narration = getattr(panel, 'narration', None) or []
+    has_letters = bool(board_narration or board_dialogue)
+    letter_keys = [f'balloon/{i}' for i in range(len(board_dialogue[:4]))]
     for _pos in ('top', 'bottom'):
-        _caps = [n for n in (panel.narration or []) if n.position.value == _pos]
+        _caps = [n for n in board_narration if n.position.value == _pos]
         letter_keys += [f'caption/{_pos}/{i}' for i in range(len(_caps[:2]))]
     # the master eye rules its letters recursively; it reads as ON when any is
     letters = {"on": has_letters and (not letter_keys or any(_key_on(k) for k in letter_keys)),
@@ -651,15 +734,20 @@ def light_table(state: APPState, panel, scene, setting,
     bg_layer = {"on": background is not None and _key_on('background'), "key": "background"}
 
     aspect = _ASPECT[panel.aspect.value]
+    # the rough and the print display in the board's orientation; portrait
+    # boards cap their height so the table never towers off the page
+    _ar = {'landscape': 1.5, 'portrait': 2 / 3, 'square': 1.0}[panel.aspect.value]
+    canvas_style = (f'aspect-ratio: {aspect}; max-height: 72vh; '
+                    f'max-width: calc(72vh * {_ar:.4f});')
 
     # ---- THE ROUGH: the live mock --------------------------------------
     @ui.refreshable
     def rough():
-        canvas = ui.element('div').classes('rough-canvas').style(f'aspect-ratio: {aspect};')
+        canvas = ui.element('div').classes('rough-canvas').style(canvas_style)
         canvas._props['data-series'] = series_id
         canvas._props['data-issue'] = panel.issue_id
-        canvas._props['data-scene'] = panel.scene_id
-        canvas._props['data-panel'] = panel.panel_id
+        for k, v in board_attrs.items():
+            canvas._props[k] = v
         if locked:
             canvas._props['data-locked'] = '1'
         with canvas:
@@ -731,10 +819,10 @@ def light_table(state: APPState, panel, scene, setting,
                         lbl._props['data-ty'] = str(b.get('ty', max(y - 14, 2)))
                     return lbl
 
-                tops = [n for n in panel.narration if n.position.value == 'top'][:2]
+                tops = [n for n in board_narration if n.position.value == 'top'][:2]
                 for i, n in enumerate(tops):
                     letter(f'caption/top/{i}', 'rough-narration', n.text, 2, 88 - i * 12, 'caption')
-                for i, d in enumerate(panel.dialogue[:4]):
+                for i, d in enumerate(board_dialogue[:4]):
                     # the balloon hangs near its speaker when they're on the table
                     fig = next((f for f in visible
                                 if f.get("ref") and f["ref"].character_id == d.character_id), None)
@@ -744,21 +832,14 @@ def light_table(state: APPState, panel, scene, setting,
                                 emphasis=d.emphasis.value)
                     if bl is not None:
                         bl._props['title'] = f"{d.character_id} speaks — double-click to edit, drag to place"
-                for i, n in enumerate([n for n in panel.narration if n.position.value == 'bottom'][:1]):
+                for i, n in enumerate([n for n in board_narration if n.position.value == 'bottom'][:1]):
                     letter(f'caption/bottom/{i}', 'rough-narration', n.text, 2, 4, 'caption')
 
     # ---- POSE: describe the pose first, then render in the background ----
     def pose_figure(character_id: str, variant_id: str, pose_direction: str | None = None):
-        from agentic.tools.imaging import generate_figure_acetate_body
-        from helpers.render_queue import enqueue_renders
         ui.notify(f"Posing {character_id.replace('-', ' ')} — the acetate lands on the table when it's ready.",
                   type='info')
-        enqueue_renders(state, [(
-            f"posing {character_id} for panel {panel.panel_number}",
-            lambda: generate_figure_acetate_body(
-                state, series_id, panel.issue_id, panel.scene_id,
-                panel.panel_id, character_id, variant_id, pose_direction),
-        )], role="the Penciller")
+        pose_figure_bg(state, panel, character_id, variant_id, pose_direction)
 
     async def split_flow(layer_key: str, source_path: str):
         import asyncio
@@ -798,10 +879,12 @@ def light_table(state: APPState, panel, scene, setting,
                 dlg.close()
                 ui.notify(f"Splitting {len(chosen)} element(s) — {len(chosen) + 1} renders, "
                           f"the acetates land shortly.", type='info')
+                kw = ({"cover_id": panel.cover_id} if cover_mode
+                      else {"scene_id": panel.scene_id, "panel_id": panel.panel_id})
                 enqueue_renders(state, [(
                     f"splitting {len(chosen)} element(s) off '{layer_key}'",
-                    lambda: split_layer_body(state, series_id, panel.issue_id, panel.scene_id,
-                                             panel.panel_id, layer_key, chosen),
+                    lambda: split_layer_body(state, series_id, panel.issue_id,
+                                             layer=layer_key, entities=chosen, **kw),
                 )], role='the Background Artist')
             with ui.row().classes('w-full justify-end'):
                 ui.button(f'Lift the selected', icon='content_cut').props('unelevated dense') \
@@ -812,7 +895,7 @@ def light_table(state: APPState, panel, scene, setting,
         name = character_id.replace('-', ' ').title()
         with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 460px;'):
             ui.label(f"Pose {name}").classes('caption-box caption-box-sm')
-            hint = panel.beat or panel.description or ''
+            hint = getattr(panel, 'beat', None) or panel.description or ''
             direction = ui.textarea(
                 placeholder=f"Describe the pose — e.g. from the beat: “{hint[:120]}…”" if hint
                 else 'Describe the pose, expression and action…').classes('w-full').props('outlined autofocus')
@@ -879,8 +962,7 @@ def light_table(state: APPState, panel, scene, setting,
             parts.append("no setting background")
         on_figs = [f for f in figures if f["on"]]
         if on_figs:
-            from schema import Panel as _Panel
-            fresh = storage.read_object(cls=_Panel, primary_key=panel.primary_key) or panel
+            fresh = storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
 
             def depth(h):
                 return "near/large" if h >= 88 else ("far/small" if h <= 55 else "mid-ground")
@@ -903,9 +985,9 @@ def light_table(state: APPState, panel, scene, setting,
         if pinned:
             parts.append(f"{len(pinned)} pinned reference image(s)")
         if letters["on"] and has_letters:
-            fresh_blk = (storage.read_object(cls=_Panel, primary_key=panel.primary_key) or panel).figure_blocking or {}
+            fresh_blk = (storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel).figure_blocking or {}
             placed = []
-            for i, d in enumerate(panel.dialogue[:4]):
+            for i, d in enumerate(board_dialogue[:4]):
                 b = fresh_blk.get(f'balloon/{i}') or {}
                 if not b.get('on', 1):
                     continue
@@ -915,17 +997,18 @@ def light_table(state: APPState, panel, scene, setting,
                 placed.append(desc)
             parts.append("letter it AS BLOCKED on the table"
                          + (f" — {'; '.join(placed)}" if placed else ""))
-        else:
+        elif supports_letters:
             parts.append("leave it unlettered")
-        post_user_message(state, "Ink this rough into a new take of this panel — compose it with " +
+        noun = "cover" if cover_mode else "panel"
+        post_user_message(state, f"Ink this rough into a new take of this {noun} — compose it with " +
                           "; ".join(parts) + ".")
 
     with ui.row().classes('w-full flex-nowrap').style('gap: 12px; align-items: stretch;'):
         stack_col = ui.column().classes('w-1/3 acetate-stack').style('gap: 4px; min-width: 220px;')
         stack_col._props['data-series'] = series_id
         stack_col._props['data-issue'] = panel.issue_id
-        stack_col._props['data-scene'] = panel.scene_id
-        stack_col._props['data-panel'] = panel.panel_id
+        for k, v in board_attrs.items():
+            stack_col._props[k] = v
         if locked:
             stack_col.classes('table-locked')
         with stack_col:
@@ -1222,10 +1305,9 @@ def light_table(state: APPState, panel, scene, setting,
                 import io
                 from uuid import uuid4
                 from PIL import Image as _Img
-                from schema import Panel as _Panel
                 keys = list((panel.layer_groups or {}).get(gname, []))
                 has_plate = 'background/plate' in keys
-                fresh = storage.read_object(cls=_Panel, primary_key=panel.primary_key) or panel
+                fresh = storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
                 fkeys = {f["key"]: f for f in figures}
                 live = [fkeys[k] for k in keys if k in fkeys
                         and ((fresh.figure_blocking or {}).get(k) or {}).get('on', 1)
@@ -1501,8 +1583,9 @@ def light_table(state: APPState, panel, scene, setting,
                 ui.label('lay a new acetate:').classes('text-xs text-gray-500')
                 ui.button(icon='person_add').props('flat round dense size=sm') \
                     .tooltip('A figure — one click from the cast').on('click', lambda _: pick_figure())
-                ui.button(icon='category').props('flat round dense size=sm') \
-                    .tooltip('A foreground prop — one click from the prop shop').on('click', lambda _: pick_prop())
+                if hasattr(scene, 'props'):   # covers have no scene props
+                    ui.button(icon='category').props('flat round dense size=sm') \
+                        .tooltip('A foreground prop — one click from the prop shop').on('click', lambda _: pick_prop())
                 ui.button(icon='landscape').props('flat round dense size=sm') \
                     .tooltip('A background — one click from the settings').on('click', lambda _: pick_background())
                 def new_letters():
@@ -1528,8 +1611,8 @@ def light_table(state: APPState, panel, scene, setting,
                             state.refresh_details()
 
                         speakers = [r.character_id for r in (panel.character_references or [])]
-                        if not speakers and scene is not None:
-                            speakers = [c.character_id for c in (scene.cast or [])]
+                        if not speakers:
+                            speakers = [c.character_id for c in (getattr(scene, 'cast', None) or [])]
                         if speakers:
                             ui.label('A balloon — who speaks?').classes('text-sm q-mt-sm')
                             with ui.row().style('gap: 4px;'):
@@ -1543,9 +1626,10 @@ def light_table(state: APPState, panel, scene, setting,
                             .classes('text-xs text-gray-500 q-mt-sm')
                     dlg.open()
 
-                ui.button(icon='chat_bubble').props('flat round dense size=sm') \
-                    .tooltip('Letters — lay a balloon or narrator box on the table') \
-                    .on('click', lambda _: new_letters())
+                if supports_letters:   # cover trade dress is lettered at render time
+                    ui.button(icon='chat_bubble').props('flat round dense size=sm') \
+                        .tooltip('Letters — lay a balloon or narrator box on the table') \
+                        .on('click', lambda _: new_letters())
 
             # or just drop an image straight onto the table as a reference
             with ui.row().classes('light-layer w-full items-center justify-center relative overflow-hidden').style('min-height: 34px;'):
@@ -1559,7 +1643,6 @@ def light_table(state: APPState, panel, scene, setting,
             def flatten_bytes() -> bytes:
                 import io
                 from PIL import Image
-                from schema import Panel as _Panel
                 dims = {'landscape': (1536, 1024), 'portrait': (1024, 1536), 'square': (1024, 1024)}[panel.aspect.value]
                 W, H = dims
                 if bg_layer["on"] and background:
@@ -1570,7 +1653,7 @@ def light_table(state: APPState, panel, scene, setting,
                     base = base.crop((left, top, left + W, top + H))
                 else:
                     base = Image.new('RGBA', dims, (250, 246, 236, 255))
-                fresh = storage.read_object(cls=_Panel, primary_key=panel.primary_key) or panel
+                fresh = storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
                 live = [f for f in figures if f["on"] and f["img"]]
                 for f in sorted(live, key=lambda g: {**g["blocking"], **((fresh.figure_blocking or {}).get(g["key"]) or {})}.get("z", 0)):
                     b = {**f["blocking"], **((fresh.figure_blocking or {}).get(f["key"]) or {})}
@@ -1692,16 +1775,20 @@ def light_table(state: APPState, panel, scene, setting,
                 swatch.tooltip('The style this panel prints in — click to swap the swatch')
                 swatch.on('click', lambda _: pick_style())
                 ui.space()
-                # the frame's SHAPE, switched right on the rough
+                # the frame's SHAPE, switched right on the rough — panels
+                # come in landscape/portrait/square; covers only landscape
+                # or portrait
                 from schema import FrameLayout as _FL
 
                 def reshape(shape):
                     panel.aspect = shape
                     storage.update_object(panel)
                     state.refresh_details()
-                for icon, shape, tip in (('crop_landscape', _FL.LANDSCAPE, 'Landscape frame'),
-                                         ('crop_portrait', _FL.PORTRAIT, 'Portrait frame'),
-                                         ('crop_square', _FL.SQUARE, 'Square frame')):
+                shapes = [('crop_landscape', _FL.LANDSCAPE, 'Landscape frame'),
+                          ('crop_portrait', _FL.PORTRAIT, 'Portrait frame')]
+                if not cover_mode:
+                    shapes.append(('crop_square', _FL.SQUARE, 'Square frame'))
+                for icon, shape, tip in shapes:
                     b = ui.button(icon=icon).props('flat round dense size=sm').tooltip(tip)
                     if panel.aspect == shape:
                         b.props('color=primary')
@@ -1709,11 +1796,11 @@ def light_table(state: APPState, panel, scene, setting,
             rough()
             # the margin notes: the visual description IS the textual rough
             from gui.elements import markdown_field_editor
-            markdown_field_editor(state, "Visual Description", panel.description, header_size=3)
+            markdown_field_editor(state, description_label, panel.description, header_size=3)
         if featured is not None:
             with ui.column().style('flex: 1 1 0; min-width: 0;'):
                 ui.label('THE PRINT').classes('comic-label-sm')
-                with ui.element('div').classes('rough-canvas').style(f'aspect-ratio: {aspect};'):
+                with ui.element('div').classes('rough-canvas').style(canvas_style):
                     ui.image(source=_src(featured)).props('fit=cover') \
                         .classes('absolute inset-0 w-full h-full')
                     if actions:

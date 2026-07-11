@@ -109,9 +109,9 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                 series_id = sel[-3].id if len(sel) > 2 else None
                 cover = storage.read_object(Cover, {"series_id": series_id, "issue_id": sel[-2].id, "cover_id": sel[-1].id}) if series_id else None
                 if cover is not None and not cover.image:
-                    return ("This cover hasn't been rendered.  Describe the scene you want, or I can propose one from the issue's story.",
-                            ["Propose a cover concept", "Render the cover"])
-                return (None, ["Re-render the cover", "Try a different text layout"])
+                    return ("This cover hasn't been rendered.  Compose it on the light table or describe the scene you want — I can also propose one from the issue's story.",
+                            ["Compose this cover: …", "Propose a cover concept", "Render the cover"])
+                return (None, ["Compose this cover: …", "Re-render the cover", "Try a different text layout"])
 
             case "style":
                 return (None, ["Generate an art style example", "Tune the bubble styles"])
