@@ -164,13 +164,27 @@ def init_layout(logger):
         /* the conversation is comic PANELS: each message a square-cornered
            inked frame, its speaker's name a caption box riding the top
            rule, the speaker a drawn CHARACTER in the margin */
-        .q-message-text { border: 2.5px solid var(--ink); border-radius: 2px;
+        .q-message-text { border: 2.5px solid var(--ink); border-radius: 4px;
                           box-shadow: 4px 4px 0 rgba(0,0,0,.45);
                           background: var(--panel) !important; color: var(--ink) !important;
-                          padding: 14px 16px 12px; margin-top: 0; }
-        .q-message-text::before { display: none; }  /* panels, not balloons */
+                          padding: 14px 16px 12px; margin-top: 0;
+                          position: relative; overflow: visible; }
         .q-message-sent .q-message-text { background: var(--caption) !important;
                                           color: var(--caption-ink) !important; }
+        /* the balloon tail: an inked wedge pointing at the speaker's
+           portrait — outline triangle underneath, fill triangle on top */
+        .q-message-text::before { content: ''; position: absolute; top: 12px;
+                                  border: 9px solid transparent; }
+        .q-message-text::after  { content: ''; position: absolute; top: 16px;
+                                  border: 5.5px solid transparent; }
+        .q-message-received .q-message-text::before {
+            left: -16px; border-right: 16px solid var(--ink); border-left: 0; }
+        .q-message-received .q-message-text::after {
+            left: -9px; border-right: 10px solid var(--panel); border-left: 0; }
+        .q-message-sent .q-message-text::before {
+            right: -16px; left: auto; border-left: 16px solid var(--ink); border-right: 0; }
+        .q-message-sent .q-message-text::after {
+            right: -9px; left: auto; border-left: 10px solid var(--caption); border-right: 0; }
         .q-message-name { font-weight: 800; text-transform: uppercase;
                           font-size: .7rem; letter-spacing: .5px;
                           background: var(--caption); color: var(--caption-ink);

@@ -107,10 +107,11 @@ def view_series(state: APPState):
                 ).style('margin-top: 0px; margin-bottom: 0px')
 
         # A cardwall for viewing and adding characters to the comic series.
-        if True:
+        characters = storage.read_all_objects(CharacterModel, primary_key={"series_id": series.series_id})
+        if characters:
             with view_all_instances(
                 state=state, 
-                get_instances = lambda: storage.read_all_objects(CharacterModel, primary_key={"series_id": series.series_id}), 
+                get_instances = lambda: characters, 
                 get_image_locator=lambda x: storage.find_character_image(series_id=series.series_id, character_id=x.character_id),
                 kind="character",
                 aspect_ratio="6/5",
@@ -123,7 +124,8 @@ def view_series(state: APPState):
             state=state,
             on_upload=lambda e: upload_and_ask(e, "I would like to create a new character"),
             packer=packer,
-            label='Drop image to create a character'
+            label='Drop image to create a character',
+            overlap_caption=None if characters else _cap("Characters", "I would like to create a new character")
         )
 
         # A cardwall for viewing and adding the recurring settings of the series.
@@ -131,10 +133,11 @@ def view_series(state: APPState):
             # Show the first rendered master background, if any.
             return next((img for img in (loc.images or {}).values() if img and os.path.exists(img)), None)
 
-        if True:
+        settings = storage.read_all_objects(Setting, primary_key={"series_id": series.series_id}, order_by="name")
+        if settings:
             view_all_instances(
                 state=state,
-                get_instances=lambda: storage.read_all_objects(Setting, primary_key={"series_id": series.series_id}, order_by="name"),
+                get_instances=lambda: settings,
                 get_image_locator=setting_image,
                 kind="setting",
                 aspect_ratio="3/2",
@@ -146,7 +149,8 @@ def view_series(state: APPState):
             state=state,
             on_upload=lambda e: upload_and_ask(e, "I would like to create a new setting"),
             packer=packer,
-            label='Drop image to create a setting'
+            label='Drop image to create a setting',
+            overlap_caption=None if settings else _cap("Settings", "I would like to create a new setting")
         )
 
         # Props and wardrobe: the reusable stuff panels are dressed with.

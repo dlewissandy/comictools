@@ -809,9 +809,12 @@ def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], N
             card.style(f'aspect-ratio: {aspect_ratio}')
         if overlap_caption is not None:
             # an empty group's narrator box rides its drop box, so the
-            # caption and the way to fill it stay together
+            # caption and the way to fill it stay together; overflow stays
+            # visible (mosaic-card clips!) and the caption sits ABOVE the
+            # invisible upload input so its button still takes the click
+            card.classes('overflow-visible')
             with card:
-                with ui.element('div').classes('panel-caption'):
+                with ui.element('div').classes('panel-caption').style('z-index: 20;'):
                     overlap_caption()
         with card:
             uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
@@ -819,7 +822,7 @@ def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], N
 
             # Visible caption in center
             with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
-                ui.label(label).classes('text-lg text-gray-600')
+                ui.label(label).classes('text-lg text-gray-600 text-center').style('padding: 0 12px;')
 
 
 def removable_chips(state: APPState, caption: str, items: list[tuple[str, str]],
