@@ -240,3 +240,35 @@ async def test_drawer_scopes_to_current_series(user: User) -> None:
     assert switches, "scope switch exists"
     switches[-1].set_value(False)
     await user.should_see("Joey")         # the whole studio
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_cast_card_corner_remove(user: User) -> None:
+    """The cast card itself carries the remove control: corner ✕ detaches."""
+    main.LocalStorage = _TmpStorage
+    SC, P = "b3cc50eb-5a57-463c-ba10-927d941c9779", "667ca06e-8b94-4d98-ab88-f996d6f3c8f9"
+    json.dump({"selection": [
+        {"name": "Series", "id": None, "kind": "all-series"},
+        {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+        {"name": "C", "id": "witchlight-carnival", "kind": "issue"},
+        {"name": "T", "id": SC, "kind": "scene"},
+        {"name": "P", "id": P, "kind": "panel"}],
+        "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    # the panel's cast cardwall has ✕ buttons (icon=close) on each card
+    closers = [e for e in user.client.elements.values()
+               if e.__class__.__name__ == "Button" and getattr(e, "props", {}).get("icon") == "close"]
+    assert closers, "corner ✕ exists on cast cards"
+    btn = closers[0]
+    for ev in btn._event_listeners.values():
+        if ev.type.startswith("click"):
+            btn._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+    await user.should_see("removed")   # ✂️ receipt in the chat
+
+    from schema import Panel
+    storage = main.LocalStorage(base_path="data")
+    panel = storage.read_object(Panel, {"series_id": "wonders-of-the-witchlight",
+                                        "issue_id": "witchlight-carnival",
+                                        "scene_id": SC, "panel_id": P})
+    assert len(panel.character_references) < 2, "a reference was detached"

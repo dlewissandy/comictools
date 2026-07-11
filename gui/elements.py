@@ -342,7 +342,8 @@ def render_object_cards(
         get_image_locator: Callable[[BaseModel], Optional[str]] = lambda x: x.image_filepath(),
         get_name: Callable[[int,BaseModel], str] = lambda i,x: x.name, 
         get_markdown: Optional[Callable] = None, 
-        number_of_columns: int = 4):
+        number_of_columns: int = 4,
+        on_remove: Optional[Callable] = None):
     
     selection = state.selection
     with ui.element().classes(f'grid grid-cols-{number_of_columns} gap-2 w-full') as grid:
@@ -352,7 +353,27 @@ def render_object_cards(
             id = instance.id
             logger.debug(f"Creating card for {id}")
             card = ui.card().classes(TAILWIND_CARD).style(f'aspect-ratio: {aspect_ratio}')
+            card.classes('relative overflow-visible')
             with card:
+                if on_remove is not None:
+                    def _detach(instance=instance, name=name):
+                        try:
+                            on_remove(instance)
+                        except Exception as ex:
+                            ui.notify(f"Couldn't remove {name}: {ex}", type='warning')
+                            return
+                        try:
+                            with state.history:
+                                with ui.chat_message(name='You', sent=True).classes('w-full'):
+                                    ui.markdown(f"✂️ removed **{name}**")
+                            state.history.scroll_to(percent=100)
+                        except Exception:
+                            pass
+                        state.refresh_details()
+                    ui.button(icon='close').props('flat round dense size=xs') \
+                        .classes('absolute top-0 right-0 z-10 bg-white/70 dark:bg-black/50') \
+                        .tooltip(f'Remove {name}') \
+                        .on('click.stop', lambda _, inst=instance, n=name: _detach(inst, n))
                 if callable(kind):
                     kind_value = kind(instance)
                 else:
@@ -384,7 +405,8 @@ def view_all_instances(
         set_choice: Optional[Callable] = None, 
         get_markdown: Optional[Callable] = None,
         number_of_columns: int=4,
-        aspect_ratio: str = "1/1"): 
+        aspect_ratio: str = "1/1",
+        on_remove: Optional[Callable] = None): 
     """
     A gui shortcut to view all the instances of a given kind.
 
@@ -447,7 +469,8 @@ def view_all_instances(
             cardwall=init_cardwall(),
             get_image_locator=get_image_locator, 
             number_of_columns=number_of_columns,
-            aspect_ratio=aspect_ratio
+            aspect_ratio=aspect_ratio,
+            on_remove=on_remove
         )
 
 class Attribute(TypedDict, total=False):
@@ -627,6 +650,11 @@ def aspect_ratio_picker(
 def view_character_references(state: APPState, parent: BaseModel):
     storage: GenericStorage = state.storage
 
+    def _remove_ref(ref):
+        parent.character_references = [c for c in parent.character_references
+                                       if not (c.character_id == ref.character_id and c.variant_id == ref.variant_id)]
+        storage.update_object(data=parent)
+
     with ui.expansion().classes('w-full').classes('border border-gray-300 dark:border-gray-700 rounded-md bg-gray-100 dark:bg-gray-800') as expansion:
         with expansion.add_slot('header'):
             header("Characters", 2)
@@ -639,6 +667,7 @@ def view_character_references(state: APPState, parent: BaseModel):
             get_instances=lambda: parent.character_references,
             get_image_locator=lambda x: storage.find_variant_image(series_id=x.series_id, character_id=x.character_id, variant_id=x.variant_id),
             get_name= lambda _, x: x.name, 
+            on_remove=_remove_ref,
         )
     expansion.open()
     return expansion
