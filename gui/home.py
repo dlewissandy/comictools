@@ -1,4 +1,5 @@
 import os
+from nicegui import ui
 from gui.elements import view_all_instances
 from gui.state import APPState
 from schema.series import Series
