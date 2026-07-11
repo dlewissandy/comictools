@@ -179,6 +179,40 @@ def view_scene(state: APPState):
                         new_itm = SelectionItem(name=f"panel {panel.panel_number}", id=panel.panel_id, kind='panel')
                         new_sel = [s for s in selection]+[new_itm]
                         card.on('click', lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
+
+                        # Reorder without leaving the page: ◀ ▶ nudge the panel
+                        # through the reading order and receipt into the chat.
+                        def _nudge(panel_id, delta, number):
+                            ordered = storage.read_all_objects(Panel, primary_key={
+                                "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id},
+                                order_by="panel_number")
+                            idx = next((i for i, x in enumerate(ordered) if x.panel_id == panel_id), None)
+                            if idx is None or not (0 <= idx + delta < len(ordered)):
+                                return
+                            moved = ordered.pop(idx)
+                            ordered.insert(idx + delta, moved)
+                            for i, x in enumerate(ordered):
+                                if x.panel_number != i + 1:
+                                    x.panel_number = i + 1
+                                    storage.update_object(x)
+                            try:
+                                with state.history:
+                                    with ui.chat_message(name='You', sent=True).classes('w-full'):
+                                        ui.markdown(f"↔️ moved **{moved.name}** to position {idx + delta + 1}")
+                                state.history.scroll_to(percent=100)
+                            except Exception:
+                                pass
+                            state.refresh_details()
+
+                        with card:
+                            with ui.row().classes('w-full justify-between').style('margin-top: -6px;'):
+                                ui.button(icon='chevron_left').props('flat round dense size=xs') \
+                                    .tooltip('Move earlier in the reading order') \
+                                    .on('click.stop', lambda _, pid=panel.panel_id, n=panel.panel_number: _nudge(pid, -1, n))
+                                ui.label(f"#{panel.panel_number}").classes('text-xs text-gray-500 self-center')
+                                ui.button(icon='chevron_right').props('flat round dense size=xs') \
+                                    .tooltip('Move later in the reading order') \
+                                    .on('click.stop', lambda _, pid=panel.panel_id, n=panel.panel_number: _nudge(pid, 1, n))
                 # Add a card for uploading an image to create a new panel
                 if w + 2 > 8:
                     # Start a new row
