@@ -348,7 +348,8 @@ def init_layout(logger):
     with input_row:
         placeholder = "message"
         user_input = ui.input(placeholder=placeholder).props('rounded outlined input-class=mx-3 ') \
-            .classes('w-full self-center stt-input').style('flex-grow: 1; width: 100vh;')
+            .classes('w-full self-center stt-input').style('flex-grow: 1; width: 100vh;') \
+            .mark('conversation')
 
         attach_upload = ui.upload(auto_upload=True, max_files=1).props('accept=image/*').classes('hidden')
         attach_button = ui.button(icon='attach_file').props('flat round').classes('q-ml-sm').tooltip('Attach a reference image to what you are working on')

@@ -4,7 +4,7 @@ from gui.avatars import comic_chat_message
 from loguru import logger
 from nicegui.events import UploadEventArguments
 from gui.selection import SelectionItem, SelectedKind
-from gui.elements import markdown, image_field_editor, DARK_MODE_STYLES, markdown_field_editor, header, crud_button, CrudButtonKind, view_attributes, Attribute, removable_chips
+from gui.elements import markdown, DARK_MODE_STYLES, markdown_field_editor, header, crud_button, CrudButtonKind, view_attributes, Attribute, removable_chips
 from gui.messaging import post_user_message
 from schema import SceneModel, Panel, FrameLayout
 from gui.state import APPState
@@ -19,7 +19,6 @@ def view_scene(state: APPState):
         state: The GUI elements containing the details and selection.
     """
     # DEREFERENCE THE DATA
-    from schema import ComicStyle, StyleExample
     details = state.details
     storage: GenericStorage = state.storage
 
@@ -34,9 +33,7 @@ def view_scene(state: APPState):
         with details:
             ui.markdown(message)
         return
-    
-    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": scene.style_id}) if scene.style_id else None
-    
+
     # Draw the detials window.   It will have a row with the story and style, and then
     # cardwall with the panels.   Unlike other cardwalls, this one will try to match each
     # card to the size and aspect ratio of the panel image.  Each row can contain at most
@@ -76,8 +73,11 @@ def view_scene(state: APPState):
         chip.on('click', lambda _, m=fix_message: post_user_message(state, m))
 
     with details:
-        with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
+        with ui.row().classes('w-full flex-nowrap items-center').style('padding: 0; margin: 0; gap: 12px;'):
             header(f"Scene {scene.scene_number}: {scene.name.title()}", 0)
+            # THE STYLE SWATCH: the scene's style, worn by every panel in it
+            from gui.light_table import style_swatch
+            style_swatch(state, scene)
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current scene."), size=1)
 
@@ -125,26 +125,12 @@ def view_scene(state: APPState):
                 [(p.name, p.name) for p in (scene.props or [])],
                 _remove_prop, icon='category')
 
-        with cpanel(8):
+        with cpanel(12):
             markdown_field_editor(
-                    state=state, 
-                    name = "Story", 
-                    value = scene.story, 
-                    header_size = 2
-                )
-        with cpanel(4):
-            image_field_editor(
                     state=state,
-                    kind=SelectedKind.PICK_STYLE,
-                    get_caption = lambda: "Style",
-                    get_id = lambda: style.id if style else None,
-                    get_image_filepath = lambda: storage.find_image(
-                        StyleExample(
-                            style_id=style.id,
-                            example_type="art",
-                            image_id=style.image.get("art"),
-                            mime_type="image/jpeg"
-                            ), style.image.get("art",None)) if style else None
+                    name = "Story",
+                    value = scene.story,
+                    header_size = 2
                 )
 
         # Production details (collapsed): the prose that doesn't need to be

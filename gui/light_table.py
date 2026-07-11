@@ -375,6 +375,30 @@ def _src(path: str) -> str:
     return f"/{p}?v={v}" if p.startswith('data/') else path
 
 
+_AR_CACHE: dict = {}
+
+
+def _img_ar(path: str) -> float:
+    """An image's width/height ratio, cached by (path, mtime) — the rough
+    redraws often and shouldn't reopen every acetate each time."""
+    try:
+        key = (path, os.path.getmtime(path))
+    except OSError:
+        return 2 / 3
+    v = _AR_CACHE.get(key)
+    if v is None:
+        try:
+            from PIL import Image as _I
+            with _I.open(path) as im:
+                v = im.width / im.height
+        except Exception:
+            v = 2 / 3
+        if len(_AR_CACHE) > 512:
+            _AR_CACHE.clear()
+        _AR_CACHE[key] = v
+    return v
+
+
 # ---------------------------------------------------------------------------
 # BOARDS: anything composed on the light table.  A PANEL composes on top of
 # its scene (style/setting/props live there); a COVER is its own scene — it
@@ -495,6 +519,54 @@ def wear_style_on_table(state, scene, style):
     state.storage.update_object(scene)
     table_receipt(state, f"🎨 swapped the style swatch — takes now print in **{style.name}**")
     state.refresh_details()
+
+
+def style_swatch(state, scene):
+    """THE STYLE SWATCH: a printer's color chip taped to the board — the
+    style everything here prints in.  Click to swap it; takes, backgrounds
+    and sheets rendered afterwards wear the new style.  `scene` is whatever
+    owns the style_id: a scene, or a cover."""
+    storage = state.storage
+    cur = storage.read_object(cls=ComicStyle, primary_key={"style_id": scene.style_id}) \
+        if getattr(scene, 'style_id', None) else None
+
+    def _art(st):
+        art = st.image.get('art') if isinstance(st.image, dict) else st.image
+        return art if art and os.path.exists(art) else None
+
+    def pick():
+        with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                .style('min-width: 520px; max-width: 780px;'):
+            ui.label('Swap the style swatch').classes('caption-box caption-box-sm')
+            ui.label('Every take printed here wears the swatched style — '
+                     'pick the one it should wear.').classes('text-sm q-mt-sm')
+            with ui.row().classes('w-full q-mt-sm').style('gap: 10px;'):
+                for st in storage.read_all_objects(ComicStyle, order_by='name'):
+                    art = _art(st)
+                    current = getattr(scene, 'style_id', None) == st.style_id
+                    with ui.card().classes('soft-card p-1' + (' style-swatch-current'
+                                                              if current else ' cursor-pointer')) \
+                            .style('width: 150px;') as card:
+                        if art:
+                            ui.image(source=_src(art)).style('height: 90px;').props('fit=cover')
+                        ui.label(st.name.title() + (' — on the board' if current else '')) \
+                            .classes('text-xs text-center w-full')
+                    if not current:
+                        card.on('click', lambda _, st=st: (dlg.close(),
+                                                           wear_style_on_table(state, scene, st)))
+        dlg.open()
+
+    swatch = ui.element('div').classes('style-swatch cursor-pointer')
+    with swatch:
+        art = _art(cur) if cur is not None else None
+        if art:
+            ui.image(source=_src(art)).classes('style-swatch-art')
+        else:
+            ui.icon('palette').style('font-size: 16px;')
+        ui.label(cur.name if cur is not None else 'pick a style').classes('style-swatch-name')
+    swatch.tooltip('The style this prints in — click to swap the swatch')
+    swatch.on('click', lambda _: pick())
+    return swatch
 
 
 def rework_take_on_table(state, board, img: str):
@@ -834,12 +906,7 @@ def light_table(state: APPState, panel, scene, setting,
             canvas_ar = {'landscape': 1.5, 'portrait': 2 / 3, 'square': 1.0}[panel.aspect.value]
 
             def img_k(path):
-                try:
-                    from PIL import Image as _Img
-                    iw, ih = _Img.open(path).size
-                except Exception:
-                    iw, ih = 2, 3
-                return (iw / ih) / canvas_ar  # width%% per height%%
+                return _img_ar(path) / canvas_ar  # width%% per height%%
 
             visible = [f for f in figures if f["on"] and f["img"]]
             for f in sorted(visible, key=lambda g: g["blocking"].get("z", 0)):
@@ -1134,12 +1201,35 @@ def light_table(state: APPState, panel, scene, setting,
                             continue
                         panel.figure_blocking[f"{prefix}{i - 1 if i > removed_idx else i}"] = v
 
+                def reassign_balloon(i, speaker):
+                    panel.dialogue[i].character_id = speaker
+                    storage.update_object(panel)
+                    _receipt(f"🎙 handed a balloon to **{speaker.replace('-', ' ')}**")
+                    state.refresh_details()
+
+                cast_ids = list(dict.fromkeys(
+                    [r.character_id for r in (panel.character_references or [])] +
+                    [c.character_id for c in (getattr(scene, 'cast', None) or [])]))
+
                 for i, d in enumerate(panel.dialogue[:4]):
                     with ui.row().classes('light-layer w-full items-center flex-nowrap') \
                             .style('gap: 4px; margin-left: 14px; width: calc(100% - 14px);'):
                         letter_eye(f'balloon/{i}')
                         ui.icon('chat_bubble').classes('text-sm')
-                        ui.label(f"{d.character_id.replace('-', ' ')}: {d.text[:22]}") \
+                        others = [s for s in cast_ids if s != d.character_id]
+                        if others:
+                            # hand the balloon to another speaker in one click
+                            spk = ui.button(d.character_id.replace('-', ' ')) \
+                                .props('flat dense no-caps size=sm') \
+                                .tooltip('Who speaks — click to hand this balloon to someone else')
+                            with spk:
+                                with ui.menu():
+                                    for s in others:
+                                        ui.menu_item(s.replace('-', ' '),
+                                                     on_click=lambda _, s=s, i=i: reassign_balloon(i, s))
+                        else:
+                            ui.label(d.character_id.replace('-', ' ')).classes('text-xs text-bold')
+                        ui.label(d.text[:22]) \
                             .classes('text-xs').style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
                         ui.space()
                         sel = ui.select([e.value for e in DialogueEmphasis], value=d.emphasis.value) \
@@ -1876,56 +1966,9 @@ def light_table(state: APPState, panel, scene, setting,
                 ui.label('THE ROUGH').classes('comic-label-sm')
 
                 # THE STYLE SWATCH: taped to the board like a printer's color
-                # chip — the style every take of this scene prints in
-                cur_style = None
-                if scene is not None and scene.style_id:
-                    cur_style = storage.read_object(cls=ComicStyle,
-                                                    primary_key={"style_id": scene.style_id})
-
-                def _style_art(st):
-                    art = st.image.get('art') if isinstance(st.image, dict) else st.image
-                    return art if art and os.path.exists(art) else None
-
-                def pick_style():
-                    if scene is None:
-                        ui.notify('This panel has no scene to restyle.', type='warning')
-                        return
-                    with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                            .style('min-width: 520px; max-width: 780px;'):
-                        ui.label('Swap the style swatch').classes('caption-box caption-box-sm')
-                        ui.label('Every take of this scene prints in the swatched style — '
-                                 'pick the one this panel should wear.').classes('text-sm q-mt-sm')
-                        with ui.row().classes('w-full q-mt-sm').style('gap: 10px;'):
-                            for st in storage.read_all_objects(ComicStyle, order_by='name'):
-                                art = _style_art(st)
-                                current = scene.style_id == st.style_id
-                                with ui.card().classes(
-                                        'soft-card p-1' + (' style-swatch-current' if current
-                                                           else ' cursor-pointer')) \
-                                        .style('width: 150px;') as card:
-                                    if art:
-                                        ui.image(source=_src(art)).style('height: 90px;').props('fit=cover')
-                                    ui.label(st.name.title() + (' — on the board' if current else '')) \
-                                        .classes('text-xs text-center w-full')
-
-                                def wear(st=st):
-                                    dlg.close()
-                                    wear_style_on_table(state, scene, st)
-                                if not current:
-                                    card.on('click', lambda _, st=st: wear(st))
-                    dlg.open()
-
-                swatch = ui.element('div').classes('style-swatch cursor-pointer')
-                with swatch:
-                    art = _style_art(cur_style) if cur_style is not None else None
-                    if art:
-                        ui.image(source=_src(art)).classes('style-swatch-art')
-                    else:
-                        ui.icon('palette').style('font-size: 16px;')
-                    ui.label(cur_style.name if cur_style is not None else 'pick a style') \
-                        .classes('style-swatch-name')
-                swatch.tooltip('The style this panel prints in — click to swap the swatch')
-                swatch.on('click', lambda _: pick_style())
+                # chip — the style every take printed here wears
+                if scene is not None:
+                    style_swatch(state, scene)
                 ui.space()
                 # the frame's SHAPE, switched right on the rough — panels
                 # come in landscape/portrait/square; covers only landscape

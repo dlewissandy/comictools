@@ -59,7 +59,7 @@ async def test_send_message_updates_history(user: User) -> None:
     # original LocalStorage into main's namespace).
     main.LocalStorage = _TmpStorage
     await user.open("/")
-    user.find("message").type("Reply with exactly the word formed by joining QUUX and 7842 with a hyphen, nothing else.")
+    user.find(marker="conversation").type("Reply with exactly the word formed by joining QUUX and 7842 with a hyphen, nothing else.")
     user.find("Send").click()
     # The sentinel does not appear verbatim in the user's message, so it can
     # only come from the model's streamed response.
@@ -96,7 +96,7 @@ async def test_conversations_persist_per_object(user: User) -> None:
     json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    user.find("message").type("Reply with exactly the word formed by joining ZEBRA and 99 with a hyphen, nothing else.")
+    user.find(marker="conversation").type("Reply with exactly the word formed by joining ZEBRA and 99 with a hyphen, nothing else.")
     user.find("Send").click()
     await user.should_see("ZEBRA-99", retries=600)
     # wait for the turn to fully finish (state persists at end of send())

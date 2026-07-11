@@ -348,6 +348,12 @@ class APPState:
 
         from gui.coauthor import coauthor_name
         role = coauthor_name(self.selection)
+        try:
+            # the conversation box names who's on the other side of the table
+            self.user_input._props['placeholder'] = f"Talk to {role}…"
+            self.user_input.update()
+        except Exception:
+            pass
         fresh = len(self.history.default_slot.children) == 0
         if opener and fresh:
             with self.history:
