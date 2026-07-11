@@ -2,13 +2,13 @@ import os
 from loguru import logger
 from nicegui import ui
 from gui.elements import (
-    markdown, header, image_field_editor, view_all_instances, markdown_field_editor, Attribute, view_attributes, crud_button, post_user_message,
+    header, view_all_instances, markdown_field_editor, Attribute, view_attributes, crud_button, post_user_message,
     CrudButtonKind, comic_page, cpanel, ccell
     )
-from schema import ComicStyle, Issue, Cover, Panel, SceneModel, StyleExample
+from schema import ComicStyle, Issue, Cover, Panel, SceneModel
 from gui.state import APPState
 from gui.messaging import post_user_message
-from gui.selection import SelectionItem, SelectedKind
+from gui.selection import SelectedKind
 
 def view_issue(state:APPState):
     """
@@ -17,7 +17,6 @@ def view_issue(state:APPState):
     Args:
         state: The GUI elements containing the details and selection.
     """
-    from gui.messaging import new_item_messager
     selection = state.selection
     storage = state.storage
 
@@ -72,8 +71,11 @@ def view_issue(state:APPState):
                 chip.on('click', lambda _, m=fix_message: post_user_message(state, m))
 
     with details:
-        with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
+        with ui.row().classes('w-full flex-nowrap items-center').style('padding: 0; margin: 0; gap: 12px;'):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
+            # THE STYLE SWATCH: the issue's default style, worn like everywhere else
+            from gui.light_table import style_swatch
+            style_swatch(state, issue)
             ui.space()
             ui.button('Read', icon='menu_book').props('rounded') \
                 .tooltip('Read the issue front to back') \
@@ -100,22 +102,8 @@ def view_issue(state:APPState):
             _pill(everything and os.path.exists(export_path), 'bound PDF', 'Export the issue as a PDF.')
 
         
-        with cpanel(8):
+        with cpanel(12):
             markdown_field_editor(state, "Story", issue.story)
-        with cpanel(4):
-            image_field_editor(
-                    state=state, 
-                    kind=SelectedKind.PICK_STYLE, 
-                    get_caption=lambda: "Style", 
-                    get_id =lambda: style.style_id if style else None, 
-                    get_image_filepath=lambda: storage.find_image(
-                        StyleExample(
-                            style_id=style.style_id,
-                            example_type="art",
-                            image_id=style.image.get("art"),
-                            mime_type="image/jpeg"
-                        ), style.image.get("art", None)) if style else None
-                )
 
 
         def _set(field):

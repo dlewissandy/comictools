@@ -48,8 +48,33 @@ def view_character(state:APPState):
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current character."),size=1)
 
-        markdown_field_editor(state, "Description", character.description)        
+        markdown_field_editor(state, "Description", character.description)
 
+        # APPEARS IN: every scene casting this character — the character's
+        # footprint across the series at a glance (mirrors the setting page)
+        from schema import Issue, SceneModel
+        from gui.selection import SelectionItem, SelectedKind
+        appears = []
+        for iss in storage.read_all_objects(Issue, primary_key={"series_id": series_id}):
+            for sc in storage.read_all_objects(SceneModel, primary_key={
+                    "series_id": series_id, "issue_id": iss.issue_id}):
+                if any(c.character_id == character_id for c in (sc.cast or [])):
+                    appears.append((iss, sc))
+        with ui.row().classes('w-full items-center q-px-sm').style('gap: 6px;'):
+            ui.label('Appears in').classes('comic-label-sm')
+            if not appears:
+                ui.label('not cast in any scene yet').classes('text-xs text-gray-500')
+            for iss, sc in appears[:12]:
+                def goto(iss=iss, sc=sc):
+                    base = [s for s in state.selection
+                            if s.kind.value in ('all-series', 'series')]
+                    state.change_selection(new=[*base,
+                        SelectionItem(name=iss.name, id=iss.issue_id, kind=SelectedKind.ISSUE),
+                        SelectionItem(name=sc.name, id=sc.scene_id, kind=SelectedKind.SCENE)])
+                ui.chip(f"{iss.name} · Scene {sc.scene_number}: {sc.name}", icon='theater_comedy') \
+                    .props('dense clickable outline') \
+                    .tooltip('Open this scene') \
+                    .on('click', lambda _, iss=iss, sc=sc: goto(iss, sc))
 
         from gui.elements import caption_action, ruled_page, uploader_card, CrudButtonKind as _CK
         with ui.element('div').classes('w-full q-mt-md'):

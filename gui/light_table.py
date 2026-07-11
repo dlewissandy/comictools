@@ -662,9 +662,10 @@ def lay_prop_on_table(state, scene, prop_asset):
 
 
 def wear_style_on_table(state, scene, style):
+    """`scene` is whatever owns the style_id: a scene, a cover, or an issue."""
     scene.style_id = style.style_id
     state.storage.update_object(scene)
-    table_receipt(state, f"🎨 swapped the style swatch — takes now print in **{style.name}**")
+    table_receipt(state, f"🎨 swapped the style swatch — new work here prints in **{style.name}**")
     state.refresh_details()
 
 
