@@ -56,15 +56,59 @@ def init_layout(logger):
     | User Input Field and Send Button                         |  Footer Region
     +----------------------------------------------------------+
     """
-    # Simple, clean chrome: sections are flat with a hairline separator;
-    # cards get one soft border and no fill.  Defined once, used everywhere.
+    # THE COMIC SKIN — the app lays out like a comic book page: paper ground,
+    # inked panels for assets and artwork, narrator caption boxes for headings,
+    # speech balloons for the conversation.  Two token classes carry it all.
+    ui.add_head_html('<link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">')
     ui.add_css("""
+        :root { --ink:#181410; --paper:#f2ead8; --panel:#fffdf4;
+                --caption:#f9df7b; --caption-ink:#181410; }
+        .body--dark { --ink:#e9dfc7; --paper:#15130f; --panel:#211d16;
+                      --caption:#7d651e; --caption-ink:#f6eed9; }
+
+        .q-page, .nicegui-content { background: var(--paper); }
+        .q-header { border-bottom: 3px solid var(--ink); }
+        .q-footer { border-top: 3px solid var(--ink); }
+
+        /* display lettering */
+        .comic-title { font-family: 'Bangers', 'Arial Black', Impact, sans-serif;
+                       font-size: 2.6rem; letter-spacing: 1.5px; line-height: 1.05;
+                       color: var(--ink);
+                       text-shadow: 2px 2px 0 rgba(0,0,0,.15); }
+        .comic-title-sm { font-size: 2rem; }
+
+        /* narrator caption boxes */
+        .caption-box { display: inline-block; background: var(--caption); color: var(--caption-ink);
+                       border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
+                       padding: 1px 10px; font-weight: 800; text-transform: uppercase;
+                       font-size: .85rem; letter-spacing: .8px; transform: rotate(-.4deg); }
+        .caption-box-sm { font-size: .72rem; padding: 0 8px; }
+
+        .comic-label { font-weight: 800; text-transform: uppercase;
+                       font-size: .8rem; letter-spacing: .5px; color: var(--ink); }
+        .comic-label-sm { font-size: .68rem; opacity: .75; }
+
+        /* panels: assets and rendered artwork live in inked comic panels */
+        .soft-card { background: var(--panel) !important;
+                     border: 2.5px solid var(--ink) !important;
+                     border-radius: 2px !important;
+                     box-shadow: 3px 3px 0 rgba(0,0,0,.4) !important; }
+
+        /* page rows: sections separated by a firm ink rule, no boxes */
         .section-flat { background: transparent !important; border: none !important;
-                        border-bottom: 1px solid rgba(127,127,127,.25) !important;
-                        border-radius: 0 !important; box-shadow: none !important; }
-        .soft-card { background: transparent !important;
-                     border: 1px solid rgba(127,127,127,.3) !important;
-                     border-radius: 6px !important; box-shadow: none !important; }
+                        border-bottom: 2px solid var(--ink) !important;
+                        border-radius: 0 !important; box-shadow: none !important;
+                        margin-bottom: 10px; }
+
+        /* the conversation is speech balloons */
+        .q-message-text { border: 2px solid var(--ink); border-radius: 10px;
+                          box-shadow: 2px 2px 0 rgba(0,0,0,.35);
+                          background: var(--panel) !important; color: var(--ink) !important; }
+        .q-message-text::before { color: var(--ink); }
+        .q-message-sent .q-message-text { background: var(--caption) !important;
+                                          color: var(--caption-ink) !important; }
+        .q-message-name { font-weight: 800; text-transform: uppercase;
+                          font-size: .7rem; letter-spacing: .5px; }
     """)
 
     # SET THE DARK MODE BASED ON THE ENVIRONMENT VARIABLE

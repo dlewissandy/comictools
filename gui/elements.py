@@ -12,13 +12,15 @@ from loguru import logger
 from storage.generic import GenericStorage
 from enum import StrEnum
 
-HEADER_STYLES = {
-    0: 'font-size: 3rem; font-weight: bold;',
-    1: 'font-size: 2.5rem; font-weight: bold;',
-    2: 'font-size: 2rem; font-weight: bold;',
-    3: 'font-size: 1.5rem; font-weight: bold;',
-    4: 'font-size: 1rem; font-weight: bold;',
-    5: 'font-size: 0.75rem; font-weight: bold;',
+# Comic type scale: 0-1 display lettering, 2-3 narrator caption boxes,
+# 4-5 small production labels.  Styled centrally in main.py's CSS.
+HEADER_CLASSES = {
+    0: 'comic-title',
+    1: 'comic-title comic-title-sm',
+    2: 'caption-box',
+    3: 'caption-box caption-box-sm',
+    4: 'comic-label',
+    5: 'comic-label comic-label-sm',
 }
 
 class CrudButtonKind(StrEnum):
@@ -45,8 +47,11 @@ CRUD_BUTTON_STYLES = {
      "3": 'font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit; margin: 0;'
 }
 
+_GRID_MIN = {2: '300px', 3: '230px', 4: '180px'}
+
 def init_cardwall(columns: int = 4):
-    return ui.element('div').classes(f'columns-{columns} w-full gap-2 ')
+    return ui.element('div').classes('w-full').style(
+        f"display: grid; grid-template-columns: repeat(auto-fill, minmax({_GRID_MIN.get(columns, '180px')}, 1fr)); gap: 10px;")
 
 def crud_button(kind: CrudButtonKind, action: Callable, size: int = 2):
     """Create a button with a specific style and action.
@@ -85,7 +90,7 @@ def header(text: str, level: int = 1) -> None:
     """
      if level < 0 or level > 5:
         raise ValueError("Header level must be between 0 and 5.")
-     return ui.label(text).style(HEADER_STYLES[level]).style('margin-top: 0px; margin-bottom: 0px')
+     return ui.label(text).classes(HEADER_CLASSES[level]).style('margin-top: 0px; margin-bottom: 0px')
 
 def markdown(body: str) -> None:
     with ui.element().classes('w-full q-pa-md'):
@@ -346,7 +351,8 @@ def render_object_cards(
         on_remove: Optional[Callable] = None):
     
     selection = state.selection
-    with ui.element().classes(f'grid grid-cols-{number_of_columns} gap-2 w-full') as grid:
+    with ui.element().classes('w-full').style(
+            f"display: grid; grid-template-columns: repeat(auto-fill, minmax({_GRID_MIN.get(number_of_columns, '180px')}, 1fr)); gap: 10px;") as grid:
         for i,instance in enumerate(instances):
             name = get_name(i,instance)
             logger.debug(f"Rendering card for {name} with kind {kind}")
