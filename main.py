@@ -142,6 +142,9 @@ def init_layout(logger):
         /* !important: QImg writes object-fit inline, and cropping art is a
            firing offense in this studio */
         .mosaic-card .q-img__image { object-fit: contain !important; }
+        /* EXCEPT scene panels: frame and art share the same shape, so the
+           art fills its frame and the page reads as the rendered scene */
+        .mosaic-card.panel-fill .q-img__image { object-fit: cover !important; }
         /* the caption lives in the margin: it fades in when you hover the
            panel, so frames stay a consistent ruled size */
         .panel-hover-caption { position: absolute; left: 8px; bottom: 8px;

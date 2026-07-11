@@ -1004,8 +1004,13 @@ class PagePacker:
         while j < len(reqs) and x < self.width - 1e-6:
             c2, v2, f2, m2 = reqs[j]
             if self._is_portrait(v2):
-                break
-            w2, h2 = self._nominal(v2)
+                # a portrait card joins the row ONLY at the row's own height
+                pv = next(((w, h) for w, h in v2 if abs(h - h0) < 1e-6), None)
+                if pv is None:
+                    break
+                w2, h2 = pv
+            else:
+                w2, h2 = self._nominal(v2)
             if h2 != h0 or x + w2 > self.width + 1e-6:
                 break
             row.append([c2, x, 0.0, float(w2), float(h2), f2, m2])
@@ -1030,6 +1035,30 @@ class PagePacker:
             x += w0
             j += 1
         budget = self.width + 1 / 3 - x
+        if H == 3:
+            # height-3 covers rule in a simple row with other 3-tall cards
+            row = []
+            R3 = 0.0
+            while j < len(reqs):
+                c2, v2, f2, m2 = reqs[j]
+                if self._is_portrait(v2):
+                    pv = next(((w, h) for w, h in v2 if abs(h - 3) < 1e-6), None)
+                    if pv is None:
+                        break
+                    w2, h2 = pv
+                else:
+                    w2, h2 = self._nominal(v2)
+                if h2 != 3 or x + R3 + w2 > self.width + 1e-6:
+                    break
+                row.append([c2, x + R3, 0.0, float(w2), 3.0, f2, m2])
+                R3 += w2
+                j += 1
+            if row:
+                if x + R3 < self.width - 1e-6 and any(r[5] for r in row):
+                    self._stretch_row(row, self.width - x)
+                    R3 = sum(r[3] for r in row)
+                cells += [tuple(r[:5]) for r in row]
+            return {'W': x + R3, 'cells': cells, 'next': j}
         # the region beside the covers, filled slice by slice
         R = 0.0
         first_slice = []

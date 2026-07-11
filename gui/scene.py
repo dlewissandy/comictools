@@ -193,10 +193,12 @@ def view_scene(state: APPState):
                 page_ctx = ruled_page()
                 packer = page_ctx.__enter__()
                 for panel in panels:
+                    # all three shapes rule at band height 3, so any mix of
+                    # panels packs into shared rows
                     if panel.aspect == FrameLayout.LANDSCAPE:
-                        # 4.5x3 keeps 3:2 at the same band height as the
-                        # square panels, so mixed pages rule in one block
                         variants = [(4.5, 3), (3, 2), (6, 4)]
+                    elif panel.aspect == FrameLayout.PORTRAIT:
+                        variants = [(2, 3)]
                     else:
                         variants = [(3, 3)]
                     image = None
@@ -204,10 +206,12 @@ def view_scene(state: APPState):
                         # Resolve the stored locator to an actual image filepath.
                         image = storage.find_image(obj=panel, locator=panel.image)
                     with packer.place_cell(variants, fudge=image is None):
-                        with ui.card().classes('soft-card mb-2 p-2 break-inside-avoid mosaic-card relative') as card:
+                        with ui.card().classes('soft-card mb-2 p-2 break-inside-avoid mosaic-card relative panel-fill') as card:
                             if image is not None:
                                 ui.label(f"Panel {panel.panel_number}: {panel.name}").classes(HEADER_CLASSES[3] + ' panel-hover-caption')
-                                ui.image(source=image).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                                # the art FILLS the frame — frame and art share
+                                # the same shape, so the page reads as the scene
+                                ui.image(source=image).props('fit=cover').classes('absolute inset-0 w-full h-full')
                             else:
                                 with ui.scroll_area().classes('w-full h-full').style('overflow: auto;'):
                                     header(f"Panel {panel.panel_number}: {panel.name}", 3)
@@ -241,12 +245,15 @@ def view_scene(state: APPState):
                             state.refresh_details()
 
                         with card:
-                            with ui.row().classes('w-full justify-between').style('margin-top: -6px;'):
+                            # reading-order controls ride ON the art
+                            with ui.row().classes('absolute bottom-1 left-0 right-0 z-10 justify-between items-center').style('padding: 0 6px;'):
                                 ui.button(icon='chevron_left').props('flat round dense size=xs') \
+                                    .classes('bg-white/70 dark:bg-black/50') \
                                     .tooltip('Move earlier in the reading order') \
                                     .on('click.stop', lambda _, pid=panel.panel_id, n=panel.panel_number: _nudge(pid, -1, n))
-                                ui.label(f"#{panel.panel_number}").classes('text-xs text-gray-500 self-center')
+                                ui.label(f"#{panel.panel_number}").classes('text-xs self-center px-2 rounded bg-white/70 dark:bg-black/50')
                                 ui.button(icon='chevron_right').props('flat round dense size=xs') \
+                                    .classes('bg-white/70 dark:bg-black/50') \
                                     .tooltip('Move later in the reading order') \
                                     .on('click.stop', lambda _, pid=panel.panel_id, n=panel.panel_number: _nudge(pid, 1, n))
                 # A drop box for creating a new panel: same band height as
