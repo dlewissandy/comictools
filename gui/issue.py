@@ -97,8 +97,21 @@ def view_issue(state:APPState):
                   f'artwork {done_total}/{total}' if total else 'artwork',
                   'Render the missing panels.')
             _pill(front_ok, 'front cover', 'Create and render a front cover.')
-            _pill(len(pages_all) > 0, 'page layout', 'Lay out the pages for this issue.')
-            everything = bool(issue.story) and total > 0 and done_total == total and front_ok
+            # the layout pill is honest: green only when EVERY panel is placed
+            from helpers.binder import page_coverage
+            has_layout, _placed, unplaced, dangling = page_coverage(storage, series_id, issue_id)
+            layout_ok = has_layout and not unplaced and not dangling
+            layout_label = 'page layout'
+            if has_layout and (unplaced or dangling):
+                bits = []
+                if unplaced:
+                    bits.append(f"{len(unplaced)} unplaced")
+                if dangling:
+                    bits.append(f"{len(dangling)} dangling")
+                layout_label = f"page layout ({', '.join(bits)})"
+            _pill(layout_ok, layout_label,
+                  'Lay out the pages for this issue — every panel on a page.')
+            everything = bool(issue.story) and total > 0 and done_total == total and front_ok and layout_ok
             _pill(everything and os.path.exists(export_path), 'bound PDF', 'Export the issue as a PDF.')
 
         

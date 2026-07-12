@@ -1936,11 +1936,22 @@ def preflight_issue(wrapper: RunContextWrapper[APPState], series_id: str, issue_
     Returns:
         A human-readable completeness report.
     """
-    from helpers.binder import collect_issue
+    from helpers.binder import collect_issue, _reading_order
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
     front, panels, back, missing = collect_issue(storage, series_id, issue_id)
-    total = len(panels) + len(missing) - (0 if front else 1)
+
+    # PLACEHOLDER LETTERING is a print-killer: the table's scaffold text must
+    # never reach the book
+    placeholders = []
+    for scene, scene_panels in _reading_order(storage, series_id, issue_id):
+        for p in scene_panels:
+            texts = [d.text for d in (p.dialogue or [])] + [n.text for n in (p.narration or [])]
+            if any(t.strip().rstrip('…').lower() in ('say something', 'narration') for t in texts if t):
+                placeholders.append(f"panel {p.panel_number} of scene '{scene.name}' still has "
+                                    f"placeholder lettering — write the real words before it prints")
+    missing = missing + placeholders
+
     report = [f"Rendered panels: {len(panels)}",
               f"Front cover: {'rendered' if front else 'MISSING'}",
               f"Back cover: {'rendered' if back else 'none'}"]
@@ -1986,11 +1997,32 @@ def layout_issue_pages(wrapper: RunContextWrapper[APPState], series_id: str, iss
 
     unknown = [pid for page in pages for row in page for pid in row if pid not in scene_of]
     if unknown:
-        return f"Unknown panel id(s): {', '.join(unknown[:5])}.  Check the shot list (read_all_panels per scene)."
+        return f"Unknown panel id(s): {', '.join(unknown[:5])}.  Check the panel list (read_all_panels per scene)."
+    for pi, page_rows in enumerate(pages, start=1):
+        if not page_rows:
+            return f"Page {pi} has no rows — every page needs at least one row of panels."
+        for ri, row in enumerate(page_rows, start=1):
+            if not row:
+                return f"Page {pi} row {ri} has no panels — remove the empty row or fill it."
 
-    # replace existing layout
-    for old in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id}):
-        storage.delete_object(cls=Page, primary_key=old.primary_key)
+    # snapshot the outgoing layout so it can be brought back (delete+recreate
+    # under the same ids blocks trash restore — a wastebasket JSON does not)
+    import json as _json
+    from uuid import uuid4 as _uuid4
+    old_pages = storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id},
+                                         order_by="page_number")
+    if old_pages:
+        try:
+            snap_dir = os.path.join(str(storage.base_path), "series", series_id, "issues", issue_id)
+            os.makedirs(snap_dir, exist_ok=True)
+            snap = os.path.join(snap_dir, f".trash--layout--{_uuid4().hex[:6]}.json")
+            with open(snap, "w") as fh:
+                _json.dump([p.model_dump() for p in old_pages], fh, indent=1)
+            logger.info(f"page-layout snapshot: {snap}")
+        except Exception as ex:
+            logger.warning(f"layout snapshot skipped: {ex}")
+    for old_page in old_pages:
+        storage.delete_object(cls=Page, primary_key=old_page.primary_key)
 
     placed = 0
     for i, page_rows in enumerate(pages, start=1):

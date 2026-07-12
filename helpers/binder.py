@@ -23,6 +23,34 @@ def _reading_order(storage: GenericStorage, series_id: str, issue_id: str):
         yield scene, panels
 
 
+def page_coverage(storage: GenericStorage, series_id: str, issue_id: str):
+    """The truth about the page layout: which panels are PLACED on pages,
+    which are UNPLACED (in the issue but on no page), and which page refs are
+    DANGLING (point at panels that no longer exist).
+
+    Returns (has_layout, placed_keys, unplaced, dangling) where unplaced is
+    [(scene, panel)] in reading order and dangling is [(page_number, PanelRef)].
+    """
+    from schema import Page
+    page_models = storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id},
+                                           order_by="page_number")
+    all_panels = {}
+    for scene, panels in _reading_order(storage, series_id, issue_id):
+        for panel in panels:
+            all_panels[(scene.scene_id, panel.panel_id)] = (scene, panel)
+    placed, dangling = set(), []
+    for pm in page_models:
+        for row in pm.rows:
+            for ref in row:
+                key = (ref.scene_id, ref.panel_id)
+                if key in all_panels:
+                    placed.add(key)
+                else:
+                    dangling.append((pm.page_number, ref))
+    unplaced = [sp for key, sp in all_panels.items() if key not in placed]
+    return bool(page_models), placed, unplaced, dangling
+
+
 def collect_issue(storage: GenericStorage, series_id: str, issue_id: str):
     """
     Gather everything needed to bind the issue.
@@ -44,6 +72,17 @@ def collect_issue(storage: GenericStorage, series_id: str, issue_id: str):
                 panel_images.append(panel.image)
             else:
                 missing.append(f"panel {panel.panel_number} of scene '{scene.name}' is not rendered (generate_panel_image)")
+
+    # a page layout that doesn't cover the issue is a SILENT story-killer —
+    # say so, loudly, wherever collect_issue is consulted
+    has_layout, _placed, unplaced, dangling = page_coverage(storage, series_id, issue_id)
+    if has_layout:
+        for scene, panel in unplaced:
+            missing.append(f"panel {panel.panel_number} of scene '{scene.name}' is on NO page "
+                           f"(layout_issue_pages) — it would be left out of the book")
+        for page_number, ref in dangling:
+            missing.append(f"page {page_number} references a panel that no longer exists "
+                           f"({ref.panel_id[:8]}…) — it prints as an empty box")
     return front, panel_images, back, missing
 
 
@@ -73,8 +112,23 @@ def bind_issue_pdf(storage: GenericStorage, series_id: str, issue_id: str, outpu
         # A page layout exists: compose each page as its designed grid.
         for page_model, rows in layout:
             pages.append(_compose_page(rows))
-            for path in (p for row in rows for p in row if p is None):
-                pass  # unplaced/unrendered already reported via collect_issue
+        # panels the layout forgot are NEVER silently dropped: they flow onto
+        # extra pages at the end (and collect_issue reports them as gaps)
+        _has, _placed, unplaced, _dang = page_coverage(storage, series_id, issue_id)
+        leftover_images = [p.image for _s, p in unplaced if p.image and os.path.exists(p.image)]
+        if leftover_images:
+            page = None
+            cursor = MARGIN
+            inner_w = PAGE_W - 2 * MARGIN
+            for path in leftover_images:
+                img = Image.open(path).convert("RGB")
+                h = int(img.height * inner_w / img.width)
+                if page is None or cursor + h > PAGE_H - MARGIN:
+                    page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+                    pages.append(page)
+                    cursor = MARGIN
+                page.paste(img.resize((inner_w, h), Image.LANCZOS), (MARGIN, cursor))
+                cursor += h + GUTTER
     else:
         # No layout yet: flow panels down each page in reading order.
         page = None
@@ -146,6 +200,8 @@ def _compose_page(rows: list[list[str | None]]) -> "Image.Image":
             else:
                 imgs.append(None)
                 ratios.append(1.0)
+        if not row or sum(ratios) <= 0:
+            continue   # an empty row is a layout bug reported upstream — skip, don't crash
         usable = inner_w - GUTTER * (len(row) - 1)
         row_h = int(usable / sum(ratios))
         prepared.append((row_h, list(zip(imgs, [int(row_h * r) for r in ratios]))))

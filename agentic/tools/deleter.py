@@ -129,7 +129,22 @@ def delete_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
         A status message indicating the result of the deletion.
     """
     pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id}
-    return deleter(wrapper=wrapper, cls=Panel, primary_key=pk)
+    result = deleter(wrapper=wrapper, cls=Panel, primary_key=pk)
+    # a deleted panel must leave NO dangling page refs (they print as boxes)
+    try:
+        from schema import Page
+        state = wrapper.context
+        storage = state.storage
+        for page in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id}):
+            new_rows = [[r for r in row if r.panel_id != panel_id] for row in page.rows]
+            new_rows = [row for row in new_rows if row]
+            if new_rows != page.rows:
+                page.rows = new_rows
+                storage.update_object(page)
+    except Exception as ex:
+        from loguru import logger
+        logger.warning(f"page-ref cleanup after panel delete skipped: {ex}")
+    return result
 
 @function_tool
 def delete_cover(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, cover_id: str) -> str:

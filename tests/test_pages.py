@@ -55,5 +55,8 @@ def test_binder_composes_designed_pages(storage, tmp_data, unrendered_panel):
 
     out = os.path.join(tmp_data, "series", WL, "issues", CARN, "exports", "paged.pdf")
     count, _missing = bind_issue_pdf(storage, WL, CARN, out)
-    assert count == 3, "front cover + 2 designed pages"
+    # front + 2 designed pages + the issue's OTHER rendered panels, which
+    # now flow onto extra pages instead of being silently dropped
+    assert count > 3
+    assert any("on NO page" in m for m in _missing)
     assert os.path.getsize(out) > 10_000
