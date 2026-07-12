@@ -529,13 +529,15 @@ def layout_pages(storage: GenericStorage, series_id: str, issue_id: str):
 
 
 def resolve_cells(storage: GenericStorage, series_id: str, issue_id: str, pm) -> list[tuple]:
-    """A stitched page's cells resolved to (image_path_or_None, x, y, w, h)."""
+    """A stitched page's cells resolved to (image_path_or_None, x, y, w, h,
+    label) — the label names an unrendered panel right on the placeholder."""
     specs = []
     for c in pm.cells:
         panel = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
                                             "scene_id": c.scene_id, "panel_id": c.panel_id})
         ok = panel and panel.image and os.path.exists(panel.image)
-        specs.append((panel.image if ok else None, c.x, c.y, c.w, c.h))
+        label = f"panel {panel.panel_number} — {panel.name}" if panel else "missing panel"
+        specs.append((panel.image if ok else None, c.x, c.y, c.w, c.h, label))
     return specs
 
 
@@ -550,10 +552,10 @@ def _compose_page_cells(cells: list[tuple]) -> "Image.Image":
     if not cells:
         return page
     draw = ImageDraw.Draw(page)
-    grid_h = max(10.0, max(y + h for _p, _x, y, _w, h in cells))
+    grid_h = max(10.0, max(y + h for _p, _x, y, _w, h, *_ in cells))
     ux = (PAGE_W - 2 * MARGIN_X) / 6.0
     uy = (PAGE_H - 2 * MARGIN_Y) / grid_h
-    for path, x, y, w, h in cells:
+    for path, x, y, w, h, *extra in cells:
         left = MARGIN_X + x * ux + (GUTTER / 2 if x > 0.05 else 0)
         right = MARGIN_X + (x + w) * ux - (GUTTER / 2 if x + w < 5.95 else 0)
         top = MARGIN_Y + y * uy + (GUTTER / 2 if y > 0.05 else 0)
@@ -568,6 +570,14 @@ def _compose_page_cells(cells: list[tuple]) -> "Image.Image":
         else:
             draw.rectangle([left, top, left + bw, top + bh],
                            outline=(180, 180, 180), width=3, fill=(240, 240, 240))
+            # the placeholder NAMES what belongs here — a gray box that
+            # says which panel is missing is a to-do, not a mystery
+            label = extra[0] if extra else ""
+            if label:
+                f = _font(18)
+                for li, line in enumerate(_wrap(draw, label, f, bw - 24)[:3]):
+                    _center_text(draw, round(left + bw / 2),
+                                 round(top + bh / 2) - 24 + li * 26, line, f, (150, 146, 138))
     return page
 
 

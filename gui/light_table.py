@@ -1231,7 +1231,7 @@ def wastebasket_chip(state, board):
                         os.remove(path)
                     except OSError:
                         pass
-                table_receipt(state, f"🗑 emptied the wastebasket — {len(entries)} piece(s) gone for good")
+                table_receipt(state, f"🗑 emptied the wastebasket — {len(entries)} piece{'s' if len(entries) != 1 else ''} gone for good")
                 dlg.close()
                 state.refresh_details()
             with ui.row().classes('w-full justify-end q-mt-sm'):

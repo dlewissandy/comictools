@@ -578,7 +578,8 @@ def view_attributes(state: APPState, caption: str, attributes: list[Attribute], 
             with expansion.add_slot('header'):
                 if not individual_icons:
                     caption_action(caption, CrudButtonKind.UPDATE,
-                                   lambda _: post_user_message(state, f"I would like to edit the {caption}."), header_size)
+                                   lambda _: post_user_message(
+                                       state, f"I would like to edit the {caption or 'details in this section'}."), header_size)
                     cols = 2
                     col_style = 'grid-template-columns: auto auto;'
                 else:
@@ -590,7 +591,9 @@ def view_attributes(state: APPState, caption: str, attributes: list[Attribute], 
                     attr_name = attr["caption"]
                     value = attr.get("get_value")()
                     if individual_icons:
-                        ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _: post_user_message(state, f"I would like to edit the {caption} date."))
+                        # the pencil edits THIS attribute — bound per row, not
+                        # the section caption with a stray 'date' bolted on
+                        ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _, n=attr_name: post_user_message(state, f"I would like to edit the {n}."))
                     header(attr_name,4)
                     value = attr.get("get_value")()
                     if value is None:

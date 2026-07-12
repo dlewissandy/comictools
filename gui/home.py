@@ -21,7 +21,12 @@ def view_all_styles(state: APPState):
                 get_instances=lambda: storage.read_all_objects(ComicStyle),
                 kind="style",
                 aspect_ratio="1/1",
-                packer=packer, variants=[(3, 3)])
+                packer=packer, variants=[(3, 3)],
+                # a style's art is abstract — its NAME must be readable
+                # without hovering
+                card_overlay=lambda style: ui.label(style.name.title())
+                    .classes('caption-box caption-box-sm')
+                    .style('position: absolute; bottom: 6px; left: 6px; z-index: 6;'))
         
 def view_all_publishers(state: APPState):
     from gui.elements import PagePacker, caption_action, CrudButtonKind as _CK

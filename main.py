@@ -296,7 +296,12 @@ def init_layout(logger):
         .book-page { width: var(--pw); aspect-ratio: 6.625 / 10.1875; position: relative;
                      background: #fdfcf8; border-radius: 2px; overflow: hidden;
                      box-shadow: 0 6px 18px rgba(0,0,0,.35), 0 1px 4px rgba(0,0,0,.25);
-                     cursor: default; }
+                     cursor: default;
+                     /* THE PAGE IS PAPER: identical in both themes — ink stays
+                        ink even when the room around the table goes dark */
+                     color: #1c1a17;
+                     --ink: #181410; --caption: #f9df7b; --caption-ink: #181410; }
+        .book-page .text-gray-500 { color: #6b7280 !important; }
         .book-page--recto { grid-column: 2; }
         .book-page--ghost { border: 2px dashed var(--ink); background: transparent;
                             box-shadow: none; cursor: pointer;
@@ -847,7 +852,7 @@ def read_issue_page(series_id: str, issue_id: str):
                         f'download>{label}</a>')
         ui.space()
         if missing:
-            with ui.expansion(f"{len(missing)} piece(s) still missing") \
+            with ui.expansion(f"{len(missing)} piece{'s' if len(missing) != 1 else ''} still missing") \
                     .style('color: #8a8378; max-width: 380px;'):
                 for m in missing:
                     ui.markdown(f"* {m}").style('color: #8a8378;')

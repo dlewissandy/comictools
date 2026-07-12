@@ -310,7 +310,6 @@ def view_issue(state: APPState):
                         'tile-beat__text' + ('' if txt else ' italic opacity-60'))
             if cap_scene is not None:
                 cap = ui.label(f'{cap_scene.scene_number} · {cap_scene.name}'.upper()).classes('tile-cap')
-                cap.tooltip('The scene — open it, move it, grow it')
                 with cap:
                     scene_menu(cap_scene)
                 cap.on('click.stop', lambda _: None)
@@ -495,7 +494,6 @@ def view_issue(state: APPState):
         wc = len(text.split())
         with ui.element('div').classes('book-page book-page--script') as sh:
             cap = ui.label(f'{sc.scene_number} · {sc.name}'.upper()).classes('page-cap')
-            cap.tooltip('The scene — open it, move it, grow it')
             with cap:
                 scene_menu(sc)
             cap.on('click.stop', lambda _: None)

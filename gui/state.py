@@ -403,6 +403,12 @@ class APPState:
     def refresh_details(self):
         logger.trace("Refreshing details")
         logger.debug(f"SELECTION:{self.selection}")
+        # TOOLTIP DISCIPLINE: a rebuild orphans any tooltip open under the
+        # cursor — Quasar portals them to <body>, so they'd float forever
+        try:
+            ui.run_javascript("document.querySelectorAll('.q-tooltip').forEach(t => t.remove());")
+        except Exception:
+            pass
         # These imports are here to avoid circular imports
         from gui.home import view_all_styles, view_all_series, view_all_publishers
         from gui.style import view_style, view_pick_style
