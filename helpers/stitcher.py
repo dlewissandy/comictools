@@ -33,26 +33,81 @@ def _is_portrait(a: float) -> bool:
 
 
 def pack_bands(items: list[tuple]) -> list[dict]:
-    """Pack (key, aspect_ratio) items into bands, reading order preserved.
+    """Pack (key, aspect_ratio[, size]) items into bands, reading order
+    preserved.  Size is the author's thumb on the scale: 'small' beats pack
+    three to a tier, 'large' ones command their own band, 'splash' takes the
+    whole page; 'regular' (the default) follows the aspect rules.
     Each band: {"h": units, "cells": [(key, x, y_in_band, w, h)]}."""
+    items = [(it[0], it[1], it[2] if len(it) > 2 else "regular") for it in items]
+
+    def pairable(it):
+        return it is not None and it[2] not in ("large", "splash")
+
     bands, i, n = [], 0, len(items)
     while i < n:
-        key, a = items[i]
+        key, a, size = items[i]
         nxt = items[i + 1] if i + 1 < n else None
         nx2 = items[i + 2] if i + 2 < n else None
+
+        if size == "splash":
+            # the full page, edge to edge — the biggest moment in the book
+            bands.append({"h": 10.0, "cells": [(key, 0.0, 0.0, 6.0, 10.0)]})
+            i += 1
+            continue
+        if size == "large":
+            if _is_portrait(a) and pairable(nxt) and pairable(nx2):
+                # a big portrait commands the band, two beats stacked beside
+                bands.append({"h": 6.0, "cells": [(key, 0.0, 0.0, 4.0, 6.0),
+                                                  (nxt[0], 4.0, 0.0, 2.0, 3.0),
+                                                  (nx2[0], 4.0, 3.0, 2.0, 3.0)]})
+                i += 3
+            elif _is_portrait(a):
+                bands.append({"h": 6.0, "cells": [(key, 1.0, 0.0, 4.0, 6.0)]})
+                i += 1
+            else:
+                bands.append({"h": 4.5, "cells": [(key, 0.0, 0.0, 6.0, 4.5)]})
+                i += 1
+            continue
+        if size == "small":
+            if not _is_portrait(a):
+                # up to three small beats share a compact tier
+                run = [items[i]]
+                j = i + 1
+                while j < n and len(run) < 3 and items[j][2] == "small" and not _is_portrait(items[j][1]):
+                    run.append(items[j])
+                    j += 1
+                s = sum(r[1] for r in run)
+                h = max(1.6, min(2.0, PAGE_UNITS_W / s))
+                x = 0.0
+                cells = []
+                for r in run:
+                    w = PAGE_UNITS_W * r[1] / s
+                    cells.append((r[0], x, 0.0, w, h))
+                    x += w
+                bands.append({"h": h, "cells": cells})
+                i = j
+            elif nxt and nxt[2] == "small" and _is_portrait(nxt[1]):
+                bands.append({"h": 3.0, "cells": [(key, 0.0, 0.0, 3.0, 3.0),
+                                                  (nxt[0], 3.0, 0.0, 3.0, 3.0)]})
+                i += 2
+            else:
+                bands.append({"h": 3.0, "cells": [(key, 2.0, 0.0, 2.0, 3.0)]})
+                i += 1
+            continue
+
         if _is_portrait(a):
-            if nxt and _is_portrait(nxt[1]):
+            if pairable(nxt) and _is_portrait(nxt[1]):
                 # portraits pair up, half the page tall
                 bands.append({"h": 4.5, "cells": [(key, 0.0, 0.0, 3.0, 4.5),
                                                   (nxt[0], 3.0, 0.0, 3.0, 4.5)]})
                 i += 2
-            elif nxt and nx2 and not _is_portrait(nxt[1]) and not _is_portrait(nx2[1]):
+            elif pairable(nxt) and pairable(nx2) and not _is_portrait(nxt[1]) and not _is_portrait(nx2[1]):
                 # THE TALL BAND: a portrait beside two stacked landscapes
                 bands.append({"h": 4.0, "cells": [(key, 0.0, 0.0, 8 / 3, 4.0),
                                                   (nxt[0], 8 / 3, 0.0, 10 / 3, 2.0),
                                                   (nx2[0], 8 / 3, 2.0, 10 / 3, 2.0)]})
                 i += 3
-            elif nxt:
+            elif pairable(nxt):
                 # portrait rules a shared row beside one wide neighbor
                 bands.append({"h": 3.0, "cells": [(key, 0.0, 0.0, 2.0, 3.0),
                                                   (nxt[0], 2.0, 0.0, 4.0, 3.0)]})
@@ -62,8 +117,8 @@ def pack_bands(items: list[tuple]) -> list[dict]:
                 bands.append({"h": 4.5, "cells": [(key, 1.5, 0.0, 3.0, 4.5)]})
                 i += 1
         else:
-            if nxt and not _is_portrait(nxt[1]):
-                if (nx2 and abs(a - 1) < 0.1 and abs(nxt[1] - 1) < 0.1
+            if pairable(nxt) and not _is_portrait(nxt[1]):
+                if (pairable(nx2) and abs(a - 1) < 0.1 and abs(nxt[1] - 1) < 0.1
                         and abs(nx2[1] - 1) < 0.1):
                     # three squares across, a steady beat-beat-beat tier
                     bands.append({"h": 2.0, "cells": [(key, 0.0, 0.0, 2.0, 2.0),
@@ -126,7 +181,8 @@ def stitch_pages(storage, series_id: str, issue_id: str) -> list[Page]:
     items = []
     for scene, panels in _reading_order(storage, series_id, issue_id):
         for p in panels:
-            items.append(((p.scene_id, p.panel_id), AR.get(p.aspect.value, 1.5)))
+            items.append(((p.scene_id, p.panel_id), AR.get(p.aspect.value, 1.5),
+                          getattr(p, 'size', None) or 'regular'))
     if not items:
         return []
     band_pages = paginate(pack_bands(items))
@@ -180,7 +236,8 @@ def repack_page(storage, pm: Page) -> Page:
             panel = storage.read_object(Panel, {"series_id": pm.series_id, "issue_id": pm.issue_id,
                                                 "scene_id": ref.scene_id, "panel_id": ref.panel_id})
             aspect = AR.get(panel.aspect.value, 1.5) if panel else 1.5
-            items.append(((ref.scene_id, ref.panel_id), aspect))
+            items.append(((ref.scene_id, ref.panel_id), aspect,
+                          (getattr(panel, 'size', None) or 'regular') if panel else 'regular'))
     bands = pack_bands(items)
     cells_abs = justify(bands, is_last=(sum(b["h"] for b in bands) < PAGE_UNITS_H))
     pm.rows = [[PanelRef(scene_id=k[0], panel_id=k[1]) for k, *_ in b["cells"]] for b in bands]

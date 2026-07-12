@@ -9,15 +9,29 @@ from helpers.binder import page_coverage, collect_issue, bind_issue_pdf, _compos
 WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
 
 
+def _orphan_panel(storage):
+    """A panel the layout doesn't know about — the gap the truth must name."""
+    from schema import Panel
+    SC = "b3cc50eb-5a57-463c-ba10-927d941c9779"
+    p = Panel(panel_id="test-orphan", issue_id=CARN, series_id=WL, scene_id=SC,
+              panel_number=97, name="Orphan", beat="b", description="d",
+              aspect="landscape", character_references=[], narration=[],
+              dialogue=[], image=None, reference_images=[])
+    storage.create_object(p, overwrite=True)
+    return p
+
+
 def test_page_coverage_reports_unplaced_panels(storage):
+    _orphan_panel(storage)
     has_layout, placed, unplaced, dangling = page_coverage(storage, WL, CARN)
     assert has_layout
     assert len(placed) > 0
-    # the real data has panels on no page — coverage must SAY so
-    assert len(unplaced) > 0
+    # a panel on no page — coverage must SAY so
+    assert any(p.panel_id == "test-orphan" for _s, p in unplaced)
 
 
 def test_collect_issue_names_the_gap(storage):
+    _orphan_panel(storage)
     _f, _p, _b, missing = collect_issue(storage, WL, CARN)
     assert any("on NO page" in m for m in missing)
 

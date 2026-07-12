@@ -21,10 +21,14 @@ from PIL import Image, ImageDraw, ImageFont
 from storage.generic import GenericStorage
 from schema import Issue, SceneModel, Panel, Cover, Series, Publisher
 
-# 6.625in x 10.25in at 150dpi — standard US comic trim.
-PAGE_W, PAGE_H = 994, 1538
-MARGIN = 40      # outer page margin
-GUTTER = 28      # vertical space between panels on a page
+# 6.625in x 10.1875in at 150dpi — US standard comic trim.  The live area
+# is the 6x10-unit grid (1 unit = 1 inch); the difference is the fudge
+# room for margins.
+PAGE_W, PAGE_H = 994, 1528
+MARGIN_X = (PAGE_W - 900) // 2    # 47px ≈ 5/16in side margins
+MARGIN_Y = (PAGE_H - 1500) // 2   # 14px top/bottom
+MARGIN = MARGIN_X                 # text blocks (indicia, credits) keep this inset
+GUTTER = 28      # space between panels on a page
 
 
 def _reading_order(storage: GenericStorage, series_id: str, issue_id: str):
@@ -233,16 +237,16 @@ def _flow_pages(image_paths: list[str]) -> list["Image.Image"]:
     """Flow panels down each page in reading order — the layout-less binding,
     also used for overflow pages carrying panels the layout forgot."""
     pages: list[Image.Image] = []
-    page, cursor = None, MARGIN
-    inner_w = PAGE_W - 2 * MARGIN
+    page, cursor = None, MARGIN_Y
+    inner_w = PAGE_W - 2 * MARGIN_X
     for path in image_paths:
         img = Image.open(path).convert("RGB")
         h = int(img.height * inner_w / img.width)
-        if page is None or cursor + h > PAGE_H - MARGIN:
+        if page is None or cursor + h > PAGE_H - MARGIN_Y:
             page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
             pages.append(page)
-            cursor = MARGIN
-        page.paste(img.resize((inner_w, h), Image.LANCZOS), (MARGIN, cursor))
+            cursor = MARGIN_Y
+        page.paste(img.resize((inner_w, h), Image.LANCZOS), (MARGIN_X, cursor))
         cursor += h + GUTTER
     return pages
 
@@ -383,7 +387,7 @@ def book_signature(storage: GenericStorage, series_id: str, issue_id: str) -> st
             + json.dumps([(c.panel_id, c.x, c.y, c.w, c.h) for c in pm.cells]))
     for scene, panels in _reading_order(storage, series_id, issue_id):
         for p in panels:
-            parts.append(f"{scene.scene_id}/{p.panel_id}#{p.panel_number}="
+            parts.append(f"{scene.scene_id}/{p.panel_id}#{p.panel_number}@{p.aspect.value}="
                          f"{stamp(p.image) if p.image else 'none'}")
     return hashlib.md5("\n".join(parts).encode()).hexdigest()[:16]
 
@@ -471,13 +475,13 @@ def _compose_page_cells(cells: list[tuple]) -> "Image.Image":
         return page
     draw = ImageDraw.Draw(page)
     grid_h = max(10.0, max(y + h for _p, _x, y, _w, h in cells))
-    ux = (PAGE_W - 2 * MARGIN) / 6.0
-    uy = (PAGE_H - 2 * MARGIN) / grid_h
+    ux = (PAGE_W - 2 * MARGIN_X) / 6.0
+    uy = (PAGE_H - 2 * MARGIN_Y) / grid_h
     for path, x, y, w, h in cells:
-        left = MARGIN + x * ux + (GUTTER / 2 if x > 0.05 else 0)
-        right = MARGIN + (x + w) * ux - (GUTTER / 2 if x + w < 5.95 else 0)
-        top = MARGIN + y * uy + (GUTTER / 2 if y > 0.05 else 0)
-        bottom = MARGIN + (y + h) * uy - (GUTTER / 2 if y + h < grid_h - 0.05 else 0)
+        left = MARGIN_X + x * ux + (GUTTER / 2 if x > 0.05 else 0)
+        right = MARGIN_X + (x + w) * ux - (GUTTER / 2 if x + w < 5.95 else 0)
+        top = MARGIN_Y + y * uy + (GUTTER / 2 if y > 0.05 else 0)
+        bottom = MARGIN_Y + (y + h) * uy - (GUTTER / 2 if y + h < grid_h - 0.05 else 0)
         bw, bh = max(1, round(right - left)), max(1, round(bottom - top))
         if path:
             im = Image.open(path).convert("RGB")
@@ -497,7 +501,7 @@ def _compose_page(rows: list[list[str | None]]) -> "Image.Image":
     row spans the page width; rows are scaled uniformly if they overflow.
     Unrendered panels appear as light placeholder boxes.
     """
-    inner_w = PAGE_W - 2 * MARGIN
+    inner_w = PAGE_W - 2 * MARGIN_X
     prepared: list[tuple[int, list[tuple["Image.Image | None", int]]]] = []
     total_h = 0
     for row in rows:
@@ -518,12 +522,12 @@ def _compose_page(rows: list[list[str | None]]) -> "Image.Image":
         total_h += row_h
     total_h += GUTTER * (len(rows) - 1)
 
-    scale = min(1.0, (PAGE_H - 2 * MARGIN) / total_h) if total_h else 1.0
+    scale = min(1.0, (PAGE_H - 2 * MARGIN_Y) / total_h) if total_h else 1.0
     page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
-    y = MARGIN
+    y = MARGIN_Y
     for row_h, cells in prepared:
         h = int(row_h * scale)
-        x = MARGIN
+        x = MARGIN_X
         for im, w0 in cells:
             w = int(w0 * scale)
             if im is not None:

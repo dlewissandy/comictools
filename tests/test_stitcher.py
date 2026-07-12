@@ -102,3 +102,19 @@ def test_compose_page_cells(storage, tmp_path):
     assert img.getpixel((260, 150))[0] > 150
     px = img.getpixel((740, 150))
     assert abs(px[0] - px[1]) < 12 and px[0] > 200, "placeholder is light gray"
+
+
+def test_sizes_speak():
+    # a splash takes the whole page
+    bands = pack_bands([("s", L, "splash"), ("a", L), ("b", L)])
+    assert bands[0]["h"] == 10.0 and bands[0]["cells"][0][3:] == (6.0, 10.0)
+    # a large landscape refuses to pair
+    bands = pack_bands([("big", L, "large"), ("a", L), ("b", L)])
+    assert len(bands[0]["cells"]) == 1 and bands[0]["cells"][0][3] == 6.0
+    # a large portrait commands the band with two beats stacked beside it
+    bands = pack_bands([("p", P, "large"), ("a", L), ("b", S)])
+    assert len(bands) == 1 and bands[0]["h"] == 6.0
+    # three smalls share one compact tier
+    bands = pack_bands([("a", L, "small"), ("b", L, "small"), ("c", L, "small")])
+    assert len(bands) == 1 and len(bands[0]["cells"]) == 3
+    assert bands[0]["h"] <= 2.0

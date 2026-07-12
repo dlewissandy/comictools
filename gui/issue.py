@@ -1,39 +1,35 @@
 """
-THE ISSUE WORKSPACE: the comic front and center, one unified experience.
+THE OPEN BOOK: the issue view IS the comic.
 
-The book you're making IS the page: a masthead, THE SPINE RAIL (five stage
-chips that report production truth AND set the viewing altitude — one click
-collapses back up), THE SHELF (the physical book: covers, a spine that
-thickens as pages land, every sheet leafable), THE SCRIPT, THE SCENES as
-tiers that expand into beats — each beat wearing the lens of the altitude
-you're at (words → table state → print) — and THE PRESSROOM at the bottom.
+Open an issue and the book lies on the table in side-by-side spreads —
+the front cover is a page, THE SCRIPT is a page, the panels are live
+tiles in real page grids (art when inked, the beat's words on script
+paper until then), loose panels wait on THE TRAY page, and the book
+closes with the back cover and a COLOPHON page carrying credits,
+downloads, and the production small print.
 
-Click grammar: a chevron or rail chip changes what you SEE; the face of a
-thing walks INTO its editor (cover → its light table, scene → its view,
-beat → its light table, sheet → the page in hand).
+Everything is done ON the book: set a tile's aspect right on the tile,
+break a bare scene into beats from the script page, stitch loose panels
+from the tray, click any tile to walk into its rough board and the
+'page N' chip walks you back.  No dashboards, no drill-down sections —
+one unified book.
 """
 import os
-import re
 
 from loguru import logger
 from nicegui import ui
 
-from schema import ComicStyle, Issue, Cover, Panel, SceneModel, Page
+from schema import ComicStyle, Issue, Cover, Panel, SceneModel, Page, FrameLayout
 from gui.elements import header, Attribute, view_attributes, crud_button, CrudButtonKind, markdown_field_editor
 from gui.state import APPState
 from gui.messaging import post_user_message
 from gui.selection import SelectionItem, SelectedKind
 
-RANK = {"script": 0, "scenes": 1, "beats": 2, "roughs": 3, "prints": 4}
 COVER_ORDER = ["front", "inside-front", "inside-back", "back"]
-
-
-def _workspace(state, issue_id):
-    ws_all = getattr(state, '_workspace', None)
-    if ws_all is None:
-        ws_all = {}
-        state._workspace = ws_all
-    return ws_all.setdefault(issue_id, {"altitude": "scenes", "open": set()})
+ASPECT_CYCLE = {"landscape": "portrait", "portrait": "square", "square": "landscape"}
+SIZE_CYCLE = {"regular": "large", "large": "splash", "splash": "small", "small": "regular"}
+SIZE_ICON = {"small": "photo_size_select_small", "regular": "crop_din",
+             "large": "photo_size_select_large", "splash": "fullscreen"}
 
 
 def view_issue(state: APPState):
@@ -55,65 +51,206 @@ def view_issue(state: APPState):
         if style is None:
             logger.warning(f"Issue {issue.id} has style set to {issue.style_id} but style not found.")
 
-    ws = _workspace(state, issue_id)
-    altitude = ws["altitude"]
-    rank = RANK.get(altitude, 1)
-
-    def set_altitude(a):
-        ws["altitude"] = a
-        ws["open"] = set()          # the rail clears per-scene overrides
-        state.refresh_details()
-
-    def toggle_scene(scene_id):
-        ws["open"] ^= {scene_id}    # an override relative to the altitude floor
-        state.refresh_details()
-
-    # ---- one read of the whole book -----------------------------------
+    # ---- one read of the whole book ------------------------------------
     scenes_all = storage.read_all_objects(SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id},
                                           order_by="scene_number")
+    scene_of = {sc.scene_id: sc for sc in scenes_all}
     panels_by_scene = {sc.scene_id: storage.read_all_objects(
         Panel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": sc.scene_id},
         order_by="panel_number") for sc in scenes_all}
-    all_panels = [p for ps in panels_by_scene.values() for p in ps]
-    total = len(all_panels)
-    inked = sum(1 for p in all_panels if p.image and os.path.exists(p.image))
-    on_table = sum(1 for p in all_panels if (p.figure_images or (p.image and os.path.exists(p.image))))
-    bare_scenes = sum(1 for sc in scenes_all if not panels_by_scene[sc.scene_id])
+    panel_of = {p.panel_id: p for ps in panels_by_scene.values() for p in ps}
+    total = len(panel_of)
+    inked = sum(1 for p in panel_of.values() if p.image and os.path.exists(p.image))
+    bare_scenes = [sc for sc in scenes_all if not panels_by_scene[sc.scene_id]]
 
     covers_all = storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id})
-    covers_all.sort(key=lambda c: COVER_ORDER.index(c.location.value) if c.location.value in COVER_ORDER else 9)
-    front_ok = any(c.location.value == "front" and c.image and os.path.exists(c.image) for c in covers_all)
+    cover_at = {}
+    for c in covers_all:
+        cover_at.setdefault(c.location.value, c)
     pages_all = storage.read_all_objects(Page, primary_key={"series_id": series_id, "issue_id": issue_id},
                                          order_by="page_number")
     from helpers.binder import page_coverage
-    has_layout, _placed, unplaced, dangling = page_coverage(storage, series_id, issue_id)
-    layout_ok = has_layout and not unplaced and not dangling
-    placed_on = {}
-    for pm in pages_all:
-        for row in pm.rows:
-            for ref in row:
-                placed_on.setdefault(ref.panel_id, pm.page_number)
-    export_path = os.path.join("data", "series", series_id, "issues", issue_id, "exports", f"{issue_id}.pdf")
-    print_ready = bool(issue.story) and total > 0 and inked == total and front_ok and layout_ok
+    _has, _placed, unplaced, dangling = page_coverage(storage, series_id, issue_id)
+    export_dir = os.path.join("data", "series", series_id, "issues", issue_id, "exports")
 
-    from gui.pages_board import page_thumb, edit_page, pressroom, open_panel, stitch_now
+    from gui.pages_board import open_panel
+    from gui.light_table import table_receipt
 
     def goto(kind, id_, name):
         idx = next((i for i, s in enumerate(state.selection) if s.kind.value == 'issue'), None)
         base = state.selection[:idx + 1] if idx is not None else state.selection
         state.change_selection(new=[*base, SelectionItem(name=name, id=id_, kind=kind)])
 
+    def open_scene_panel(scene_id, panel_id):
+        open_panel(state, series_id, issue_id, scene_id, panel_id)
+
+    def _repack_prints(panel_id):
+        # the persisted PRINT layout follows the author's changes too
+        from helpers.stitcher import repack_page
+        for pm in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id}):
+            if pm.cells and any(r.panel_id == panel_id for row in pm.rows for r in row):
+                repack_page(storage, pm)
+                storage.update_object(pm)
+
+    def cycle_aspect(scene_id, panel_id):
+        """Turn the panel right on the tile; the book reflows around it."""
+        p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
+                                        "scene_id": scene_id, "panel_id": panel_id})
+        if p is None:
+            return
+        p.aspect = FrameLayout(ASPECT_CYCLE[p.aspect.value])
+        storage.update_object(p)
+        _repack_prints(panel_id)
+        table_receipt(state, f"🔲 turned the panel {p.aspect.value} — the book reflowed around it")
+        state.refresh_details()
+
+    def cycle_size(scene_id, panel_id):
+        """Resize the panel right on the tile; the book reflows around it."""
+        p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
+                                        "scene_id": scene_id, "panel_id": panel_id})
+        if p is None:
+            return
+        p.size = SIZE_CYCLE.get(getattr(p, 'size', None) or 'regular', 'regular')
+        storage.update_object(p)
+        _repack_prints(panel_id)
+        table_receipt(state, f"🔲 made the panel a {p.size} — the book reflowed around it")
+        state.refresh_details()
+
+    def move_beat(scene_id, panel_id, d):
+        """Nudge a beat through its scene; panels reflow across the pages."""
+        sibs = sorted(storage.read_all_objects(Panel, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}),
+            key=lambda p: p.panel_number)
+        i = next((j for j, p in enumerate(sibs) if p.panel_id == panel_id), None)
+        if i is None or not (0 <= i + d < len(sibs)):
+            return
+        sibs[i], sibs[i + d] = sibs[i + d], sibs[i]
+        for j, p in enumerate(sibs):
+            if p.panel_number != j + 1:
+                p.panel_number = j + 1
+                storage.update_object(p)
+        table_receipt(state, f"↔️ moved the beat {'earlier' if d < 0 else 'later'} — "
+                             f"the book reflowed around it")
+        state.refresh_details()
+
+    def move_scene(scene, d):
+        sibs = sorted(storage.read_all_objects(SceneModel, primary_key={
+            "series_id": series_id, "issue_id": issue_id}), key=lambda s: s.scene_number)
+        i = next((j for j, s in enumerate(sibs) if s.scene_id == scene.scene_id), None)
+        if i is None or not (0 <= i + d < len(sibs)):
+            return
+        sibs[i], sibs[i + d] = sibs[i + d], sibs[i]
+        for j, s in enumerate(sibs):
+            if s.scene_number != j + 1:
+                s.scene_number = j + 1
+                storage.update_object(s)
+        table_receipt(state, f"↔️ moved **{sibs[i + d].name}** "
+                             f"{'earlier' if d < 0 else 'later'} in the book")
+        state.refresh_details()
+
+    def scene_menu(sc):
+        """Everything a scene needs, hanging off its caption box."""
+        with ui.menu():
+            ui.menu_item('Open the scene — cast, setting, story',
+                         on_click=lambda _, s=sc: goto(SelectedKind.SCENE, s.scene_id, s.name))
+            ui.menu_item('Move the scene earlier', on_click=lambda _, s=sc: move_scene(s, -1))
+            ui.menu_item('Move the scene later', on_click=lambda _, s=sc: move_scene(s, 1))
+            ui.menu_item('Add a beat to this scene',
+                         on_click=lambda _, s=sc: post_user_message(
+                             state, f"Add another panel to scene '{s.name}'."))
+            ui.menu_item('Delete the scene…',
+                         on_click=lambda _, s=sc: post_user_message(
+                             state, f"I would like to delete scene '{s.name}'."))
+
+    # ---- the tile: a panel living on a page ------------------------------
+    # the page trim is 6.625 x 10.1875in; the 6x10 grid is the live area and
+    # the difference breathes as margins, exactly like the printed page
+    TRIM_W, TRIM_H = 6.625, 10.1875
+    MX, MY = (TRIM_W - 6.0) / 2, (TRIM_H - 10.0) / 2
+
+    def tile(scene_id, panel_id, x, y, w, h, grid_h=10.0, cap_scene=None):
+        p = panel_of.get(panel_id)
+        live_h = TRIM_H - 2 * MY
+        box = (f'left: {(MX + x) / TRIM_W * 100:.2f}%; '
+               f'top: {(MY + y / grid_h * live_h) / TRIM_H * 100:.2f}%; '
+               f'width: {w / TRIM_W * 100:.2f}%; '
+               f'height: {(h / grid_h * live_h) / TRIM_H * 100:.2f}%;')
+        t = ui.element('div').classes('tile').style(box)
+        with t:
+            if p is None:
+                ui.label('missing panel').classes('tile-beat text-xs text-gray-400')
+            elif p.image and os.path.exists(p.image):
+                ui.image(source=p.image).props('fit=cover').classes('absolute inset-0 w-full h-full')
+            else:
+                with ui.element('div').classes('tile-beat' + (' tile-beat--capped' if cap_scene else '')):
+                    txt = (p.beat or '').strip()
+                    ui.label(txt if txt else 'unwritten beat').classes(
+                        'tile-beat__text' + ('' if txt else ' italic opacity-60'))
+            if cap_scene is not None:
+                # the scene announces itself on its first panel, comics-style;
+                # its caption box is also the scene's handle (menu)
+                cap = ui.label(f'{cap_scene.scene_number} · {cap_scene.name}'.upper()).classes('tile-cap')
+                cap.tooltip('The scene — open it, move it, grow it')
+                with cap:
+                    scene_menu(cap_scene)
+                cap.on('click.stop', lambda _: None)
+            if p is not None:
+                size = getattr(p, 'size', None) or 'regular'
+                with ui.row().classes('tile-tools items-center flex-nowrap'):
+                    ui.button(icon='chevron_left').props('flat round dense size=xs') \
+                        .tooltip('Earlier in the scene') \
+                        .on('click.stop', lambda _, s=scene_id, pid=panel_id: move_beat(s, pid, -1))
+                    ui.button(icon={'landscape': 'crop_landscape', 'portrait': 'crop_portrait',
+                                    'square': 'crop_square'}[p.aspect.value]) \
+                        .props('flat round dense size=xs') \
+                        .tooltip(f'{p.aspect.value} — click to turn the panel') \
+                        .on('click.stop', lambda _, s=scene_id, pid=panel_id: cycle_aspect(s, pid))
+                    ui.button(icon=SIZE_ICON[size]).props('flat round dense size=xs') \
+                        .tooltip(f'{size} — click to resize the panel') \
+                        .on('click.stop', lambda _, s=scene_id, pid=panel_id: cycle_size(s, pid))
+                    ui.button(icon='chevron_right').props('flat round dense size=xs') \
+                        .tooltip('Later in the scene') \
+                        .on('click.stop', lambda _, s=scene_id, pid=panel_id: move_beat(s, pid, 1))
+                    ui.button(icon='close').props('flat round dense size=xs') \
+                        .tooltip('Tear this beat out of the book…') \
+                        .on('click.stop', lambda _, p=p: post_user_message(
+                            state, f"I would like to delete panel {p.panel_number} "
+                                   f"('{p.name}') of this scene."))
+        if p is not None:
+            t.tooltip(f"beat {p.panel_number}: {p.name or ''} — open the rough board")
+            t.on('click', lambda _, s=scene_id, pid=panel_id: open_scene_panel(s, pid))
+        return t
+
+    def cover_sheet(location, recto=False):
+        c = cover_at.get(location)
+        classes = 'book-page' + (' book-page--recto' if recto else '')
+        if c is not None and c.image and os.path.exists(c.image):
+            with ui.element('div').classes(classes) as sh:
+                ui.image(source=c.image).props('fit=cover').classes('absolute inset-0 w-full h-full')
+                ui.label(location.replace('-', ' ').upper()).classes('page-cap')
+            sh.tooltip(f"The {location.replace('-', ' ')} cover — open its light table")
+            sh.on('click', lambda _: goto(SelectedKind.COVER, c.cover_id, f"{location} cover"))
+        elif c is not None:
+            with ui.element('div').classes(classes + ' book-page--ghost') as sh:
+                ui.label(f'{location.replace("-", " ")} cover').classes('page-cap')
+                ui.label('bare board — open its light table').classes('page-ghost-hint')
+            sh.on('click', lambda _: goto(SelectedKind.COVER, c.cover_id, f"{location} cover"))
+        elif location in ('front', 'back'):
+            with ui.element('div').classes(classes + ' book-page--ghost') as sh:
+                ui.label(f'+ {location} cover').classes('page-ghost-cta')
+            sh.tooltip('Every book needs one')
+            sh.on('click', lambda _, loc=location: post_user_message(
+                state, f"I would like to create a {loc} cover for this issue."))
+        else:
+            return False
+        return True
+
     with details:
-        # ---- MASTHEAD ---------------------------------------------------
+        # ---- the masthead over the table ---------------------------------
         with ui.row().classes('w-full flex-nowrap items-center').style('padding: 0; margin: 0; gap: 12px;'):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
             from gui.light_table import style_swatch
             style_swatch(state, issue)
-            if print_ready and os.path.exists(export_path):
-                ui.chip('ON THE STANDS', icon='celebration', color='green').props('dense clickable') \
-                    .tooltip('The issue is print-ready — read it front to back') \
-                    .on('click', lambda _: ui.run_javascript(
-                        f"window.open('/series/{series_id}/issue/{issue_id}/read', '_blank');"))
             ui.space()
             ui.button('Read', icon='menu_book').props('rounded') \
                 .tooltip('Read the issue front to back') \
@@ -121,276 +258,128 @@ def view_issue(state: APPState):
                     f"window.open('/series/{series_id}/issue/{issue_id}/read', '_blank');"))
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current issue."))
 
-        # ---- THE SPINE RAIL: production truth + viewing altitude --------
-        story_words = len((issue.story or '').split())
-        n_sc = len(scenes_all)
-        stages = [
-            ("script", "THE SCRIPT", f"{story_words} words" if issue.story else "unwritten",
-             100 if issue.story else 0),
-            ("scenes", "SCENES", f"{n_sc}" if n_sc else "none yet",
-             100 if n_sc else 0),
-            ("beats", "BEATS",
-             (f"{total}" + (f" · {bare_scenes} scene(s) bare" if bare_scenes else "")) if n_sc else "—",
-             int(100 * (n_sc - bare_scenes) / n_sc) if n_sc else 0),
-            ("roughs", "ROUGHS", f"{on_table}/{total} on the table" if total else "—",
-             int(100 * on_table / total) if total else 0),
-            ("prints", "PRINTS",
-             (f"{inked}/{total} inked" + (f" · {len(unplaced)} unplaced" if has_layout and unplaced else "")) if total else "—",
-             int(100 * inked / total) if total else 0),
-        ]
-        with ui.row().classes('w-full items-center').style('gap: 8px; flex-wrap: wrap;'):
-            for key, label, sub, pct in stages:
-                chip = ui.element('div').classes('stage-chip' + (' stage-chip--here' if altitude == key else '')
-                                                 + (' stage-chip--done' if pct >= 100 else ''))
-                chip.mark(f'altitude-{key}')
-                chip.style(f'--pct: {pct}%;')
-                with chip:
-                    ui.label(label).classes('stage-chip__name')
-                    ui.label(sub).classes('stage-chip__sub')
-                chip.on('click', lambda _, k=key: set_altitude(k))
-                chip.tooltip(f"See the book at {label.lower()} altitude")
-            bound_ok = print_ready and os.path.exists(export_path)
-            bc = ui.chip('⤓ bound', icon='check_circle' if bound_ok else 'radio_button_unchecked',
-                         color='green' if bound_ok else 'orange').props('dense outline clickable')
-            if bound_ok:
-                bc.tooltip('Open the bound PDF')
-                bc.on('click', lambda _: ui.run_javascript(
-                    f"window.open('/{export_path.replace(os.sep, '/')}', '_blank');"))
-            else:
-                bc.tooltip("Click and I'll bind what's ready")
-                bc.on('click', lambda _: post_user_message(state, "Export the issue as a PDF."))
+        # ---- THE OPEN BOOK ------------------------------------------------
+        with ui.element('div').classes('book w-full'):
+            # the front cover opens the book alone on the recto, like a real one
+            cover_sheet('front', recto=True)
+            cover_sheet('inside-front')
 
-        # ---- THE SHELF: the physical book -------------------------------
-        with ui.row().classes('shelf w-full flex-nowrap items-end'):
-            front = next((c for c in covers_all if c.location.value == 'front'), None)
-            for c in covers_all:
-                with ui.element('div').classes('shelf-sheet').style('width: 96px;') as sheet:
-                    if c.image and os.path.exists(c.image):
-                        ui.image(source=c.image).props('fit=cover').style('width: 96px; height: 144px;')
+            # THE SCRIPT: a manuscript page in the book
+            with ui.element('div').classes('book-page book-page--script'):
+                ui.label('THE SCRIPT').classes('page-cap')
+                with ui.element('div').classes('script-body'):
+                    if issue.story:
+                        ui.markdown(issue.story).classes('script-text')
                     else:
-                        ui.label(f'{c.location.value} cover\n(bare board)') \
-                            .classes('text-xs text-gray-500 text-center') \
-                            .style('width: 96px; height: 144px; display: flex; align-items: center; '
-                                   'justify-content: center; white-space: pre-line;')
-                    sheet.tooltip(f"The {c.location.value.replace('-', ' ')} cover — open its light table")
-                    sheet.on('click', lambda _, c=c: goto(SelectedKind.COVER, c.cover_id,
-                                                          f"{c.location.value} cover"))
-            if front is None:
-                with ui.element('div').classes('shelf-sheet shelf-ghost').style('width: 96px;') as g:
-                    ui.label('+ front cover').classes('text-xs text-gray-500 text-center') \
-                        .style('width: 96px; height: 144px; display: flex; align-items: center; justify-content: center;')
-                    g.tooltip('Every book needs a face')
-                    g.on('click', lambda _: post_user_message(state, "I would like to create a front cover for this issue."))
-            # the spine thickens as the book grows
-            ui.element('div').classes('shelf-spine').style(f'width: {4 + len(pages_all)}px; height: 144px;') \
-                .tooltip(f"{len(pages_all)} page(s) and counting" if pages_all else "no pages yet")
-            for pm in pages_all:
-                with ui.element('div').classes('shelf-sheet').style('width: 96px;') as sheet:
-                    ui.image(source=page_thumb(state, series_id, issue_id, pm)) \
-                        .props('fit=contain').style('width: 96px;')
-                    ui.label(f'{pm.page_number}').classes('shelf-folio')
-                    sheet.tooltip(f'Page {pm.page_number} — take it in hand')
-                    sheet.on('click', lambda _, pid=pm.page_id: edit_page(state, series_id, issue_id, pid))
-            if total and not pages_all:
-                with ui.element('div').classes('shelf-sheet shelf-ghost').style('width: 96px;') as g:
-                    ui.label('🧵 stitch\nthe book').classes('text-xs text-center') \
-                        .style('width: 96px; height: 144px; display: flex; align-items: center; '
-                               'justify-content: center; white-space: pre-line;')
-                    g.tooltip('Lay every panel onto pages, reading order, one click')
-                    g.on('click', lambda _: stitch_now(state, series_id, issue_id))
-            if covers_all or pages_all:
-                with ui.element('div').classes('shelf-bookend') as be:
-                    ui.label('READ').classes('shelf-bookend__label')
-                    be.tooltip('Pick the book up — the reading room')
-                    be.on('click', lambda _: ui.run_javascript(
-                        f"window.open('/series/{series_id}/issue/{issue_id}/read', '_blank');"))
+                        ui.label('This book has no words yet.').classes('page-ghost-hint q-mt-lg')
 
-        # ---- THE SCRIPT --------------------------------------------------
-        if altitude == 'script' or not issue.story:
-            markdown_field_editor(state, "The script", issue.story)
-
-            def _set(field):
-                def setter(value):
-                    setattr(issue, field, value or None)
-                    storage.update_object(data=issue)
-                return setter
-            with ui.expansion('Credits & indicia — they print on the inside front cover') \
-                    .classes('w-full section-flat'):
-                view_attributes(
-                    state=state, caption="", individual_icons=False,
-                    attributes=[
-                        Attribute(caption="publication date", get_value=lambda: issue.publication_date, set_value=_set("publication_date")),
-                        Attribute(caption="price", get_value=lambda: issue.price, set_value=lambda v: (setattr(issue, "price", float(v) if v else None), storage.update_object(data=issue))),
-                        Attribute(caption="writer", get_value=lambda: issue.writer, set_value=_set("writer")),
-                        Attribute(caption="artist", get_value=lambda: issue.artist, set_value=_set("artist")),
-                        Attribute(caption="colorist", get_value=lambda: issue.colorist, set_value=_set("colorist")),
-                        Attribute(caption="creative minds", get_value=lambda: issue.creative_minds, set_value=_set("creative_minds")),
-                    ])
-        else:
-            # the arc strip: beginning and destination in one line — the
-            # writer's compass while working deep in a tier
-            sentences = re.split(r'(?<=[.!?])\s+', issue.story.strip())
-            arc = sentences[0] + ("  …  " + sentences[-1] if len(sentences) > 1 else "")
-            with ui.row().classes('arc-strip w-full items-center flex-nowrap').style('gap: 8px;') as strip:
-                ui.icon('history_edu').classes('text-lg')
-                ui.label(arc).classes('arc-strip__text')
-                ui.space()
-                ui.label(f'{story_words} words').classes('text-xs text-gray-500').style('flex-shrink: 0;')
-                strip.tooltip('The script — click to read and edit it')
-                strip.on('click', lambda _: set_altitude('script'))
-
-        # ---- THE SCENES: tiers that open into beats ----------------------
-        with ui.row().classes('w-full items-center q-mt-sm').style('gap: 10px;'):
-            ui.label('THE SCENES').classes('comic-label-sm')
-            ui.button(icon='add').props('flat round dense size=sm') \
-                .tooltip('Another scene') \
-                .on('click', lambda _: post_user_message(state, "I would like to create a new scene for this issue."))
-            if scenes_all and altitude == 'script':
-                ui.label(f'{n_sc} scene(s) — the SCENES chip on the rail opens them') \
-                    .classes('text-xs text-gray-500')
-        if not scenes_all:
-            ui.label('No scenes yet — expand the script into scenes with me.') \
-                .classes('text-sm text-gray-500')
-
-        if altitude != 'script':
-            lens = altitude if rank >= RANK['beats'] else 'beats'
+                def edit_script():
+                    with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 640px; max-width: 900px;'):
+                        markdown_field_editor(state, "The script", issue.story)
+                    dlg.open()
+                with ui.row().classes('script-foot items-center').style('gap: 4px;'):
+                    ui.button(icon='edit').props('flat round dense size=sm') \
+                        .tooltip('Rewrite the script').on('click', lambda _: edit_script())
+                    if not issue.story:
+                        ui.chip('write it with me', icon='auto_stories').props('dense outline clickable') \
+                            .on('click', lambda _: post_user_message(state, "Help me write the story for this issue."))
+                    ui.chip('+ scene', icon='add').props('dense outline clickable') \
+                        .tooltip('Another scene in the story') \
+                        .on('click', lambda _: post_user_message(state, "I would like to create a new scene for this issue."))
+            # THE BOOK FLOWS CONTINUOUSLY: beats pack across page turns the
+            # way text reflows across lines — turning, resizing, or moving a
+            # panel can carry its neighbors onto the next or previous page.
+            # A scene with no beats yet holds its place as a manuscript page.
+            from helpers.stitcher import pack_bands, paginate, justify, AR
+            segments, run = [], []
             for sc in scenes_all:
                 panels = panels_by_scene[sc.scene_id]
-                opened = (rank >= RANK['beats']) ^ (sc.scene_id in ws["open"])
-                with ui.row().classes('light-layer tier-row w-full items-center flex-nowrap').style('gap: 8px;'):
-                    ui.button(icon='expand_less' if opened else 'expand_more') \
-                        .props('flat round dense size=sm') \
-                        .tooltip('Fold the beats away' if opened else 'Open this scene into its beats') \
-                        .on('click', lambda _, sid=sc.scene_id: toggle_scene(sid))
-                    img = storage.find_scene_image(series_id=series_id, issue_id=issue_id, scene_id=sc.scene_id)
-                    if img:
-                        ui.image(source=img).props('fit=cover').style(
-                            'width: 64px; height: 36px; border-radius: 3px; flex-shrink: 0;')
-                    nm = ui.label(f"#{sc.scene_number} · {sc.name}").classes('tier-row__name') \
-                        .tooltip('Open the scene view')
-                    nm.on('click', lambda _, s=sc: goto(SelectedKind.SCENE, s.scene_id, s.name))
-                    with ui.row().classes('items-center flex-nowrap').style('gap: 3px;'):
-                        for p in panels:
-                            done = p.image and os.path.exists(p.image)
-                            half = bool(p.figure_images) and not done
-                            ui.element('span').classes(
-                                'ink-dot' + (' ink-dot--solid' if done else ' ink-dot--half' if half else '')) \
-                                .tooltip(f"beat {p.panel_number}: "
-                                         + ('inked' if done else 'on the table' if half else 'penciled'))
-                    if not panels:
-                        ui.chip('no beats yet — break it down', icon='edit', color='orange') \
-                            .props('dense outline clickable') \
-                            .tooltip("Click and I'll break this scene into beats with you") \
-                            .on('click', lambda _, s=sc: post_user_message(
-                                state, f"Break scene '{s.name}' into panels."))
-                    ui.space()
+                if panels:
+                    run += [((sc.scene_id, p.panel_id), AR.get(p.aspect.value, 1.5),
+                             getattr(p, 'size', None) or 'regular') for p in panels]
+                else:
+                    if run:
+                        segments.append(('flow', run))
+                        run = []
+                    segments.append(('manuscript', sc))
+            if run:
+                segments.append(('flow', run))
 
-                    def _nudge(scene, d):
-                        sibs = sorted(storage.read_all_objects(SceneModel, primary_key={
-                            "series_id": series_id, "issue_id": issue_id}), key=lambda s: s.scene_number)
-                        i = next((j for j, s in enumerate(sibs) if s.scene_id == scene.scene_id), None)
-                        if i is None or not (0 <= i + d < len(sibs)):
-                            return
-                        sibs[i], sibs[i + d] = sibs[i + d], sibs[i]
-                        for j, s in enumerate(sibs):
-                            if s.scene_number != j + 1:
-                                s.scene_number = j + 1
-                                storage.update_object(s)
-                        from gui.light_table import table_receipt
-                        table_receipt(state, f"↔️ moved **{sibs[i + d].name}** "
-                                             f"{'earlier' if d < 0 else 'later'} in the issue")
-                        state.refresh_details()
-                    ui.button(icon='chevron_left').props('flat round dense size=xs') \
-                        .tooltip('Earlier in the issue').on('click', lambda _, s=sc: _nudge(s, -1))
-                    ui.button(icon='chevron_right').props('flat round dense size=xs') \
-                        .tooltip('Later in the issue').on('click', lambda _, s=sc: _nudge(s, 1))
+            first_tiles = {ps[0].panel_id: sc for sc in scenes_all
+                           for ps in [panels_by_scene[sc.scene_id]] if ps}
+            folio = 0
+            for kind, seg in segments:
+                if kind == 'flow':
+                    band_pages = paginate(pack_bands(seg))
+                    for pi, pb in enumerate(band_pages):
+                        folio += 1
+                        cells = justify(pb, is_last=(pi == len(band_pages) - 1))
+                        grid_h = max(10.0, max(y + h for _k, _x, y, _w, h in cells))
+                        with ui.element('div').classes('book-page'):
+                            for key, x, y, w, h in cells:
+                                tile(key[0], key[1], x, y, w, h, grid_h,
+                                     cap_scene=first_tiles.get(key[1]))
+                            ui.label(str(folio)).classes('page-folio')
+                else:
+                    sc = seg
+                    folio += 1
+                    with ui.element('div').classes('book-page book-page--script'):
+                        cap = ui.label(f'{sc.scene_number} · {sc.name}'.upper()).classes('page-cap')
+                        cap.tooltip('The scene — open it, move it, grow it')
+                        with cap:
+                            scene_menu(sc)
+                        cap.on('click.stop', lambda _: None)
+                        with ui.element('div').classes('script-body'):
+                            if sc.story:
+                                ui.markdown(sc.story).classes('script-text')
+                            else:
+                                ui.label('Nothing written for this scene yet.') \
+                                    .classes('page-ghost-hint q-mt-lg')
+                        with ui.row().classes('script-foot items-center').style('gap: 4px;'):
+                            ui.chip('break it into beats', icon='grid_on') \
+                                .props('dense outline clickable') \
+                                .tooltip("I'll break this scene into beats — they flow "
+                                         "onto these pages as tiles") \
+                                .on('click', lambda _, s=sc: post_user_message(
+                                    state, f"Break scene '{s.name}' into panels."))
+                        ui.label(str(folio)).classes('page-folio')
 
-                if opened and panels:
-                    with ui.row().classes('w-full flex-nowrap tier-beats').style(
-                            'gap: 8px; overflow-x: auto; padding: 4px 2px 10px 44px;'):
-                        for p in panels:
-                            done = p.image and os.path.exists(p.image)
-                            with ui.card().classes('soft-card beat-card p-1 cursor-pointer relative') as card:
-                                if p.panel_id in placed_on and done:
-                                    ui.element('div').classes('corner-fold')
-                                with ui.row().classes('w-full items-center flex-nowrap').style('gap: 4px;'):
-                                    ui.label(f'#{p.panel_number}').classes('text-xs text-gray-500')
-                                    ui.icon({'landscape': 'crop_landscape', 'portrait': 'crop_portrait',
-                                             'square': 'crop_square'}.get(p.aspect.value, 'crop_landscape')) \
-                                        .classes('text-xs text-gray-500')
-                                    ui.space()
-                                    ui.icon('edit').classes(
-                                        'text-xs ' + ('text-green-700' if p.beat else 'text-gray-400')) \
-                                        .tooltip('penciled' if p.beat else 'unwritten')
-                                    ui.icon('layers').classes(
-                                        'text-xs ' + ('text-green-700' if p.figure_images else 'text-gray-400')) \
-                                        .tooltip(f'{len(p.figure_images)} acetate(s) on the table'
-                                                 if p.figure_images else 'bare board')
-                                    ui.icon('brush').classes(
-                                        'text-xs ' + ('text-green-700' if done else 'text-gray-400')) \
-                                        .tooltip('inked' if done else 'not inked yet')
-                                if lens == 'prints' or (lens == 'roughs' and done):
-                                    if done:
-                                        ui.image(source=p.image).props('fit=cover').style('height: 84px;')
-                                    else:
-                                        with ui.element('div').style(
-                                                'height: 84px; border: 2px dashed #bbb; border-radius: 4px; '
-                                                'display: flex; align-items: center; justify-content: center;'):
-                                            ui.label('unrendered').classes('text-xs text-gray-500')
-                                elif lens == 'roughs':
-                                    with ui.column().classes('w-full items-center justify-center').style('height: 84px; gap: 2px;'):
-                                        if p.figure_images:
-                                            ui.label(f'{len(p.figure_images)} acetate(s)').classes('text-sm')
-                                            ui.label('on the table').classes('text-xs text-gray-500')
-                                        else:
-                                            ui.label('bare board').classes('text-sm text-gray-500')
-                                            ui.label('walk in and build it').classes('text-xs text-gray-400')
-                                else:
-                                    txt = (p.beat or '').strip()
-                                    with ui.element('div').classes('beat-card__paper').style('height: 84px;'):
-                                        if txt:
-                                            ui.label(txt).classes('beat-card__text')
-                                        else:
-                                            ui.label('unwritten — click the pencil').classes(
-                                                'text-xs text-gray-400 italic')
-                                with ui.row().classes('w-full items-center flex-nowrap').style('gap: 4px; min-height: 20px;'):
-                                    ui.label(p.name or '').classes('text-xs') \
-                                        .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;')
-                                    if not (p.beat or '').strip():
-                                        ui.button(icon='edit').props('flat round dense size=xs') \
-                                            .tooltip('Pencil this beat — I\'ll draft it from the scene') \
-                                            .on('click.stop', lambda _, s=sc, p=p: post_user_message(
-                                                state, f"Write the beat text for panel {p.panel_number} "
-                                                       f"of scene '{s.name}', from the scene's story."))
-                                    elif not done and lens == 'prints':
-                                        ui.button(icon='brush').props('flat round dense size=xs') \
-                                            .tooltip('Ink it — render this panel') \
-                                            .on('click.stop', lambda _, s=sc, p=p: post_user_message(
-                                                state, f"Render panel {p.panel_number} of scene '{s.name}'."))
-                                    if p.panel_id in placed_on:
-                                        ui.chip(f'p{placed_on[p.panel_id]}', icon='menu_book') \
-                                            .props('dense outline clickable size=sm') \
-                                            .tooltip(f'Printed on page {placed_on[p.panel_id]} — take the page in hand') \
-                                            .on('click.stop', lambda _, p=p: edit_page(
-                                                state, series_id, issue_id,
-                                                next((pg.page_id for pg in pages_all
-                                                      if any(r.panel_id == p.panel_id for row in pg.rows for r in row)), None)))
-                            card.on('click', lambda _, s=sc, p=p: open_panel(
-                                state, series_id, issue_id, s.scene_id, p.panel_id))
-                            card.tooltip('Open this beat on its light table')
-                        with ui.card().classes('soft-card beat-card ghost-card p-1 cursor-pointer items-center justify-center') as gcard:
-                            ui.label('+ beat').classes('text-sm text-gray-500')
-                            gcard.tooltip('Another beat in this scene')
-                            gcard.on('click', lambda _, s=sc: post_user_message(
-                                state, f"Add another panel to scene '{s.name}'."))
+            cover_sheet('inside-back')
+            cover_sheet('back')
 
-        # ---- THE PRESSROOM ------------------------------------------------
-        if altitude == 'prints' or unplaced or dangling or not pages_all:
-            pressroom(state, series_id, issue_id)
-        else:
-            with ui.row().classes('arc-strip w-full items-center').style('gap: 8px;') as pr:
-                ui.icon('auto_awesome_mosaic').classes('text-lg')
-                ui.label(f'The pressroom — {len(pages_all)} page(s), every panel placed') \
-                    .classes('text-xs')
-                pr.tooltip('Open the pressroom — stitching and the unplaced tray')
-                pr.on('click', lambda _: set_altitude('prints'))
+            # THE COLOPHON: credits, downloads, the production small print
+            with ui.element('div').classes('book-page book-page--script'):
+                ui.label('COLOPHON').classes('page-cap')
+                with ui.element('div').classes('script-body'):
+                    def _set(field):
+                        def setter(value):
+                            setattr(issue, field, value or None)
+                            storage.update_object(data=issue)
+                        return setter
+                    view_attributes(
+                        state=state, caption="", individual_icons=False,
+                        attributes=[
+                            Attribute(caption="writer", get_value=lambda: issue.writer, set_value=_set("writer")),
+                            Attribute(caption="artist", get_value=lambda: issue.artist, set_value=_set("artist")),
+                            Attribute(caption="colorist", get_value=lambda: issue.colorist, set_value=_set("colorist")),
+                            Attribute(caption="creative minds", get_value=lambda: issue.creative_minds, set_value=_set("creative_minds")),
+                            Attribute(caption="publication date", get_value=lambda: issue.publication_date, set_value=_set("publication_date")),
+                            Attribute(caption="price", get_value=lambda: issue.price, set_value=lambda v: (setattr(issue, "price", float(v) if v else None), storage.update_object(data=issue))),
+                        ])
+                    with ui.row().classes('q-mt-md items-center').style('gap: 6px; flex-wrap: wrap;'):
+                        for fname, label in ((f"{issue_id}.pdf", '⤓ PDF'), (f"{issue_id}.cbz", '⤓ CBZ')):
+                            path = os.path.join(export_dir, fname)
+                            if os.path.exists(path):
+                                ui.chip(label, icon='download').props('dense outline clickable') \
+                                    .on('click', lambda _, u='/' + path.replace(os.sep, '/'):
+                                        ui.run_javascript(f"window.open('{u}', '_blank');"))
+                        ui.chip('bind it', icon='menu_book').props('dense outline clickable') \
+                            .tooltip("I'll bind the book and hand you the download") \
+                            .on('click', lambda _: post_user_message(state, "Export the issue as a PDF."))
+                # the small print tells the production truth
+                bits = [f"{inked} of {total} panels inked" if total else "no panels yet",
+                        "every panel placed" if pages_all and not unplaced and not dangling
+                        else f"{len(unplaced)} panel(s) loose" if unplaced else "no pages yet"]
+                if bare_scenes:
+                    bits.append(f"{len(bare_scenes)} scene(s) still to break down")
+                ui.label("  ·  ".join(bits)).classes('page-small-print')

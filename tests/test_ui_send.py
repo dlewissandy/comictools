@@ -152,10 +152,8 @@ async def test_inline_scalar_edit_affordance(user: User) -> None:
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    # the workspace opens at SCENES altitude; the script level carries the
-    # credits & indicia click-to-edit scalars
-    await user.should_see("THE SCRIPT")
-    user.find(marker="altitude-script").click()
+    # THE COLOPHON page carries the credits' click-to-edit scalars
+    await user.should_see("COLOPHON")
     await user.should_see("Click to edit writer")
     await user.should_see("Click to edit price")
 
@@ -214,7 +212,7 @@ async def test_palette_and_chip_removal(user: User) -> None:
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
 async def test_issue_production_dashboard(user: User) -> None:
-    """The issue view opens on THE SPINE RAIL: production truth per stage."""
+    """The issue view opens as THE OPEN BOOK: script page, pages, colophon."""
     main.LocalStorage = _TmpStorage
     json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
                              {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
@@ -222,10 +220,8 @@ async def test_issue_production_dashboard(user: User) -> None:
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
     await user.should_see("THE SCRIPT")
-    await user.should_see("BEATS")
-    await user.should_see("PRINTS")
-    await user.should_see("bound")
-    await user.should_see("THE SCENES")
+    await user.should_see("COLOPHON")
+    await user.should_see("panels inked")
 
 
 @pytest.mark.module_under_test(main)

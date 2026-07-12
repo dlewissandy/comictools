@@ -1909,6 +1909,7 @@ def export_issue_pdf(wrapper: RunContextWrapper[APPState], series_id: str, issue
     if issue is None:
         return f"Issue '{issue_id}' not found in series '{series_id}'."
 
+    _refresh_machine_layout(storage, series_id, issue_id)
     output = os.path.join(str(storage.base_path), "series", series_id, "issues", issue_id, "exports", f"{issue_id}.pdf")
     try:
         page_count, missing = bind_issue_pdf(storage, series_id, issue_id, output)
@@ -1925,6 +1926,22 @@ def export_issue_pdf(wrapper: RunContextWrapper[APPState], series_id: str, issue
     url = "/" + output.replace(os.sep, "/")
     return (f"Issue '{issue.name}' bound to {output} ({page_count} pages).  "
             f"Give the author this link: [Download the bound PDF]({url}){note}")
+
+
+def _refresh_machine_layout(storage, series_id: str, issue_id: str) -> None:
+    """Before binding: if the page layout is the stitcher's (or absent) and
+    the book has drifted — loose or dangling panels — re-stitch so the print
+    is always current.  Hand-designed layouts (rows without cells) are never
+    touched."""
+    from schema import Page
+    from helpers.binder import page_coverage
+    pages = storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id})
+    if pages and not all(p.cells for p in pages):
+        return                       # the author laid these pages by hand
+    _has, _placed, unplaced, dangling = page_coverage(storage, series_id, issue_id)
+    if not pages or unplaced or dangling:
+        from helpers.stitcher import apply_stitch
+        apply_stitch(storage, series_id, issue_id)
 
 
 @function_tool
@@ -1950,6 +1967,7 @@ def export_issue_cbz(wrapper: RunContextWrapper[APPState], series_id: str, issue
     if issue is None:
         return f"Issue '{issue_id}' not found in series '{series_id}'."
 
+    _refresh_machine_layout(storage, series_id, issue_id)
     output = os.path.join(str(storage.base_path), "series", series_id, "issues", issue_id, "exports", f"{issue_id}.cbz")
     try:
         page_count, missing = bind_issue_cbz(storage, series_id, issue_id, output)
