@@ -116,6 +116,22 @@ def view_panel(state: APPState):
                 else:
                     nb.on('click', lambda _: goto(1))
 
+            # PRINTED ON PAGE N: one click back up to the book — rapid
+            # page-to-panel-and-back editing
+            from schema import Page as _Page
+            on_page = next((pm.page_number for pm in storage.read_all_objects(
+                _Page, primary_key={"series_id": series_id, "issue_id": issue_id})
+                for row in pm.rows for r in row if r.panel_id == panel_id), None)
+            if on_page is not None:
+                def back_to_book():
+                    i = next((j for j, s in enumerate(state.selection)
+                              if s.kind.value == 'issue'), None)
+                    if i is not None:
+                        state.change_selection(new=state.selection[:i + 1])
+                ui.chip(f'page {on_page}', icon='menu_book').props('dense outline clickable') \
+                    .tooltip(f'Printed on page {on_page} — back up to the book') \
+                    .on('click', lambda _: back_to_book())
+
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current panel."), size=1)
 

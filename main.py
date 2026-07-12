@@ -268,6 +268,67 @@ def init_layout(logger):
         /* GHOST CARDS: work not yet inked — dashed frame, faded art, one CTA */
         .ghost-card { border-style: dashed !important; }
         .ghost-card .q-img { opacity: .3; filter: grayscale(55%); }
+
+        /* THE SPINE RAIL: stage chips that ink themselves in as the book
+           approaches print — the fill IS the completion meter */
+        .stage-chip { display: inline-flex; flex-direction: column; cursor: pointer;
+                      border: 2px solid var(--ink); border-radius: 3px;
+                      padding: 3px 12px 4px; position: relative; line-height: 1.1;
+                      background: linear-gradient(90deg, rgba(46,125,50,.22) var(--pct, 0%),
+                                                  transparent var(--pct, 0%));
+                      transition: transform .12s; }
+        .stage-chip:hover { transform: translateY(-1px); }
+        .stage-chip--here { box-shadow: 3px 3px 0 rgba(0,0,0,.4); }
+        .stage-chip--done { border-color: #2e7d32; }
+        .stage-chip__name { font-size: .68rem; font-weight: 800; letter-spacing: .05em; }
+        .stage-chip__sub  { font-size: .62rem; opacity: .75; white-space: nowrap; }
+
+        /* THE SHELF: the book as a physical object — sheets lift to be picked
+           up, the spine thickens as pages land */
+        .shelf { overflow-x: auto; gap: 10px; padding: 10px 4px 6px;
+                 border-bottom: 2px solid var(--ink); }
+        .shelf-sheet { flex-shrink: 0; cursor: pointer; border-radius: 2px;
+                       background: #fff; box-shadow: 2px 3px 8px rgba(0,0,0,.35);
+                       transition: transform .15s; position: relative; overflow: hidden; }
+        .shelf-sheet:hover { transform: translateY(-5px); }
+        .shelf-ghost { border: 2px dashed var(--ink); opacity: .65; box-shadow: none;
+                       background: transparent; }
+        .shelf-spine { flex-shrink: 0; background: var(--ink); border-radius: 1px;
+                       margin: 0 2px; }
+        .shelf-folio { position: absolute; bottom: 2px; right: 5px; font-size: .6rem;
+                       background: rgba(255,255,255,.8); border-radius: 6px;
+                       padding: 0 4px; color: #333; }
+        .shelf-bookend { flex-shrink: 0; cursor: pointer; height: 144px; width: 30px;
+                         background: var(--caption, #f3e5ab); border: 2px solid var(--ink);
+                         border-radius: 2px; display: flex; align-items: center;
+                         justify-content: center; transition: transform .15s; }
+        .shelf-bookend:hover { transform: translateY(-5px); }
+        .shelf-bookend__label { writing-mode: vertical-rl; font-size: .68rem;
+                                font-weight: 800; letter-spacing: .2em; }
+
+        /* THE TIERS: ink dots fill hollow → half → solid as beats move
+           script → table → print */
+        .ink-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+                   border: 1.5px solid var(--ink); display: inline-block; }
+        .ink-dot--half { background: linear-gradient(to top, var(--ink) 50%, transparent 50%); }
+        .ink-dot--solid { background: var(--ink); }
+        .tier-row__name { font-weight: 700; cursor: pointer; white-space: nowrap;
+                          overflow: hidden; text-overflow: ellipsis; }
+        .tier-row__name:hover { text-decoration: underline; }
+        .beat-card { width: 152px; flex-shrink: 0; }
+        .beat-card__paper { background: var(--caption, #f9f4e0); border-radius: 3px;
+                            padding: 4px 6px; overflow: hidden; }
+        .beat-card__text { font-size: .68rem; line-height: 1.25;
+                           display: -webkit-box; -webkit-line-clamp: 5;
+                           -webkit-box-orient: vertical; overflow: hidden; }
+        .corner-fold { position: absolute; top: 0; right: 0; z-index: 5; width: 0; height: 0;
+                       border-style: solid; border-width: 0 16px 16px 0;
+                       border-color: transparent #c9a86a transparent transparent; }
+        .arc-strip { cursor: pointer; border: 1.5px dashed var(--ink); border-radius: 3px;
+                     padding: 6px 12px; opacity: .85; }
+        .arc-strip:hover { opacity: 1; }
+        .arc-strip__text { font-style: italic; font-size: .8rem; overflow: hidden;
+                           text-overflow: ellipsis; white-space: nowrap; }
         .comic-page > * { min-width: 0; }
         .cpanel { position: relative; background: var(--panel);
                   border: 2.5px solid var(--ink); border-radius: 2px;
