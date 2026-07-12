@@ -113,6 +113,17 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                             ["Compose this cover: …", "Propose a cover concept", "Render the cover"])
                 return (None, ["Compose this cover: …", "Re-render the cover", "Try a different text layout"])
 
+            case "insert":
+                from schema import Insert
+                series_id = sel[-3].id if len(sel) > 2 else None
+                ins = storage.read_object(Insert, {"series_id": series_id, "issue_id": sel[-2].id,
+                                                   "insert_id": sel[-1].id}) if series_id else None
+                if ins is not None and not ins.image:
+                    return (f"This {ins.kind} reads as typeset words until it's inked — "
+                            f"compose it on the light table or say the word and I'll render it.",
+                            ["Render this page", "Work on the words with me", "Move it in the book"])
+                return (None, ["Re-render this page", "Rework it on the table", "Move it in the book"])
+
             case "style":
                 return (None, ["Generate an art style example", "Tune the bubble styles"])
 
@@ -146,6 +157,7 @@ ROLE_NAMES = {
     "styled-variant": "the Character Designer",
     "setting": "the Background Artist",
     "cover": "the Cover Artist",
+    "insert": "the Production Artist",
     "front-cover": "the Cover Artist",
     "back-cover": "the Cover Artist",
     "inside-front-cover": "the Cover Artist",

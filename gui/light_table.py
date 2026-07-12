@@ -2830,7 +2830,8 @@ def light_table(state: APPState, panel, scene, setting,
                         _receipt('🏷 laid the series title masthead on the table')
                         state.refresh_details()
                     ui.button(icon='title').props('flat round dense size=sm') \
-                        .tooltip('The series title masthead — lay it on the cover as an acetate') \
+                        .tooltip(f'The series title masthead — lay it on this '
+                                 f'{"cover" if cover_mode else "page"} as an acetate') \
                         .on('click', lambda _: lay_title())
 
                     # THE PUBLISHER'S MARK: the little logo every cover wears
@@ -2850,10 +2851,11 @@ def light_table(state: APPState, panel, scene, setting,
                         panel.figure_images['element/publisher-mark'] = art
                         panel.figure_blocking['element/publisher-mark'] = {"x": 10, "y": 82, "h": 12, "z": 61}
                         storage.update_object(panel)
-                        _receipt("🔖 laid the publisher's mark on the cover")
+                        _receipt(f"🔖 laid the publisher's mark on {board_label(panel)}")
                         state.refresh_details()
                     ui.button(icon='workspace_premium').props('flat round dense size=sm') \
-                        .tooltip("The publisher's mark — lay the logo on the cover as an acetate") \
+                        .tooltip(f'The publisher\'s mark — lay the logo on this '
+                                 f'{"cover" if cover_mode else "page"} as an acetate') \
                         .on('click', lambda _: lay_publisher_mark())
                 def new_letters():
                     from schema.dialog import Dialogue, Narration, DialogueEmphasis, NarrationPosition
@@ -2963,9 +2965,9 @@ def light_table(state: APPState, panel, scene, setting,
                         state.refresh_details()
 
                     with ui.column().classes('w-full q-mt-sm').style('gap: 6px;'):
-                        ui.button('A new take of this panel', icon='filter_frames').props('unelevated dense') \
+                        ui.button(f'A new take of {board_label(panel)}', icon='filter_frames').props('unelevated dense') \
                             .classes('w-full').on('click', lambda _: as_take())
-                        ui.button('A reference on this panel', icon='attachment').props('outline dense') \
+                        ui.button(f'A reference on {board_label(panel)}', icon='attachment').props('outline dense') \
                             .classes('w-full').on('click', lambda _: as_reference())
                         if setting is not None and scene is not None and scene.style_id:
                             ui.button(f"The master background for {setting.name.title()}", icon='landscape') \
@@ -3002,8 +3004,10 @@ def light_table(state: APPState, panel, scene, setting,
                     state.refresh_details()
                 shapes = [('crop_landscape', _FL.LANDSCAPE, 'Landscape frame'),
                           ('crop_portrait', _FL.PORTRAIT, 'Portrait frame')]
-                if not cover_mode:
+                if not cover_mode and not insert_mode:
                     shapes.append(('crop_square', _FL.SQUARE, 'Square frame'))
+                if insert_mode:
+                    shapes = []   # a full page is portrait, always
                 for icon, shape, tip in shapes:
                     b = ui.button(icon=icon).props('flat round dense size=sm')
                     if panel.aspect == shape:

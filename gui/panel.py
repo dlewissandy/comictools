@@ -101,20 +101,21 @@ def view_panel(state: APPState):
                 state.change_selection(new=[*selection[:-1], SelectionItem(
                     name=tgt.name, id=tgt.panel_id, kind=SelectedKind.PANEL)])
 
-            with ui.row().classes('items-center flex-nowrap self-center').style('gap: 2px;'):
-                pb = ui.button(icon='chevron_left').props('flat round dense') \
-                    .tooltip('Previous panel in the scene')
-                if idx <= 0:
-                    pb.props('disable')
-                else:
-                    pb.on('click', lambda _: goto(-1))
-                ui.label(f'{idx + 1}/{len(sibs)}').classes('text-xs text-gray-500')
-                nb = ui.button(icon='chevron_right').props('flat round dense') \
-                    .tooltip('Next panel in the scene')
-                if idx >= len(sibs) - 1:
-                    nb.props('disable')
-                else:
-                    nb.on('click', lambda _: goto(1))
+            if len(sibs) > 1:   # a walker with nowhere to walk is clutter
+                with ui.row().classes('items-center flex-nowrap self-center').style('gap: 2px;'):
+                    pb = ui.button(icon='chevron_left').props('flat round dense') \
+                        .tooltip('Previous panel in the scene')
+                    if idx <= 0:
+                        pb.props('disable')
+                    else:
+                        pb.on('click', lambda _: goto(-1))
+                    ui.label(f'{idx + 1}/{len(sibs)}').classes('text-xs text-gray-500')
+                    nb = ui.button(icon='chevron_right').props('flat round dense') \
+                        .tooltip('Next panel in the scene')
+                    if idx >= len(sibs) - 1:
+                        nb.props('disable')
+                    else:
+                        nb.on('click', lambda _: goto(1))
 
             # PRINTED ON PAGE N: one click back up to the book — rapid
             # page-to-panel-and-back editing

@@ -93,6 +93,21 @@ def view_insert(state: APPState):
                     else:
                         nb.on('click', lambda _: goto(1))
 
+            # ITS PLACE IN THE BOOK: one click back up, landing on this page
+            def back_to_book():
+                if not hasattr(state, '_book_anchor'):
+                    state._book_anchor = {}
+                state._book_anchor[issue_id] = f'insert-{insert_id}'
+                i = next((j for j, s in enumerate(state.selection)
+                          if s.kind.value == 'issue'), None)
+                if i is not None:
+                    state.change_selection(new=state.selection[:i + 1])
+            place = (f'after scene {insert.after_scene_number}'
+                     if insert.after_scene_number else 'front of the book')
+            ui.chip(place, icon='menu_book').props('dense outline clickable') \
+                .tooltip('Where this page sits — back up to the book') \
+                .on('click', lambda _: back_to_book())
+
             ui.space()
             from gui.strike import strike
             from agentic.tools.deleter import delete_insert as _del_insert
