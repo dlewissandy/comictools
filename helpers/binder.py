@@ -279,7 +279,12 @@ def compose_book(storage: GenericStorage, series_id: str, issue_id: str
     if layout:
         for page_model, rows in layout:
             folio = page_model.page_number
-            interior.append((f"page {folio}", _folio_stamp(_compose_page(rows), folio)))
+            if page_model.cells:
+                # a STITCHED page: exact boxes on the 6x10 unit grid
+                img = _compose_page_cells(resolve_cells(storage, series_id, issue_id, page_model))
+            else:
+                img = _compose_page(rows)
+            interior.append((f"page {folio}", _folio_stamp(img, folio)))
         # panels the layout forgot are NEVER silently dropped: they flow onto
         # extra pages at the end (and collect_issue reports them as gaps)
         _has, _placed, unplaced, _dang = page_coverage(storage, series_id, issue_id)
@@ -374,7 +379,8 @@ def book_signature(storage: GenericStorage, series_id: str, issue_id: str) -> st
     for pm in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id},
                                        order_by="page_number"):
         parts.append(f"page{pm.page_number}:" + json.dumps(
-            [[(r.scene_id, r.panel_id) for r in row] for row in pm.rows]))
+            [[(r.scene_id, r.panel_id) for r in row] for row in pm.rows])
+            + json.dumps([(c.panel_id, c.x, c.y, c.w, c.h) for c in pm.cells]))
     for scene, panels in _reading_order(storage, series_id, issue_id):
         for p in panels:
             parts.append(f"{scene.scene_id}/{p.panel_id}#{p.panel_number}="
@@ -440,6 +446,49 @@ def layout_pages(storage: GenericStorage, series_id: str, issue_id: str):
             rows.append(paths)
         resolved.append((pm, rows))
     return resolved
+
+
+def resolve_cells(storage: GenericStorage, series_id: str, issue_id: str, pm) -> list[tuple]:
+    """A stitched page's cells resolved to (image_path_or_None, x, y, w, h)."""
+    specs = []
+    for c in pm.cells:
+        panel = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
+                                            "scene_id": c.scene_id, "panel_id": c.panel_id})
+        ok = panel and panel.image and os.path.exists(panel.image)
+        specs.append((panel.image if ok else None, c.x, c.y, c.w, c.h))
+    return specs
+
+
+def _compose_page_cells(cells: list[tuple]) -> "Image.Image":
+    """
+    Compose one STITCHED page: each cell is an exact box on the 6-wide x
+    10-tall unit grid.  Art is scaled-to-cover and center-cropped into its
+    box (never distorted); unrendered panels print as placeholder boxes.
+    A crowded page (units past 10 after an edit) scales to fit the trim.
+    """
+    page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+    if not cells:
+        return page
+    draw = ImageDraw.Draw(page)
+    grid_h = max(10.0, max(y + h for _p, _x, y, _w, h in cells))
+    ux = (PAGE_W - 2 * MARGIN) / 6.0
+    uy = (PAGE_H - 2 * MARGIN) / grid_h
+    for path, x, y, w, h in cells:
+        left = MARGIN + x * ux + (GUTTER / 2 if x > 0.05 else 0)
+        right = MARGIN + (x + w) * ux - (GUTTER / 2 if x + w < 5.95 else 0)
+        top = MARGIN + y * uy + (GUTTER / 2 if y > 0.05 else 0)
+        bottom = MARGIN + (y + h) * uy - (GUTTER / 2 if y + h < grid_h - 0.05 else 0)
+        bw, bh = max(1, round(right - left)), max(1, round(bottom - top))
+        if path:
+            im = Image.open(path).convert("RGB")
+            s = max(bw / im.width, bh / im.height)
+            im = im.resize((max(1, round(im.width * s)), max(1, round(im.height * s))), Image.LANCZOS)
+            cx, cy = (im.width - bw) // 2, (im.height - bh) // 2
+            page.paste(im.crop((cx, cy, cx + bw, cy + bh)), (round(left), round(top)))
+        else:
+            draw.rectangle([left, top, left + bw, top + bh],
+                           outline=(180, 180, 180), width=3, fill=(240, 240, 240))
+    return page
 
 
 def _compose_page(rows: list[list[str | None]]) -> "Image.Image":

@@ -140,6 +140,10 @@ def delete_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
             new_rows = [row for row in new_rows if row]
             if new_rows != page.rows:
                 page.rows = new_rows
+                if page.cells:
+                    # a stitched page re-stitches around the gap
+                    from helpers.stitcher import repack_page
+                    repack_page(storage, page)
                 storage.update_object(page)
     except Exception as ex:
         from loguru import logger

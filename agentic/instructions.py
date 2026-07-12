@@ -81,9 +81,13 @@ PERSONAS = {
            (varying framing: establishing panel, medium, close-up).   Favor
            image-driven storytelling; keep dialogue minimal and purposeful.
 
-        7. LAY OUT THE PAGES once panels exist: propose a page-by-page grid —
-           rows of 1-3 panels, splash pages for the big moments, pacing at the
-           page turn — get approval, then call layout_issue_pages.  Use
+        7. LAY OUT THE PAGES once panels exist: call stitch_issue_pages to lay
+           the WHOLE issue onto pages in one step (the studio's banding on the
+           printed page's 6x10 grid) — the author can rearrange any page
+           afterward.  For a hand-designed layout instead, propose a
+           page-by-page grid — rows of 1-3 panels, splash pages for the big
+           moments, pacing at the page turn — get approval, then call
+           layout_issue_pages.  Use
            preflight_issue to see what still needs rendering, and
            export_issue_pdf (or export_issue_cbz for comic reader apps) to
            bind the finished book — always hand the author the download link

@@ -2090,6 +2090,36 @@ def layout_issue_pages(wrapper: RunContextWrapper[APPState], series_id: str, iss
     return f"Laid out {len(pages)} pages ({placed} panels placed).{note}"
 
 
+@function_tool
+def stitch_issue_pages(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+    """
+    STITCH THE BOOK: lay every scene's panels, in reading order, onto pages
+    automatically — the studio's banding algorithm on the printed page's
+    6x10 unit grid (portrait panels lead tall bands beside stacked landscape
+    panels; pairs share rows; a lone wide panel becomes a splash).   Replaces
+    any existing page layout (the old one is snapshotted).   Use this for a
+    complete first layout in one step; layout_issue_pages remains the tool
+    for hand-designed page grids.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+
+    Returns:
+        A status message summarizing the stitched book.
+    """
+    from helpers.stitcher import apply_stitch
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    new_pages, _old = apply_stitch(storage, series_id, issue_id)
+    if not new_pages:
+        return "Nothing to stitch yet — break the scenes into panels first."
+    placed = sum(len(p.cells) for p in new_pages)
+    state.is_dirty = True
+    return (f"Stitched the whole issue onto {len(new_pages)} page(s) — all {placed} panels "
+            f"placed in reading order.  The author can rearrange any page from the issue view.")
+
+
 def _render_asset_reference(wrapper, cls, key, series_id, asset_id, style_id, subject_line, guidance):
     """Shared renderer: reference art for a prop/outfit in a style, anchored to the style's art example."""
     state: APPState = wrapper.context
