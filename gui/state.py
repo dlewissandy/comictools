@@ -462,6 +462,9 @@ class APPState:
                 return view_panel(self)
             case "cover":
                 return view_cover(self)
+            case "insert":
+                from gui.insert import view_insert
+                return view_insert(self)
             case "publisher":
                 return view_publisher(self)
             case "pick-publisher":

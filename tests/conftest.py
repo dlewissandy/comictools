@@ -48,13 +48,18 @@ def mock_imaging(monkeypatch):
     from io import BytesIO
     from PIL import Image
     import agentic.tools.imaging as imaging
+    import helpers.generator as generator
     calls = []
     def _jpeg():
         buf = BytesIO(); Image.new("RGB", (16, 16), (60, 120, 200)).save(buf, "JPEG"); return buf.getvalue()
-    monkeypatch.setattr(imaging, "invoke_generate_image_api",
-                        lambda prompt, **kw: calls.append(("generate", prompt, [])) or _jpeg())
-    monkeypatch.setattr(imaging, "invoke_edit_image_api",
-                        lambda prompt, reference_images=None, **kw: calls.append(("edit", prompt, list(reference_images or []))) or _jpeg())
+    gen = lambda prompt, **kw: calls.append(("generate", prompt, [])) or _jpeg()
+    edit = lambda prompt, reference_images=None, **kw: calls.append(("edit", prompt, list(reference_images or []))) or _jpeg()
+    # patch BOTH the imaging module's names and the source module — bodies
+    # that import inside the function resolve helpers.generator at call time
+    monkeypatch.setattr(imaging, "invoke_generate_image_api", gen)
+    monkeypatch.setattr(imaging, "invoke_edit_image_api", edit)
+    monkeypatch.setattr(generator, "invoke_generate_image_api", gen)
+    monkeypatch.setattr(generator, "invoke_edit_image_api", edit)
     return calls
 
 

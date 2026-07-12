@@ -535,3 +535,24 @@ TOOLKITS["front-cover"] = TOOLKITS["cover"]
 TOOLKITS["back-cover"] = TOOLKITS["cover"]
 TOOLKITS["inside-front-cover"] = TOOLKITS["cover"]
 TOOLKITS["inside-back-cover"] = TOOLKITS["cover"]
+
+# THE INSERT WORKBENCH: a full-page insert is a board like a cover — it
+# composes on the light table and renders from its rough + description.
+TOOLKITS["insert"] = [
+    # Read
+    read_all_inserts,
+    read_all_styles,
+    read_setting,
+    read_all_settings,
+    read_all_characters,
+    read_all_variants,
+    # Update
+    update_insert,
+    # Delete
+    undo_last_delete,
+    delete_insert,
+    # Imaging
+    generate_insert_art,
+    generate_setting_background,
+    generate_series_title_art,
+]

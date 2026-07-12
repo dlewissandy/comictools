@@ -448,7 +448,7 @@ def view_issue(state: APPState):
         classes = 'book-page'
         if not rendered:
             classes += ' book-page--script' if has_text else ' book-page--ghost book-page--insert'
-        with ui.element('div').classes(classes) as sh:
+        with ui.element('div').classes(classes + ' cursor-pointer') as sh:
             if rendered:
                 ui.image(source=ins.image).props('fit=cover').classes('absolute inset-0 w-full h-full')
             elif has_text:
@@ -461,11 +461,10 @@ def view_issue(state: APPState):
                          'mailbag': 'mail', 'title-page': 'title'}.get(ins.kind, 'wallpaper')) \
                     .classes('text-4xl').style('opacity: .5;')
                 ui.label(ins.name).classes('page-ghost-cta')
-                ui.chip('render it', icon='brush').props('dense outline clickable size=sm') \
-                    .on('click.stop', lambda _, i=ins: post_user_message(
-                        state, f"Render the '{i.name}' insert."))
             ui.label(f'{ins.kind} · {ins.name}'.upper()).classes('page-cap')
-            with ui.row().classes('script-foot insert-foot items-center flex-nowrap').style('gap: 2px;'):
+            foot = ui.row().classes('script-foot insert-foot items-center flex-nowrap').style('gap: 2px;')
+            foot.on('click.stop', lambda _: None)   # the foot's own clicks stay in the foot
+            with foot:
                 footer_btn('chevron_left', 'Earlier in the book (previous scene)',
                            lambda _, i=ins: move_insert(i, -1))
                 footer_btn('chevron_right', 'Later in the book (next scene)',
@@ -483,6 +482,10 @@ def view_issue(state: APPState):
                 footer_btn('close', 'Tear this insert out…',
                            lambda _, i=ins: post_user_message(
                                state, f"I would like to delete the insert '{i.name}'."))
+        # the page IS a board: click it to open its light table
+        sh.tooltip(f"The {ins.kind} — open it on the light table")
+        sh.on('click', lambda _, i=ins: goto(SelectedKind.INSERT, i.insert_id, i.name,
+                                             anchor=f'insert-{i.insert_id}'))
         sh._props['data-banchor'] = f'insert-{ins.insert_id}'
 
     def scene_sheet(sc, folio=None):

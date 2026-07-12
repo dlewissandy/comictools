@@ -251,6 +251,7 @@ if (!window._roughDragInit) {
   const report = (fig, canvas) => emitEvent('rough_block', {
       key: fig.dataset.key, series: canvas.dataset.series, issue: canvas.dataset.issue,
       scene: canvas.dataset.scene, panel: canvas.dataset.panel, cover: canvas.dataset.cover,
+      insert: canvas.dataset.insert,
       x: parseFloat(fig.style.left), y: parseFloat(fig.style.bottom) || 0,
       h: parseFloat(fig.style.height) || 0,
       fs: parseFloat(fig.style.fontSize) || 0,
@@ -340,7 +341,8 @@ if (!window._roughDragInit) {
     emitEvent('stack_reorder', {
       src: src.dataset.key, dst: row.dataset.key, mode: dropMode(e, row),
       series: stack.dataset.series, issue: stack.dataset.issue,
-      scene: stack.dataset.scene, panel: stack.dataset.panel, cover: stack.dataset.cover});
+      scene: stack.dataset.scene, panel: stack.dataset.panel, cover: stack.dataset.cover,
+      insert: stack.dataset.insert});
   });
   document.addEventListener('dragend', () => {
     clearDropMarks();
@@ -420,6 +422,7 @@ if (!window._roughDragInit) {
     emitEvent('rough_text', {
       key: fig.dataset.key, series: canvas.dataset.series, issue: canvas.dataset.issue,
       scene: canvas.dataset.scene, panel: canvas.dataset.panel, cover: canvas.dataset.cover,
+      insert: canvas.dataset.insert,
       text: fig.innerText.trim()});
   }
   document.addEventListener('focusout', (e) => {
@@ -480,6 +483,13 @@ def _img_ar(path: str) -> float:
 # ---------------------------------------------------------------------------
 def is_cover(board) -> bool:
     return hasattr(board, 'cover_id')
+
+
+def is_insert(board) -> bool:
+    """A full-page insert (poster, ad, pin-up, the mailbag) — its own scene,
+    like a cover: it owns style_id and setting_id and rides the table as
+    both the subject and the scene-role."""
+    return hasattr(board, 'insert_id')
 
 
 def apply_stack_reorder(p, src_k: str, dst_k: str, mode: str = 'before') -> None:
@@ -601,6 +611,8 @@ def board_label(board) -> str:
     """How the board reads in receipts and job labels."""
     if is_cover(board):
         return f"the {board.location.value.replace('-', ' ')} cover"
+    if is_insert(board):
+        return f"the '{board.name}' {board.kind}"
     return f"panel {board.panel_number}"
 
 
@@ -762,11 +774,15 @@ def handle_clipboard_image(state, args: dict):
 
 
 def read_board(storage, a: dict):
-    """Resolve a rough/stack event back to its board (panel or cover)."""
+    """Resolve a rough/stack event back to its board (panel, cover or insert)."""
     if a.get('cover'):
         from schema import Cover as _Cover
         return storage.read_object(cls=_Cover, primary_key={
             "series_id": a['series'], "issue_id": a['issue'], "cover_id": a['cover']})
+    if a.get('insert'):
+        from schema import Insert as _Insert
+        return storage.read_object(cls=_Insert, primary_key={
+            "series_id": a['series'], "issue_id": a['issue'], "insert_id": a['insert']})
     from schema import Panel as _Panel
     return storage.read_object(cls=_Panel, primary_key={
         "series_id": a['series'], "issue_id": a['issue'],
@@ -830,6 +846,7 @@ def pose_figure_bg(state, board, character_id: str, variant_id: str,
         return
     pending.add(pkey)
     kw = ({"cover_id": board.cover_id} if is_cover(board)
+          else {"insert_id": board.insert_id} if is_insert(board)
           else {"scene_id": board.scene_id, "panel_id": board.panel_id})
 
     def job():
@@ -1181,7 +1198,9 @@ def light_table(state: APPState, panel, scene, setting,
     series_id = panel.series_id
     locked = featured is not None
     cover_mode = is_cover(panel)   # a cover is a board like any other
+    insert_mode = is_insert(panel)  # so is a full-page insert
     board_attrs = ({'data-cover': panel.cover_id} if cover_mode
+                   else {'data-insert': panel.insert_id} if insert_mode
                    else {'data-scene': panel.scene_id, 'data-panel': panel.panel_id})
 
     # BLOCKING: the drag/scale script ships in main.py's page head; here we
@@ -1492,6 +1511,7 @@ def light_table(state: APPState, panel, scene, setting,
                 ui.notify(f"Splitting {len(chosen)} element(s) — {len(chosen) + 1} renders, "
                           f"the acetates land shortly.", type='info')
                 kw = ({"cover_id": panel.cover_id} if cover_mode
+                      else {"insert_id": panel.insert_id} if insert_mode
                       else {"scene_id": panel.scene_id, "panel_id": panel.panel_id})
                 enqueue_renders(state, [(
                     f"splitting {len(chosen)} element(s) off '{layer_key}'",
@@ -1617,7 +1637,8 @@ def light_table(state: APPState, panel, scene, setting,
                          + (f" — {'; '.join(placed)}" if placed else ""))
         elif supports_letters:
             parts.append("leave it unlettered")
-        noun = "cover" if cover_mode else "panel"
+        noun = ("cover" if cover_mode
+                else f"'{panel.name}' insert page" if insert_mode else "panel")
         post_user_message(state, f"Ink this rough into a new take of this {noun} — compose it with " +
                           "; ".join(parts) + ".")
 
@@ -2352,8 +2373,8 @@ def light_table(state: APPState, panel, scene, setting,
                 def job(prop_id=prop.prop_id, style_id=style_id):
                     from agentic.tools.imaging import render_prop_reference_body
                     note = render_prop_reference_body(state, series_id, prop_id, style_id)
-                    if cover_mode:
-                        # the finished art lands straight on the cover
+                    if cover_mode or insert_mode:
+                        # the finished art lands straight on the board
                         fb = storage.read_object(cls=type(panel), primary_key=panel.primary_key)
                         pa2 = storage.read_object(cls=PropAsset, primary_key={
                             "series_id": series_id, "prop_id": prop_id})
@@ -2583,9 +2604,9 @@ def light_table(state: APPState, panel, scene, setting,
 
                             def lay(pa=pa):
                                 dlg.close()
-                                if cover_mode:
-                                    # covers have no scene props: the art
-                                    # itself lands as an acetate
+                                if cover_mode or insert_mode:
+                                    # covers and inserts have no scene props:
+                                    # the art itself lands as an acetate
                                     lay_prop_acetate(state, panel, pa, getattr(scene, 'style_id', None))
                                 else:
                                     lay_prop_on_table(state, scene, pa)
@@ -2628,9 +2649,10 @@ def light_table(state: APPState, panel, scene, setting,
                     .on('click', lambda _: pick_prop())
                 ui.button(icon='landscape').props('flat round dense size=sm') \
                     .tooltip('A background — one click from the settings').on('click', lambda _: pick_background())
-                if cover_mode:
+                if cover_mode or insert_mode:
                     # THE MASTHEAD: lay the series title art as an acetate —
-                    # art-only covers wear the title as a composited overlay
+                    # art-only covers (and posters, and ads) wear the title
+                    # as a composited overlay
                     def lay_title():
                         fresh_board(storage, panel)
                         from schema import Series as _Series
@@ -2764,7 +2786,7 @@ def light_table(state: APPState, panel, scene, setting,
                     def as_reference():
                         import io as _io
                         data = flatten_bytes()
-                        bid = panel.cover_id if cover_mode else panel.panel_id
+                        bid = panel.cover_id if cover_mode else panel.insert_id if insert_mode else panel.panel_id
                         storage.upload_reference_image(panel, f"flattened-{bid[:6]}.png",
                                                        _io.BytesIO(data), 'image/png')
                         _receipt('🗜 flattened the table onto a reference acetate')

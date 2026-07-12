@@ -2294,9 +2294,10 @@ def render_missing_panels(wrapper: RunContextWrapper[APPState], series_id: str, 
 def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id: str | None = None,
                                  panel_id: str | None = None, character_id: str = "", variant_id: str = "",
                                  pose_direction: str | None = None,
-                                 cover_id: str | None = None) -> str:
-    """Render a transparent posed figure for a board (a panel, or a cover when
-    cover_id is given) and remember it there.  Callable directly from the GUI
+                                 cover_id: str | None = None,
+                                 insert_id: str | None = None) -> str:
+    """Render a transparent posed figure for a board (a panel, a cover, or a
+    full-page insert) and remember it there.  Callable directly from the GUI
     (background job) or via the tool."""
     from storage.filepath import obj_to_imagepath
     from helpers.generator import invoke_edit_image_api
@@ -2307,6 +2308,13 @@ def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id:
             "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
         if panel is None:
             return f"Cover '{cover_id}' not found."
+        scene = None
+    elif insert_id:
+        from schema import Insert as _Insert
+        panel = storage.read_object(cls=_Insert, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "insert_id": insert_id})
+        if panel is None:
+            return f"Insert '{insert_id}' not found."
         scene = None
     else:
         panel = storage.read_object(cls=Panel, primary_key={
@@ -2573,8 +2581,9 @@ def _resolve_layer_source(panel, scene, storage, series_id: str, layer: str):
 
 def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None = None,
                      panel_id: str | None = None, layer: str = 'background',
-                     entities: list | None = None, cover_id: str | None = None) -> str:
-    """Split one layer of a board (a panel, or a cover when cover_id is given)
+                     entities: list | None = None, cover_id: str | None = None,
+                     insert_id: str | None = None) -> str:
+    """Split one layer of a board (a panel, a cover, or a full-page insert)
     into its constituent elements.
 
     layer: 'background', a figure key 'character_id/variant_id', or an
@@ -2592,6 +2601,13 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None 
             "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
         if panel is None:
             return f"Cover '{cover_id}' not found."
+        scene = None
+    elif insert_id:
+        from schema import Insert as _Insert
+        panel = storage.read_object(cls=_Insert, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "insert_id": insert_id})
+        if panel is None:
+            return f"Insert '{insert_id}' not found."
         scene = None
     else:
         panel = storage.read_object(cls=Panel, primary_key={
@@ -2893,6 +2909,12 @@ def generate_insert_art_body(state, series_id: str, issue_id: str, insert_id: st
     style = storage.read_object(cls=ComicStyle, primary_key={"style_id": issue.style_id}) \
         if issue is not None and issue.style_id else None
 
+    # the insert's own style wins; the issue's style is the default
+    own_style = storage.read_object(cls=ComicStyle, primary_key={"style_id": insert.style_id}) \
+        if getattr(insert, 'style_id', None) else None
+    if own_style is not None:
+        style = own_style
+
     kind_notes = {
         "poster": "an in-world poster page, bold display lettering welcome",
         "ad": "a vintage comic-book advertisement page, playful copy and product art",
@@ -2900,12 +2922,25 @@ def generate_insert_art_body(state, series_id: str, issue_id: str, insert_id: st
         "mailbag": "a letters page: masthead, columns of letter excerpts with replies, hand-lettered",
         "title-page": "a title/contents page: the issue title large, credits, a decorative border",
     }
+
+    # THE ROUGH IS THE PENCILS: when the author blocked acetates on the
+    # insert's light table, composite them and hand them to the artist first
+    rough_guidance = ""
+    rough_ref = _compose_table_rough(storage, insert, None)
+    table_layout = _table_layout_brief(insert)
+    if rough_ref:
+        rough_guidance = ("The FIRST reference image is the author's ROUGH of this page — the exact "
+                          "composition assembled on the light table.   Treat it as the pencils: keep "
+                          "every figure and element at its position, scale and facing; finish and ink "
+                          "it in the style.\n")
+
     prompt = f"""Draw a FULL-PAGE COMIC BOOK INSERT — {kind_notes.get(insert.kind, 'a full page')}.
 
 "{insert.name}"
 
 {insert.description or 'Design it from the name and kind above.'}
 
+{rough_guidance}{table_layout}
 Full-bleed portrait page (standard US comic trim), edge to edge — no outer
 frame, no white margin.{chr(10) + format_comic_style(style, include_bubble_styles=False, include_character_style=False, heading_level=1) if style is not None else ''}
 """
@@ -2913,6 +2948,8 @@ frame, no white margin.{chr(10) + format_comic_style(style, include_bubble_style
     if style is not None:
         art = style.image.get('art') if isinstance(style.image, dict) else style.image
     refs = [art] if art and os.path.exists(art) else []
+    if rough_ref:
+        refs.insert(0, rough_ref)
     refs.extend(storage.list_uploads(obj=insert))
     if refs:
         image_bytes = invoke_edit_image_api(prompt, reference_images=refs,

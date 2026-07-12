@@ -20,6 +20,7 @@ class SelectedKind(StrEnum):
     SCENE = "scene"
     PANEL = "panel"
     COVER = "cover"
+    INSERT = "insert"
     CHARACTER = "character"
     VARIANT = "variant"
     STYLED_VARIANT = "styled-variant"
@@ -83,6 +84,10 @@ def selection_to_context(
             case SelectedKind.COVER.value:
                 accum["cover_id"] = id
                 context.append((Cover, {k:v for k, v in accum.items()}))
+            case SelectedKind.INSERT.value:
+                from schema import Insert
+                accum["insert_id"] = id
+                context.append((Insert, {k:v for k, v in accum.items()}))
             case SelectedKind.CHARACTER.value:
                 accum["character_id"] = id
                 context.append((CharacterModel, {k:v for k, v in accum.items()}))

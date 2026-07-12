@@ -29,6 +29,7 @@ from storage.generic import GenericStorage
 _SEGMENTS = {
     SelectedKind.ISSUE: "issue",
     SelectedKind.COVER: "cover",
+    SelectedKind.INSERT: "insert",
     SelectedKind.SCENE: "scene",
     SelectedKind.PANEL: "panel",
     SelectedKind.CHARACTER: "character",
@@ -146,6 +147,10 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
             return sel
         if rest[0] == "cover" and len(rest) == 2:
             sel.append(_named(storage, SelectedKind.COVER, rest[1], Cover, {"series_id": sid, "issue_id": iid, "cover_id": rest[1]}, name_attr="cover_id"))
+            return sel
+        if rest[0] == "insert" and len(rest) == 2:
+            from schema import Insert
+            sel.append(_named(storage, SelectedKind.INSERT, rest[1], Insert, {"series_id": sid, "issue_id": iid, "insert_id": rest[1]}))
             return sel
         if rest[0] == "scene" and len(rest) >= 2:
             scid = rest[1]

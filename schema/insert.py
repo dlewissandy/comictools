@@ -1,5 +1,7 @@
 from typing import Optional
 from pydantic import BaseModel, Field
+from schema.character_reference import CharacterRef
+from schema.enums import FrameLayout
 
 
 class Insert(BaseModel):
@@ -7,6 +9,9 @@ class Insert(BaseModel):
     A FULL-PAGE INSERT: a poster, an ad, a pin-up, the mailbag — a page
     that isn't story panels but belongs in the book.  Anchored after a
     scene (0 = right after the script pages), it prints full-bleed.
+
+    An insert is a BOARD like a cover: it composes on THE LIGHT TABLE and,
+    like a cover, is its own scene — it owns style_id and setting_id.
     """
     insert_id: str = Field(..., description="A unique identifier for the insert.")
     issue_id: str = Field(..., description="The issue this insert belongs to.")
@@ -16,6 +21,16 @@ class Insert(BaseModel):
     description: str = Field("", description="What the page shows, in enough detail to render it.  For a mailbag: the letters and replies.  Default to empty string.")
     after_scene_number: int = Field(0, description="The insert appears after this scene number (0 = right after the script pages, before scene 1).  Default to 0.")
     image: Optional[str] = Field(None, description="The rendered full-page art.  Default to None.")
+
+    # THE LIGHT TABLE (same acetate model as Panel and Cover — an insert
+    # composes on the same table, so the fields match exactly)
+    aspect: FrameLayout = Field(FrameLayout.PORTRAIT, description="A full page is portrait.  Default to portrait.")
+    style_id: Optional[str] = Field(None, description="The art style of the insert.  Default to None (the issue's style).")
+    setting_id: Optional[str] = Field(None, description="An optional setting whose master background anchors the page (a pin-up in the fortune teller's tent).  Default to None.")
+    character_references: list[CharacterRef] = Field(default_factory=list, description="The characters appearing on the page.  Default to empty list.")
+    figure_images: dict[str, str] = Field(default_factory=dict, description="Posed figure acetates for this insert: maps 'character_id/variant_id' to a transparent cut-out image.  Default to empty dict.")
+    figure_blocking: dict[str, dict] = Field(default_factory=dict, description="Blocking for each acetate: maps a layer key to {x, y, h, z}.  Default to empty dict.")
+    layer_groups: dict[str, list[str]] = Field(default_factory=dict, description="Named groups of light-table layers.  Default to empty dict.")
 
     @property
     def primary_key(self) -> dict[str, str]:
