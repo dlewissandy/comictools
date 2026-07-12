@@ -157,6 +157,25 @@ def create_publisher(wrapper: RunContextWrapper[APPState], name: str, descriptio
         ))
 
 
+def resolve_publisher_id(storage, publisher: Optional[str], selection=None) -> Optional[str]:
+    """Resolve a publisher reference (id OR display name, any case) to the
+    canonical publisher_id.  Falls back to the publisher in the current
+    selection when no reference is given — a series created while looking
+    at a publisher belongs to that publisher.  Returns None when nothing
+    resolves; '' means a reference was given but matches no publisher."""
+    if publisher:
+        cand = normalize_id(publisher)
+        for p in storage.read_all_objects(Publisher):
+            if publisher in (p.publisher_id, p.name) or cand == p.publisher_id \
+                    or cand == normalize_id(p.name or ''):
+                return p.publisher_id
+        return ''
+    for item in (selection or []):
+        if item.kind.value == 'publisher' and item.id:
+            return item.id
+    return None
+
+
 @function_tool
 def create_comic_series(wrapper: RunContextWrapper[APPState], series_title: str, description: Optional[str], publisher: Optional[str]) -> Series:
     """
@@ -165,13 +184,22 @@ def create_comic_series(wrapper: RunContextWrapper[APPState], series_title: str,
     Args:
         series_title: The title of the new comic series.
         description: An optional description of the comic series.   This should be 2-5 paragraphs about the series, its themes, characters and setting.  This is intended for writers and artists to understand the series and generate content for it.   IT IS NOT INTENDED FOR THE READER, OR MARKETING.
-        publisher: An optional name of the publisher for the comic series.   If povided, YOU MUST verify that the publisher exists in the database.
+        publisher: The publisher for the comic series, by name or id.   Optional: when the
+            user is working inside a publisher, that publisher is used automatically.
     
     Returns:
         The created Series object.
     """
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
+
+    # THE SERIES BELONGS TO ITS PUBLISHER: resolve name-or-id in CODE (the
+    # coauthor often passes the display name, which would never match the
+    # publisher page's id filter), defaulting to the publisher on screen.
+    pub_id = resolve_publisher_id(storage, publisher, state.selection)
+    if pub_id == '':
+        return (f"Publisher '{publisher}' not found — create it first with "
+                f"create_publisher, or pick an existing one.")
 
     # check to see if the series already exists.
     series_id = normalize_id(series_title)
@@ -180,7 +208,7 @@ def create_comic_series(wrapper: RunContextWrapper[APPState], series_title: str,
         return f"Series with title '{series_title}' already exists."
     else:
         logger.info(f"The title '{series_title}' is available.")
-    series = Series(series_id=series_id, name=series_title, description=description, publisher_id=publisher)
+    series = Series(series_id=series_id, name=series_title, description=description, publisher_id=pub_id)
     new_id = storage.create_object(data=series)
     selection = state.selection
     new_itm = SelectionItem(name=series.name, id=new_id, kind=SelectedKind.SERIES)
