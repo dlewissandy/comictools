@@ -187,6 +187,14 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
 
 
 async def send(state: APPState):
+    # THE SEND LOCK: Enter used to slip past the disabled button and start a
+    # second agent run over the first — one conversation turn at a time.
+    # The typed words are never lost; they stay in the box.
+    if getattr(state, '_sending', False):
+        ui.notify("One moment — the coauthor is mid-reply.  Your words are "
+                  "still in the box.", type='info')
+        return
+
     # Dereference state variables
     history = state.history
     text_input = state.user_input
@@ -203,9 +211,11 @@ async def send(state: APPState):
     except Exception as e:
         logger.debug(f"Failed to read image editor selection: {e}")
 
-    # Disable the "send button" while the response is being generated
+    # Disable the "send button" while the response is being generated —
+    # and take the send lock (cleared in the same finally that re-enables)
     send_button = state.send_button
     send_button.disable()
+    state._sending = True
 
     # Build The Message History
     messages = state.get_messages(role_map=ROLE_MAP)
@@ -243,6 +253,7 @@ async def send(state: APPState):
         ticker.cancel()
         spinner.delete()
         send_button.enable()
+        state._sending = False
 
     state.write()
     if state.is_dirty:

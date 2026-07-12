@@ -5,9 +5,55 @@ studio role that did the work) and refreshes the details pane; a summary lands
 at the end.  The user keeps talking while the studio works.
 """
 import asyncio
+import json
 import os
 import re
+import time
+from uuid import uuid4
+
 from loguru import logger
+
+# THE DOCKET: every queued render leaves a slip on disk until it finishes,
+# so a restart can't silently swallow work — the studio reports what died
+# and offers the labels back.
+QUEUE_DIR = os.path.join("data", ".queue")
+
+
+def _slip_write(label: str) -> str:
+    try:
+        os.makedirs(QUEUE_DIR, exist_ok=True)
+        name = f"{int(time.time() * 1000)}-{uuid4().hex[:6]}.json"
+        path = os.path.join(QUEUE_DIR, name)
+        with open(path, "w") as f:
+            json.dump({"label": label, "queued_at": time.time()}, f)
+        return path
+    except OSError as e:
+        logger.warning(f"queue slip skipped: {e}")
+        return ""
+
+
+def _slip_burn(path: str) -> None:
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
+def orphaned_slips() -> list[str]:
+    """Labels of renders that were on the drawing board when the studio
+    last went down — call at startup and TELL the author."""
+    if not os.path.isdir(QUEUE_DIR):
+        return []
+    labels = []
+    for name in sorted(os.listdir(QUEUE_DIR)):
+        path = os.path.join(QUEUE_DIR, name)
+        try:
+            labels.append(json.load(open(path)).get("label", name))
+        except (OSError, json.JSONDecodeError):
+            pass
+        _slip_burn(path)
+    return labels
 
 
 def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Penciller"):
@@ -35,6 +81,7 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
         except Exception:
             pass
     pending.extend(label for label, _ in jobs)
+    slips = {label: _slip_write(label) for label, _ in jobs}
 
     def _announce(text: str, image: str | None = None):
         try:
@@ -70,6 +117,7 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                 logger.error(f"render job '{label}' failed: {e}")
                 _announce(f"⚠️ **{label}** — failed: {e}")
             finally:
+                _slip_burn(slips.get(label, ""))
                 try:
                     pending.remove(label)
                 except ValueError:

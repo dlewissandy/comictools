@@ -82,6 +82,50 @@ def invoke_generate_api(
         return response.output[0].content[0].text
     return response.output_parsed
 
+
+
+# ---------------------------------------------------------------------------
+# THE SPEND LEDGER: every render costs real money — the studio counts them
+# so the header can tell the truth.  {"YYYY-MM-DD": {"low": n, ...}}
+# ---------------------------------------------------------------------------
+SPEND_LEDGER = os.path.join("data", ".spend.json")
+# rough gpt-image rates per image by quality — an estimate, shown as one
+EST_COST = {"low": 0.02, "medium": 0.07, "high": 0.19}
+
+
+def record_spend(quality: str) -> None:
+    import json as _json
+    import time as _time
+    try:
+        ledger = {}
+        if os.path.exists(SPEND_LEDGER):
+            ledger = _json.load(open(SPEND_LEDGER))
+        day = _time.strftime("%Y-%m-%d")
+        ledger.setdefault(day, {})
+        ledger[day][quality] = ledger[day].get(quality, 0) + 1
+        tmp = SPEND_LEDGER + ".tmp"
+        with open(tmp, "w") as f:
+            _json.dump(ledger, f, indent=1)
+        os.replace(tmp, SPEND_LEDGER)
+    except Exception as e:
+        logger.warning(f"spend ledger skipped: {e}")
+
+
+def spend_today() -> tuple[int, float]:
+    """(renders today, estimated dollars today)."""
+    import json as _json
+    import time as _time
+    try:
+        if not os.path.exists(SPEND_LEDGER):
+            return 0, 0.0
+        day = _json.load(open(SPEND_LEDGER)).get(_time.strftime("%Y-%m-%d"), {})
+        n = sum(day.values())
+        cost = sum(EST_COST.get(q, 0.1) * c for q, c in day.items())
+        return n, cost
+    except Exception:
+        return 0, 0.0
+
+
 def invoke_generate_image_api(
     prompt: str,
     model: str = "gpt-image-1.5",
@@ -102,6 +146,7 @@ def invoke_generate_image_api(
             moderation="low",
             quality= quality.name.lower(),
         )
+        record_spend(quality.name.lower())
         if n == 1:
             return decode_image_response(response)
         return decode_image_responses(response)
@@ -157,6 +202,7 @@ def invoke_edit_image_api(
     if mask:
         args["mask"] = filepath_to_filehandle(mask)
     response = openai.images.edit(**args)
+    record_spend(quality.name.lower())
 
     if n == 1:
         return decode_image_response(response)

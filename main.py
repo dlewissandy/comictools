@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from gui.selection import (SelectionItem)
 from messaging import send
 from storage.local import LocalStorage
+from helpers.render_queue import orphaned_slips as _orphaned_slips
+_ORPHAN_SLIPS = _orphaned_slips()
 load_dotenv()
 
 # ---------------------------------------------------------
@@ -629,6 +631,38 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         ui.button(icon='delete_outline').props('flat round dense') \
             .tooltip('The wastebasket — everything struck, ready to bring back') \
             .on('click', lambda _: open_wastebasket())
+
+        # THE SPEND METER: renders cost real money — the header tells the
+        # truth quietly (today's count and a rough dollar estimate)
+        spend_label = ui.label('').classes('text-xs text-gray-500') \
+            .tooltip("Today's renders and a rough cost estimate — every image "
+                     "the studio inked since midnight")
+
+        def _spend_tick():
+            from helpers.generator import spend_today
+            n, cost = spend_today()
+            spend_label.set_text(f"🎨 {n} · ~${cost:.2f}" if n else '')
+        _spend_tick()
+        ui.timer(15.0, _spend_tick)
+
+    # WORK THAT DIED WITH THE LAST SHUTDOWN: the docket's leftover slips —
+    # report them once, in the chat, with the labels ready to re-run
+    def _report_orphans():
+        global _ORPHAN_SLIPS
+        labels, _ORPHAN_SLIPS = _ORPHAN_SLIPS, []
+        if not labels:
+            return
+        try:
+            from gui.avatars import comic_chat_message
+            with state.history:
+                with comic_chat_message(name='the Editor', sent=False).classes('w-full'):
+                    ui.markdown("⚠️ The studio went down with work still on the drawing board:\n"
+                                + "\n".join(f"* {l}" for l in labels)
+                                + "\n\nSay the word and I'll run them again.")
+            state.history.scroll_to(percent=100)
+        except Exception as e:
+            logger.debug(f"orphan-slip report skipped: {e}")
+    ui.timer(2.5, _report_orphans, once=True)
 
     # PASTE AN IMAGE anywhere: boards offer take/plate/reference; other
     # views file it as a reference on what you're working on

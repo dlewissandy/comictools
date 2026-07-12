@@ -90,12 +90,15 @@ class LocalStorage(GenericStorage):
         if not os.path.isdir(parent_path):
             raise NotADirectoryError(f"Path {parent_path} is not a directory.")
 
-        # Write the object to the file in JSON format.   The file will be created if it does not exist.
+        # ATOMIC WRITE: the JSON lands whole or not at all — a crash
+        # mid-write must never truncate the author's work
         logger.debug(f"Writing object {data.__class__.__name__} to file {filepath}")
-        with open(filepath, 'w') as f:
+        tmp = filepath + '.tmp'
+        with open(tmp, 'w') as f:
             f.write(data.model_dump_json(indent=2))
             f.flush()
             os.fsync(f.fileno())
+        os.replace(tmp, filepath)
 
         # sync the parent folder
         fs_dir = os.open(parent_path, os.O_DIRECTORY)
@@ -234,10 +237,14 @@ class LocalStorage(GenericStorage):
             logger.error(f"Path {filepath} is not a file.")
             raise NotADirectoryError(f"Path {filepath} is not a file.")
         
-        with open(filepath, 'w') as f:
+        # ATOMIC WRITE: tmp + fsync + rename — the update lands whole or
+        # the old file survives untouched
+        tmp = filepath + '.tmp'
+        with open(tmp, 'w') as f:
             f.write(json.dumps(data.model_dump(), indent=2))
             f.flush()
             os.fsync(f.fileno())
+        os.replace(tmp, filepath)
 
         # sync the parent folder
         parent_path = os.path.dirname(filepath)
