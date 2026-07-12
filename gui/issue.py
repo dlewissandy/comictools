@@ -60,10 +60,15 @@ def view_issue(state:APPState):
     pages_all = storage.read_all_objects(Page, primary_key={"series_id": series_id, "issue_id": issue_id})
     export_path = os.path.join("data", "series", series_id, "issues", issue_id, "exports", f"{issue_id}.pdf")
 
-    def _pill(ok: bool, label: str, fix_message: str | None = None):
-        """A dashboard step: green when done; amber and CLICKABLE when it isn't."""
+    def _pill(ok: bool, label: str, fix_message: str | None = None, done_url: str | None = None):
+        """A dashboard step: green when done; amber and CLICKABLE when it isn't.
+        A green pill with a done_url opens the finished thing (e.g. the bound PDF)."""
         if ok:
-            ui.chip(label, icon='check_circle', color='green').props('dense outline')
+            chip = ui.chip(label, icon='check_circle', color='green').props('dense outline')
+            if done_url:
+                chip.props('clickable')
+                chip.tooltip('Open it')
+                chip.on('click', lambda _, u=done_url: ui.run_javascript(f"window.open('{u}', '_blank');"))
         else:
             chip = ui.chip(label, icon='radio_button_unchecked', color='orange').props('dense clickable')
             if fix_message:
@@ -112,7 +117,8 @@ def view_issue(state:APPState):
             _pill(layout_ok, layout_label,
                   'Lay out the pages for this issue — every panel on a page.')
             everything = bool(issue.story) and total > 0 and done_total == total and front_ok and layout_ok
-            _pill(everything and os.path.exists(export_path), 'bound PDF', 'Export the issue as a PDF.')
+            _pill(everything and os.path.exists(export_path), 'bound PDF', 'Export the issue as a PDF.',
+                  done_url='/' + export_path.replace(os.sep, '/'))
 
         
         with cpanel(12):

@@ -85,7 +85,9 @@ PERSONAS = {
            rows of 1-3 panels, splash pages for the big moments, pacing at the
            page turn — get approval, then call layout_issue_pages.  Use
            preflight_issue to see what still needs rendering, and
-           export_issue_pdf to bind the finished book.
+           export_issue_pdf (or export_issue_cbz for comic reader apps) to
+           bind the finished book — always hand the author the download link
+           these tools return.
 
         Work incrementally and conversationally — a few scenes at a time, checking in —
         rather than dumping everything at once.  Artwork (backgrounds and panel art)

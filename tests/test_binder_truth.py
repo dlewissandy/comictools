@@ -44,9 +44,9 @@ def test_bind_appends_rendered_leftovers_instead_of_dropping(storage, tmp_path):
     out = str(tmp_path / "book.pdf")
     page_count, missing = bind_issue_pdf(storage, WL, CARN, out)
     assert os.path.exists(out)
-    # front cover + designed pages + AT LEAST one overflow page carrying the
-    # rendered leftover — never fewer
-    assert page_count > n_layout_pages + 1
+    # front cover + indicia + designed pages + AT LEAST one overflow page
+    # carrying the rendered leftover — never fewer
+    assert page_count >= n_layout_pages + 3
     assert any("on NO page" in m for m in missing)
 
 

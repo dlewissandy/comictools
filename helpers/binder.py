@@ -1,13 +1,25 @@
 """
 Bind an issue into a book: compose the covers and the panels (in reading
 order) onto comic pages and write a PDF.
+
+The single source of truth is compose_book(): every sheet of the finished
+book, in order — front cover, inside-front (indicia), interior pages with
+folios, overflow pages, inside-back, back.  The PDF, the CBZ, and THE
+READING ROOM all consume the same sheets, so what you read IS the book.
 """
+import hashlib
+import io
+import json
 import os
+import re
+import zipfile
+from functools import lru_cache
+
 from loguru import logger
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 from storage.generic import GenericStorage
-from schema import Issue, SceneModel, Panel, Cover
+from schema import Issue, SceneModel, Panel, Cover, Series, Publisher
 
 # 6.625in x 10.25in at 150dpi — standard US comic trim.
 PAGE_W, PAGE_H = 994, 1538
@@ -86,74 +98,323 @@ def collect_issue(storage: GenericStorage, series_id: str, issue_id: str):
     return front, panel_images, back, missing
 
 
-def bind_issue_pdf(storage: GenericStorage, series_id: str, issue_id: str, output_path: str) -> tuple[int, list[str]]:
-    """
-    Compose the issue into a PDF: covers full-bleed, interior panels stacked
-    down each page in reading order with gutters, new page when full.
+# ---------------------------------------------------------------------------
+# type on the page: folios, credits, indicia
+# ---------------------------------------------------------------------------
 
-    Returns (page_count, missing).
+@lru_cache(maxsize=16)
+def _font(size: int) -> "ImageFont.FreeTypeFont":
+    for name in ("Helvetica.ttc", "HelveticaNeue.ttc", "Arial.ttf", "DejaVuSans.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:                      # ancient Pillow: tiny bitmap font
+        return ImageFont.load_default()
+
+
+def _wrap(draw: "ImageDraw.ImageDraw", text: str, font, max_w: int) -> list[str]:
+    lines, line = [], ""
+    for word in text.split():
+        trial = f"{line} {word}".strip()
+        if draw.textlength(trial, font=font) <= max_w or not line:
+            line = trial
+        else:
+            lines.append(line)
+            line = word
+    if line:
+        lines.append(line)
+    return lines
+
+
+def _center_text(draw: "ImageDraw.ImageDraw", cx: int, y: int, text: str, font, fill) -> int:
+    """Draw text centered on cx with its top at y; return the new y below it."""
+    l, t, r, b = draw.textbbox((0, 0), text, font=font)
+    draw.text((cx - (r - l) / 2, y - t), text, font=font, fill=fill)
+    return y + (b - t)
+
+
+def _folio_stamp(page: "Image.Image", number: int) -> "Image.Image":
+    """The folio: a quiet page number centered in the bottom margin."""
+    draw = ImageDraw.Draw(page)
+    _center_text(draw, PAGE_W // 2, PAGE_H - 30, str(number), _font(20), (140, 140, 140))
+    return page
+
+
+def _small_print(issue: Issue, series: Series | None, publisher: Publisher | None) -> str:
+    """The indicia paragraph, the way real comics run it in tiny type."""
+    parts = [f"{(series.name if series else issue.name).upper()} No. {issue.issue_number}."]
+    if issue.publication_date:
+        parts.append(f"Published {issue.publication_date}.")
+    if publisher:
+        parts.append(f"A {publisher.name} publication.")
+    if issue.price:
+        parts.append(f"Cover price ${issue.price:.2f}.")
+    parts.append("All characters and events in this issue are entirely fictional.  "
+                 "Any similarity to actual persons is purely coincidental.")
+    return "  ".join(parts)
+
+
+def _indicia_sheet(issue: Issue, series: Series | None, publisher: Publisher | None) -> "Image.Image":
+    """A composed inside-front page: title block, the credits, the indicia.
+    Used when the issue has no inside-front cover art of its own."""
+    page = Image.new("RGB", (PAGE_W, PAGE_H), (250, 247, 240))
+    draw = ImageDraw.Draw(page)
+    cx, inner_w = PAGE_W // 2, PAGE_W - 2 * MARGIN
+    ink, soft = (45, 42, 38), (120, 114, 104)
+
+    y = 260
+    for line in _wrap(draw, (series.name if series else issue.name).upper(), _font(68), inner_w):
+        y = _center_text(draw, cx, y, line, _font(68), ink) + 10
+    y += 18
+    draw.line([(cx - 150, y), (cx + 150, y)], fill=soft, width=3)
+    y += 40
+    for line in _wrap(draw, f"No. {issue.issue_number}  ·  {issue.name}", _font(38), inner_w):
+        y = _center_text(draw, cx, y, line, _font(38), ink) + 8
+
+    credits = [(role, value) for role, value in (
+        ("WRITER", issue.writer), ("ARTIST", issue.artist),
+        ("COLORIST", issue.colorist), ("CREATED BY", issue.creative_minds),
+    ) if value]
+    if credits:
+        y = max(y + 120, 640)
+        for role, value in credits:
+            y = _center_text(draw, cx, y, role, _font(24), soft) + 10
+            for line in _wrap(draw, value, _font(34), inner_w):
+                y = _center_text(draw, cx, y, line, _font(34), ink) + 6
+            y += 44
+
+    small = _font(17)
+    lines = _wrap(draw, _small_print(issue, series, publisher), small, inner_w)
+    line_h = 24
+    y = PAGE_H - MARGIN - 20 - line_h * len(lines)
+    for line in lines:
+        y = _center_text(draw, cx, y, line, small, soft) + 7
+    return page
+
+
+def _stamp_indicia(art: "Image.Image", issue: Issue, series: Series | None,
+                   publisher: Publisher | None) -> "Image.Image":
+    """Run the indicia small print in a translucent band along the bottom of
+    inside-front cover art — where real books carry it."""
+    base = art.convert("RGBA")
+    draw = ImageDraw.Draw(base)
+    small = _font(17)
+    inner_w = PAGE_W - 2 * MARGIN
+    lines = _wrap(draw, _small_print(issue, series, publisher), small, inner_w)
+    line_h, pad = 24, 18
+    band_h = line_h * len(lines) + 2 * pad
+    overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+    odraw.rectangle([0, base.height - band_h, base.width, base.height], fill=(255, 255, 255, 210))
+    out = Image.alpha_composite(base, overlay)
+    draw = ImageDraw.Draw(out)
+    y = base.height - band_h + pad
+    for line in lines:
+        y = _center_text(draw, base.width // 2, y, line, small, (60, 58, 54)) + 7
+    return out.convert("RGB")
+
+
+# ---------------------------------------------------------------------------
+# composing the book
+# ---------------------------------------------------------------------------
+
+def _full_bleed(path: str) -> "Image.Image":
+    img = Image.open(path).convert("RGB")
+    scale = max(PAGE_W / img.width, PAGE_H / img.height)
+    img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
+    x, y = (img.width - PAGE_W) // 2, (img.height - PAGE_H) // 2
+    return img.crop((x, y, x + PAGE_W, y + PAGE_H))
+
+
+def _flow_pages(image_paths: list[str]) -> list["Image.Image"]:
+    """Flow panels down each page in reading order — the layout-less binding,
+    also used for overflow pages carrying panels the layout forgot."""
+    pages: list[Image.Image] = []
+    page, cursor = None, MARGIN
+    inner_w = PAGE_W - 2 * MARGIN
+    for path in image_paths:
+        img = Image.open(path).convert("RGB")
+        h = int(img.height * inner_w / img.width)
+        if page is None or cursor + h > PAGE_H - MARGIN:
+            page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
+            pages.append(page)
+            cursor = MARGIN
+        page.paste(img.resize((inner_w, h), Image.LANCZOS), (MARGIN, cursor))
+        cursor += h + GUTTER
+    return pages
+
+
+def compose_book(storage: GenericStorage, series_id: str, issue_id: str
+                 ) -> tuple[list[tuple[str, "Image.Image"]], list[str]]:
+    """
+    Every sheet of the finished book, in order:
+
+      front cover → inside-front (cover art stamped with the indicia, or a
+      composed credits/indicia page) → interior pages (the designed grids, or
+      panels flowed in reading order), folios stamped → overflow pages for
+      rendered panels the layout forgot → inside-back cover → back cover.
+
+    Returns (sheets, missing) where sheets is [(label, PIL.Image)].
     """
     front, panel_images, back, missing = collect_issue(storage, series_id, issue_id)
+    covers: list[Cover] = storage.read_all_objects(Cover, {"series_id": series_id, "issue_id": issue_id})
 
-    pages: list[Image.Image] = []
+    def cover_art(location: str):
+        return next((c.image for c in covers
+                     if c.location.value == location and c.image and os.path.exists(c.image)), None)
 
-    def full_bleed(path):
-        img = Image.open(path).convert("RGB")
-        scale = max(PAGE_W / img.width, PAGE_H / img.height)
-        img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
-        x, y = (img.width - PAGE_W) // 2, (img.height - PAGE_H) // 2
-        return img.crop((x, y, x + PAGE_W, y + PAGE_H))
+    issue: Issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
+    series: Series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
+    publisher = None
+    if series and series.publisher_id:
+        publisher = storage.read_object(cls=Publisher, primary_key={"publisher_id": series.publisher_id})
 
-    if front:
-        pages.append(full_bleed(front))
-
+    # ---- interior pages, folios stamped
+    interior: list[tuple[str, Image.Image]] = []
     layout = layout_pages(storage, series_id, issue_id)
+    folio = 0
     if layout:
-        # A page layout exists: compose each page as its designed grid.
         for page_model, rows in layout:
-            pages.append(_compose_page(rows))
+            folio = page_model.page_number
+            interior.append((f"page {folio}", _folio_stamp(_compose_page(rows), folio)))
         # panels the layout forgot are NEVER silently dropped: they flow onto
         # extra pages at the end (and collect_issue reports them as gaps)
         _has, _placed, unplaced, _dang = page_coverage(storage, series_id, issue_id)
-        leftover_images = [p.image for _s, p in unplaced if p.image and os.path.exists(p.image)]
-        if leftover_images:
-            page = None
-            cursor = MARGIN
-            inner_w = PAGE_W - 2 * MARGIN
-            for path in leftover_images:
-                img = Image.open(path).convert("RGB")
-                h = int(img.height * inner_w / img.width)
-                if page is None or cursor + h > PAGE_H - MARGIN:
-                    page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
-                    pages.append(page)
-                    cursor = MARGIN
-                page.paste(img.resize((inner_w, h), Image.LANCZOS), (MARGIN, cursor))
-                cursor += h + GUTTER
+        leftovers = [p.image for _s, p in unplaced if p.image and os.path.exists(p.image)]
+        for page in _flow_pages(leftovers):
+            folio += 1
+            interior.append((f"page {folio} (overflow)", _folio_stamp(page, folio)))
     else:
-        # No layout yet: flow panels down each page in reading order.
-        page = None
-        cursor = MARGIN
-        inner_w = PAGE_W - 2 * MARGIN
-        for path in panel_images:
-            img = Image.open(path).convert("RGB")
-            h = int(img.height * inner_w / img.width)
-            if page is None or cursor + h > PAGE_H - MARGIN:
-                page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
-                pages.append(page)
-                cursor = MARGIN
-            page.paste(img.resize((inner_w, h), Image.LANCZOS), (MARGIN, cursor))
-            cursor += h + GUTTER
+        for page in _flow_pages(panel_images):
+            folio += 1
+            interior.append((f"page {folio}", _folio_stamp(page, folio)))
 
+    if not interior and not front:
+        return [], missing
+
+    sheets: list[tuple[str, Image.Image]] = []
+    if front:
+        sheets.append(("front cover", _full_bleed(front)))
+    inside_front = cover_art("inside-front")
+    if inside_front:
+        sheets.append(("inside front cover",
+                       _stamp_indicia(_full_bleed(inside_front), issue, series, publisher)))
+    elif issue is not None:
+        sheets.append(("indicia", _indicia_sheet(issue, series, publisher)))
+    sheets += interior
+    inside_back = cover_art("inside-back")
+    if inside_back:
+        sheets.append(("inside back cover", _full_bleed(inside_back)))
     if back:
-        pages.append(full_bleed(back))
+        sheets.append(("back cover", _full_bleed(back)))
+    return sheets, missing
 
-    if not pages:
+
+def bind_issue_pdf(storage: GenericStorage, series_id: str, issue_id: str, output_path: str) -> tuple[int, list[str]]:
+    """
+    Bind the issue into a PDF book — the sheets from compose_book, saved as
+    one page each.  Returns (page_count, missing).
+    """
+    sheets, missing = compose_book(storage, series_id, issue_id)
+    if not sheets:
         return 0, missing
-
+    pages = [img for _label, img in sheets]
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     pages[0].save(output_path, "PDF", save_all=True, append_images=pages[1:], resolution=150)
     logger.info(f"Bound issue {issue_id} to {output_path} ({len(pages)} pages)")
     return len(pages), missing
+
+
+def bind_issue_cbz(storage: GenericStorage, series_id: str, issue_id: str, output_path: str) -> tuple[int, list[str]]:
+    """
+    Bind the issue into a CBZ (comic book archive: a zip of page images in
+    reading order) — the format every comic reader app opens natively.
+    Returns (page_count, missing).
+    """
+    sheets, missing = compose_book(storage, series_id, issue_id)
+    if not sheets:
+        return 0, missing
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_STORED) as z:
+        for i, (label, img) in enumerate(sheets):
+            slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+            buf = io.BytesIO()
+            img.save(buf, "JPEG", quality=92)
+            z.writestr(f"{i:03d}-{slug}.jpg", buf.getvalue())
+    logger.info(f"Bound issue {issue_id} to {output_path} ({len(sheets)} pages)")
+    return len(sheets), missing
+
+
+# ---------------------------------------------------------------------------
+# THE READING ROOM's sheets — same composition, cached as files
+# ---------------------------------------------------------------------------
+
+def book_signature(storage: GenericStorage, series_id: str, issue_id: str) -> str:
+    """A fingerprint of everything that shapes the composed book: issue
+    metadata (the indicia), covers, page layout, and every panel's art."""
+    from schema import Page
+
+    def stamp(path):
+        try:
+            return f"{path}:{os.path.getmtime(path):.0f}"
+        except OSError:
+            return f"{path}:gone"
+
+    parts = []
+    issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
+    parts.append(issue.model_dump_json() if issue else "no-issue")
+    series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
+    parts.append(series.name if series else "")
+    for cover in sorted(storage.read_all_objects(Cover, {"series_id": series_id, "issue_id": issue_id}),
+                        key=lambda c: c.cover_id):
+        parts.append(f"{cover.location.value}={stamp(cover.image) if cover.image else 'none'}")
+    for pm in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id},
+                                       order_by="page_number"):
+        parts.append(f"page{pm.page_number}:" + json.dumps(
+            [[(r.scene_id, r.panel_id) for r in row] for row in pm.rows]))
+    for scene, panels in _reading_order(storage, series_id, issue_id):
+        for p in panels:
+            parts.append(f"{scene.scene_id}/{p.panel_id}#{p.panel_number}="
+                         f"{stamp(p.image) if p.image else 'none'}")
+    return hashlib.md5("\n".join(parts).encode()).hexdigest()[:16]
+
+
+def reader_sheets(storage: GenericStorage, series_id: str, issue_id: str
+                  ) -> tuple[list[tuple[str, str]], list[str]]:
+    """
+    The book's sheets as image FILES for THE READING ROOM — composed with the
+    exact math that binds the PDF, cached on disk by content signature so
+    repeat visits open instantly.  Returns ([(label, path)], missing).
+    """
+    sig = book_signature(storage, series_id, issue_id)
+    out_dir = os.path.join(str(storage.base_path), "series", series_id, "issues", issue_id,
+                           "exports", "sheets")
+    manifest_path = os.path.join(out_dir, "manifest.json")
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path) as f:
+                data = json.load(f)
+            if data.get("sig") == sig and all(os.path.exists(p) for _l, p in data.get("sheets", [])):
+                return [(l, p) for l, p in data["sheets"]], data.get("missing", [])
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    sheets, missing = compose_book(storage, series_id, issue_id)
+    os.makedirs(out_dir, exist_ok=True)
+    for name in os.listdir(out_dir):          # stale sheets from the last composition
+        if name.endswith(".jpg"):
+            os.remove(os.path.join(out_dir, name))
+    entries: list[tuple[str, str]] = []
+    for i, (label, img) in enumerate(sheets):
+        path = os.path.join(out_dir, f"{i:03d}.jpg")
+        img.save(path, "JPEG", quality=90)
+        entries.append((label, path))
+    with open(manifest_path, "w") as f:
+        json.dump({"sig": sig, "sheets": entries, "missing": missing}, f)
+    return entries, missing
 
 
 def layout_pages(storage: GenericStorage, series_id: str, issue_id: str):
@@ -219,7 +480,6 @@ def _compose_page(rows: list[list[str | None]]) -> "Image.Image":
             if im is not None:
                 page.paste(im.resize((w, h), Image.LANCZOS), (x, y))
             else:
-                from PIL import ImageDraw
                 d = ImageDraw.Draw(page)
                 d.rectangle([x, y, x + w, y + h], outline=(180, 180, 180), width=3, fill=(240, 240, 240))
             x += w + GUTTER

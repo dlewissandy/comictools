@@ -547,11 +547,12 @@ def style_page(tail: str):
 @ui.page('/series/{series_id}/issue/{issue_id}/read')
 def read_issue_page(series_id: str, issue_id: str):
     """
-    THE READING ROOM: the bound issue, front to back — cover first, then
-    every page in reading order.  Lights down, pages as paper sheets;
-    arrow keys (or PageUp/PageDown) turn the pages.  Read-only; no chat.
+    THE READING ROOM: the bound issue, front to back — every sheet composed
+    with the SAME math that binds the PDF, so what you read IS the book.
+    Lights down, pages as paper sheets; arrow keys (or PageUp/PageDown) turn
+    the pages.  Read-only; no chat.
     """
-    from helpers.binder import collect_issue
+    from helpers.binder import reader_sheets
     from schema import Issue
     storage = LocalStorage(base_path="data")
     issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
@@ -560,6 +561,9 @@ def read_issue_page(series_id: str, issue_id: str):
         .reading-room { background: #211d1a !important; }
         .reader-sheet { background: #fff; border-radius: 2px;
                         box-shadow: 0 10px 32px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4); }
+        .reader-dl { color: #211d1a; background: #e8e2d8; padding: 5px 14px; border-radius: 16px;
+                     font-size: 13px; font-weight: 600; text-decoration: none; }
+        .reader-dl:hover { background: #fff; }
     """)
     ui.query('body').classes('reading-room')
     ui.add_body_html("""<script>
@@ -578,36 +582,25 @@ def read_issue_page(series_id: str, issue_id: str):
         if issue is None:
             ui.markdown(f"Issue `{issue_id}` not found.").style('color: #e8e2d8;')
             return
-        from helpers.binder import layout_pages
-        front, panel_images, back, missing = collect_issue(storage, series_id, issue_id)
+        sheets, missing = reader_sheets(storage, series_id, issue_id)
         ui.label(f"{issue.name}").classes('text-3xl font-bold').style('color: #e8e2d8;')
-        ui.label('← → turn the pages').classes('text-xs').style('color: #8a8378;')
-        if front:
-            ui.image(source=front).classes('w-full reader-sheet').style('max-width: 700px;')
-        layout = layout_pages(storage, series_id, issue_id)
-        if layout:
-            # Designed pages: each page is a sheet of rows; panels share row height.
-            for pm, rows in layout:
-                with ui.card().classes('w-full q-pa-md reader-sheet').style('aspect-ratio: 994/1538; overflow: hidden;'):
-                    for row in rows:
-                        with ui.row().classes('w-full flex-nowrap items-stretch').style('gap: 8px;'):
-                            for img in row:
-                                if img:
-                                    ui.image(source=img).style('flex: 1; min-width: 0;')
-                                else:
-                                    ui.element('div').style('flex: 1; background: #eee; border: 2px dashed #bbb; min-height: 120px;')
-                ui.label(f"page {pm.page_number}").classes('text-xs self-center').style('color: #8a8378; margin-top: -18px;')
-        else:
-            for img in panel_images:
-                ui.image(source=img).classes('w-full reader-sheet')
-        if back:
-            ui.image(source=back).classes('w-full reader-sheet').style('max-width: 700px;')
+        with ui.row().classes('items-center').style('gap: 12px;'):
+            ui.label('← → turn the pages').classes('text-xs').style('color: #8a8378;')
+            # take the book with you: the bound exports, one click each
+            exports_dir = os.path.join('data', 'series', series_id, 'issues', issue_id, 'exports')
+            for fname, label in ((f"{issue_id}.pdf", '⤓ PDF'), (f"{issue_id}.cbz", '⤓ CBZ')):
+                path = os.path.join(exports_dir, fname)
+                if os.path.exists(path):
+                    ui.html(f'<a class="reader-dl" href="/{path.replace(os.sep, "/")}" '
+                            f'download>{label}</a>')
+        for label, path in sheets:
+            ui.image(source=path).classes('w-full reader-sheet').style('max-width: 720px;')
         if missing:
             with ui.expansion(f"{len(missing)} piece(s) still missing from a complete issue") \
                     .classes('w-full').style('color: #e8e2d8;'):
                 for m in missing:
                     ui.markdown(f"* {m}")
-        if not front and not panel_images:
+        if not sheets:
             ui.markdown("Nothing rendered yet — render covers and panels, then come back.").style('color: #e8e2d8;')
 
 
