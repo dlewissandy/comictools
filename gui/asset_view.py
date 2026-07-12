@@ -68,17 +68,25 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
             if asset.origin:
                 ui.badge(f"from {asset.origin.series_id}", color='grey').classes('self-center q-ml-md')
             if not used_in:
+                from gui.strike import strike as _strike
+                from agentic.tools.assets import delete_prop as _dp0, delete_outfit as _do0
                 ui.chip('unused — safe to strike', icon='delete_sweep', color='orange') \
                     .props('dense outline clickable') \
-                    .tooltip(f'Nothing in the series points at this {kind_label} — one click strikes it') \
-                    .on('click', lambda _: post_user_message(
-                        state, f"Delete this {kind_label} — nothing uses it."))
+                    .tooltip(f'Nothing in the series points at this {kind_label} — one click strikes it '
+                             f'(the wastebasket can bring it back)') \
+                    .on('click', lambda _: _strike(
+                        state, _dp0 if key_name == "prop_id" else _do0,
+                        {"series_id": series_id, key_name: asset_id},
+                        f"the unused '{asset.name}' {kind_label}"))
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE,
-                        action=lambda _: post_user_message(
-                            state, f"I would like to delete this {kind_label}."
-                            + (f"  It is still used in {len(used_in)} place(s) — tell me where before I confirm."
-                               if used_in else "  Nothing uses it.")), size=1)
+            from gui.strike import strike
+            from agentic.tools.assets import delete_prop as _dp, delete_outfit as _do
+            _tool = _dp if key_name == "prop_id" else _do
+            _params = {"series_id": series_id, key_name: asset_id}
+            _label = (f"the '{asset.name}' {kind_label}"
+                      + (f" (it was used in {len(used_in)} place(s))" if used_in else ""))
+            crud_button(kind=CrudButtonKind.DELETE, size=1,
+                        action=lambda _: strike(state, _tool, _params, _label))
 
         with ui.row().classes('w-full items-center q-px-sm').style('gap: 6px;'):
             ui.label('Used in').classes('comic-label-sm')

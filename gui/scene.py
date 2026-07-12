@@ -78,7 +78,13 @@ def view_scene(state: APPState):
             from gui.light_table import style_swatch
             style_swatch(state, scene)
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current scene."), size=1)
+            from gui.strike import strike
+            from agentic.tools.deleter import delete_scene as _del_scene
+            crud_button(kind=CrudButtonKind.DELETE, size=1,
+                        action=lambda _: strike(state, _del_scene,
+                            {"series_id": series_id, "issue_id": issue_id,
+                             "scene_id": scene_id},
+                            f"scene {scene.scene_number} ('{scene.name}')"))
 
         # THE PAGE: the scene stitches into a 12-column comic page.
         from gui.elements import removable_chips_inline, comic_page, cpanel, ccell

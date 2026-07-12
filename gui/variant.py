@@ -63,7 +63,13 @@ def view_character_variant(state:APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"{character.name.title()} ({variant.name.title()})", 0)
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current character variant."), size=1)
+            from gui.strike import strike
+            from agentic.tools import delete_character_variant as _del_variant
+            crud_button(kind=CrudButtonKind.DELETE, size=1,
+                        action=lambda _: strike(state, _del_variant,
+                            {"series_id": series_id, "character_id": character_id,
+                             "variant_id": variant_id},
+                            f"{character.name}'s '{variant.name or variant_id}' look"))
 
 
         # Composition: what this look is built from — chips with ✕ to detach.

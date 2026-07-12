@@ -93,9 +93,13 @@ def view_cover(state: APPState):
                         nb.on('click', lambda _: goto(1))
 
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE,
-                        action=lambda _: post_user_message(state, "I would like to delete the current cover."),
-                        size=1)
+            from gui.strike import strike
+            from agentic.tools.deleter import delete_cover as _del_cover
+            crud_button(kind=CrudButtonKind.DELETE, size=1,
+                        action=lambda _: strike(state, _del_cover,
+                            {"series_id": series_id, "issue_id": issue_id,
+                             "cover_id": cover_id},
+                            f"the {cover.location.value.replace('-', ' ')} cover"))
 
         page = comic_page()
         page.__enter__()

@@ -94,9 +94,13 @@ def view_insert(state: APPState):
                         nb.on('click', lambda _: goto(1))
 
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE,
-                        action=lambda _: post_user_message(state, f"I would like to delete the insert '{insert.name}'."),
-                        size=1)
+            from gui.strike import strike
+            from agentic.tools.deleter import delete_insert as _del_insert
+            crud_button(kind=CrudButtonKind.DELETE, size=1,
+                        action=lambda _: strike(state, _del_insert,
+                            {"series_id": series_id, "issue_id": issue_id,
+                             "insert_id": insert_id},
+                            f"the '{insert.name}' {insert.kind}"))
 
         page = comic_page()
         page.__enter__()

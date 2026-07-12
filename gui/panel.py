@@ -137,7 +137,13 @@ def view_panel(state: APPState):
                     .on('click', lambda _: back_to_book())
 
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current panel."), size=1)
+            from gui.strike import strike
+            from agentic.tools.deleter import delete_panel as _del_panel
+            crud_button(kind=CrudButtonKind.DELETE, size=1,
+                        action=lambda _: strike(state, _del_panel,
+                            {"series_id": series_id, "issue_id": issue_id,
+                             "scene_id": scene_id, "panel_id": panel_id},
+                            f"panel {panel.panel_number} ('{panel.name}')"))
 
         # THE PAGE: the light table is the workspace; everything else is
         # the margin around it.
