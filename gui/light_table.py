@@ -1046,6 +1046,12 @@ def light_table(state: APPState, panel, scene, setting,
         if background and not os.path.exists(background):
             background = None
         bg_style_missing = keyed is None
+        if keyed:
+            # a master in the WRONG ORIENTATION cover-crops badly — detect it
+            def _orient(a):
+                return 'landscape' if a > 1.2 else ('portrait' if a < 0.83 else 'square')
+            board_ar = {'landscape': 1.5, 'portrait': 2 / 3, 'square': 1.0}[panel.aspect.value]
+            bg_style_missing = _orient(_img_ar(keyed)) != _orient(board_ar)
 
     _char_names = {c.character_id: c.name for c in storage.read_all_objects(
         CharacterModel, primary_key={"series_id": series_id})}
@@ -2012,17 +2018,22 @@ def light_table(state: APPState, panel, scene, setting,
                 _receipt(f"🖌 inking the **{setting.name}** master in {style_id2} — "
                          f"it lands on the table when it's done")
                 enqueue_renders(state, [(
-                    f"master background — {setting.name} in {style_id2}",
+                    f"master background — {setting.name} in {style_id2} ({panel.aspect.value})",
                     lambda: generate_setting_background_body(state, series_id,
-                                                             setting.setting_id, style_id2),
+                                                             setting.setting_id, style_id2,
+                                                             panel.aspect),
                 )], role='the Background Artist')
 
             bg_label = f"Background — {setting.name if setting else 'no setting yet'}"
             if split_plate and background == split_plate:
                 bg_label += " (split plate)"
             elif setting is not None and bg_style_missing:
-                bg_label += " — not inked in this style yet" if background is None \
-                    else " (borrowed from another style)"
+                if background is None:
+                    bg_label += " — not inked in this style yet"
+                elif (setting.images or {}).get(getattr(scene, 'style_id', None)) == background:
+                    bg_label += f" — re-ink for this {panel.aspect.value} board"
+                else:
+                    bg_label += " (borrowed from another style)"
             with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
                 eye(bg_layer)
                 if background:
@@ -2199,9 +2210,10 @@ def light_table(state: APPState, panel, scene, setting,
                                 lay_background_on_table(state, scene, panel, new_s)
                                 style_id = getattr(scene, 'style_id', None) or 'vintage-four-color'
                                 enqueue_renders(state, [(
-                                    f"master background — {new_s.name} in {style_id}",
+                                    f"master background — {new_s.name} in {style_id} ({panel.aspect.value})",
                                     lambda sid2=new_s.setting_id, st2=style_id:
-                                        generate_setting_background_body(state, series_id, sid2, st2),
+                                        generate_setting_background_body(state, series_id, sid2, st2,
+                                                                         panel.aspect),
                                 )], role='the Background Artist')
                                 laid.append(f"the new {new_s.name} set")
                             elif kind2 == 'figure':
@@ -2292,9 +2304,10 @@ def light_table(state: APPState, panel, scene, setting,
                         from agentic.tools.imaging import generate_setting_background_body
                         from helpers.render_queue import enqueue_renders
                         enqueue_renders(state, [(
-                            f"master background — {name} in {style_id}",
+                            f"master background — {name} in {style_id} ({panel.aspect.value})",
                             lambda: generate_setting_background_body(state, series_id,
-                                                                     new_s.setting_id, style_id),
+                                                                     new_s.setting_id, style_id,
+                                                                     panel.aspect),
                         )], role='the Background Artist')
                     ui.button('Build the set & ink its master', icon='construction') \
                         .props('unelevated dense no-caps').classes('q-mt-sm') \

@@ -1583,13 +1583,19 @@ def generate_series_title_art(
     return generate_series_title_art_body(wrapper.context, series_id, style_id)
 
 
-def generate_setting_background_body(state, series_id: str, setting_id: str, style_id: str) -> str:
+def generate_setting_background_body(state, series_id: str, setting_id: str, style_id: str,
+                                     aspect: FrameLayout | str | None = None) -> str:
     """Render a setting's master background in one style — callable directly
-    from the GUI (background job) or via the tool."""
+    from the GUI (background job) or via the tool.  `aspect` should be the
+    ASPECT OF THE BOARD the master is for (portrait covers get portrait
+    masters); defaults to landscape for a classic establishing view."""
     class _W:  # minimal wrapper shim for generate_object_image
         context = state
     wrapper = _W()
     storage: GenericStorage = state.storage
+    if isinstance(aspect, str):
+        aspect = FrameLayout(aspect)
+    aspect = aspect or FrameLayout.LANDSCAPE
 
     setting: Setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": setting_id})
     if setting is None:
@@ -1600,12 +1606,15 @@ def generate_setting_background_body(state, series_id: str, setting_id: str, sty
 
     prop_lines = "\n".join(f"* **{p.name}**: {p.description}" for p in setting.props)
     interior_or_exterior = "an interior" if setting.interior else "an exterior"
+    view_line = {"landscape": "a wide establishing view",
+                 "portrait": "a tall establishing view (portrait orientation, as for a cover)",
+                 "square": "a square establishing view"}[aspect.value]
 
     prompt = f"""Render a comic book master background of {interior_or_exterior} setting: "{setting.name}".
 
 This is an EMPTY SETTING: render the setting fully dressed with its props but with
-absolutely NO characters, people, or creatures in it.   Compose it as a wide
-establishing view with generous negative space where characters can later be
+absolutely NO characters, people, or creatures in it.   Compose it as {view_line}
+with generous negative space where characters can later be
 placed.   The rendering must strictly follow the comic style below so that
 panels composed on top of this background match the rest of the issue.
 
@@ -1626,7 +1635,7 @@ panels composed on top of this background match the rest of the issue.
         obj=setting,
         prompt=prompt,
         reference_images=reference_images,
-        aspect_ratio=FrameLayout.LANDSCAPE,
+        aspect_ratio=aspect,
         image_quality=IMAGE_QUALITY.HIGH,
         name=f"{setting_id}-{style_id}-background",
     )
@@ -1646,6 +1655,7 @@ def generate_setting_background(
     series_id: str,
     setting_id: str,
     style_id: str,
+    aspect: Optional[str] = None,
 ) -> str:
     """
     Render the master background for a setting in a given comic style: the empty
@@ -1661,10 +1671,13 @@ def generate_setting_background(
         setting_id: The ID of the setting to render.
         style_id: The comic style to render the master background in.
 
+        aspect: The aspect of the board the master is for — 'landscape', 'portrait'
+            or 'square'.  Match the panel/cover it will sit behind; defaults to landscape.
+
     Returns:
         A status message with the locator of the rendered master background.
     """
-    return generate_setting_background_body(wrapper.context, series_id, setting_id, style_id)
+    return generate_setting_background_body(wrapper.context, series_id, setting_id, style_id, aspect)
 
 
 def render_panel_impl(state: APPState, series_id: str, issue_id: str, scene_id: str, panel_id: str) -> str:
