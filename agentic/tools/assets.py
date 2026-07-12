@@ -252,3 +252,68 @@ def extract_outfit_from_variant(wrapper: RunContextWrapper[APPState],
     state.is_dirty = True
     return (f"Extracted outfit '{name}' from {character_id}'s '{variant.name}' and linked it.  "
             f"Render its reference art with generate_outfit_reference so composites can use it.")
+
+
+@function_tool
+def dedupe_props(wrapper: RunContextWrapper[APPState], series_id: str,
+                 confirm: bool = False) -> str:
+    """
+    Tidy the prop shop: find props that are the SAME THING under the same
+    name (duplicates from repeated conjuring), keep the richest one, re-point
+    every wardrobe look at the keeper, and strike the copies (they go to the
+    wastebasket, restorable).   The first call only REPORTS the duplicates;
+    call again with confirm=true to merge.
+
+    Args:
+        series_id: The series whose props to tidy.
+        confirm: False to report; true to merge.
+
+    Returns:
+        The duplicate report, or a summary of the merge.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    props = storage.read_all_objects(PropAsset, {"series_id": series_id})
+    groups: dict[str, list] = {}
+    for p in props:
+        groups.setdefault(normalize_id(p.name), []).append(p)
+    dupes = {k: v for k, v in groups.items() if len(v) > 1}
+    if not dupes:
+        return "The prop shop is tidy — no duplicate props."
+
+    def richness(p):
+        return (sum(1 for i in (p.images or {}).values() if i and os.path.exists(i)),
+                len(p.description or ""))
+
+    if not confirm:
+        lines = [f"{len(dupes)} duplicated prop name(s):"]
+        for k, group in dupes.items():
+            keeper = max(group, key=richness)
+            lines.append(f"  - '{group[0].name}' x{len(group)} — would keep "
+                         f"{keeper.prop_id} ({richness(keeper)[0]} render(s)), "
+                         f"strike {', '.join(p.prop_id for p in group if p is not keeper)}")
+        lines.append("Call dedupe_props again with confirm=true to merge them "
+                     "(struck copies go to the wastebasket).")
+        return "\n".join(lines)
+
+    merged, struck = 0, 0
+    for k, group in dupes.items():
+        keeper = max(group, key=richness)
+        losers = [p for p in group if p is not keeper]
+        loser_ids = {p.prop_id for p in losers}
+        # every wardrobe look that carried a copy now carries the keeper
+        for ch in storage.read_all_objects(CharacterModel, {"series_id": series_id}):
+            for v in storage.read_all_objects(CharacterVariant, {
+                    "series_id": series_id, "character_id": ch.character_id}):
+                if any(pid in loser_ids for pid in (v.prop_ids or [])):
+                    v.prop_ids = list(dict.fromkeys(
+                        keeper.prop_id if pid in loser_ids else pid
+                        for pid in (v.prop_ids or [])))
+                    storage.update_object(data=v)
+        for p in losers:
+            storage.delete_object(cls=PropAsset, primary_key=p.primary_key)
+            struck += 1
+        merged += 1
+    state.is_dirty = True
+    return (f"Tidied the prop shop: {merged} name(s) merged, {struck} duplicate "
+            f"prop(s) struck to the wastebasket (restorable).")

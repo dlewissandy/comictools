@@ -86,7 +86,7 @@ from agentic.tools.library import list_library_assets, import_character, import_
 from agentic.tools.assets import (
     create_prop, read_all_props, update_prop_description, delete_prop,
     create_outfit, read_all_outfits, update_outfit_description, delete_outfit,
-    compose_character_variant, extract_outfit_from_variant,
+    compose_character_variant, extract_outfit_from_variant, dedupe_props,
 )
 from agentic.tools.imaging import generate_prop_reference, generate_outfit_reference
 from agentic.tools.imaging import (
@@ -493,6 +493,7 @@ TOOLKITS: dict[str,list[Tool]] = {
 }
 
 TOOLKITS["library"] = [
+    dedupe_props,
     # Browse
     list_library_assets,
     read_all_series,
@@ -505,6 +506,7 @@ TOOLKITS["library"] = [
 ]
 
 TOOLKITS["prop"] = [
+    dedupe_props,
     read_all_props,
     update_prop_description,
     delete_prop,

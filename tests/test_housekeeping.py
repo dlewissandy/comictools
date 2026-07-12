@@ -1,0 +1,85 @@
+"""HOUSEKEEPING: the wastebasket has eyes (list/restore-one/purge) and the
+prop shop can tidy its duplicates."""
+import os
+import time
+from types import SimpleNamespace
+
+from schema import PropAsset, CharacterVariant
+
+WL = "wonders-of-the-witchlight"
+
+
+def test_wastebasket_list_and_restore_one(storage):
+    from schema import PropAsset as _P
+    from storage.trash import list_entries, restore_entry
+    p = _P(prop_id="test-junk", series_id=WL, name="Test Junk", description="d",
+           images={}, origin=None)
+    storage.create_object(p, overwrite=True)
+    storage.delete_object(cls=_P, primary_key=p.primary_key)
+    entries = list_entries(storage.base_path)
+    assert entries and any("test-junk" in e["original_path"] for e in entries)
+    entry = next(e for e in entries if "test-junk" in e["original_path"])
+    assert not entry["occupied"]
+    restored = restore_entry(storage.base_path, entry["entry"])
+    assert restored and os.path.exists(restored)
+    back = storage.read_object(cls=_P, primary_key=p.primary_key)
+    assert back is not None and back.name == "Test Junk"
+
+
+def test_purge_only_old_entries(storage):
+    import json
+    from schema import PropAsset as _P
+    from storage.trash import list_entries, purge, TRASH_DIR
+    p = _P(prop_id="test-old", series_id=WL, name="Test Old", description="d",
+           images={}, origin=None)
+    storage.create_object(p, overwrite=True)
+    storage.delete_object(cls=_P, primary_key=p.primary_key)
+    # age the newest entry artificially
+    entry = list_entries(storage.base_path)[0]
+    mf = os.path.join(storage.base_path, TRASH_DIR, entry["entry"], "manifest.json")
+    m = json.load(open(mf)); m["deleted_at"] = time.time() - 40 * 86400
+    json.dump(m, open(mf, "w"))
+    n = purge(storage.base_path, older_than_days=30)
+    assert n >= 1
+    assert all(e["entry"] != entry["entry"] for e in list_entries(storage.base_path))
+
+
+def test_dedupe_props_merges_and_repoints(storage):
+    from agentic.tools.assets import dedupe_props
+    dup1 = PropAsset(prop_id="glow-1", series_id=WL, name="Glowing Eyes",
+                     description="rich description of the prop", images={}, origin=None)
+    dup2 = PropAsset(prop_id="glow-2", series_id=WL, name="Glowing Eyes",
+                     description="", images={}, origin=None)
+    storage.create_object(dup1, overwrite=True)
+    storage.create_object(dup2, overwrite=True)
+    # a wardrobe look carrying the copy
+    from schema import CharacterModel
+    ch = storage.read_all_objects(CharacterModel, {"series_id": WL})[0]
+    v = storage.read_all_objects(CharacterVariant, {"series_id": WL,
+                                                    "character_id": ch.character_id})[0]
+    v.prop_ids = list(v.prop_ids or []) + ["glow-2"]
+    storage.update_object(v)
+
+    wrapper = SimpleNamespace(context=SimpleNamespace(storage=storage, is_dirty=False,
+                                                      selection=[]))
+    report = dedupe_props.on_invoke_tool
+    # invoke the tool body directly via the wrapped function
+    import json as _json
+    out = dedupe_props.on_invoke_tool  # FunctionTool
+    # call through the raw python function for simplicity
+    fn = getattr(dedupe_props, 'func', None)
+    if fn is None:   # agents SDK stores the original under __wrapped__ or _func
+        import inspect
+        fn = dedupe_props.on_invoke_tool
+        import asyncio
+        res = asyncio.get_event_loop().run_until_complete(
+            fn(wrapper, _json.dumps({"series_id": WL, "confirm": False})))
+        assert "duplicated" in res
+        res = asyncio.get_event_loop().run_until_complete(
+            fn(wrapper, _json.dumps({"series_id": WL, "confirm": True})))
+        assert "struck" in res
+    survivors = [p for p in storage.read_all_objects(PropAsset, {"series_id": WL})
+                 if p.name == "Glowing Eyes" and p.prop_id in ("glow-1", "glow-2")]
+    assert [p.prop_id for p in survivors] == ["glow-1"], "keeper survives, copy struck"
+    v2 = storage.read_object(cls=CharacterVariant, primary_key=v.primary_key)
+    assert "glow-1" in (v2.prop_ids or []) and "glow-2" not in (v2.prop_ids or [])

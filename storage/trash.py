@@ -60,3 +60,66 @@ def restore_last(base_path: str) -> str | None:
         logger.info(f"restored {original}")
         return original
     return None
+
+
+def list_entries(base_path: str, limit: int = 60) -> list[dict]:
+    """The wastebasket's contents, newest first: what was struck, from
+    where, and when — the truth that makes 'bring it back' possible."""
+    trash_root = os.path.join(base_path, TRASH_DIR)
+    if not os.path.isdir(trash_root):
+        return []
+    out = []
+    for name in sorted(os.listdir(trash_root), reverse=True)[: limit * 2]:
+        manifest_path = os.path.join(trash_root, name, "manifest.json")
+        if not os.path.isfile(manifest_path):
+            continue
+        try:
+            m = json.load(open(manifest_path))
+        except (json.JSONDecodeError, OSError):
+            continue
+        out.append({"entry": name, "original_path": m.get("original_path", ""),
+                    "deleted_at": m.get("deleted_at", 0), "note": m.get("note", ""),
+                    "occupied": os.path.exists(m.get("original_path", ""))})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def restore_entry(base_path: str, entry: str) -> str | None:
+    """Restore ONE named wastebasket entry to its original place.  Returns
+    the restored path, or None (missing entry / the place is occupied)."""
+    entry_dir = os.path.join(base_path, TRASH_DIR, entry)
+    manifest_path = os.path.join(entry_dir, "manifest.json")
+    if not os.path.isfile(manifest_path):
+        return None
+    manifest = json.load(open(manifest_path))
+    original = manifest["original_path"]
+    if os.path.exists(original):
+        logger.warning(f"cannot restore {original}: path exists again")
+        return None
+    os.makedirs(os.path.dirname(original), exist_ok=True)
+    shutil.move(os.path.join(entry_dir, "payload"), original)
+    shutil.rmtree(entry_dir, ignore_errors=True)
+    logger.info(f"restored {original}")
+    return original
+
+
+def purge(base_path: str, older_than_days: float = 30) -> int:
+    """Empty wastebasket entries older than the given age.  Returns the
+    number of entries destroyed — the ONLY place the studio truly deletes."""
+    trash_root = os.path.join(base_path, TRASH_DIR)
+    if not os.path.isdir(trash_root):
+        return 0
+    cutoff = time.time() - older_than_days * 86400
+    n = 0
+    for name in os.listdir(trash_root):
+        manifest_path = os.path.join(trash_root, name, "manifest.json")
+        try:
+            m = json.load(open(manifest_path))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if m.get("deleted_at", 0) < cutoff:
+            shutil.rmtree(os.path.join(trash_root, name), ignore_errors=True)
+            n += 1
+    logger.info(f"purged {n} wastebasket entries older than {older_than_days}d")
+    return n

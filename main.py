@@ -572,6 +572,64 @@ def build_page(selection_override: list[SelectionItem] | None = None):
             board_label = ui.label('').classes('text-xs')
         board_chip.tooltip('The studio is at work — receipts land in the chat as pieces finish')
 
+        # THE WASTEBASKET: deletes are moves, and here's where they went —
+        # open it, see what was struck and when, bring anything back
+        def open_wastebasket():
+            import time as _time
+            from storage.trash import list_entries, restore_entry, purge
+            entries = list_entries("data")
+            with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                    .style('min-width: 560px; max-width: 760px; max-height: 70vh;'):
+                with ui.row().classes('w-full items-center'):
+                    ui.label('The wastebasket').classes('caption-box caption-box-sm')
+                    ui.space()
+                    if entries:
+                        def do_purge():
+                            n = purge("data", older_than_days=30)
+                            ui.notify(f"Emptied {n} entr{'y' if n == 1 else 'ies'} older than 30 days.",
+                                      type='info')
+                            dlg.close()
+                        ui.button('Empty 30-day-old entries', icon='delete_forever') \
+                            .props('outline dense size=sm no-caps color=negative') \
+                            .tooltip('The only true delete in the studio — everything younger stays') \
+                            .on('click', lambda _: do_purge())
+                if not entries:
+                    ui.label('Empty — nothing has been struck.').classes('text-sm text-gray-500 q-mt-sm')
+                with ui.column().classes('w-full q-mt-sm').style('gap: 4px; overflow-y: auto;'):
+                    for en in entries:
+                        rel = os.path.relpath(en['original_path'], 'data') if en['original_path'] else '?'
+                        age_h = (_time.time() - en['deleted_at']) / 3600
+                        age = (f"{age_h * 60:.0f}m ago" if age_h < 1
+                               else f"{age_h:.0f}h ago" if age_h < 48 else f"{age_h / 24:.0f}d ago")
+                        with ui.row().classes('w-full items-center flex-nowrap light-layer') \
+                                .style('gap: 8px; padding: 2px 8px;'):
+                            ui.icon('folder' if not en['occupied'] else 'block') \
+                                .classes('text-sm text-gray-500')
+                            ui.label(rel).classes('text-xs') \
+                                .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;') \
+                                .tooltip(en['note'] or rel)
+                            ui.label(age).classes('text-xs text-gray-500').style('flex-shrink: 0;')
+                            if en['occupied']:
+                                ui.label('superseded').classes('text-xs text-gray-500')
+                            else:
+                                def bring_back(entry=en['entry'], rel=rel):
+                                    restored = restore_entry("data", entry)
+                                    if restored:
+                                        ui.notify(f"Brought back {rel}.", type='positive')
+                                        dlg.close()
+                                        state.refresh_details()
+                                    else:
+                                        ui.notify("Couldn't restore — its place is occupied.",
+                                                  type='warning')
+                                ui.button(icon='restore_from_trash').props('flat round dense size=xs') \
+                                    .tooltip('Bring it back exactly where it was') \
+                                    .on('click', lambda _, e2=en['entry'], r2=rel: bring_back(e2, r2))
+            dlg.open()
+
+        ui.button(icon='delete_outline').props('flat round dense') \
+            .tooltip('The wastebasket — everything struck, ready to bring back') \
+            .on('click', lambda _: open_wastebasket())
+
     # PASTE AN IMAGE anywhere: boards offer take/plate/reference; other
     # views file it as a reference on what you're working on
     from gui.light_table import handle_clipboard_image
