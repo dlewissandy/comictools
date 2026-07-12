@@ -1033,6 +1033,8 @@ def light_table(state: APPState, panel, scene, setting,
         if background and not os.path.exists(background):
             background = None
 
+    _char_names = {c.character_id: c.name for c in storage.read_all_objects(
+        CharacterModel, primary_key={"series_id": series_id})}
     figures = []
     for i, ref in enumerate(panel.character_references or []):
         key = f"{ref.character_id}/{ref.variant_id}"
@@ -1728,7 +1730,8 @@ def light_table(state: APPState, panel, scene, setting,
                             .on('click', lambda _, ref=f["ref"]: pick_variant(ref))
                     else:
                         ui.icon('person').classes('text-lg').style('width: 40px; text-align: center;')
-                    name_lbl = f["ref"].character_id.replace('-', ' ').title()
+                    name_lbl = (_char_names.get(f["ref"].character_id)
+                                or f["ref"].character_id.replace('-', ' ')).title()
                     posing = pose_pending_key(panel, f["ref"].character_id, f["ref"].variant_id) \
                         in (getattr(state, '_poses_pending', None) or set())
                     ui.label(name_lbl + (' — posing…' if posing
@@ -2014,6 +2017,168 @@ def light_table(state: APPState, panel, scene, setting,
             def _fresh():
                 return storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
 
+            def _default_variant(cid):
+                for r in (panel.character_references or []):
+                    if r.character_id == cid:
+                        return r.variant_id
+                for r in (getattr(scene, 'cast', None) or []):
+                    if r.character_id == cid:
+                        return r.variant_id
+                vs = list(storage.read_all_objects(CharacterVariant, primary_key={
+                    "series_id": series_id, "character_id": cid}))
+                return vs[0].variant_id if vs else 'default'
+
+            def conjure_prop(name: str, description: str):
+                """Create a prop asset and queue its reference art in this
+                board's style; on covers the finished art lands on the table."""
+                from agentic.tools.normalization import normalize_id
+                from helpers.render_queue import enqueue_renders
+                prop = PropAsset(prop_id=normalize_id(name), series_id=series_id,
+                                 name=name, description=description or name)
+                storage.create_object(data=prop)
+                if not cover_mode and scene is not None:
+                    scene.props = (scene.props or []) + [Prop(name=name, description=description or name)]
+                    storage.update_object(scene)
+                style_id = getattr(scene, 'style_id', None) or 'vintage-four-color'
+
+                def job(prop_id=prop.prop_id, style_id=style_id):
+                    from agentic.tools.imaging import render_prop_reference_body
+                    note = render_prop_reference_body(state, series_id, prop_id, style_id)
+                    if cover_mode:
+                        # the finished art lands straight on the cover
+                        fb = storage.read_object(cls=type(panel), primary_key=panel.primary_key)
+                        pa2 = storage.read_object(cls=PropAsset, primary_key={
+                            "series_id": series_id, "prop_id": prop_id})
+                        img2 = ((pa2.images or {}).get(style_id)) if pa2 is not None else None
+                        if fb is not None and img2 and os.path.exists(img2):
+                            from agentic.tools.normalization import normalize_id as _nid
+                            k = f'element/{_nid(pa2.name)}'
+                            if k not in (fb.figure_images or {}):
+                                fb.figure_images[k] = img2
+                                fb.figure_blocking[k] = {"x": 50, "y": 6, "h": 28, "z": 55}
+                                storage.update_object(fb)
+                    return note
+                enqueue_renders(state, [(f"prop reference — {name} in {style_id}", job)],
+                                role='the Prop Maker')
+
+            async def build_table_flow():
+                """THE BRIEF BECOMES THE TABLE: break the written description
+                into acetates — setting laid, figures posed as directed,
+                elements conjured — with an approval pass first."""
+                import asyncio
+                from agentic.tools.imaging import breakdown_brief
+                brief = (panel.description or '').strip()
+                if not brief:
+                    ui.notify('Write the visual description first — the table is built from the brief.',
+                              type='warning')
+                    return
+                pending = getattr(state, '_render_pending', None)
+                if pending is None:
+                    pending = []
+                    state._render_pending = pending
+                busy_label = 'breaking the brief into acetates'
+                pending.append(busy_label)
+                with ui.dialog().props('persistent') as busy, \
+                        ui.card().classes('soft-card').style('min-width: 360px;'):
+                    with ui.row().classes('items-center').style('gap: 12px;'):
+                        ui.spinner('dots', size='2em', color='primary')
+                        ui.label('Reading the brief — breaking it into acetates…').classes('text-sm')
+                busy.open()
+                try:
+                    plan = await asyncio.to_thread(breakdown_brief, state, series_id, brief, cover_mode)
+                finally:
+                    busy.close()
+                    try:
+                        pending.remove(busy_label)
+                    except ValueError:
+                        pass
+                if not plan or not (plan['figures'] or plan['elements']
+                                    or plan['setting_id'] or plan['new_setting']):
+                    ui.notify('The brief did not break down into acetates — add more visual detail.',
+                              type='warning')
+                    return
+
+                cast_names = {c.character_id: c.name for c in storage.read_all_objects(
+                    CharacterModel, primary_key={"series_id": series_id})}
+                with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                        .style('min-width: 520px; max-width: 760px;'):
+                    ui.label('Build the table from the brief').classes('caption-box caption-box-sm')
+                    ui.label('Pick what to lay: figures go to the Penciller with the pose the brief '
+                             'directs, elements are conjured as props, and everything lands here.') \
+                        .classes('text-sm q-mt-sm')
+                    checks = []
+                    if plan['setting_id']:
+                        s_obj = storage.read_object(cls=Setting, primary_key={
+                            "series_id": series_id, "setting_id": plan['setting_id']})
+                        if s_obj is not None:
+                            checks.append(('setting', s_obj,
+                                           ui.checkbox(f"Background — {s_obj.name}", value=True)))
+                    elif plan['new_setting']:
+                        ns = plan['new_setting']
+                        checks.append(('new_setting', ns,
+                                       ui.checkbox(f"NEW setting — {ns.get('name', 'unnamed')}", value=True)))
+                    for f in plan['figures']:
+                        nm2 = (cast_names.get(f['character_id']) or f['character_id']).title()
+                        checks.append(('figure', f,
+                                       ui.checkbox(f"Pose {nm2} — {str(f.get('pose', ''))[:70]}", value=True)))
+                    for e in plan['elements']:
+                        checks.append(('element', e,
+                                       ui.checkbox(f"Conjure {e['name']} — {str(e.get('description', ''))[:60]}",
+                                                   value=True)))
+                    if cover_mode and plan['wants_masthead']:
+                        checks.append(('masthead', None,
+                                       ui.checkbox('Lay the series title masthead', value=True)))
+
+                    def go():
+                        dlg.close()
+                        laid = []
+                        for kind2, item, cb in checks:
+                            if not cb.value:
+                                continue
+                            if kind2 == 'setting':
+                                lay_background_on_table(state, scene, panel, item)
+                                laid.append(f"the {item.name} background")
+                            elif kind2 == 'new_setting':
+                                from agentic.tools.normalization import normalize_id as _nid
+                                from agentic.tools.imaging import generate_setting_background_body
+                                from helpers.render_queue import enqueue_renders
+                                new_s = Setting(setting_id=_nid(item.get('name', 'set')), series_id=series_id,
+                                                name=item.get('name', 'New Set'),
+                                                description=item.get('description') or item.get('name', ''),
+                                                interior=bool(item.get('interior')), props=[], images={})
+                                storage.create_object(data=new_s)
+                                lay_background_on_table(state, scene, panel, new_s)
+                                style_id = getattr(scene, 'style_id', None) or 'vintage-four-color'
+                                enqueue_renders(state, [(
+                                    f"master background — {new_s.name} in {style_id}",
+                                    lambda sid2=new_s.setting_id, st2=style_id:
+                                        generate_setting_background_body(state, series_id, sid2, st2),
+                                )], role='the Background Artist')
+                                laid.append(f"the new {new_s.name} set")
+                            elif kind2 == 'figure':
+                                cid = item['character_id']
+                                vid = _default_variant(cid)
+                                if not any(c.character_id == cid and c.variant_id == vid
+                                           for c in (panel.character_references or [])):
+                                    panel.character_references = (panel.character_references or []) + [
+                                        CharacterRef(series_id=series_id, character_id=cid, variant_id=vid)]
+                                    storage.update_object(panel)
+                                pose_figure_bg(state, panel, cid, vid, item.get('pose') or None)
+                                laid.append(f"{cid.replace('-', ' ')} (posing)")
+                            elif kind2 == 'element':
+                                conjure_prop(item['name'], item.get('description') or '')
+                                laid.append(f"{item['name']} (conjuring)")
+                            elif kind2 == 'masthead':
+                                lay_title()
+                                laid.append('the masthead')
+                        if laid:
+                            _receipt('🛠 building the table from the brief — ' + ', '.join(laid))
+                        state.refresh_details()
+                    with ui.row().classes('w-full justify-end q-mt-sm'):
+                        ui.button('Build the table', icon='auto_awesome').props('unelevated dense') \
+                            .on('click', lambda _: go())
+                dlg.open()
+
             def pick_figure():
                 with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 720px;'):
                     ui.label('Lay a figure on the table').classes('caption-box caption-box-sm')
@@ -2126,37 +2291,10 @@ def light_table(state: APPState, panel, scene, setting,
                         if not name:
                             ui.notify('Name the prop first.', type='warning')
                             return
-                        description = (desc.value or '').strip() or name
-                        prop = PropAsset(prop_id=normalize_id(name), series_id=series_id,
-                                         name=name, description=description)
-                        storage.create_object(data=prop)
                         dlg.close()
-                        if not cover_mode and scene is not None:
-                            scene.props = (scene.props or []) + [Prop(name=name, description=description)]
-                            storage.update_object(scene)
+                        conjure_prop(name, (desc.value or '').strip())
                         _receipt(f"🎪 conjured the **{name}** prop — its reference art "
                                  f"is on the drawing board…")
-                        style_id = getattr(scene, 'style_id', None) or 'vintage-four-color'
-
-                        def job(prop_id=prop.prop_id, style_id=style_id):
-                            from agentic.tools.imaging import render_prop_reference_body
-                            note = render_prop_reference_body(state, series_id, prop_id, style_id)
-                            if cover_mode:
-                                # the finished art lands straight on the cover
-                                fb = storage.read_object(cls=type(panel), primary_key=panel.primary_key)
-                                pa2 = storage.read_object(cls=PropAsset, primary_key={
-                                    "series_id": series_id, "prop_id": prop_id})
-                                img2 = ((pa2.images or {}).get(style_id)) if pa2 is not None else None
-                                if fb is not None and img2 and os.path.exists(img2):
-                                    k = f'element/{normalize_id(pa2.name)}'
-                                    if k not in (fb.figure_images or {}):
-                                        fb.figure_images[k] = img2
-                                        fb.figure_blocking[k] = {"x": 50, "y": 6, "h": 28, "z": 55}
-                                        storage.update_object(fb)
-                            return note
-                        from helpers.render_queue import enqueue_renders
-                        enqueue_renders(state, [(f"prop reference — {name} in {style_id}", job)],
-                                        role='the Prop Maker')
                         state.refresh_details()
                     ui.button('Conjure & ink its reference', icon='auto_fix_high') \
                         .props('unelevated dense no-caps').classes('q-mt-sm') \
@@ -2165,6 +2303,10 @@ def light_table(state: APPState, panel, scene, setting,
 
             with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 2px;'):
                 ui.label('lay a new acetate:').classes('text-xs text-gray-500')
+                ui.button(icon='auto_awesome').props('flat round dense size=sm') \
+                    .tooltip('BUILD THE TABLE FROM THE BRIEF — the description becomes acetates: '
+                             'setting laid, figures posed as written, elements conjured') \
+                    .on('click', lambda _: build_table_flow())
                 ui.button(icon='person_add').props('flat round dense size=sm') \
                     .tooltip('A figure — one click from the cast').on('click', lambda _: pick_figure())
                 ui.button(icon='category').props('flat round dense size=sm') \

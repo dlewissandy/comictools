@@ -2317,6 +2317,70 @@ Respond with STRICT JSON only, no prose:
         return []
 
 
+def breakdown_brief(state, series_id: str, description: str, is_cover: bool) -> dict | None:
+    """Break a written board brief into LIGHT TABLE acetates: which setting,
+    which cast figures (with pose directions lifted from the brief), which
+    standalone elements deserve their own acetate, and whether the masthead
+    is called for.  Text-only LLM pass; strict JSON; matches only KNOWN ids."""
+    import json as _json
+    import re as _re
+
+    import openai
+    storage = state.storage
+    roster = series_cast_roster(storage, series_id)
+    settings = [{"setting_id": s.setting_id, "name": s.name}
+                for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id})]
+    openai.api_key = os.getenv('OPENAI_API_KEY')
+    roster_txt = "\n".join(f'- id "{c["character_id"]}": {c.get("name")}' for c in roster[:30])
+    settings_txt = "\n".join(f'- id "{s["setting_id"]}": {s["name"]}' for s in settings[:30])
+    prompt = f"""Break this comic {'cover' if is_cover else 'panel'} brief into LIGHT TABLE acetates.
+
+BRIEF:
+{description}
+
+KNOWN CAST (figures may ONLY come from these ids):
+{roster_txt or '- (none)'}
+
+KNOWN SETTINGS (match the place to one of these when it fits):
+{settings_txt or '- (none)'}
+
+Respond with STRICT JSON only, no prose:
+{{"setting_id": <matching known setting id, or null>,
+  "new_setting": {{"name": "<2-5 words>", "description": "<visual description>", "interior": <bool>}} or null,
+  "figures": [{{"character_id": "<known cast id>", "pose": "<1-2 sentences: pose, expression, action, exactly as the brief directs>"}}],
+  "elements": [{{"name": "<2-4 words>", "description": "<visual description from the brief>"}}],
+  "wants_masthead": <true when the brief calls for the series title lettering>}}
+
+Rules: new_setting only when no known setting fits AND the brief describes a
+place.   elements are standalone visual pieces (props, signage, vehicles,
+creatures-that-are-not-cast, effects) worth their own acetate — not the
+background scenery, not the cast, not text.   At most 5 elements."""
+    resp = openai.chat.completions.create(
+        model=os.getenv('VISION_MODEL', 'gpt-5.2'),
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = resp.choices[0].message.content or ""
+    m = _re.search(r"\{.*\}", text, _re.DOTALL)
+    if not m:
+        return None
+    try:
+        data = _json.loads(m.group(0))
+    except Exception as ex:
+        logger.error(f"brief breakdown parse failed: {ex}")
+        return None
+    known = {c["character_id"] for c in roster}
+    known_settings = {s["setting_id"] for s in settings}
+    return {
+        "setting_id": data.get("setting_id") if data.get("setting_id") in known_settings else None,
+        "new_setting": data.get("new_setting") or None,
+        "figures": [f for f in (data.get("figures") or [])
+                    if isinstance(f, dict) and f.get("character_id") in known][:6],
+        "elements": [e for e in (data.get("elements") or [])
+                     if isinstance(e, dict) and e.get("name")][:5],
+        "wants_masthead": bool(data.get("wants_masthead")),
+    }
+
+
 def series_cast_roster(storage, series_id: str) -> list[dict]:
     """The series' characters as a recognition roster: [{character_id, name, notes}]."""
     from schema import CharacterModel
