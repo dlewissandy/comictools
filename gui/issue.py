@@ -209,5 +209,11 @@ def view_issue(state:APPState):
             )
         packer.finalize()
         mosaic.__exit__(None, None, None)
+
+        # THE PAGES BOARD: the book itself, visible and editable
+        with ccell(12):
+            from gui.pages_board import pages_board
+            pages_board(state, series_id, issue_id)
+
         page.__exit__(None, None, None)                
         
