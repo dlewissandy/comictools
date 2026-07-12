@@ -66,5 +66,7 @@
       "font": "Traditional serif font."
     }
   },
-  "image": null
+  "image": {
+    "art": "data/styles/89e781be-7ca7-4754-9e7c-eec4e3f56a49/images/art/79066929-00c3-4a19-b815-2ebb182307d2.jpg"
+  }
 }

@@ -66,5 +66,7 @@
       "font": "Simple, clear text."
     }
   },
-  "image": null
+  "image": {
+    "art": "data/styles/13e69e9c-46c7-4c7b-8fed-ebd1f0331c62/images/art/9026e36b-7f46-4d33-98e5-8718a0483721.jpg"
+  }
 }
