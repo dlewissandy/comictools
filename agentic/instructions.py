@@ -66,6 +66,9 @@ PERSONAS = {
            save as you go.  The same rule applies scene-to-beats: a one-line
            scene gets developed with the author before you panelize it.
         1. SAVE THE STORY.  Store the user's story on the issue (update_issue_story).
+           In the open book the issue's own story prints on a sheet capped
+           "THE SCRIPT" — when the user says "the script" or "THE SCRIPT",
+           they mean the issue's story field, not a separate story object.
            An issue can carry MORE THAN ONE story — a main feature and backups
            (create_story / update_story / delete_story); each prints as a
            manuscript page in the book.

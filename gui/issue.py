@@ -393,6 +393,9 @@ def view_issue(state: APPState):
         script (the legacy single story)."""
         sid = story.story_id if story else None
         name = story.name if story else 'THE SCRIPT'
+        # the sheet cap says THE SCRIPT; messages to the Editor must name
+        # the thing unambiguously — there is no story OBJECT called that
+        spoken = f"the story '{story.name}'" if story else "this issue's own story (the issue script)"
         text = (story.text if story else issue.story) or ''
         wc = len(text.split())
         long_read = wc > 200
@@ -408,10 +411,10 @@ def view_issue(state: APPState):
                 # and the door opens the whole manuscript
                 ui.chip('continues — open to read', icon='auto_stories') \
                     .props('dense outline clickable size=sm').classes('script-continues') \
-                    .on('click', lambda _, sid=sid, name=name, text=text: edit_text_dialog(
+                    .on('click', lambda _, sid=sid, name=name, text=text, sp=spoken: edit_text_dialog(
                         name, text,
                         lambda v, sid=sid: save_story_text(sid, v),
-                        f"Let's work on the story '{name}' together — read it back "
+                        f"Let's work on {sp} together — read it back "
                         f"to me and we'll edit it."))
             with ui.row().classes('script-foot items-center flex-nowrap').style('gap: 2px;'):
                 if story is not None:
@@ -422,21 +425,21 @@ def view_issue(state: APPState):
                         footer_btn('chevron_right', 'Later in the book',
                                    lambda _, s=story: move_story(s, 1))
                 footer_btn('edit', 'Rewrite the story',
-                           lambda _, sid=sid, name=name, text=text: edit_text_dialog(
+                           lambda _, sid=sid, name=name, text=text, sp=spoken: edit_text_dialog(
                                name, text,
                                lambda v, sid=sid: save_story_text(sid, v),
-                               f"Let's work on the story '{name}' together — read it back "
+                               f"Let's work on {sp} together — read it back "
                                f"to me and we'll edit it."))
                 if text and wc < 80:
                     ui.chip('develop it with me', icon='forum').props('dense outline clickable size=sm') \
                         .tooltip("It's thin — I'll interview you and we'll build it out") \
-                        .on('click', lambda _, name=name: post_user_message(
-                            state, f"The story '{name}' is too thin to break down — "
+                        .on('click', lambda _, sp=spoken: post_user_message(
+                            state, f"{sp.capitalize()} is too thin to break down — "
                                    f"interview me and help me develop it."))
                 elif text:
                     ui.chip('break into scenes', icon='view_agenda').props('dense outline clickable size=sm') \
-                        .on('click', lambda _, name=name: post_user_message(
-                            state, f"Break the story '{name}' into scenes."))
+                        .on('click', lambda _, sp=spoken: post_user_message(
+                            state, f"Break {sp} into scenes."))
                 else:
                     ui.chip('write it with me', icon='forum').props('dense outline clickable size=sm') \
                         .on('click', lambda _: post_user_message(state, "Help me write the story for this issue."))
