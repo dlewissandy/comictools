@@ -87,3 +87,23 @@ def test_preflight_names_cover_placeholders(storage):
     assert any(guard(t) for t in texts)
     fresh = storage.read_object(cls=_C, primary_key=cover.primary_key)
     assert fresh.dialogue[0].text == "Say something…"   # letters persist on covers
+
+
+def test_insert_letter_blocks_become_letters(storage):
+    """THE MAILBAG'S LETTERS: a text insert's description blocks ride the
+    table (and the composite) as caption letters, honoring their blocking."""
+    from helpers.compositor import letter_blocks, collect_letters
+    from schema import Insert
+    inserts = storage.read_all_objects(Insert, primary_key={"series_id": WL, "issue_id": CARN})
+    assert inserts, "the carnival issue carries the mailbag"
+    ins = inserts[0]
+    ins.description = "Dear Mud,\nI loved issue one!\n\nDear reader,\nThank you kindly."
+    ins.figure_blocking = {"letterblock/1": {"x": 60.0, "y": 12.0, "fs": 9.0}}
+    blocks = letter_blocks(ins.description)
+    assert len(blocks) == 2 and blocks[0].startswith("Dear Mud")
+    letters = collect_letters(ins)
+    assert [L["kind"] for L in letters] == ["caption", "caption"]
+    assert letters[1]["x"] == 60.0 and letters[1]["fs"] == 9.0   # blocking honored
+    # a switched-off block stays off the print
+    ins.figure_blocking["letterblock/0"] = {"on": 0}
+    assert len(collect_letters(ins)) == 1

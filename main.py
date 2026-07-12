@@ -313,6 +313,9 @@ def init_layout(logger):
                            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', sans-serif;
                            width: max-content; line-height: 1.3;
                            white-space: normal; }
+        /* the mailbag's letter blocks: text plates, wider than captions */
+        .rough-letterblock { max-width: 55%; text-align: left;
+                             white-space: pre-line; }
         /* a locked, empty table ghosts its featured print on the glass */
         .rough-ghost-print { opacity: .4; filter: saturate(.65); }
         .rough-ghost-print__note { position: absolute; bottom: 6px; left: 50%;

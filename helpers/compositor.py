@@ -30,12 +30,33 @@ def is_placeholder(text: str | None) -> bool:
     return bool(text) and text.strip().rstrip('…').strip().lower() in ("say something", "narration")
 
 
+def letter_blocks(text: str | None, cap: int = 8) -> list[str]:
+    """A text insert's letters: the blank-line-separated blocks of its
+    description — each block is one letter acetate on the table."""
+    import re
+    return [b.strip() for b in re.split(r'\n\s*\n', text or '') if b.strip()][:cap]
+
+
 def collect_letters(board) -> list[dict]:
     """The board's letters with their table blocking resolved — the same
     defaults the rough displays, so a composite matches what the author saw.
     Letters the author switched off and unwritten placeholders are skipped
     (the guard against printing the table's training wheels)."""
     if not hasattr(board, 'dialogue'):
+        # A TEXT INSERT (the mailbag, an ad): its letter blocks are captions
+        if getattr(board, 'kind', None) and getattr(board, 'description', None):
+            blk = getattr(board, 'figure_blocking', None) or {}
+            blocks = letter_blocks(board.description)
+            step = 84 / max(len(blocks), 1)
+            letters = []
+            for i, text in enumerate(blocks):
+                b = blk.get(f'letterblock/{i}') or {}
+                if not b.get('on', 1):
+                    continue
+                letters.append({"kind": "caption", "text": text,
+                                "x": b.get('x', 8), "y": b.get('y', max(88 - i * step, 4)),
+                                "fs": b.get('fs', 11)})
+            return letters
         return []
     blk = getattr(board, 'figure_blocking', None) or {}
 

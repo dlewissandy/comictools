@@ -1449,9 +1449,21 @@ def light_table(state: APPState, panel, scene, setting,
         def _on_text(e):
             a = e.args
             p = read_board(state.storage, a)
-            if p is None or not a.get('text') or not hasattr(p, 'dialogue'):
+            if p is None or not a.get('text'):
                 return
             parts = a['key'].split('/')
+            if parts[0] == 'letterblock' and len(parts) == 2 and hasattr(p, 'description'):
+                # editing a letter block writes it back into the page's words
+                from helpers.compositor import letter_blocks
+                blocks = letter_blocks(p.description, cap=999)
+                i = int(parts[1])
+                if i < len(blocks):
+                    blocks[i] = a['text']
+                    p.description = '\n\n'.join(blocks)
+                    state.storage.update_object(p)
+                return
+            if not hasattr(p, 'dialogue'):
+                return
             if parts[0] == 'balloon' and len(parts) == 2:
                 i = int(parts[1])
                 if i < len(p.dialogue):
@@ -1543,11 +1555,16 @@ def light_table(state: APPState, panel, scene, setting,
     supports_letters = hasattr(panel, 'dialogue')
     board_dialogue = getattr(panel, 'dialogue', None) or []
     board_narration = getattr(panel, 'narration', None) or []
-    has_letters = bool(board_narration or board_dialogue)
+    # A TEXT INSERT'S LETTERS: the mailbag's letters (blank-line-separated
+    # blocks of its description) ride the table as letter-block acetates
+    from helpers.compositor import letter_blocks
+    board_blocks = letter_blocks(panel.description) if insert_mode and not locked else []
+    has_letters = bool(board_narration or board_dialogue or board_blocks)
     letter_keys = [f'balloon/{i}' for i in range(len(board_dialogue[:4]))]
     for _pos in ('top', 'bottom'):
         _caps = [n for n in board_narration if n.position.value == _pos]
         letter_keys += [f'caption/{_pos}/{i}' for i in range(len(_caps[:2]))]
+    letter_keys += [f'letterblock/{i}' for i in range(len(board_blocks))]
     # the master eye rules its letters recursively; it reads as ON when any is
     letters = {"on": has_letters and (not letter_keys or any(_key_on(k) for k in letter_keys)),
                "keys": letter_keys}
@@ -1705,6 +1722,15 @@ def light_table(state: APPState, panel, scene, setting,
                         bl._props['title'] = f"{d.character_id} speaks — double-click to edit, drag to place"
                 for i, n in enumerate([n for n in board_narration if n.position.value == 'bottom'][:1]):
                     letter(f'caption/bottom/{i}', 'rough-narration', n.text, 2, 4, 'caption')
+                # the mailbag's letters: one draggable block per letter,
+                # blocked here and honored by the composite
+                step = 84 / max(len(board_blocks), 1)
+                for i, btext in enumerate(board_blocks):
+                    lb = letter(f'letterblock/{i}', 'rough-narration rough-letterblock', btext,
+                                8, max(88 - i * step, 4), 'caption')
+                    if lb is not None:
+                        lb._props['title'] = ('a letter block — drag to place it on the page, '
+                                              '⌘-wheel to size, double-click to edit')
 
     # ---- POSE: describe the pose first, then render in the background ----
     def pose_figure(character_id: str, variant_id: str, pose_direction: str | None = None):
@@ -1957,8 +1983,12 @@ def light_table(state: APPState, panel, scene, setting,
             ui.label('top of the stack prints last — drag rows to restack; '
                      'pick a row or an acetate and the other lights up').classes('text-xs text-gray-500 italic')
             if has_letters:
-                layer_row('chat_bubble', 'Letters — balloons & captions', letters,
-                          edit_message='I would like to edit the narration and dialogue of this '
+                layer_row('chat_bubble',
+                          'Letters — the page\'s letter blocks' if insert_mode
+                          else 'Letters — balloons & captions', letters,
+                          edit_message='I would like to work on the words of this page.'
+                                       if insert_mode else
+                                       'I would like to edit the narration and dialogue of this '
                                        + ('cover.' if cover_mode else 'panel.'))
 
                 def letter_eye(key):
@@ -2002,7 +2032,18 @@ def light_table(state: APPState, panel, scene, setting,
                     [r.character_id for r in (panel.character_references or [])] +
                     [c.character_id for c in (getattr(scene, 'cast', None) or [])]))
 
-                for i, d in enumerate(panel.dialogue[:4]):
+                # THE MAILBAG'S LETTER ROWS: one row per letter block, with
+                # its eye — the block's words live in the page description
+                for i, btext in enumerate(board_blocks):
+                    with ui.row().classes('light-layer w-full items-center flex-nowrap') \
+                            .style('gap: 4px; margin-left: 14px; width: calc(100% - 14px);'):
+                        letter_eye(f'letterblock/{i}')
+                        ui.icon('drafts').classes('text-sm')
+                        ui.label(btext.splitlines()[0][:34]).classes('text-xs') \
+                            .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
+                        ui.space()
+
+                for i, d in enumerate(board_dialogue[:4]):
                     with ui.row().classes('light-layer w-full items-center flex-nowrap') \
                             .style('gap: 4px; margin-left: 14px; width: calc(100% - 14px);'):
                         letter_eye(f'balloon/{i}')
@@ -2058,7 +2099,7 @@ def light_table(state: APPState, panel, scene, setting,
                             .tooltip('Remove this balloon').on('click', lambda _, i=i: drop_balloon(i))
 
                 for pos in ('top', 'bottom'):
-                    caps = [n for n in panel.narration if n.position.value == pos]
+                    caps = [n for n in board_narration if n.position.value == pos]
                     for i, n in enumerate(caps[:2]):
                         with ui.row().classes('light-layer w-full items-center flex-nowrap') \
                                 .style('gap: 4px; margin-left: 14px; width: calc(100% - 14px);'):

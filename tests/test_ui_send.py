@@ -393,3 +393,37 @@ async def test_colophon_prints_all_credits_and_each_line_is_a_pencil(user: User,
         if ev.type.startswith("click"):
             lines[0]._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
     assert sent == ["I would like to edit the writer."]
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_mailbag_letter_blocks_ride_the_table(user: User) -> None:
+    """THE MAILBAG'S LETTERS: on an unlocked text insert, every description
+    block rides the rough as a letter acetate with its own stack row."""
+    main.LocalStorage = _TmpStorage
+    from schema import Insert
+    from helpers.compositor import letter_blocks
+    storage = _TmpStorage()
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    ins = storage.read_all_objects(Insert, primary_key={"series_id": WL, "issue_id": CARN})[0]
+    keep = ins.image
+    ins.image = None            # unlocked, in the tmp copy only
+    storage.update_object(ins)
+    try:
+        json.dump({"selection": [{"name": "S", "id": None, "kind": "all-series"},
+                                 {"name": "WL", "id": WL, "kind": "series"},
+                                 {"name": "C", "id": CARN, "kind": "issue"},
+                                 {"name": "M", "id": ins.insert_id, "kind": "insert"}],
+                   "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+        await user.open("/")
+        n = len(letter_blocks(ins.description))
+        assert n > 0
+        blocks = [e for e in user.client.elements.values()
+                  if 'rough-letterblock' in str(getattr(e, "_classes", []))]
+        assert len(blocks) == n, "one letter acetate per description block"
+        # each block key persists through the shared blocking path
+        keys = {e._props.get('data-key') for e in blocks}
+        assert keys == {f'letterblock/{i}' for i in range(n)}
+    finally:
+        ins.image = keep
+        storage.update_object(ins)
