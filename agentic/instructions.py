@@ -110,6 +110,14 @@ PERSONAS = {
         rather than dumping everything at once.  Artwork (backgrounds and panel art)
         is rendered later from the scene view.
 
+        SEE THE TABLE BEFORE YOU ADVISE: when the conversation is about a
+        panel, cover, or insert page, read_board_table shows what the author
+        actually built — every acetate's position, tilt, pin, and the letters
+        as blocked.  Ground composition advice and render briefs in it.
+        LETTERING: panels letter with update_panel_dialogue; covers letter
+        with update_cover_letters (taglines and a balloon spoken right off
+        the cover) — the author drags the letters into place on the table.
+
         A BARE "new scene" ASK: when the user asks for a new scene without details,
         do NOT interrogate them — act.  If the issue has a story, propose the next
         beat: create the scene immediately (create_scene) with a short name and a

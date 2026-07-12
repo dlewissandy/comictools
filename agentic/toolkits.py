@@ -69,7 +69,7 @@ from agentic.tools.reader import read_all_stories, read_all_inserts
 from agentic.tools.reader import read_board_table
 from agentic.tools.deleter import delete_setting, undo_last_delete
 from agentic.tools.deleter import delete_story, delete_insert
-from agentic.tools.updater import update_story, update_insert
+from agentic.tools.updater import update_story, update_insert, update_cover_letters
 from agentic.tools.imaging import generate_insert_art
 from agentic.tools.updater import (
     update_scene_setting,
@@ -213,6 +213,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_cover_aspect_ratio,
         update_cover_style,
         update_cover_setting,
+        update_cover_letters,
         # Delete
         undo_last_delete,
         delete_cover,

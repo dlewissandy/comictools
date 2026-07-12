@@ -1297,3 +1297,45 @@ def update_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id
         state.is_dirty = True
         results.append(f"Insert moved after scene {obj.after_scene_number}.")
     return "  ".join(results) if results else "Nothing to update."
+
+
+@function_tool
+def update_cover_letters(wrapper: RunContextWrapper[APPState],
+        series_id: str, issue_id: str, cover_id: str,
+        dialogue: Optional[list[Dialogue]] = None,
+        narration: Optional[list[Narration]] = None) -> str:
+    """
+    Set the LETTERS for a cover: dialogue balloons (a character speaking
+    right off the cover) and/or narrator boxes (taglines, story hooks).
+    Only the provided lists are replaced; pass an empty list to clear one.
+    The author blocks their positions on the cover's light table.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        cover_id: The cover to letter.
+        dialogue: The dialogue balloons (max 4 render).  Optional.
+        narration: The narrator boxes/taglines.  Optional.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    from schema import Cover
+    state: APPState = wrapper.context
+    cover = state.storage.read_object(cls=Cover, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
+    if cover is None:
+        return f"Cover '{cover_id}' not found."
+    bits = []
+    if dialogue is not None:
+        cover.dialogue = dialogue
+        bits.append(f"{len(dialogue)} balloon(s)")
+    if narration is not None:
+        cover.narration = narration
+        bits.append(f"{len(narration)} caption(s)")
+    if not bits:
+        return "Nothing to letter — pass dialogue and/or narration."
+    state.storage.update_object(cover)
+    state.is_dirty = True
+    return (f"Lettered the cover: {', '.join(bits)}.  The author can drag them "
+            f"into place on the cover's light table.")
