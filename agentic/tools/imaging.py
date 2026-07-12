@@ -277,7 +277,8 @@ def _table_layout_brief(board) -> str:
         lines.append(f"* {ref.character_id} stands at {_pct(b.get('x', 50))} from left, {depth}"
                      + (f", raised {_pct(b['y'])} above the frame bottom" if float(b.get('y', 0)) > 5 else "")
                      + ("; only partly in frame, rising from below the bottom edge" if float(b.get('y', 0)) < -5 else "")
-                     + ("; MIRRORED left-to-right versus their reference sheet" if b.get('flip') else ""))
+                     + ("; MIRRORED left-to-right versus their reference sheet" if b.get('flip') else "")
+                     + (f"; TILTED {float(b['rot']):g} degrees clockwise" if b.get('rot') else ""))
     for key, path in sorted((board.figure_images or {}).items()):
         if not key.startswith('element/'):
             continue

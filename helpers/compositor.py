@@ -179,6 +179,16 @@ def paste_acetates(base, aspect: str, layers) -> list[tuple]:
         img = img.resize((max(1, round(img.width * s)), max(1, round(th))))
         cx = W * float(b.get('x', 50)) / 100
         bottom = H - H * float(b.get('y', 0)) / 100
-        base.paste(img, (round(cx - img.width / 2), round(bottom - img.height)), img)
-        boxes.append((cx - img.width / 2, bottom - img.height, cx + img.width / 2, bottom))
+        rot = float(b.get('rot') or 0)
+        if rot:
+            # CSS rotates around the element's center — pivot the same way:
+            # keep the pre-tilt center, expand the canvas so nothing crops
+            cy = bottom - th / 2
+            img = img.rotate(-rot, expand=True, resample=Image.BICUBIC)
+            base.paste(img, (round(cx - img.width / 2), round(cy - img.height / 2)), img)
+            boxes.append((cx - img.width / 2, cy - img.height / 2,
+                          cx + img.width / 2, cy + img.height / 2))
+        else:
+            base.paste(img, (round(cx - img.width / 2), round(bottom - img.height)), img)
+            boxes.append((cx - img.width / 2, bottom - img.height, cx + img.width / 2, bottom))
     return boxes

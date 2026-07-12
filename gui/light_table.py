@@ -171,6 +171,22 @@ if (!window._roughDragInit) {
   let drag = null;
   let resize = null;
   let tailDrag = null;
+
+  // MOVE-UNDO: a ring of before-states; Cmd/Ctrl+Z walks it back
+  window._roughUndo = window._roughUndo || [];
+  function pushUndo(fig, canvas) {
+    window._roughUndo.push({fig, canvas, left: fig.style.left, bottom: fig.style.bottom,
+                            height: fig.style.height, width: fig.style.width,
+                            fontSize: fig.style.fontSize, rot: fig.dataset.rot || '',
+                            tx: fig.dataset.tx, ty: fig.dataset.ty});
+    if (window._roughUndo.length > 60) window._roughUndo.shift();
+  }
+  function applyTransform(fig) {
+    const deg = parseFloat(fig.dataset.rot) || 0;
+    const flip = fig.dataset.flip ? ' scaleX(-1)' : '';
+    const base = fig.dataset.scale === 'font' ? '' : 'translateX(-50%)';
+    fig.style.transform = base + flip + (deg ? ` rotate(${deg}deg)` : '');
+  }
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;               // primary button only
     if (e.target.isContentEditable) return;   // typing, not dragging
@@ -179,6 +195,7 @@ if (!window._roughDragInit) {
       const canvas = e.target.closest('.rough-canvas');
       const fig = canvas.querySelector(`[data-key="${CSS.escape(key)}"]`);
       e.preventDefault();
+      pushUndo(fig, canvas);
       tailDrag = {fig, canvas};
       return;
     }
@@ -188,6 +205,7 @@ if (!window._roughDragInit) {
       const r = fig.getBoundingClientRect();
       const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
       e.preventDefault();
+      pushUndo(fig, fig.closest('.rough-canvas'));
       resize = {fig, canvas: fig.closest('.rough-canvas'), cx, cy,
                 d0: Math.hypot(e.clientX - cx, e.clientY - cy),
                 h0: parseFloat(fig.style.height) || 0,
@@ -236,6 +254,7 @@ if (!window._roughDragInit) {
     if (!drag.live) {
       if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 3) return;
       drag.live = true;
+      pushUndo(drag.fig, drag.canvas);
       drag.fig.style.zIndex = 99;  // ride above the stack while dragging
     }
     const r = drag.canvas.getBoundingClientRect();
@@ -244,6 +263,13 @@ if (!window._roughDragInit) {
     let y = ((r.bottom - e.clientY) / r.height) * 100 - (isNaN(hh) ? 2 : hh / 2) + drag.offY;
     x = Math.max(-20, Math.min(120, x));
     y = Math.max(-80, Math.min(95, y));   // negative: peek up from below the frame
+    // SNAP: center and thirds pull gently (the baseline too) — Shift opts out
+    if (!e.shiftKey) {
+      for (const s of [100 / 3, 50, 200 / 3]) {
+        if (Math.abs(x - s) < 1.5) { x = s; break; }
+      }
+      if (Math.abs(y) < 1.5) y = 0;
+    }
     drag.fig.style.left = x + '%';
     drag.fig.style.bottom = y + '%';
     drag.fig.style.top = 'auto';
@@ -257,7 +283,8 @@ if (!window._roughDragInit) {
       h: parseFloat(fig.style.height) || 0,
       fs: parseFloat(fig.style.fontSize) || 0,
       tx: parseFloat(fig.dataset.tx) || 0,
-      ty: parseFloat(fig.dataset.ty) || 0});
+      ty: parseFloat(fig.dataset.ty) || 0,
+      rot: parseFloat(fig.dataset.rot) || 0});
   document.addEventListener('pointerup', (e) => {
     if (tailDrag) {
       report(tailDrag.fig, tailDrag.canvas);
@@ -286,7 +313,14 @@ if (!window._roughDragInit) {
     if (window._roughSel !== fig) return;
     e.preventDefault();
     const canvas = fig.closest('.rough-canvas');
-    if (fig.dataset.scale === 'font') {
+    if (e.altKey && fig.dataset.scale !== 'font') {
+      // Alt+wheel TILTS the selected acetate; letters stay upright
+      if (!window._wheelPending || window._wheelPending.f !== fig) pushUndo(fig, canvas);
+      let deg = (parseFloat(fig.dataset.rot) || 0) + (e.deltaY < 0 ? 3 : -3);
+      deg = Math.max(-180, Math.min(180, Math.round(deg)));
+      fig.dataset.rot = deg;
+      applyTransform(fig);
+    } else if (fig.dataset.scale === 'font') {
       let fs = parseFloat(fig.style.fontSize) || 11;
       fs = Math.max(6, Math.min(30, fs * (e.deltaY < 0 ? 1.08 : 0.92)));
       fig.style.fontSize = fs + 'px';
@@ -295,7 +329,7 @@ if (!window._roughDragInit) {
       h = Math.max(15, Math.min(140, h * (e.deltaY < 0 ? 1.06 : 0.94)));
       setH(fig, h);
     }
-    // persist once the scaling settles — not one write per wheel tick; a
+    // persist once the change settles — not one write per wheel tick; a
     // pending write for ANOTHER figure flushes first, never gets dropped
     const pend = window._wheelPending;
     if (pend && pend.f !== fig) {
@@ -356,10 +390,46 @@ if (!window._roughDragInit) {
   // ARROW KEYS nudge the selected acetate (Shift = coarse); Escape deselects
   document.addEventListener('keydown', (e) => {
     if (e.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+      // walk the move-undo ring back (skipping acetates from torn-down views)
+      let st;
+      while ((st = window._roughUndo.pop())) {
+        if (document.contains(st.fig)) break;
+      }
+      if (!st) return;
+      e.preventDefault();
+      st.fig.style.left = st.left; st.fig.style.bottom = st.bottom;
+      if (st.height) st.fig.style.height = st.height;
+      if (st.width) st.fig.style.width = st.width;
+      if (st.fontSize) st.fig.style.fontSize = st.fontSize;
+      if (st.tx !== undefined) st.fig.dataset.tx = st.tx;
+      if (st.ty !== undefined) st.fig.dataset.ty = st.ty;
+      st.fig.dataset.rot = st.rot || '';
+      applyTransform(st.fig);
+      requestAnimationFrame(window.roughDrawTails);
+      report(st.fig, st.canvas);
+      return;
+    }
     const fig = window._roughSel;
     if (!fig) return;
     if (e.key === 'Escape') { deselect(); requestAnimationFrame(window.roughDrawTails); return; }
     if (fig.dataset.lock) return;                      // pinned: it stays put
+    if ((e.key === '[' || e.key === ']') && fig.dataset.scale !== 'font') {
+      // [ and ] TILT the selected acetate (Shift = coarse)
+      e.preventDefault();
+      if (!window._nudgePending || window._nudgePending.f !== fig) {
+        pushUndo(fig, fig.closest('.rough-canvas'));
+      }
+      const d = (e.key === ']' ? 1 : -1) * (e.shiftKey ? 15 : 5);
+      let deg = (parseFloat(fig.dataset.rot) || 0) + d;
+      fig.dataset.rot = Math.max(-180, Math.min(180, deg));
+      applyTransform(fig);
+      const canvas = fig.closest('.rough-canvas');
+      window._nudgePending = {f: fig, c: canvas};
+      clearTimeout(window._nudgeT);
+      window._nudgeT = setTimeout(() => { window._nudgePending = null; report(fig, canvas); }, 400);
+      return;
+    }
     const step = e.shiftKey ? 5 : 1;
     let dx = 0, dy = 0;
     if (e.key === 'ArrowLeft') dx = -step;
@@ -370,6 +440,7 @@ if (!window._roughDragInit) {
     const canvas = fig.closest('.rough-canvas');
     if (!canvas || canvas.dataset.locked) return;
     e.preventDefault();
+    if (!window._nudgePending || window._nudgePending.f !== fig) pushUndo(fig, canvas);
     fig.style.left = (Math.max(-20, Math.min(120, (parseFloat(fig.style.left) || 50) + dx))) + '%';
     fig.style.bottom = (Math.max(-80, Math.min(95, (parseFloat(fig.style.bottom) || 0) + dy))) + '%';
     fig.style.top = 'auto';
@@ -1391,10 +1462,11 @@ def light_table(state: APPState, panel, scene, setting,
                 if b.get('lock'):
                     cls += ' rough-locked'
                 flip = ' scaleX(-1)' if b.get('flip') else ''
+                rot = f' rotate({float(b["rot"]):g}deg)' if b.get('rot') else ''
                 fig = ui.image(source=_src(f["img"])).props('fit=contain').classes(cls) \
                     .style(f'left: {b["x"]}%; bottom: {b["y"]}%; height: {b["h"]}%; '
                            f'width: {b["h"] * k}%; '
-                           f'transform: translateX(-50%){flip}; '
+                           f'transform: translateX(-50%){flip}{rot}; '
                            f'z-index: {max(1, 10 + int(b.get("z", 0)))};')
                 fig._props['data-key'] = f["key"]
                 fig._props['data-war'] = f'{k:.4f}'
@@ -1402,6 +1474,8 @@ def light_table(state: APPState, panel, scene, setting,
                     fig._props['data-flip'] = '1'
                 if b.get('lock'):
                     fig._props['data-lock'] = '1'
+                if b.get('rot'):
+                    fig._props['data-rot'] = f'{float(b["rot"]):g}'
 
             live_props = [p["name"] for p in props if p["on"]]
             if live_props:
@@ -1704,7 +1778,7 @@ def light_table(state: APPState, panel, scene, setting,
                         state.refresh_details()
                     ui.button('Unlock', icon='lock_open').props('outline dense size=sm') \
                         .on('click', lambda _: unlock())
-            ui.label('top of the stack prints last — drag rows to restack').classes('text-xs text-gray-500 italic')
+            ui.label('top of the stack prints last — drag rows to restack · drags snap to center & thirds (Shift skips) · [ and ] tilt · ⌘Z takes a move back').classes('text-xs text-gray-500 italic')
             if has_letters:
                 layer_row('chat_bubble', 'Letters — balloons & captions', letters,
                           edit_message='I would like to edit the narration and dialogue of this '
