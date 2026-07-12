@@ -63,7 +63,7 @@ from agentic.tools import (
     create_character_style_example_image
 )
 from agentic.tools.creator import create_variant, create_variant_from_image, create_setting, create_scene_panels
-from agentic.tools.creator import create_story, create_insert
+from agentic.tools.creator import create_story, create_insert, derive_character
 from agentic.tools.reader import read_setting, read_all_settings
 from agentic.tools.reader import read_all_stories, read_all_inserts
 from agentic.tools.deleter import delete_setting, undo_last_delete
@@ -176,6 +176,8 @@ TOOLKITS: dict[str,list[Tool]] = {
     "character": [
         # Navigation tools
 
+        # Create
+        derive_character,
         # Query Tools
         read_character,
         read_series,
@@ -372,6 +374,7 @@ TOOLKITS: dict[str,list[Tool]] = {
     "series": [
         # Create
         create_character,
+        derive_character,
         create_issue,
         create_setting,
         # Imaging

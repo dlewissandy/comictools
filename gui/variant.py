@@ -102,8 +102,35 @@ def view_character_variant(state:APPState):
                 header("Styled Images", 2).classes('ml-4')
                 ui.space()
                 crud_button(kind=CrudButtonKind.CREATE, action=lambda _: post_user_message(state, "I would like a new styled image for the current character variant."))
-            from gui.elements import ruled_page, HEADER_CLASSES, TAILWIND_CARD
+            from gui.elements import ruled_page, HEADER_CLASSES, TAILWIND_CARD, art_tools
             from schema import ComicStyle
+
+            def ink_sheet(st):
+                from agentic.tools.imaging import create_styled_image_body
+                from helpers.render_queue import enqueue_renders
+                ui.notify(f"Inking {character.name.title()}'s {variant.name or variant_id} sheet "
+                          f"in {st.name.title()} — it lands here when done.", type='info')
+                enqueue_renders(state, [(
+                    f"styled sheet — {character.name} ({variant.name or variant_id}) in {st.name}",
+                    lambda: create_styled_image_body(state, series_id, character_id,
+                                                     variant_id, st.style_id),
+                )], role='the Character Designer')
+
+            styles_by_id = {st.style_id: st for st in storage.read_all_objects(ComicStyle)}
+
+            def _sheet_tools(styled_image):
+                # EVERY REFERENCE SHEET IS EDITABLE HERE: heal the art in the
+                # image editor, or re-ink the whole sheet in its style
+                img = storage.find_styled_image(
+                    series_id=styled_image.series_id, character_id=styled_image.character_id,
+                    variant_id=styled_image.variant_id, style_id=styled_image.style_id,
+                    name=styled_image.image_id)
+                st = styles_by_id.get(styled_image.style_id)
+                art_tools(state, img,
+                          on_reink=(lambda st=st: ink_sheet(st)) if st else None,
+                          reink_tip='Re-ink this reference sheet from scratch in the same style',
+                          heal_name=f"{character.name}'s sheet")
+
             with ruled_page() as packer:
                 view_all_instances(
                     state=state,
@@ -113,21 +140,12 @@ def view_character_variant(state:APPState):
                     aspect_ratio="3/2",
                     get_name=lambda _,img: img.name,
                     packer=packer, variants=[(3, 2), (4, 8/3), (6, 4)],
+                    card_overlay=_sheet_tools,
                 )
 
                 # GHOST CARDS: styles this look has no sheet in yet — one
                 # click sends the render to the drawing board, so panels in
                 # that style stop drawing the character off-model
-                def ink_sheet(st):
-                    from agentic.tools.imaging import create_styled_image_body
-                    from helpers.render_queue import enqueue_renders
-                    ui.notify(f"Inking {character.name.title()}'s {variant.name or variant_id} sheet "
-                              f"in {st.name.title()} — it lands here when done.", type='info')
-                    enqueue_renders(state, [(
-                        f"styled sheet — {character.name} ({variant.name or variant_id}) in {st.name}",
-                        lambda: create_styled_image_body(state, series_id, character_id,
-                                                         variant_id, st.style_id),
-                    )], role='the Character Designer')
 
                 have = {sid for sid, img in (variant.images or {}).items() if img}
                 for st in storage.read_all_objects(ComicStyle, order_by='name'):

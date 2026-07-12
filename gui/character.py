@@ -43,8 +43,16 @@ def view_character(state:APPState):
         return
 
     with details:
-        with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
+        with ui.row().classes('w-full flex-nowrap items-center').style('padding: 0; margin: 0; gap: 8px;'):
             header(character.name.title(), 0)
+            # CAST A RELATIVE: a new character built from this one — same
+            # family look, the changes you name
+            ui.chip('cast a relative', icon='family_restroom').props('dense outline clickable') \
+                .tooltip(f"A sibling, a parent, a rival from the same clan — "
+                         f"derived from {character.name.title()}'s look") \
+                .on('click', lambda _: post_user_message(
+                    state, f"Create a new character derived from {character.name} — "
+                           f"ask me who they are and what changes."))
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current character."),size=1)
 

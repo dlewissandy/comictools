@@ -1147,3 +1147,28 @@ class PagePacker:
                     f'grid-column: {round(x * self.SUB) + 1} / span {round(w * self.SUB)}; '
                     f'grid-row: {round(y * self.SUB) + 1} / span {round(h * self.SUB)};')
             i = band['next']
+
+
+def art_tools(state, img_path, *, on_reink=None,
+              reink_tip='Re-ink this art from scratch', heal_name='this art'):
+    """EVERY IMAGE IS EDITABLE WHERE YOU SEE IT: a small tool row riding the
+    card — heal (inpaint/outpaint in the image editor) and, when offered, a
+    re-ink.  The same affordance everywhere art shows: masters, sheets,
+    mastheads, references."""
+    from gui.selection import SelectionItem, SelectedKind
+    if not img_path:
+        return
+    with ui.row().classes('absolute top-1 right-1 z-10 items-center').style('gap: 4px;'):
+        def heal():
+            itm = SelectionItem(name=f'Edit {heal_name}', id=img_path,
+                                kind=SelectedKind.IMAGE_EDITOR)
+            state.change_selection(new=[*state.selection, itm])
+        ui.button(icon='healing').props('flat round dense size=xs') \
+            .classes('bg-white/70 dark:bg-black/50') \
+            .tooltip('Edit this art — inpaint, outpaint, fix the details') \
+            .on('click.stop', lambda _: heal())
+        if on_reink:
+            ui.button(icon='brush').props('flat round dense size=xs') \
+                .classes('bg-white/70 dark:bg-black/50') \
+                .tooltip(reink_tip) \
+                .on('click.stop', lambda _: on_reink())

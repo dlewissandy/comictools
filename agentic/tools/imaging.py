@@ -1519,11 +1519,13 @@ def outpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str
 # -------------------------------------------------------------------------
 from schema import Setting, SceneModel
 
-def generate_series_title_art_body(state, series_id: str, style_id: str) -> str:
+def generate_series_title_art_body(state, series_id: str, style_id: str,
+                                   notes: str | None = None) -> str:
     """Render THE TITLE ART: the series masthead — the title hand-lettered in
     one comic style on transparent acetate.  Stored on the series keyed by
     style; covers hold their title lettering to it, and art-only covers can
-    wear it as an overlay on the light table."""
+    wear it as an overlay on the light table.  `notes` is the author's
+    lettering direction ('drippy horror letters', 'chrome sci-fi')."""
     from helpers.generator import invoke_edit_image_api, invoke_generate_image_api
 
     storage: GenericStorage = state.storage
@@ -1541,6 +1543,7 @@ Wide banner composition, lettering only: NO characters, NO scenery, NO frame,
 NO other text.  Bold and readable at cover size, with the inking, palette and
 energy of the comic style below.  COMPLETELY TRANSPARENT background — this is
 an acetate overlay to be composited onto cover art.
+{("THE AUTHOR'S LETTERING DIRECTION: " + notes) if notes else ""}
 
 {format_comic_style(style, include_bubble_styles=False, include_character_style=False, heading_level=1)}
 """
@@ -1569,6 +1572,7 @@ def generate_series_title_art(
     wrapper: RunContextWrapper[APPState],
     series_id: str,
     style_id: str,
+    notes: Optional[str] = None,
 ) -> str:
     """
     Render THE TITLE ART for a series: the series title hand-lettered as a comic
@@ -1579,11 +1583,13 @@ def generate_series_title_art(
     Args:
         series_id: The ID of the series whose title to letter.
         style_id: The comic style to letter the masthead in.
+        notes: The author's lettering direction, e.g. 'drippy horror letters',
+            'chrome sci-fi', 'circus poster woodtype'.  Optional.
 
     Returns:
         A status message with the locator of the rendered title art.
     """
-    return generate_series_title_art_body(wrapper.context, series_id, style_id)
+    return generate_series_title_art_body(wrapper.context, series_id, style_id, notes)
 
 
 def generate_setting_background_body(state, series_id: str, setting_id: str, style_id: str,
@@ -2233,7 +2239,11 @@ def generate_outfit_reference(wrapper: RunContextWrapper[APPState], series_id: s
     return _render_asset_reference(
         wrapper, Outfit, "outfit_id", series_id, outfit_id, style_id,
         "an outfit (wardrobe)",
-        "Present the attire on a neutral, featureless display form — NO character identity, no face — front view and back view side by side, neutral background.")
+        "Present the attire on a TAILOR'S MANNEQUIN (a neutral gray dress-form — "
+        "NO character identity, no face, no hair) as a WARDROBE TURNAROUND: "
+        "three angles side by side — front, three-quarter, and back — the same "
+        "mannequin and garment at the same scale in each, on a plain neutral "
+        "background, like a costume shop's reference sheet.")
 
 
 @function_tool

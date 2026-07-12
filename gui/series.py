@@ -89,14 +89,28 @@ def view_series(state: APPState):
         from gui.elements import HEADER_CLASSES
 
         def ink_title(st):
+            # THE LETTERER TAKES DIRECTION: name the look before the render
             from agentic.tools.imaging import generate_series_title_art_body
             from helpers.render_queue import enqueue_renders
-            ui.notify(f"Lettering the {series.name.title()} masthead in {st.name.title()} — "
-                      f"it lands here when it's done.", type='info')
-            enqueue_renders(state, [(
-                f"title art — {series.name} in {st.name}",
-                lambda: generate_series_title_art_body(state, series.series_id, st.style_id),
-            )], role='the Letterer')
+            with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 420px;'):
+                ui.label(f'Letter the masthead in {st.name.title()}').classes('caption-box caption-box-sm')
+                notes = ui.input(placeholder="lettering direction — 'circus poster woodtype', "
+                                             "'drippy horror letters', 'chrome sci-fi'…") \
+                    .props('outlined dense').classes('w-full q-mt-sm')
+
+                def go():
+                    dlg.close()
+                    ui.notify(f"Lettering the {series.name.title()} masthead in {st.name.title()} — "
+                              f"it lands here when it's done.", type='info')
+                    enqueue_renders(state, [(
+                        f"title art — {series.name} in {st.name}",
+                        lambda n=(notes.value or '').strip() or None:
+                            generate_series_title_art_body(state, series.series_id, st.style_id, n),
+                    )], role='the Letterer')
+                with ui.row().classes('w-full justify-end q-mt-sm'):
+                    ui.button('Letter it', icon='brush').props('unelevated dense no-caps') \
+                        .on('click', lambda _: go())
+            dlg.open()
 
         titled = {sid: img for sid, img in (getattr(series, 'title_images', {}) or {}).items()
                   if img and os.path.exists(img)}
@@ -115,6 +129,11 @@ def view_series(state: APPState):
                     ui.label(st.name.title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
                     if timg:
                         ui.image(source=timg).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                        from gui.elements import art_tools
+                        art_tools(state, timg,
+                                  on_reink=lambda st=st: ink_title(st),
+                                  reink_tip='Re-letter the masthead — with fresh direction',
+                                  heal_name=f'{series.name} masthead')
                     else:
                         art = st.image.get('art') if isinstance(st.image, dict) else st.image
                         if art and os.path.exists(art):

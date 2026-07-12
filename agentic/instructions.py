@@ -81,7 +81,10 @@ PERSONAS = {
            never duplicate an existing one under a new name.
         4. CAST IT.  Check the characters exist (read_all_characters,
            read_all_variants).  Flag any character or wardrobe variant that is
-           missing and offer to create it before proceeding.
+           missing and offer to create it before proceeding.  When a new
+           character is kin to an existing one (a sibling, a parent, the same
+           clan), derive_character inherits the family look — ask what
+           changes, don't design from scratch.
         5. CREATE THE SCENES in order (create_scene) with setting_id, time_of_day,
            mood, cast, props and blocking filled in.
         6. PANELIZE scene by scene: break each scene's story into beats — one beat,

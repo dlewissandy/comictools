@@ -1047,3 +1047,77 @@ def create_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id
     return (f"Insert '{insert.name}' ({insert.kind}) added after scene "
             f"{insert.after_scene_number} (insert_id: {insert.insert_id}).  "
             f"Render its art with generate_insert_art.")
+
+
+@function_tool
+def derive_character(wrapper: RunContextWrapper[APPState], series_id: str,
+                     source_character_id: str, new_name: str,
+                     what_changes: str) -> str:
+    """
+    Cast a NEW character built from an existing one — a sibling, a parent,
+    a rival from the same clan, the same actor in a different role.  The new
+    character inherits the source's look (its reference sheet anchors every
+    future render) with the stated changes applied.
+
+    Args:
+        series_id: The ID of the series.
+        source_character_id: The character to derive from.
+        new_name: The new character's name.
+        what_changes: What differs from the source — age, build, wardrobe,
+            demeanor ('his older sister: taller, silver-streaked hair,
+            a ranger's leathers, wary where he is warm').
+
+    Returns:
+        A status message with the new character's id and what anchors it.
+    """
+    import os
+    from schema import CharacterVariant as _CV
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    src_ch = storage.read_object(cls=CharacterModel, primary_key={
+        "series_id": series_id, "character_id": source_character_id})
+    if src_ch is None:
+        return f"Character '{source_character_id}' not found."
+    src_variants = storage.read_all_objects(_CV, {"series_id": series_id,
+                                                  "character_id": source_character_id})
+    src_v = src_variants[0] if src_variants else None
+
+    ch = CharacterModel(character_id=normalize_id(new_name), series_id=series_id,
+                        name=normalize_name(new_name),
+                        description=f"Derived from {src_ch.name}: {what_changes}\n\n"
+                                    f"(Source: {src_ch.description})")
+    result = creator(wrapper=wrapper, obj=ch)
+    if isinstance(result, str):
+        return result
+
+    base = _CV(
+        variant_id="base", series_id=series_id, character_id=ch.character_id,
+        name="base",
+        description=f"Same family/species/build as {src_ch.name}, but: {what_changes}",
+        race=getattr(src_v, 'race', None) or "", gender=getattr(src_v, 'gender', None) or "",
+        age=getattr(src_v, 'age', None) or "", height=getattr(src_v, 'height', None) or "",
+        appearance=((getattr(src_v, 'appearance', None) or "") +
+                    f"\nCHANGED from the source: {what_changes}").strip(),
+        attire=getattr(src_v, 'attire', None) or "",
+        behavior=getattr(src_v, 'behavior', None) or "",
+        images={},
+    )
+    storage.create_object(data=base, overwrite=True)
+
+    # THE ANCHOR: the source's best sheet rides the new variant's uploads,
+    # so every render of the new character is held to the family look
+    anchored = ""
+    sheet = storage.find_variant_image(series_id=series_id,
+                                       character_id=source_character_id,
+                                       variant_id=getattr(src_v, 'variant_id', 'base') if src_v else 'base')
+    if sheet and os.path.exists(sheet):
+        import io as _io
+        with open(sheet, 'rb') as fh:
+            storage.upload_reference_image(base, f"family-look--{source_character_id}.png",
+                                           _io.BytesIO(fh.read()), 'image/png')
+        anchored = f"  {src_ch.name}'s sheet anchors the family look."
+
+    state.is_dirty = True
+    return (f"Cast {ch.name} (character_id: {ch.character_id}), derived from "
+            f"{src_ch.name}.{anchored}  Ink their reference sheet from the "
+            f"character's page (or create_styled_image) — the changes: {what_changes}")
