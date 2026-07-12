@@ -657,6 +657,13 @@ def create_styled_image_body(state, series_id: str, character_id: str,
     from schema import Outfit, PropAsset
     reference_images: list[str] = []
     missing: list[str] = []
+    # THE EXEMPLARS LEAD: the variant's uploads (a sculpted exemplar, a
+    # pasted face, a family-look anchor) hold every sheet to the same person
+    exemplars = [u for u in storage.list_uploads(obj=variant) if u and os.path.exists(u)]
+    if exemplars:
+        reference_images.extend(exemplars[:3])
+        prompt += ("\n\n## EXEMPLARS\nThe first reference image(s) show THIS EXACT "
+                   "CHARACTER — hold the face, build, and identity to them precisely.")
     if variant.outfit_id:
         outfit = storage.read_object(Outfit, {"series_id": series_id, "outfit_id": variant.outfit_id})
         if outfit is None:
@@ -2995,3 +3002,78 @@ def generate_insert_art(wrapper: RunContextWrapper[APPState], series_id: str,
         A status message with the locator of the rendered art.
     """
     return generate_insert_art_body(wrapper.context, series_id, issue_id, insert_id)
+
+
+def generate_character_exemplar_body(state, series_id: str, character_id: str,
+                                     variant_id: str, notes: str | None = None) -> str:
+    """THE MODEL SHEET SESSION starts with ONE great exemplar: a single
+    three-quarter portrait of the character that everyone agrees IS them.
+    It lands in the variant's uploads, where it anchors every styled
+    reference sheet that follows."""
+    from helpers.generator import invoke_edit_image_api, invoke_generate_image_api
+    storage: GenericStorage = state.storage
+    variant = storage.read_object(cls=CharacterVariant, primary_key={
+        "series_id": series_id, "character_id": character_id, "variant_id": variant_id})
+    if variant is None:
+        return f"Variant '{variant_id}' of '{character_id}' not found."
+    character = storage.read_object(cls=CharacterModel, primary_key={
+        "series_id": series_id, "character_id": character_id})
+
+    prompt = f"""ONE DEFINITIVE PORTRAIT of a comic character — the exemplar
+every future drawing will be held to.
+
+{character.name if character else character_id} ({variant.name or variant_id}):
+{variant.description}
+Race/species: {variant.race}.  Gender: {variant.gender}.  Age: {variant.age}.
+Height/build: {variant.height}.
+Appearance: {variant.appearance}
+Attire: {variant.attire}
+
+Three-quarter view, head to mid-thigh, neutral stance, even studio light,
+plain light-gray background.  Clean readable design — this is a MODEL SHEET
+exemplar, not a scene.{(chr(10) + "THE AUTHOR'S DIRECTION: " + notes) if notes else ""}
+"""
+    refs = [u for u in storage.list_uploads(obj=variant) if u and os.path.exists(u)]
+    sheet = storage.find_variant_image(series_id=series_id, character_id=character_id,
+                                       variant_id=variant_id)
+    if sheet and os.path.exists(sheet):
+        refs.append(sheet)
+    if refs:
+        image_bytes = invoke_edit_image_api(prompt, reference_images=refs[:3],
+                                            size="1024x1536", quality=IMAGE_QUALITY.HIGH,
+                                            input_fidelity="high")
+    else:
+        image_bytes = invoke_generate_image_api(prompt, size="1024x1536",
+                                                quality=IMAGE_QUALITY.HIGH)
+    import io as _io
+    locator = storage.upload_reference_image(
+        variant, f"exemplar--{uuid4().hex[:6]}.png", _io.BytesIO(image_bytes), "image/png")
+    state.is_dirty = True
+    return (f"Exemplar sculpted for {character.name if character else character_id} "
+            f"({variant.name or variant_id}): {locator}.  Every styled sheet is now "
+            f"held to it — re-ink sheets that predate it.")
+
+
+@function_tool
+def generate_character_exemplar(wrapper: RunContextWrapper[APPState], series_id: str,
+                                character_id: str, variant_id: str,
+                                notes: Optional[str] = None) -> str:
+    """
+    Sculpt THE EXEMPLAR: one definitive three-quarter portrait of a character
+    variant, saved into the variant's uploads where it anchors every styled
+    reference sheet that follows.   Iterate here FIRST — cheaper and faster
+    than re-rendering multi-angle sheets — until the author says 'that's
+    them', then ink the sheets.
+
+    Args:
+        series_id: The ID of the series.
+        character_id: The character.
+        variant_id: The variant (look) to sculpt.
+        notes: The author's direction for this attempt ('rounder face',
+            'older eyes', 'less armor').  Optional.
+
+    Returns:
+        A status message with the exemplar's locator.
+    """
+    return generate_character_exemplar_body(wrapper.context, series_id,
+                                            character_id, variant_id, notes)

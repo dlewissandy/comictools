@@ -70,7 +70,7 @@ from agentic.tools.reader import read_board_table
 from agentic.tools.deleter import delete_setting, undo_last_delete
 from agentic.tools.deleter import delete_story, delete_insert
 from agentic.tools.updater import update_story, update_insert, update_cover_letters
-from agentic.tools.imaging import generate_insert_art
+from agentic.tools.imaging import generate_insert_art, generate_character_exemplar
 from agentic.tools.updater import (
     update_scene_setting,
     update_scene_cast,
@@ -179,6 +179,7 @@ TOOLKITS: dict[str,list[Tool]] = {
 
         # Create
         derive_character,
+        generate_character_exemplar,
         # Query Tools
         read_character,
         read_series,
@@ -459,6 +460,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_variant
     ],
     "variant": [
+        generate_character_exemplar,
         # Navigation
         # Create
         # Read

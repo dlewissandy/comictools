@@ -72,6 +72,41 @@ def view_character_variant(state:APPState):
                             f"{character.name}'s '{variant.name or variant_id}' look"))
 
 
+        # THE EXEMPLARS: the images this look is HELD to — sculpt one with
+        # the coauthor, paste one, or drop one; every styled sheet anchors
+        # to them.  The model sheet session starts here.
+        from nicegui.events import UploadEventArguments
+        from gui.elements import ruled_page as _rp, TAILWIND_CARD as _TC, uploader_card as _uc
+        exemplars = [u for u in storage.list_uploads(variant) if u and os.path.exists(u)]
+        with ui.expansion(value=bool(exemplars) or not (variant.images or {})) \
+                .classes('w-full section-flat') as _exp:
+            with _exp.add_slot('header'):
+                with ui.row().classes('items-center').style('gap: 8px;'):
+                    ui.label('The Exemplars').classes('caption-box caption-box-sm')
+                    ui.chip('sculpt one with me', icon='face_retouching_natural') \
+                        .props('dense outline clickable size=sm') \
+                        .tooltip("One definitive portrait, iterated until it IS them — "
+                                 "then every sheet is held to it") \
+                        .on('click.stop', lambda _: post_user_message(
+                            state, f"Sculpt an exemplar portrait for {character.name}'s "
+                                   f"'{variant.name or variant_id}' look — ask me for direction first."))
+
+            def _on_upload(e: UploadEventArguments):
+                storage.upload_reference_image(obj=variant, name=e.name,
+                                               data=e.content, mime_type=e.type)
+                ui.notify('Exemplar filed — every sheet is held to it now.', type='positive')
+                state.refresh_details()
+
+            with _rp() as _packer:
+                for up in exemplars:
+                    with _packer.place_cell([(3, 4)], fudge=False):
+                        with ui.card().classes(_TC + ' mosaic-card relative'):
+                            ui.image(source=up).props('fit=contain')
+                            from gui.elements import art_tools as _at
+                            _at(state, up, heal_name=f"{character.name}'s exemplar")
+                _uc(state=state, on_upload=_on_upload, packer=_packer,
+                    label='Drop an exemplar — a face, a figure, prior art')
+
         # Composition: what this look is built from — chips with ✕ to detach.
         from gui.elements import removable_chips
         def _save_variant():

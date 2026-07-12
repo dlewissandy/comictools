@@ -306,10 +306,13 @@ if (!window._roughDragInit) {
     drag = resize = tailDrag = null;
   });
   document.addEventListener('wheel', (e) => {
+    // PLAIN WHEEL ALWAYS SCROLLS THE PAGE.  Resizing takes a held modifier
+    // (Ctrl/Cmd+wheel) and tilting takes Alt+wheel, on the SELECTED acetate
+    // — after a drag the figure stays selected, and a bare scroll must
+    // never reshape it on the way past.
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) return;
     const fig = pickFigure(e);
     if (!fig) return;
-    // resizing is DELIBERATE: only the selected acetate answers the wheel —
-    // a page scroll passing over the rough must never reshape the art
     if (window._roughSel !== fig) return;
     e.preventDefault();
     const canvas = fig.closest('.rough-canvas');
@@ -1778,7 +1781,7 @@ def light_table(state: APPState, panel, scene, setting,
                         state.refresh_details()
                     ui.button('Unlock', icon='lock_open').props('outline dense size=sm') \
                         .on('click', lambda _: unlock())
-            ui.label('top of the stack prints last — drag rows to restack · drags snap to center & thirds (Shift skips) · [ and ] tilt · ⌘Z takes a move back').classes('text-xs text-gray-500 italic')
+            ui.label('top of the stack prints last — drag rows to restack · drags snap to center & thirds (Shift skips) · ⌘-wheel resizes, [ ] or Alt-wheel tilts the selected acetate · ⌘Z takes a move back').classes('text-xs text-gray-500 italic')
             if has_letters:
                 layer_row('chat_bubble', 'Letters — balloons & captions', letters,
                           edit_message='I would like to edit the narration and dialogue of this '

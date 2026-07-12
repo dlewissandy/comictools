@@ -155,6 +155,8 @@ UPLOAD_PATH_TEMPLATES[Setting.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.SET
 UPLOAD_PATH_TEMPLATES["PropAsset"] = os.path.join(PATH_TEMPLATES["PropAsset"], "uploads")
 UPLOAD_PATH_TEMPLATES["Outfit"] = os.path.join(PATH_TEMPLATES["Outfit"], "uploads")
 UPLOAD_PATH_TEMPLATES["Insert"] = os.path.join(PATH_TEMPLATES["Insert"], "uploads")
+UPLOAD_PATH_TEMPLATES[SelectedKind.VARIANT.value] = os.path.join(PATH_TEMPLATES[SelectedKind.VARIANT.value], "uploads")
+UPLOAD_PATH_TEMPLATES[CharacterVariant.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.VARIANT.value]
 
 
 def get_basenames(path: str, exts: list[str] = None) -> list[str]:
