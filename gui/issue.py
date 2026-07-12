@@ -192,7 +192,7 @@ def view_issue(state: APPState):
             if p.panel_number != j + 1:
                 p.panel_number = j + 1
                 storage.update_object(p)
-        receipt(f"↔️ moved the beat {'earlier' if d < 0 else 'later'} — the book reflowed")
+        receipt(f"↔️ moved the panel {'earlier' if d < 0 else 'later'} — the book reflowed")
 
     def move_scene(scene, d):
         sibs = sorted(storage.read_all_objects(SceneModel, primary_key={
@@ -243,7 +243,7 @@ def view_issue(state: APPState):
             return
         p.beat = value or ""
         storage.update_object(p)
-        receipt("✏️ penciled the beat")
+        receipt("✏️ penciled the panel")
 
     def save_scene_text(scene_id, value):
         sc = storage.read_object(SceneModel, {"series_id": series_id, "issue_id": issue_id,
@@ -282,7 +282,7 @@ def view_issue(state: APPState):
                                                        anchor=f'scene-{s.scene_id}'))
             ui.menu_item('Move the scene earlier', on_click=lambda _, s=sc: move_scene(s, -1))
             ui.menu_item('Move the scene later', on_click=lambda _, s=sc: move_scene(s, 1))
-            ui.menu_item('Add a beat to this scene',
+            ui.menu_item('Add a panel to this scene',
                          on_click=lambda _, s=sc: post_user_message(
                              state, f"Add another panel to scene '{s.name}'."))
             ui.menu_item('Delete the scene…',
@@ -306,7 +306,7 @@ def view_issue(state: APPState):
             else:
                 with ui.element('div').classes('tile-beat' + (' tile-beat--capped' if cap_scene else '')):
                     txt = (p.beat or '').strip()
-                    ui.label(txt if txt else 'unwritten beat').classes(
+                    ui.label(txt if txt else 'unwritten panel').classes(
                         'tile-beat__text' + ('' if txt else ' italic opacity-60'))
             if cap_scene is not None:
                 cap = ui.label(f'{cap_scene.scene_number} · {cap_scene.name}'.upper()).classes('tile-cap')
@@ -320,11 +320,11 @@ def view_issue(state: APPState):
                         .tooltip('Earlier in the scene') \
                         .on('click.stop', lambda _, s=scene_id, pid=panel_id: move_beat(s, pid, -1))
                     ui.button(icon='edit').props('flat round dense size=xs') \
-                        .tooltip('Pencil the beat — edit its words') \
+                        .tooltip('Pencil the panel — edit its script') \
                         .on('click.stop', lambda _, s=scene_id, p=p: edit_text_dialog(
-                            f'Beat {p.panel_number} — {p.name}', p.beat,
+                            f'Panel {p.panel_number} — {p.name}', p.beat,
                             lambda v, s=s, pid=p.panel_id: save_beat_text(s, pid, v),
-                            f"Let's work on the beat text for panel {p.panel_number} "
+                            f"Let's work on the script for panel {p.panel_number} "
                             f"of this scene together."))
                     ui.button(icon=ASPECT_ICON[p.aspect.value]).props('flat round dense size=xs') \
                         .tooltip(f'{p.aspect.value} — click to turn the panel') \
@@ -338,12 +338,12 @@ def view_issue(state: APPState):
                         .tooltip('Later in the scene') \
                         .on('click.stop', lambda _, s=scene_id, pid=panel_id: move_beat(s, pid, 1))
                     ui.button(icon='close').props('flat round dense size=xs') \
-                        .tooltip('Tear this beat out of the book…') \
+                        .tooltip('Tear this panel out of the book…') \
                         .on('click.stop', lambda _, p=p: post_user_message(
                             state, f"I would like to delete panel {p.panel_number} "
                                    f"('{p.name}') of this scene."))
         if p is not None:
-            t.tooltip(f"beat {p.panel_number}: {p.name or ''} — open the rough board")
+            t.tooltip(f"panel {p.panel_number}: {p.name or ''} — open its light table")
             t.on('click', lambda _, s=scene_id, pid=panel_id: open_scene_panel(s, pid))
         return t
 
@@ -512,10 +512,10 @@ def view_issue(state: APPState):
                                f"Let's work on scene '{s.name}' together — read it back to "
                                f"me and we'll develop it."))
                 if panels:
-                    # at beats detail this scene lives as tiles — anchor on
+                    # at panels detail this scene lives as tiles — anchor on
                     # its first panel, which always exists there
-                    ui.chip(f'{len(panels)} beats', icon='grid_on').props('dense outline clickable size=sm') \
-                        .tooltip('See the beats on the page') \
+                    ui.chip(f'{len(panels)} panels', icon='grid_on').props('dense outline clickable size=sm') \
+                        .tooltip('See the panels on the page') \
                         .on('click', lambda _, ps=panels: (remember_spot(f'panel-{ps[0].panel_id}'),
                                                            set_detail('beats')))
                 elif text and wc < 40:
@@ -525,8 +525,8 @@ def view_issue(state: APPState):
                             state, f"Scene '{s.name}' is too thin to panelize — interview me "
                                    f"and help me develop it."))
                 else:
-                    ui.chip('break it into beats', icon='grid_on').props('dense outline clickable size=sm') \
-                        .tooltip("I'll break this scene into beats — they flow onto these pages") \
+                    ui.chip('break it into panels', icon='grid_on').props('dense outline clickable size=sm') \
+                        .tooltip("I'll break this scene into panels — they flow onto these pages") \
                         .on('click', lambda _, s=sc: post_user_message(
                             state, f"Break scene '{s.name}' into panels."))
                 ui.space()
@@ -542,15 +542,17 @@ def view_issue(state: APPState):
         with ui.row().classes('book-masthead w-full flex-nowrap items-center').style('gap: 12px;'):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
             from gui.light_table import style_swatch
-            style_swatch(state, issue)
-            # THE DETAIL DIAL: read the book at story, scene, or beat altitude
+            style_swatch(state, issue, shared_with='the whole issue')
+            # THE DETAIL DIAL: read the book at script, scene, or panel altitude
             with ui.row().classes('items-center flex-nowrap').style('gap: 4px;'):
-                for key, label in (('stories', 'STORIES'), ('scenes', 'SCENES'), ('beats', 'BEATS')):
+                for key, label, hint in (('stories', 'SCRIPT', 'the written script'),
+                                         ('scenes', 'SCENES', 'scene manuscript pages'),
+                                         ('beats', 'PANELS', 'panels laid out on the pages')):
                     chip = ui.element('div').classes('dial-chip' + (' dial-chip--on' if detail == key else ''))
                     chip.mark(f'detail-{key}')
                     with chip:
                         ui.label(label)
-                    chip.tooltip(f'Read the book at {label.lower()} detail')
+                    chip.tooltip(f'Read the book as {hint}')
                     chip.on('click', lambda _, k=key: set_detail(k))
             ui.space()
             ui.button('Read', icon='menu_book').props('rounded') \

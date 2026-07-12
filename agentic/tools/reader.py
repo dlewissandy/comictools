@@ -540,7 +540,7 @@ def read_board_table(wrapper: RunContextWrapper[APPState], series_id: str, issue
         if key.startswith('element/'):
             lines.append(f"* element '{key.split('/', 1)[1].replace('-', ' ')}'; {state_of(key)}")
         elif key == 'background/plate':
-            lines.append(f"* the background plate (a reworked take); {state_of('background')}")
+            lines.append(f"* the split background (a background reworked from a take); {state_of('background')}")
     for i, d in enumerate((getattr(board, 'dialogue', None) or [])[:4]):
         lines.append(f"* balloon {i + 1}: {d.character_id} ({d.emphasis.value}) "
                      f"“{d.text}”; {state_of(f'balloon/{i}')}")

@@ -821,8 +821,8 @@ def read_issue_page(series_id: str, issue_id: str):
       }
       const counter = document.querySelector('.reader-counter');
       if (counter) counter.textContent = k === 0 ? 'the cover' :
-        (visible.length === 2 ? `sheets ${visible[0] + 1}–${visible[1] + 1} of ${n}`
-                              : `sheet ${visible[0] + 1} of ${n}`);
+        (visible.length === 2 ? `pages ${visible[0] + 1}–${visible[1] + 1} of ${n}`
+                              : `page ${visible[0] + 1} of ${n}`);
       const lt = document.querySelector('.reader-thumb--left');
       const rt = document.querySelector('.reader-thumb--right');
       if (lt) lt.style.visibility = k === 0 ? 'hidden' : 'visible';

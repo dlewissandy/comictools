@@ -991,7 +991,7 @@ def lay_figure_on_table(state, panel, character_id: str, variant_id: str,
             series_id=panel.series_id, character_id=character_id, variant_id=variant_id)]
         state.storage.update_object(panel)
     table_receipt(state, f"🎭 laid **{name or character_id.replace('-', ' ')}** on the table "
-                         f"— posing them for the beat…")
+                         f"— posing them for the panel…")
     pose_figure_bg(state, panel, character_id, variant_id)
     state.refresh_details()
 
@@ -1065,11 +1065,14 @@ def wear_style_on_table(state, scene, style):
     state.refresh_details()
 
 
-def style_swatch(state, scene):
+def style_swatch(state, scene, shared_with: str | None = None):
     """THE STYLE SWATCH: a printer's color chip taped to the board — the
     style everything here prints in.  Click to swap it; takes, backgrounds
     and sheets rendered afterwards wear the new style.  `scene` is whatever
-    owns the style_id: a scene, or a cover."""
+    owns the style_id: a scene, a cover, or an issue.  When the swatch is
+    borrowed from a larger unit (a panel wears its scene's swatch), pass
+    `shared_with` (e.g. 'the whole scene') so the swatch says so before a
+    swap surprises the neighbors."""
     storage = state.storage
     cur = storage.read_object(cls=ComicStyle, primary_key={"style_id": scene.style_id}) \
         if getattr(scene, 'style_id', None) else None
@@ -1084,6 +1087,9 @@ def style_swatch(state, scene):
             ui.label('Swap the style swatch').classes('caption-box caption-box-sm')
             ui.label('Every take printed here wears the swatched style — '
                      'pick the one it should wear.').classes('text-sm q-mt-sm')
+            if shared_with:
+                ui.label(f'This swatch is taped to {shared_with} — swapping it '
+                         f'restyles everything that wears it.').classes('text-xs text-gray-500')
             with ui.row().classes('w-full q-mt-sm').style('gap: 10px;'):
                 for st in storage.read_all_objects(ComicStyle, order_by='name'):
                     art = _art(st)
@@ -1108,7 +1114,8 @@ def style_swatch(state, scene):
         else:
             ui.icon('palette').style('font-size: 16px;')
         ui.label(cur.name if cur is not None else 'pick a style').classes('style-swatch-name')
-    swatch.tooltip('The style this prints in — click to swap the swatch')
+    swatch.tooltip('The style this prints in — click to swap the swatch'
+                   + (f' ({shared_with} wears it)' if shared_with else ''))
     swatch.on('click', lambda _: pick())
     return swatch
 
@@ -1660,10 +1667,10 @@ def light_table(state: APPState, panel, scene, setting,
             ui.label(f"Pose {name}").classes('caption-box caption-box-sm')
             hint = getattr(panel, 'beat', None) or panel.description or ''
             direction = ui.textarea(
-                placeholder=f"Describe the pose — e.g. from the beat: “{hint[:120]}…”" if hint
+                placeholder=f"Describe the pose — e.g. from the script: “{hint[:120]}…”" if hint
                 else 'Describe the pose, expression and action…').classes('w-full').props('outlined autofocus')
             with ui.row().classes('w-full justify-end').style('gap: 8px;'):
-                ui.button('Let the beat decide').props('flat dense') \
+                ui.button('Let the script decide').props('flat dense') \
                     .on('click', lambda _: (dlg.close(), pose_figure(character_id, variant_id)))
 
                 def go():
@@ -2300,7 +2307,7 @@ def light_table(state: APPState, panel, scene, setting,
                     p.layer_groups = saved_groups
                     p.character_references = saved_refs
                     storage.update_object(p)
-                _receipt(f"🗜 flattened the **{gname}** group into one layer", undo=undo)
+                _receipt(f"🗜 combined the **{gname}** group into one acetate", undo=undo)
                 state.refresh_details()
 
             fig_by_key = {f["key"]: f for f in figures}
@@ -2382,7 +2389,7 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.space()
 
                     ui.button(icon='layers').props('flat round dense size=xs') \
-                        .tooltip('Flatten this group into one layer (hidden members are discarded)') \
+                        .tooltip('Combine this group into one acetate (hidden members are discarded)') \
                         .on('click', lambda _, g=gname: flatten_group(g))
 
                     def ungroup(gname=gname):
@@ -2436,7 +2443,7 @@ def light_table(state: APPState, panel, scene, setting,
 
             def heal_background():
                 from gui.selection import SelectionItem, SelectedKind
-                nm = setting.name if setting is not None else 'the split plate'
+                nm = setting.name if setting is not None else 'the split background'
                 itm = SelectionItem(name=f"Edit {nm} background", id=background,
                                     kind=SelectedKind.IMAGE_EDITOR)
                 state.change_selection(new=[*state.selection, itm])
@@ -2456,7 +2463,7 @@ def light_table(state: APPState, panel, scene, setting,
 
             bg_label = f"Background — {setting.name if setting else 'no setting yet'}"
             if split_plate and background == split_plate:
-                bg_label += " (split plate)"
+                bg_label += " (split from the take)"
             elif setting is not None and bg_style_missing:
                 if background is None:
                     bg_label += " — not inked in this style yet"
@@ -2559,7 +2566,7 @@ def light_table(state: APPState, panel, scene, setting,
                 beat = (getattr(panel, 'beat', '') or '').strip()
                 brief = f"{beat}\n\n{(panel.description or '').strip()}".strip()
                 if not brief:
-                    ui.notify('Write the beat or visual description first — the table is built from the brief.',
+                    ui.notify('Write the script or visual description first — the table is built from the brief.',
                               type='warning')
                     return
                 # the click answers IMMEDIATELY, before the slow read starts
@@ -2988,7 +2995,9 @@ def light_table(state: APPState, panel, scene, setting,
                 # chip — the style every take printed here wears (locked
                 # tables keep their arrangement; unlock to reshape/restyle)
                 if scene is not None:
-                    sw = style_swatch(state, scene)
+                    sw = style_swatch(state, scene,
+                                      shared_with=None if (cover_mode or insert_mode)
+                                      else 'the whole scene')
                     if locked:
                         sw.classes('table-locked')
                 ui.space()

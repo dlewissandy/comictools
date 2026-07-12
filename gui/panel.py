@@ -151,10 +151,10 @@ def view_panel(state: APPState):
         page = comic_page()
         page.__enter__()
 
-        # THE BEAT: what happens in this moment — the line the whole
+        # THE SCRIPT: what happens in this panel — the line the whole
         # render is generated from, so it stays front and center.
         with cpanel(12):
-            markdown_field_editor(state, "Beat", panel.beat)
+            markdown_field_editor(state, "script", panel.beat)
 
         # THE LIGHT TABLE: stack, rough, and print side by side.
         with ccell(12):

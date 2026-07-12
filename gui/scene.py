@@ -76,7 +76,7 @@ def view_scene(state: APPState):
             header(f"Scene {scene.scene_number}: {scene.name.title()}", 0)
             # THE STYLE SWATCH: the scene's style, worn by every panel in it
             from gui.light_table import style_swatch
-            style_swatch(state, scene)
+            style_swatch(state, scene, shared_with='every panel in this scene')
             ui.space()
             from gui.strike import strike
             from agentic.tools.deleter import delete_scene as _del_scene

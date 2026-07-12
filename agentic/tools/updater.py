@@ -1124,7 +1124,7 @@ def update_setting_props(wrapper: RunContextWrapper[APPState],
     storage.update_object(data=setting)
     state.is_dirty = True
     stale = ", ".join(setting.images.keys()) if setting.images else None
-    note = f"  Plates for style(s) {stale} are now stale and should be re-rendered." if stale else ""
+    note = f"  Background masters for style(s) {stale} are now stale and should be re-inked." if stale else ""
     return f"Props of setting '{setting.name}' set to: " + ", ".join(p.name for p in props) + note
 
 
