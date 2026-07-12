@@ -730,11 +730,10 @@ def create_cover(
         logger.error(f"Error creating cover: {tb}")
         return f"Error creating cover: {str(e)}\n{tb}"
 
-@function_tool
-def create_scene(wrapper: RunContextWrapper[APPState],
+def create_scene_body(state: APPState,
         name: str,
-        story: str,
-        insertion_location: InsertionLocation,
+        story: Optional[str] = None,
+        insertion_location: Optional[InsertionLocation] = None,
         setting_id: Optional[str] = None,
         time_of_day: Optional[str] = None,
         mood: Optional[str] = None,
@@ -742,46 +741,22 @@ def create_scene(wrapper: RunContextWrapper[APPState],
         props: Optional[list[Prop]] = None,
         blocking: Optional[str] = None,
     ) -> str:
-    """
-    Create a new scene for the currently selected comic book issue.   This will create a new scene
-    with the default properties and add it to the issue at the specified insertion setting.
-
-    A scene is specified like a page of a comic script: it has a setting (setting + time of day),
-    a cast with wardrobe (character variants), props, and blocking notes.   Providing these
-    up front lets the panels be composed from consistent reference objects later.
-
-    Args:
-        name (str): The name of the new scene.   This should be a unique identifier for the scene, and
-            should be 2-5 words long, and should only contain letters, numbers and spaces (e.g.
-            "Teapot ride", "Joey gets hungry", etc).
-        story (str): The story for the new scene.   This should be detailed enough to guide the
-            creative team (authors, artists, etc.) in creating the storyboard and artwork for the scene.
-            This includes information about the setting, characters involved, and key actions or events.
-            It should not be a full script, but rather a summary of the scene's content and purpose.
-            Consider the key information that is required to ensure that this scene can be written and
-            maintains the narrative flow of the comic book issue.
-        insertion_location (InsertionLocation): The setting where the new scene should be inserted.
-            NOTE: LIST ELEMENTS ARE ONES-BASED, SO THE FIRST ELEMENT IS AT INDEX 1.
-        setting_id (str, optional): The setting (set) where the scene takes place.  Create or look up
-            settings first so scenes reuse the same sets.
-        time_of_day (str, optional): Slugline time, e.g. 'day', 'night', 'dusk'.
-        mood (str, optional): The emotional tone and lighting mood of the scene.
-        cast (list[CharacterRef], optional): The characters in the scene with the variant (wardrobe) worn.
-        props (list[Prop], optional): Scene-specific props beyond the setting's standing props.
-        blocking (str, optional): How the characters are staged and move through the setting.
-
-    Returns:
-        A status message indicating the result of the scene creation.
-    """
-    state: APPState = wrapper.context
-    logger.trace(f"inserting scene {name} at {InsertionLocation}")
+    """Create a scene on the issue in the current selection.  A bare name is
+    enough: the story defaults to empty and the scene lands at the end."""
+    logger.trace(f"inserting scene {name}")
     storage: GenericStorage = state.storage
 
-    issue_id = state.selection[-1].id
-    series_id = state.selection[-2].id
+    # resolve the issue from wherever in the chain the user is standing —
+    # never assume the selection ends exactly [series, issue]
+    issue_id = next((s.id for s in reversed(state.selection or []) if s.kind.value == 'issue'), None)
+    series_id = next((s.id for s in reversed(state.selection or []) if s.kind.value == 'series'), None)
+    if not issue_id or not series_id:
+        return "Open an issue first — a scene belongs to an issue."
     pk = {"issue_id": issue_id, "series_id": series_id}
 
     issue: Issue = storage.read_object(cls=Issue, primary_key=pk)
+    if issue is None:
+        return f"Issue '{issue_id}' not found."
     scenes: list[SceneModel] = storage.read_all_objects(cls=SceneModel, primary_key=pk, order_by="scene_number")
 
     scene = SceneModel(
@@ -789,11 +764,11 @@ def create_scene(wrapper: RunContextWrapper[APPState],
         issue_id=issue_id,
         series_id=series_id,
         name=name,
-        story=story,
-        style_id=issue.style_id,
+        story=story or "",
+        style_id=issue.style_id or "vintage-four-color",
         aspect=FrameLayout.PORTRAIT,
         scene_number=insertion_index(
-            insertion_location=insertion_location,
+            insertion_location=insertion_location or AfterLast(kind="after_last"),
             item_count=len(scenes)
         ),
         setting_id=setting_id,
@@ -816,6 +791,51 @@ def create_scene(wrapper: RunContextWrapper[APPState],
 
     state.is_dirty = True
     return f"Scene created successfully for issue {issue.name}."
+
+
+@function_tool
+def create_scene(wrapper: RunContextWrapper[APPState],
+        name: str,
+        story: Optional[str] = None,
+        insertion_location: Optional[InsertionLocation] = None,
+        setting_id: Optional[str] = None,
+        time_of_day: Optional[str] = None,
+        mood: Optional[str] = None,
+        cast: Optional[list[CharacterRef]] = None,
+        props: Optional[list[Prop]] = None,
+        blocking: Optional[str] = None,
+    ) -> str:
+    """
+    Create a new scene for the currently selected comic book issue.
+
+    A scene is specified like a page of a comic script: it has a setting (setting + time of day),
+    a cast with wardrobe (character variants), props, and blocking notes.   Providing these
+    up front lets the panels be composed from consistent reference objects later.
+
+    When the user asks for "a new scene" WITHOUT details, do not interrogate them:
+    call this immediately with just a name (and, if the issue has a story, a 1-3
+    sentence story continuing it) — every field can be filled in afterwards.
+
+    Args:
+        name (str): The name of the new scene: 2-5 words, letters/numbers/spaces
+            (e.g. "Teapot ride", "Joey gets hungry").
+        story (str, optional): A summary of the scene's content and purpose, detailed
+            enough to guide the storyboard.  Defaults to empty — fill it in later.
+        insertion_location (InsertionLocation, optional): Where the scene lands in the
+            issue.  Defaults to after the last scene.  LIST ELEMENTS ARE ONES-BASED.
+        setting_id (str, optional): The setting (set) where the scene takes place.  Create or look up
+            settings first so scenes reuse the same sets.
+        time_of_day (str, optional): Slugline time, e.g. 'day', 'night', 'dusk'.
+        mood (str, optional): The emotional tone and lighting mood of the scene.
+        cast (list[CharacterRef], optional): The characters in the scene with the variant (wardrobe) worn.
+        props (list[Prop], optional): Scene-specific props beyond the setting's standing props.
+        blocking (str, optional): How the characters are staged and move through the setting.
+
+    Returns:
+        A status message indicating the result of the scene creation.
+    """
+    return create_scene_body(wrapper.context, name, story, insertion_location,
+                             setting_id, time_of_day, mood, cast, props, blocking)
 
 
 @function_tool
