@@ -107,15 +107,19 @@ def paste_letters(base, aspect: str, letters: list[dict]) -> None:
 
     for L in letters:
         emphasis = L.get('emphasis', '')
+        # LETTERS PRINT WHAT YOU BLOCK: fs means "px on a 520px-tall canvas"
+        # on both sides of the glass; no hidden multipliers — the author
+        # sizes shouts and effects by hand and the print honors it
         px = max(14, round(float(L.get('fs', 11)) * H / 520))
-        if emphasis in ('shout', 'sound effect'):
-            px = round(px * 1.35)
         font = _letter_font(px)
-        lines = wrap(L['text'], font, W * (0.34 if L['kind'] == 'balloon' else 0.6))
+        lines = wrap(L['text'], font, W * (0.34 if L['kind'] == 'balloon' else 0.56))
         line_h = round(px * 1.3)
         text_w = max(draw.textlength(l, font=font) for l in lines)
         pad = round(px * 0.7)
         x0 = W * float(L['x']) / 100
+        if L['kind'] != 'caption':
+            # balloons hang CENTERED on x, exactly as the rough shows them
+            x0 -= (text_w + 2 * pad) / 2
         y1 = H - H * float(L['y']) / 100          # the letter's bottom edge
         box = (x0, y1 - line_h * len(lines) - 2 * pad, x0 + text_w + 2 * pad, y1)
 

@@ -79,6 +79,20 @@ if (!window._roughDragInit) {
     return svg;
   }
   window.roughDrawTails = function () {
+    // LETTERS PRINT WHAT YOU BLOCK: a letter's size is stored in REFERENCE
+    // units (px on a 520px-tall canvas — the compositor's own ruler), and
+    // the on-screen font is derived from the live canvas height, so the
+    // rough shows the print's true proportions at any pane width
+    document.querySelectorAll('.rough-drag[data-scale="font"]').forEach((el) => {
+      const c = el.closest('.rough-canvas');
+      if (!c) return;
+      const ch = c.getBoundingClientRect().height;
+      if (!ch) return;
+      const want = (parseFloat(el.dataset.fs) || 11) / 520 * ch;
+      if (Math.abs((parseFloat(el.style.fontSize) || 0) - want) > 0.5) {
+        el.style.fontSize = want + 'px';
+      }
+    });
     document.querySelectorAll('.rough-canvas').forEach((canvas) => {
       const svg = tailSvg(canvas);
       const cr = canvas.getBoundingClientRect();
@@ -135,6 +149,8 @@ if (!window._roughDragInit) {
     }).observe(document.body, {childList: true, subtree: true});
   if (document.body) startTailObserver();
   else document.addEventListener('DOMContentLoaded', startTailObserver);
+  // pane resizes change the canvas height — letters re-derive their size
+  window.addEventListener('resize', () => requestAnimationFrame(window.roughDrawTails));
 
   // SELECTION: border + corner grab handles, the familiar canvas metaphor
   function flushNudge() {
@@ -324,7 +340,11 @@ if (!window._roughDragInit) {
     if (resize) {
       const factor = Math.max(0.1, Math.hypot(e.clientX - resize.cx, e.clientY - resize.cy) / (resize.d0 || 1));
       if (resize.fig.dataset.scale === 'font') {
-        resize.fig.style.fontSize = Math.max(6, Math.min(30, resize.f0 * factor)) + 'px';
+        const c = resize.fig.closest('.rough-canvas');
+        const ch = (c ? c.getBoundingClientRect().height : 0) || 520;
+        let ref = Math.max(6, Math.min(34, (resize.f0 * factor) * 520 / ch));
+        resize.fig.dataset.fs = ref;
+        resize.fig.style.fontSize = (ref / 520 * ch) + 'px';
       } else {
         setH(resize.fig, Math.max(15, Math.min(140, resize.h0 * factor)));
       }
@@ -361,7 +381,8 @@ if (!window._roughDragInit) {
       insert: canvas.dataset.insert,
       x: parseFloat(fig.style.left), y: parseFloat(fig.style.bottom) || 0,
       h: parseFloat(fig.style.height) || 0,
-      fs: parseFloat(fig.style.fontSize) || 0,
+      fs: fig.dataset.scale === 'font'
+          ? Math.round((parseFloat(fig.dataset.fs) || 11) * 10) / 10 : 0,
       tx: parseFloat(fig.dataset.tx) || 0,
       ty: parseFloat(fig.dataset.ty) || 0,
       rot: parseFloat(fig.dataset.rot) || 0});
@@ -404,9 +425,13 @@ if (!window._roughDragInit) {
       fig.dataset.rot = deg;
       applyTransform(fig);
     } else if (fig.dataset.scale === 'font') {
-      let fs = parseFloat(fig.style.fontSize) || 11;
-      fs = Math.max(6, Math.min(30, fs * (e.deltaY < 0 ? 1.08 : 0.92)));
-      fig.style.fontSize = fs + 'px';
+      // size in REFERENCE units so the clamp means the same at any pane width
+      const ch = canvas.getBoundingClientRect().height || 520;
+      let ref = parseFloat(fig.dataset.fs)
+                || (parseFloat(fig.style.fontSize) || 11) * 520 / ch;
+      ref = Math.max(6, Math.min(34, ref * (e.deltaY < 0 ? 1.08 : 0.92)));
+      fig.dataset.fs = ref;
+      fig.style.fontSize = (ref / 520 * ch) + 'px';
     } else {
       let h = parseFloat(fig.style.height) || 50;
       h = Math.max(15, Math.min(140, h * (e.deltaY < 0 ? 1.06 : 0.94)));
@@ -484,7 +509,12 @@ if (!window._roughDragInit) {
       st.fig.style.left = st.left; st.fig.style.bottom = st.bottom;
       if (st.height) st.fig.style.height = st.height;
       if (st.width) st.fig.style.width = st.width;
-      if (st.fontSize) st.fig.style.fontSize = st.fontSize;
+      if (st.fontSize) {
+        st.fig.style.fontSize = st.fontSize;
+        const c = st.fig.closest('.rough-canvas');
+        if (c) st.fig.dataset.fs = parseFloat(st.fontSize) * 520
+                                   / (c.getBoundingClientRect().height || 520);
+      }
       if (st.tx !== undefined) st.fig.dataset.tx = st.tx;
       if (st.ty !== undefined) st.fig.dataset.ty = st.ty;
       st.fig.dataset.rot = st.rot || '';
@@ -1546,6 +1576,14 @@ def light_table(state: APPState, panel, scene, setting,
             if bg_layer["on"] and background:
                 ui.image(source=_src(background)).props('fit=cover') \
                     .classes('absolute inset-0 w-full h-full').style('z-index: 1;')
+            elif locked and featured and not any(f["on"] and f["img"] for f in figures):
+                # A LOCKED, EMPTY TABLE still shows its truth: the featured
+                # print sits ghosted on the glass — this is what the board
+                # prints; unlock to lay it back down as layers
+                ui.image(source=_src(featured)).props('fit=contain') \
+                    .classes('absolute inset-0 w-full h-full rough-ghost-print').style('z-index: 1;')
+                ui.label('the featured print — the table is locked to it') \
+                    .classes('rough-ghost-print__note')
             else:
                 with ui.column().classes('absolute inset-0 items-center justify-center') \
                         .style('z-index: 1; gap: 8px;'):
@@ -1642,6 +1680,7 @@ def light_table(state: APPState, panel, scene, setting,
                         f'left: {x}%; bottom: {y}%; top: auto; font-size: {fs}px; z-index: 70;')
                     lbl._props['data-key'] = key
                     lbl._props['data-scale'] = 'font'
+                    lbl._props['data-fs'] = f'{fs:g}'
                     lbl._props['data-kind'] = kind
                     if b.get('lock'):
                         lbl._props['data-lock'] = '1'

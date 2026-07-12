@@ -266,13 +266,17 @@ def init_layout(logger):
         .rh-ne { top: -6px; right: -6px; cursor: nesw-resize; }
         .rh-sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
         .rh-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+        /* LETTERS PRINT WHAT YOU BLOCK: family, wrap width, line height and
+           padding mirror helpers/compositor.paste_letters — the rough IS
+           the proof */
         .rough-balloon { position: absolute; transform: translateX(-50%);
                          background: #fff; color: #1a1512;
-                         border: 2px solid #1a1512; border-radius: 14px;
-                         padding: 3px 12px; font-size: .68rem;
+                         border: 2px solid #1a1512; border-radius: 1.2em;
+                         padding: .55em .7em; font-size: .68rem;
+                         font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', sans-serif;
                          width: max-content; max-width: 38%;
                          white-space: normal; text-align: center;
-                         line-height: 1.25; overflow: visible; }
+                         line-height: 1.3; overflow: visible; }
         /* the TAIL: drawn on the SVG overlay, its tip draggable */
         .rough-tails { position: absolute; inset: 0; width: 100%; height: 100%;
                        pointer-events: none; z-index: 69; overflow: visible; }
@@ -285,13 +289,14 @@ def init_layout(logger):
         .rough-balloon--shout { border-width: 3.5px; font-weight: 900;
                                 text-transform: uppercase;
                                 border-radius: 4px; transform: translateX(-50%) rotate(-1deg); }
-        .rough-balloon--thought { border-radius: 50%; padding: 8px 16px; }
+        .rough-balloon--thought { border-radius: 50%; padding: .9em 1.2em; }
+        /* display lettering knocks out of the art exactly as it prints:
+           comic-yellow fill with a heavy ink stroke */
         .rough-balloon--sound-effect { background: transparent; border: none;
-                                 font-family: 'Bangers', Impact, sans-serif;
-                                 font-size: 1.3rem; letter-spacing: 1px;
-                                 color: #1a1512;
-                                 text-shadow: 1.5px 1.5px 0 #fff, -1.5px 1.5px 0 #fff,
-                                              1.5px -1.5px 0 #fff, -1.5px -1.5px 0 #fff; }
+                                 letter-spacing: 1px;
+                                 color: #fcd838; font-weight: 900;
+                                 -webkit-text-stroke: 1.5px #1c1a17;
+                                 paint-order: stroke fill; }
 
         /* in-place letter editing (double-click) */
         .rough-editing { outline: 2px solid #3b82f6; white-space: normal;
@@ -304,9 +309,18 @@ def init_layout(logger):
         .rough-narration { position: absolute; left: 4px;
                            background: var(--caption); color: var(--caption-ink);
                            border: 2px solid var(--ink); border-radius: 2px;
-                           padding: 1px 8px; font-size: .68rem; max-width: 60%;
-                           overflow: hidden; text-overflow: ellipsis;
-                           white-space: nowrap; }
+                           padding: .55em .7em; font-size: .68rem; max-width: 60%;
+                           font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', sans-serif;
+                           width: max-content; line-height: 1.3;
+                           white-space: normal; }
+        /* a locked, empty table ghosts its featured print on the glass */
+        .rough-ghost-print { opacity: .4; filter: saturate(.65); }
+        .rough-ghost-print__note { position: absolute; bottom: 6px; left: 50%;
+                                   transform: translateX(-50%); z-index: 6;
+                                   font-size: .62rem; font-style: italic;
+                                   color: #8a8378; background: rgba(255,255,255,.75);
+                                   padding: 0 8px; border-radius: 8px;
+                                   white-space: nowrap; }
         .rough-prop { background: rgba(255,255,255,.8); color: #1a1512;
                       border: 1.5px solid var(--ink); border-radius: 8px;
                       padding: 0 6px; font-size: .62rem; }
