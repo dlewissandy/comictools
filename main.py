@@ -179,6 +179,9 @@ def init_layout(logger):
         /* THE PIN: a pinned acetate stays put — clicks fall through to the
            acetates beneath it */
         .rough-locked { pointer-events: none !important; cursor: default; }
+        /* DROP-READY: the upload box under a dragged file lights up */
+        .drop-ready { outline: 3px dashed #2e7d32 !important; outline-offset: -3px;
+                      background: rgba(46,125,50,.08) !important; }
         /* THE LINE IS DEAD: the connection dropped — edits can't save, so
            the table says so instead of letting work silently evaporate */
         .rough-line-dead::before {

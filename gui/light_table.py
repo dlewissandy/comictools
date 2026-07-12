@@ -476,14 +476,33 @@ if (!window._roughDragInit) {
     window._nudgeT = setTimeout(() => { window._nudgePending = null; report(fig, canvas); }, 400);
   });
 
-  // A MISSED FILE-DROP MUST NEVER NAVIGATE THE APP AWAY: if no drop zone
-  // handled it, swallow the browser default (opening the image in the tab)
+  // FILE DROPS: the app owns them.  A drop ON an upload box is handed
+  // straight to that box's hidden input (Quasar's own dnd path never fires
+  // here); a missed drop is swallowed so the browser never navigates away.
   document.addEventListener('dragover', (e) => {
     const t = e.dataTransfer && e.dataTransfer.types;
-    if (t && Array.prototype.includes.call(t, 'Files')) e.preventDefault();
+    if (!(t && Array.prototype.includes.call(t, 'Files'))) return;
+    e.preventDefault();
+    document.querySelectorAll('.drop-ready').forEach(z => z.classList.remove('drop-ready'));
+    const zone = e.target.closest && e.target.closest('.q-uploader');
+    if (zone) zone.classList.add('drop-ready');
+  });
+  document.addEventListener('dragleave', (e) => {
+    const zone = e.target.closest && e.target.closest('.q-uploader');
+    if (zone) zone.classList.remove('drop-ready');
   });
   document.addEventListener('drop', (e) => {
-    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) e.preventDefault();
+    if (!(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length)) return;
+    e.preventDefault();
+    document.querySelectorAll('.drop-ready').forEach(z => z.classList.remove('drop-ready'));
+    const zone = e.target.closest && e.target.closest('.q-uploader');
+    if (!zone) return;
+    const input = zone.querySelector('input[type=file]');
+    if (!input) return;
+    const dt = new DataTransfer();
+    for (const f of e.dataTransfer.files) dt.items.add(f);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', {bubbles: true}));
   });
 
   // PASTE AN IMAGE from the clipboard — lands like a drop, wherever you are
