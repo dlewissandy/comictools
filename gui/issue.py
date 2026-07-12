@@ -626,17 +626,59 @@ def view_issue(state: APPState):
                                    lambda _, s=sc: post_user_message(
                                        state, f"I would like to delete scene '{s.name}'."))
 
+    def print_sheets():
+        """PRINT: the bound proof, sheet for sheet — composed with the exact
+        math that binds the PDF.  Every sheet is a door back to its bench."""
+        from helpers.binder import reader_sheets
+        sheets, _missing = reader_sheets(storage, series_id, issue_id)
+        if not sheets:
+            with ui.element('div').classes('book-page book-page--ghost book-page--recto') as sh:
+                ui.label('nothing to proof yet — ink a cover or a panel').classes('page-ghost-cta')
+            sh.on('click', lambda _: set_detail('beats'))
+            return
+        ins_by_name = {i.name: i for i in inserts_all}
+        COVER_LOC = {'front cover': 'front', 'inside front cover': 'inside-front',
+                     'inside back cover': 'inside-back', 'back cover': 'back'}
+
+        def door(lbl):
+            if lbl.startswith('page '):
+                state._book_detail[issue_id] = 'beats'
+                remember_spot(f"flow-{lbl.split()[1]}")
+                state.refresh_details()
+            elif lbl in COVER_LOC:
+                c = cover_at.get(COVER_LOC[lbl])
+                if c is not None:
+                    goto(SelectedKind.COVER, c.cover_id, lbl, anchor=f'cover-{COVER_LOC[lbl]}')
+            elif lbl.startswith('insert — '):
+                ins = ins_by_name.get(lbl[len('insert — '):])
+                if ins is not None:
+                    goto(SelectedKind.INSERT, ins.insert_id, ins.name,
+                         anchor=f'insert-{ins.insert_id}')
+            elif lbl == 'indicia':
+                remember_spot('colophon')
+                state.refresh_details()
+        for i, (lbl, path) in enumerate(sheets):
+            with ui.element('div').classes(
+                    'book-page cursor-pointer' + (' book-page--recto' if i == 0 else '')) as sh:
+                ui.image(source=path).props('fit=cover no-spinner') \
+                    .classes('absolute inset-0 w-full h-full')
+            sh._props['data-banchor'] = f'proof-{i}'
+            sh.tooltip(f'{lbl} — click to work on it')
+            sh.on('click', lambda _, l=lbl: door(l))
+
     with details:
         # ---- the masthead stays put over the table ------------------------
         with ui.row().classes('book-masthead w-full flex-nowrap items-center').style('gap: 12px;'):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
             from gui.light_table import style_swatch
             style_swatch(state, issue, shared_with='the whole issue')
-            # THE DETAIL DIAL: read the book at script, scene, or panel altitude
+            # THE DETAIL DIAL: read the book at script, scene, panel, or
+            # print altitude — the fourth stop IS the bound proof
             with ui.row().classes('items-center flex-nowrap').style('gap: 4px;'):
                 for key, label, hint in (('stories', 'SCRIPT', 'the written script'),
                                          ('scenes', 'SCENES', 'scene manuscript pages'),
-                                         ('beats', 'PANELS', 'panels laid out on the pages')):
+                                         ('beats', 'PANELS', 'panels laid out on the pages'),
+                                         ('print', 'PRINT', 'the bound proof — composed as it prints')):
                     chip = ui.element('div').classes('dial-chip' + (' dial-chip--on' if detail == key else ''))
                     chip.mark(f'detail-{key}')
                     with chip:
@@ -662,14 +704,19 @@ def view_issue(state: APPState):
         # THE BOOK sizes itself to the bookroom (the details pane is a CSS
         # container), so a narrow pane stacks single pages instead of clipping
         with ui.element('div').classes('book w-full'):
-            cover_sheet('front', recto=True)
-            cover_sheet('inside-front')
+            if detail == 'print':
+                # THE PRINT STOP: the reading room folded into the studio —
+                # the covers, pages and inserts live INSIDE the proof sheets
+                print_sheets()
+            else:
+                cover_sheet('front', recto=True)
+                cover_sheet('inside-front')
 
             # THE STORIES: the issue's own script, then the backups, in order.
             # Once a story has been expanded into scenes it steps back — the
             # scenes ARE the story now; the STORIES dial reads it any time.
             stories = ([None] if issue.story or not stories_all else []) + stories_all
-            if detail == 'stories' or not scenes_all:
+            if detail != 'print' and (detail == 'stories' or not scenes_all):
                 for i, st in enumerate(stories):
                     # ‹ › move only among the REAL stories — the issue's own
                     # script always opens the book
@@ -679,8 +726,9 @@ def view_issue(state: APPState):
             inserts_by_anchor = {}
             for ins in inserts_all:
                 inserts_by_anchor.setdefault(ins.after_scene_number, []).append(ins)
-            for ins in inserts_by_anchor.get(0, []):
-                insert_sheet(ins)
+            if detail != 'print':
+                for ins in inserts_by_anchor.get(0, []):
+                    insert_sheet(ins)
 
             if detail == 'scenes':
                 # every scene as a manuscript page, in order, inserts slotted in
@@ -765,13 +813,14 @@ def view_issue(state: APPState):
 
             # inserts whose anchor no longer matches a scene must never
             # vanish out of reach — they wait at the back of the book
-            valid_anchors = {0} | {sc.scene_number for sc in scenes_all}
-            for ins in inserts_all:
-                if ins.after_scene_number not in valid_anchors:
-                    insert_sheet(ins)
+            if detail != 'print':
+                valid_anchors = {0} | {sc.scene_number for sc in scenes_all}
+                for ins in inserts_all:
+                    if ins.after_scene_number not in valid_anchors:
+                        insert_sheet(ins)
 
-            cover_sheet('inside-back')
-            cover_sheet('back')
+                cover_sheet('inside-back')
+                cover_sheet('back')
 
             # THE COLOPHON: credits, downloads, the production small print
             with ui.element('div').classes('book-page book-page--script') as colophon_sheet:
