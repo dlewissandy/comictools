@@ -152,6 +152,7 @@ if (!window._roughDragInit) {
   function deselect() {
     flushNudge();
     document.querySelectorAll('.rough-sel-box').forEach(b => b.remove());
+    document.querySelectorAll('.stack-row--sel').forEach(r => r.classList.remove('stack-row--sel'));
     window._roughSel = null;
   }
   function select(fig) {
@@ -166,8 +167,54 @@ if (!window._roughDragInit) {
     }
     fig.appendChild(box);
     window._roughSel = fig;
+    // ONE SELECTION: the acetate and its stack row are the same thing —
+    // selecting on the rough lights the row.  (No scrolling here: this runs
+    // inside pointerdown, and moving the pane under the cursor breaks the
+    // drag that is about to start.)
+    const key = fig.dataset.key;
+    document.querySelectorAll('.stack-row').forEach(r =>
+      r.classList.toggle('stack-row--sel', r.dataset.key === key));
+    // FIRST SELECTION teaches the hand: a placard at the moment of use.
+    // If a repaint tears it down before it could be read, offer it again.
+    if (!window._tableTaught) {
+      window._tableTaught = true;
+      const canvas = fig.closest('.rough-canvas');
+      if (canvas) {
+        const p = document.createElement('div');
+        p.className = 'rough-placard';
+        p.textContent = 'drag to move (snaps to thirds — Shift skips) · arrows nudge · ⌘-wheel resizes · [ ] or Alt-wheel tilts · ⌘Z takes it back · Esc lets go';
+        canvas.appendChild(p);
+        const born = performance.now();
+        const tick = setInterval(() => {
+          if (!p.isConnected) {
+            clearInterval(tick);
+            if (performance.now() - born < 3500) window._tableTaught = false;
+            return;
+          }
+          if (performance.now() - born > 8000) { clearInterval(tick); p.remove(); }
+        }, 500);
+      }
+    }
     requestAnimationFrame(window.roughDrawTails);
   }
+  // ...and picking a row selects its acetate on the rough (two-way mirror)
+  document.addEventListener('click', (e) => {
+    const row = e.target.closest('.stack-row');
+    if (!row || window._lineDead) return;
+    if (e.target.closest('button, .q-btn, input, .q-menu, .q-dialog, .light-thumb')) return;
+    const key = row.dataset.key;
+    if (!key) return;
+    const fig = document.querySelector(`.rough-drag[data-key="${CSS.escape(key)}"]`);
+    if (fig && !fig.classList.contains('rough-locked')) {
+      select(fig);
+    } else {
+      // nothing on the rough for this row (unposed / lifted / a group):
+      // light the row alone so the selection is still visibly answered —
+      // and on touch, this is what unfolds the row's tools
+      document.querySelectorAll('.stack-row--sel').forEach(r => r.classList.remove('stack-row--sel'));
+      row.classList.add('stack-row--sel');
+    }
+  });
 
   let drag = null;
   let resize = null;
@@ -235,7 +282,18 @@ if (!window._roughDragInit) {
       return;
     }
     const fig = pickFigure(e);
-    if (!fig) { deselect(); return; }
+    if (!fig) {
+      // no acetate under the point — but an UNPOSED SILHOUETTE may be
+      // there, click-shadowed by a transparent bounding box above it;
+      // hand the click to it so click-to-pose always answers
+      const silHit = document.elementsFromPoint(e.clientX, e.clientY)
+        .map(el => el.closest && el.closest('.rough-silhouette')).find(Boolean);
+      if (silHit && !(e.target.closest && e.target.closest('.rough-silhouette'))) {
+        silHit.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+      }
+      deselect();
+      return;
+    }
     const canvas = fig.closest('.rough-canvas');
     if (!canvas) return;
     e.preventDefault();
@@ -435,9 +493,11 @@ if (!window._roughDragInit) {
       report(st.fig, st.canvas);
       return;
     }
+    // Escape lets go of ANY selection — including a row-only highlight
+    // (an unposed or lifted figure) where no acetate holds _roughSel
+    if (e.key === 'Escape') { deselect(); requestAnimationFrame(window.roughDrawTails); return; }
     const fig = window._roughSel;
     if (!fig) return;
-    if (e.key === 'Escape') { deselect(); requestAnimationFrame(window.roughDrawTails); return; }
     if (fig.dataset.lock) return;                      // pinned: it stays put
     if ((e.key === '[' || e.key === ']') && fig.dataset.scale !== 'font') {
       // [ and ] TILT the selected acetate (Shift = coarse)
@@ -1302,6 +1362,8 @@ def takes_row(state, board, featured: str | None):
                         .tooltip('EXPLODE into layers — it becomes the background and its '
                                  'figures and elements are recognized and lifted onto acetates') \
                         .on('click.stop', lambda _, img=img: explode_take(img))
+                take.tooltip('The featured take — this is the print' if img == featured
+                             else 'Feature this take as the print — the table locks to its arrangement')
                 take.on('click', lambda _, img=img: set_image(img))
 
         def on_upload_take(e):
@@ -1527,6 +1589,28 @@ def light_table(state: APPState, panel, scene, setting,
                     fig._props['data-lock'] = '1'
                 if b.get('rot'):
                     fig._props['data-rot'] = f'{float(b["rot"]):g}'
+
+            # UNPOSED SILHOUETTES: a cast figure with no acetate yet still
+            # stands on the rough — a dashed stand-in where they'll be,
+            # and clicking it poses them
+            if not locked:
+                unposed = [f for f in figures
+                           if f["on"] and not f["img"] and f.get("ref") is not None]
+                for i, f in enumerate(unposed):
+                    b = {**f["blocking"], **(live_blk.get(f["key"]) or {})}
+                    x = b.get('x', 22 + (i * 24) % 72)
+                    y = b.get('y', 4)
+                    h = b.get('h', 52)
+                    nm = (_char_names.get(f["ref"].character_id)
+                          or f["ref"].character_id.replace('-', ' ')).title()
+                    sil = ui.element('div').classes('rough-silhouette') \
+                        .style(f'left: {x}%; bottom: {y}%; height: {h}%; '
+                               f'width: {h * 0.42}%; transform: translateX(-50%); z-index: 9;')
+                    with sil:
+                        ui.icon('accessibility_new').classes('rough-silhouette__icon')
+                        ui.label(nm).classes('rough-silhouette__name')
+                    sil.tooltip(f'{nm} is cast but not posed yet — click to pose them')
+                    sil.on('click', lambda _, r=f["ref"]: pose_dialog(r.character_id, r.variant_id))
 
             live_props = [p["name"] for p in props if p["on"]]
             if live_props:
@@ -1805,7 +1889,7 @@ def light_table(state: APPState, panel, scene, setting,
         post_user_message(state, f"Ink this rough into a new take of this {noun} — compose it with " +
                           "; ".join(parts) + ".")
 
-    with ui.row().classes('w-full flex-nowrap').style('gap: 12px; align-items: stretch;'):
+    with ui.row().classes('w-full flex-nowrap light-columns').style('gap: 12px; align-items: stretch;'):
         stack_col = ui.column().classes('w-1/3 acetate-stack').style('gap: 4px; min-width: 220px;')
         stack_col._props['data-series'] = series_id
         stack_col._props['data-issue'] = panel.issue_id
@@ -1829,7 +1913,10 @@ def light_table(state: APPState, panel, scene, setting,
                         state.refresh_details()
                     ui.button('Unlock', icon='lock_open').props('outline dense size=sm') \
                         .on('click', lambda _: unlock())
-            ui.label('top of the stack prints last — drag rows to restack · drags snap to center & thirds (Shift skips) · ⌘-wheel resizes, [ ] or Alt-wheel tilts the selected acetate · ⌘Z takes a move back').classes('text-xs text-gray-500 italic')
+            # the hand-skills placard teaches the gestures at the moment of
+            # first selection — the standing hint stays short
+            ui.label('top of the stack prints last — drag rows to restack; '
+                     'pick a row or an acetate and the other lights up').classes('text-xs text-gray-500 italic')
             if has_letters:
                 layer_row('chat_bubble', 'Letters — balloons & captions', letters,
                           edit_message='I would like to edit the narration and dialogue of this '
@@ -1979,6 +2066,7 @@ def light_table(state: APPState, panel, scene, setting,
                     storage.update_object(panel)
                     rough.refresh()
                 ui.button(icon='swap_horiz').props('flat round dense size=xs') \
+                    .classes('row-tool') \
                     .tooltip('Mirror left/right — the renderer often gets facing wrong') \
                     .on('click', lambda _, f=f: flip(f))
 
@@ -1998,6 +2086,7 @@ def light_table(state: APPState, panel, scene, setting,
                             lambda: make_cutout_body(state, panel, key, path, nm),
                         )], role='the Inker')
                     ui.button(icon='opacity').props('flat round dense size=xs color=orange') \
+                        .classes('row-tool') \
                         .tooltip('Opaque backdrop — cut it out to TRUE transparency') \
                         .on('click', lambda _, k=key, p=path, n=nm: make_cutout(k, p, n))
 
@@ -2098,6 +2187,7 @@ def light_table(state: APPState, panel, scene, setting,
                                             card.on('click', lambda _, ch=ch, v=v: link(ch, v))
                             dlg.open()
                         ui.button(icon='person_search').props('flat round dense size=xs') \
+                            .classes('row-tool') \
                             .tooltip('Who is this?  Link this cut-out to a cast member') \
                             .on('click', lambda _, k=f["key"], n=f["name"]: identify_element(k, n))
 
@@ -2106,9 +2196,11 @@ def light_table(state: APPState, panel, scene, setting,
                             itm = SelectionItem(name=f"Edit {nm}", id=path, kind=SelectedKind.IMAGE_EDITOR)
                             state.change_selection(new=[*state.selection, itm])
                         ui.button(icon='healing').props('flat round dense size=xs') \
+                            .classes('row-tool') \
                             .tooltip('Correct this element in the image editor') \
                             .on('click', lambda _, p=f["img"], n=f["name"]: heal_element(p, n))
                         ui.button(icon='content_cut').props('flat round dense size=xs') \
+                            .classes('row-tool') \
                             .tooltip('Split this element into ITS elements') \
                             .on('click', lambda _, k=f["key"], p=f["img"]: split_flow(k, p))
 
@@ -2137,6 +2229,7 @@ def light_table(state: APPState, panel, scene, setting,
                             _receipt(f"👯 duplicated the **{nm}** layer")
                             state.refresh_details()
                         ui.button(icon='content_copy').props('flat round dense size=xs') \
+                            .classes('row-tool') \
                             .tooltip('Duplicate — another copy of this element on its own acetate') \
                             .on('click', lambda _, k=f["key"], p=f["img"], n=f["name"]: dup_element(k, p, n))
                         mirror_btn(f)
@@ -2167,6 +2260,7 @@ def light_table(state: APPState, panel, scene, setting,
                             _receipt(f"✂️ removed **{nm}** from the table", undo=undo)
                             state.refresh_details()
                         ui.button(icon='close').props('flat round dense size=xs') \
+                            .classes('row-tool') \
                             .tooltip('Remove this element from the table') \
                             .on('click', lambda _, k=f["key"], n=f["name"]: drop_element(k, n))
                         return
@@ -2204,6 +2298,7 @@ def light_table(state: APPState, panel, scene, setting,
                         cutout_btn(f["key"], f["img"], name_lbl)
                     if f["posed"]:
                         ui.button(icon='content_cut').props('flat round dense size=xs') \
+                            .classes('row-tool') \
                             .tooltip('Split: lift props/wardrobe off this figure, revealing the character beneath') \
                             .on('click', lambda _, k=f["key"], p=f["img"]: split_flow(k, p))
 
@@ -2213,6 +2308,7 @@ def light_table(state: APPState, panel, scene, setting,
                                                 kind=SelectedKind.IMAGE_EDITOR)
                             state.change_selection(new=[*state.selection, itm])
                         ui.button(icon='healing').props('flat round dense size=xs') \
+                            .classes('row-tool') \
                             .tooltip('Correct this acetate — fill in, fill out, replace details') \
                             .on('click', lambda _, p=f["img"], n=name_lbl: edit_acetate(p, n))
                     ui.space()
@@ -2233,7 +2329,7 @@ def light_table(state: APPState, panel, scene, setting,
                         _receipt(f"✂️ removed **{ref.character_id}** from this panel", undo=undo)
                         state.refresh_details()
                     ui.button(icon='close').props('flat round dense size=xs') \
-                        .mark('uncast') \
+                        .mark('uncast').classes('row-tool') \
                         .tooltip('Take this figure off the table') \
                         .on('click', lambda _, ref=f["ref"]: uncast(ref))
 
@@ -2389,6 +2485,7 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.space()
 
                     ui.button(icon='layers').props('flat round dense size=xs') \
+                        .classes('row-tool') \
                         .tooltip('Combine this group into one acetate (hidden members are discarded)') \
                         .on('click', lambda _, g=gname: flatten_group(g))
 
@@ -2404,6 +2501,7 @@ def light_table(state: APPState, panel, scene, setting,
                         _receipt(f"📂 ungrouped **{gname}**", undo=undo)
                         state.refresh_details()
                     ui.button(icon='folder_off').props('flat round dense size=xs') \
+                        .classes('row-tool') \
                         .tooltip('Ungroup (the layers stay)') \
                         .on('click', lambda _, g=gname: ungroup(g))
                 for m in sorted(members, key=lambda g: -g["blocking"].get("z", 0)):
@@ -2981,7 +3079,9 @@ def light_table(state: APPState, panel, scene, setting,
                                 .props('outline dense').classes('w-full').on('click', lambda _: as_master())
                 dlg.open()
 
-            with ui.row().classes('q-mt-sm').style('gap: 8px;'):
+            # THE INK BAR RIDES ALONG: pinned to the bottom of the pane so
+            # the main action never scrolls out of reach
+            with ui.row().classes('q-mt-sm ink-bar').style('gap: 8px;'):
                 ui.button('Ink this rough', icon='brush').props('unelevated dense') \
                     .on('click', lambda _: ink())
                 ui.button('Flatten', icon='layers').props('outline dense') \

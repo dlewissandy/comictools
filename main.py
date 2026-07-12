@@ -172,6 +172,15 @@ def init_layout(logger):
         /* a POSED acetate is a real cut-out: it stands taller and grounded */
         .rough-figure.rough-figure-posed {
                         filter: drop-shadow(3px 3px 2px rgba(0,0,0,.3)); }
+        /* an UNPOSED figure is a pencil ghost: their reference sheet stands
+           in as a silhouette — clearly not ink yet, but blockable.  The
+           filter rides the IMAGE only, so the dashed edge and the selection
+           box stay crisp */
+        .rough-figure:not(.rough-figure-posed) {
+                        outline: 2px dashed rgba(59,130,246,.55);
+                        outline-offset: -2px; }
+        .rough-figure:not(.rough-figure-posed) .q-img__image {
+                        filter: grayscale(1) contrast(.7) opacity(.55); }
         /* BLOCKING: grab a figure and place it; scroll on it to scale */
         .rough-drag { cursor: grab; touch-action: none; user-select: none;
                       max-width: none; }
@@ -204,6 +213,50 @@ def init_layout(logger):
         /* a locked element itself (e.g. the style swatch) also goes quiet */
         .style-swatch.table-locked { pointer-events: none; opacity: .55; }
         .stack-row { cursor: grab; }
+        /* ONE SELECTION: the acetate on the rough and its stack row light
+           up together — pick either, the other answers */
+        .stack-row--sel { outline: 2px solid #3b82f6; outline-offset: -2px;
+                          background: rgba(59,130,246,.10) !important;
+                          border-radius: 4px; }
+        /* tools unfold on the selected (or hovered) row — at rest a row is
+           just its eye, its pin, its face and its name.  visibility (not
+           display) keeps the row's geometry still: nothing jumps on hover */
+        .stack-row .row-tool { visibility: hidden; }
+        .stack-row:hover .row-tool, .stack-row--sel .row-tool { visibility: visible; }
+        /* UNPOSED SILHOUETTE: the cast member's stand-in on the rough */
+        .rough-silhouette { position: absolute; border: 2px dashed rgba(59,130,246,.75);
+                            border-radius: 6px; background: rgba(59,130,246,.08);
+                            display: flex; flex-direction: column; align-items: center;
+                            justify-content: center; gap: 2px; cursor: pointer;
+                            transition: background .12s; }
+        .rough-silhouette:hover { background: rgba(59,130,246,.18); }
+        .rough-silhouette__icon { font-size: 2.2rem; opacity: .55; }
+        .rough-silhouette__name { font-size: .6rem; font-weight: 700; opacity: .75;
+                                  text-align: center; padding: 0 4px; }
+        /* THE HAND-SKILLS PLACARD: taught once, at the moment of first use */
+        .rough-placard { position: absolute; bottom: 8px; left: 50%;
+                         transform: translateX(-50%); z-index: 80;
+                         background: #f3e5ab; color: #1c1a17; border: 1.5px solid #1c1a17;
+                         font-size: .62rem; font-weight: 600; padding: 3px 10px;
+                         max-width: 92%; width: max-content; text-align: center;
+                         box-shadow: 2px 2px 0 rgba(0,0,0,.3);
+                         animation: placard-in .25s ease-out; pointer-events: none; }
+        @keyframes placard-in { from { opacity: 0; transform: translate(-50%, 6px); }
+                                to { opacity: 1; transform: translate(-50%, 0); } }
+        /* THE INK BAR RIDES ALONG: the main action never scrolls away */
+        .ink-bar { position: sticky; bottom: 4px; z-index: 20;
+                   background: var(--paper); padding: 6px 4px;
+                   border-top: 1.5px solid var(--ink); width: 100%; }
+        /* a locked bench has no pinned action — a faded bar floating over
+           the rows would double-expose them */
+        .table-locked .ink-bar { position: static; }
+        /* THE BENCH REFLOWS: in a narrow room the three columns stack
+           instead of crushing each other */
+        @container (max-width: 1200px) {
+            .light-columns { flex-wrap: wrap !important; }
+            .light-columns > div { flex: 1 1 340px !important;
+                                   width: auto !important; min-width: 300px !important; }
+        }
         /* drop ONTO a row to nest under it; drop at an edge to reorder */
         .stack-row.stack-drop-onto { outline: 2px solid #3b82f6; outline-offset: -2px;
                                      background: rgba(59,130,246,.12) !important; }
