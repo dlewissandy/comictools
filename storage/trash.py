@@ -49,8 +49,11 @@ def restore_last(base_path: str) -> str | None:
         manifest = json.load(open(manifest_path))
         original = manifest["original_path"]
         if os.path.exists(original):
-            logger.warning(f"cannot restore {original}: path exists again")
-            return None
+            # this entry was superseded (something lives at its path again —
+            # e.g. layout pages rewritten under the same ids) — keep walking
+            # back to the newest entry that CAN be restored
+            logger.info(f"skipping trash entry for {original}: path exists again")
+            continue
         os.makedirs(os.path.dirname(original), exist_ok=True)
         shutil.move(os.path.join(entry, "payload"), original)
         shutil.rmtree(entry, ignore_errors=True)

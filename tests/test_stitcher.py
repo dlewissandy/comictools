@@ -104,17 +104,39 @@ def test_compose_page_cells(storage, tmp_path):
     assert abs(px[0] - px[1]) < 12 and px[0] > 200, "placeholder is light gray"
 
 
-def test_sizes_speak():
-    # a splash takes the whole page
-    bands = pack_bands([("s", L, "splash"), ("a", L), ("b", L)])
-    assert bands[0]["h"] == 10.0 and bands[0]["cells"][0][3:] == (6.0, 10.0)
-    # a large landscape refuses to pair
-    bands = pack_bands([("big", L, "large"), ("a", L), ("b", L)])
-    assert len(bands[0]["cells"]) == 1 and bands[0]["cells"][0][3] == 6.0
-    # a large portrait commands the band with two beats stacked beside it
-    bands = pack_bands([("p", P, "large"), ("a", L), ("b", S)])
+def test_sizes_are_multipliers():
+    # a 2x landscape refuses to pair — a splash band
+    bands = pack_bands([("big", L, "2x"), ("a", L), ("b", L)])
+    assert len(bands[0]["cells"]) == 1 and bands[0]["cells"][0][3:] == (6.0, 4.0)
+    # a 2x portrait commands the band with two beats stacked beside it
+    bands = pack_bands([("p", P, "2x"), ("a", L), ("b", S)])
     assert len(bands) == 1 and bands[0]["h"] == 6.0
-    # three smalls share one compact tier
-    bands = pack_bands([("a", L, "small"), ("b", L, "small"), ("c", L, "small")])
-    assert len(bands) == 1 and len(bands[0]["cells"]) == 3
-    assert bands[0]["h"] <= 2.0
+    # a 3x square is the big inset moment
+    bands = pack_bands([("sq", S, "3x")])
+    assert bands[0]["cells"][0][3:] == (5.0, 5.0)
+    # aspect clamps the multiplier: no 3x landscape exists
+    bands = pack_bands([("l3", L, "3x")])
+    assert bands[0]["cells"][0][3:] == (6.0, 4.0)
+    # legacy names still read (large -> 2x)
+    bands = pack_bands([("old", L, "large"), ("a", L)])
+    assert bands[0]["cells"][0][3] == 6.0
+
+
+def test_boxes_keep_true_aspect():
+    # every box the packer produces matches its panel's aspect — the
+    # anti-clipping guarantee (except the deliberate wide-splash crop)
+    items = [("a", L), ("b", S), ("c", P), ("d", P), ("e", S), ("f", S), ("g", S)]
+    for band in pack_bands(items):
+        for key, _x, _y, w, h in band["cells"]:
+            a = dict(items)[key]
+            assert abs(w / h - a) < 0.05, f"{key} box {w}x{h} breaks aspect {a}"
+
+
+def test_justify_breathes_without_stretching():
+    items = [(f"x{i}", L) for i in range(10)]
+    pages = paginate(pack_bands(items))
+    cells = justify(pages[0], is_last=False)
+    for _k, x, y, w, h in cells:
+        assert abs(w / h - L) < 0.05, "justify must never stretch a panel"
+        assert -1e-6 <= x and x + w <= PAGE_UNITS_W + 1e-6
+        assert -1e-6 <= y and y + h <= PAGE_UNITS_H + 1e-6

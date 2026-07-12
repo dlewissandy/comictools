@@ -135,6 +135,13 @@ def test_cover_composes_setting_background_first(storage, issue_state, mock_imag
     setting = storage.read_object(Setting, {"series_id": WL, "setting_id": "toadstool-grove"})
     background = setting.images[cover.style_id]
 
+    # a BARE table: with acetates on the cover's light table the composed
+    # rough leads the references instead (the rough IS the pencils) — this
+    # test asserts the no-table ordering, so clear the table first
+    fresh = storage.read_object(Cover, {"series_id": WL, "issue_id": CARN, "cover_id": "front"})
+    fresh.figure_images, fresh.figure_blocking, fresh.layer_groups = {}, {}, {}
+    storage.update_object(fresh)
+
     # point the front cover at the setting and render it
     _invoke(updater.update_cover_setting, issue_state,
             series_id=WL, issue_id=CARN, cover_id="front", setting_id="toadstool-grove")

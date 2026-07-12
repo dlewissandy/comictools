@@ -324,9 +324,32 @@ def init_layout(logger):
                     padding: 0 5px; max-width: 85%; overflow: hidden;
                     text-overflow: ellipsis; white-space: nowrap; }
         .tile-tools { position: absolute; bottom: 2px; right: 2px; z-index: 6;
-                      background: rgba(255,255,255,.8); border-radius: 10px;
-                      opacity: 0; transition: opacity .15s; }
+                      background: rgba(255,255,255,.85); border-radius: 10px;
+                      opacity: .45; transition: opacity .15s; }
         .tile:hover .tile-tools { opacity: 1; }
+        .size-chip { cursor: pointer; border: 1.5px solid #1c1a17; border-radius: 9px;
+                     padding: 0 6px; font-size: .6rem; font-weight: 800; line-height: 1.4;
+                     background: #fff; color: #1c1a17; }
+        .size-chip:hover { background: #f3e5ab; }
+
+        /* the masthead stays put over the table */
+        .book-masthead { position: sticky; top: 0; z-index: 40;
+                         background: var(--paper); padding: 6px 0 4px;
+                         border-bottom: 2px solid var(--ink); }
+        /* THE DETAIL DIAL: stories · scenes · beats */
+        .dial-chip { cursor: pointer; border: 2px solid var(--ink); border-radius: 3px;
+                     padding: 1px 10px; font-size: .64rem; font-weight: 800;
+                     letter-spacing: .06em; opacity: .55; transition: all .12s; }
+        .dial-chip:hover { opacity: .85; }
+        .dial-chip--on { opacity: 1; background: var(--caption, #f3e5ab);
+                         color: var(--caption-ink, #1c1a17);
+                         box-shadow: 2px 2px 0 rgba(0,0,0,.35); }
+
+        .book-page--insert { gap: 8px; }
+        .insert-foot { position: absolute; bottom: 0; left: 0; right: 0;
+                       background: rgba(255,255,255,.85); z-index: 6;
+                       opacity: 0; transition: opacity .15s; }
+        .book-page:hover .insert-foot { opacity: 1; }
 
         /* the script & colophon pages read like manuscript */
         .book-page--script { display: flex; flex-direction: column; }

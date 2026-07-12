@@ -2021,6 +2021,11 @@ def preflight_issue(wrapper: RunContextWrapper[APPState], series_id: str, issue_
         if any(is_placeholder(t) for t in texts):
             placeholders.append(f"the {c.location.value} cover still has placeholder lettering — "
                                 f"write the real words before it prints")
+    # full-page inserts print too — an unrendered one is a gray placeholder page
+    from schema import Insert as _Insert
+    for ins in storage.read_all_objects(_Insert, primary_key={"series_id": series_id, "issue_id": issue_id}):
+        if not (ins.image and os.path.exists(ins.image)):
+            placeholders.append(f"insert '{ins.name}' ({ins.kind}) is not rendered (generate_insert_art)")
     missing = missing + placeholders
 
     report = [f"Rendered panels: {len(panels)}",
@@ -2847,3 +2852,75 @@ def split_layer(wrapper: RunContextWrapper, series_id: str, issue_id: str,
     """
     return split_layer_body(wrapper.context, series_id, issue_id, scene_id,
                             panel_id, layer, elements)
+
+
+def generate_insert_art_body(state, series_id: str, issue_id: str, insert_id: str) -> str:
+    """Render a FULL-PAGE INSERT — a poster, an ad, a pin-up, the mailbag —
+    full-bleed portrait art in the issue's style, from the insert's
+    description.  Callable from the GUI (background job) or via the tool."""
+    from helpers.generator import invoke_edit_image_api, invoke_generate_image_api
+    from schema import Insert
+
+    storage: GenericStorage = state.storage
+    insert = storage.read_object(cls=Insert, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "insert_id": insert_id})
+    if insert is None:
+        return f"Insert '{insert_id}' not found in issue '{issue_id}'."
+    issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
+    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": issue.style_id}) \
+        if issue is not None and issue.style_id else None
+
+    kind_notes = {
+        "poster": "an in-world poster page, bold display lettering welcome",
+        "ad": "a vintage comic-book advertisement page, playful copy and product art",
+        "pin-up": "a full-page pin-up: one glorious drawing, a caption strip at the foot",
+        "mailbag": "a letters page: masthead, columns of letter excerpts with replies, hand-lettered",
+        "title-page": "a title/contents page: the issue title large, credits, a decorative border",
+    }
+    prompt = f"""Draw a FULL-PAGE COMIC BOOK INSERT — {kind_notes.get(insert.kind, 'a full page')}.
+
+"{insert.name}"
+
+{insert.description or 'Design it from the name and kind above.'}
+
+Full-bleed portrait page (standard US comic trim), edge to edge — no outer
+frame, no white margin.{chr(10) + format_comic_style(style, include_bubble_styles=False, include_character_style=False, heading_level=1) if style is not None else ''}
+"""
+    art = None
+    if style is not None:
+        art = style.image.get('art') if isinstance(style.image, dict) else style.image
+    refs = [art] if art and os.path.exists(art) else []
+    refs.extend(storage.list_uploads(obj=insert))
+    if refs:
+        image_bytes = invoke_edit_image_api(prompt, reference_images=refs,
+                                            size="1024x1536", quality=IMAGE_QUALITY.HIGH)
+    else:
+        image_bytes = invoke_generate_image_api(prompt, size="1024x1536",
+                                                quality=IMAGE_QUALITY.HIGH)
+    locator = storage.upload_binary_image(obj=insert, data=image_bytes)
+
+    # persist onto a FRESH read — renders take minutes
+    fresh = storage.read_object(cls=Insert, primary_key=insert.primary_key) or insert
+    fresh.image = locator
+    storage.update_object(data=fresh)
+    state.is_dirty = True
+    return f"Insert '{insert.name}' rendered: {locator}"
+
+
+@function_tool
+def generate_insert_art(wrapper: RunContextWrapper[APPState], series_id: str,
+                        issue_id: str, insert_id: str) -> str:
+    """
+    Render a full-page insert's art — a poster, ad, pin-up, mailbag or title
+    page, full-bleed in the issue's style, drawn from the insert's
+    description.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        insert_id: The ID of the insert to render.
+
+    Returns:
+        A status message with the locator of the rendered art.
+    """
+    return generate_insert_art_body(wrapper.context, series_id, issue_id, insert_id)

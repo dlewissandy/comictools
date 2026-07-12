@@ -63,8 +63,13 @@ from agentic.tools import (
     create_character_style_example_image
 )
 from agentic.tools.creator import create_variant, create_variant_from_image, create_setting, create_scene_panels
+from agentic.tools.creator import create_story, create_insert
 from agentic.tools.reader import read_setting, read_all_settings
+from agentic.tools.reader import read_all_stories, read_all_inserts
 from agentic.tools.deleter import delete_setting, undo_last_delete
+from agentic.tools.deleter import delete_story, delete_insert
+from agentic.tools.updater import update_story, update_insert
+from agentic.tools.imaging import generate_insert_art
 from agentic.tools.updater import (
     update_scene_setting,
     update_scene_cast,
@@ -220,8 +225,11 @@ TOOLKITS: dict[str,list[Tool]] = {
         create_scene,
         create_scene_panels,
         create_setting,
+        create_story,
+        create_insert,
         # Imaging
         generate_series_title_art,
+        generate_insert_art,
         # Library
         list_library_assets,
         import_character,
@@ -238,6 +246,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_settings,
         read_all_characters,
         read_all_variants,
+        read_all_stories,
+        read_all_inserts,
         # Update
         update_issue_name,
         update_issue_story,
@@ -250,6 +260,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_issue_artist,
         update_issue_colorist,
         update_issue_creative_minds,
+        update_story,
+        update_insert,
         # Reorder
         move_scene,
         # Publish
@@ -264,6 +276,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_issue,
         delete_cover,
         delete_scene,
+        delete_story,
+        delete_insert,
     ],
     "panel": [
         # Create

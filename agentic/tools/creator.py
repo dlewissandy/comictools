@@ -979,3 +979,71 @@ def create_scene_panels(wrapper: RunContextWrapper[APPState],
 
     state.is_dirty = True
     return f"Created {len(created)} panels for scene '{scene.name}': " + ", ".join(created)
+
+
+@function_tool
+def create_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str,
+                 title: str, text: Optional[str]) -> str:
+    """
+    Add a story to the issue.   Classic comics run more than one story in a
+    book — a main feature and backups.   The story appears as a manuscript
+    page in the issue view, in order, and breaks down into scenes.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        title: The story's title.
+        text: The story's script text.  Optional; default to empty.
+
+    Returns:
+        A status message with the new story's id.
+    """
+    from schema import Story
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    existing = storage.read_all_objects(Story, {"series_id": series_id, "issue_id": issue_id})
+    story = Story(story_id=normalize_id(title), issue_id=issue_id, series_id=series_id,
+                  story_number=max((s.story_number for s in existing), default=0) + 1,
+                  name=normalize_name(title), text=text or "")
+    result = creator(wrapper=wrapper, obj=story)
+    if isinstance(result, str):
+        return result
+    return f"Story '{story.name}' added to the issue (story_id: {story.story_id})."
+
+
+@function_tool
+def create_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str,
+                  name: str, kind: str, description: Optional[str],
+                  after_scene_number: Optional[int]) -> str:
+    """
+    Add a FULL-PAGE INSERT to the book: a poster, an ad, a pin-up, the
+    mailbag — a page that isn't story panels but belongs in the issue.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        name: A short name, e.g. 'Carnival poster'.
+        kind: 'poster', 'ad', 'pin-up', 'mailbag' or 'title-page'.  Default to 'poster'.
+        description: What the page shows, in enough detail to render it.
+        after_scene_number: The insert appears after this scene number
+            (0 = right after the script pages).  Default to 0.
+
+    Returns:
+        A status message with the new insert's id.
+    """
+    from schema import Insert
+    state: APPState = wrapper.context
+    # the anchor must be a real place in the book
+    top = max((s.scene_number for s in state.storage.read_all_objects(
+        SceneModel, {"series_id": series_id, "issue_id": issue_id})), default=0)
+    anchor = max(0, min(top, after_scene_number or 0))
+    insert = Insert(insert_id=normalize_id(name), issue_id=issue_id, series_id=series_id,
+                    kind=kind or "poster", name=normalize_name(name),
+                    description=description or "",
+                    after_scene_number=anchor, image=None)
+    result = creator(wrapper=wrapper, obj=insert)
+    if isinstance(result, str):
+        return result
+    return (f"Insert '{insert.name}' ({insert.kind}) added after scene "
+            f"{insert.after_scene_number} (insert_id: {insert.insert_id}).  "
+            f"Render its art with generate_insert_art.")

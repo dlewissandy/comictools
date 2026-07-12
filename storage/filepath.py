@@ -47,6 +47,10 @@ ROOT_PATH_TEMPLATES[SelectedKind.COVER.value] = os.path.join(PATH_TEMPLATES[Sele
 PATH_TEMPLATES[SelectedKind.COVER.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.COVER.value], "{cover_id}")
 ROOT_PATH_TEMPLATES["Page"] = os.path.join(PATH_TEMPLATES[SelectedKind.ISSUE.value], "pages")
 PATH_TEMPLATES["Page"] = os.path.join(ROOT_PATH_TEMPLATES["Page"], "{page_id}")
+ROOT_PATH_TEMPLATES["Story"] = os.path.join(PATH_TEMPLATES[SelectedKind.ISSUE.value], "stories")
+PATH_TEMPLATES["Story"] = os.path.join(ROOT_PATH_TEMPLATES["Story"], "{story_id}")
+ROOT_PATH_TEMPLATES["Insert"] = os.path.join(PATH_TEMPLATES[SelectedKind.ISSUE.value], "inserts")
+PATH_TEMPLATES["Insert"] = os.path.join(ROOT_PATH_TEMPLATES["Insert"], "{insert_id}")
 ROOT_PATH_TEMPLATES[SelectedKind.SCENE.value] = os.path.join(PATH_TEMPLATES[SelectedKind.ISSUE.value], "scenes")
 PATH_TEMPLATES[SelectedKind.SCENE.value] = os.path.join(ROOT_PATH_TEMPLATES[SelectedKind.SCENE.value], "{scene_id}")
 ROOT_PATH_TEMPLATES[SelectedKind.PANEL.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SCENE.value], "panels")
@@ -92,6 +96,8 @@ FILEPATH_TEMPLATES[SelectedKind.ISSUE.value] = os.path.join(PATH_TEMPLATES[Selec
 FILEPATH_TEMPLATES[SelectedKind.COVER.value] = os.path.join(PATH_TEMPLATES[SelectedKind.COVER.value], "cover.json")
 FILEPATH_TEMPLATES[SelectedKind.SCENE.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SCENE.value], "scene.json")
 FILEPATH_TEMPLATES["Page"] = os.path.join(PATH_TEMPLATES["Page"], "page.json")
+FILEPATH_TEMPLATES["Story"] = os.path.join(PATH_TEMPLATES["Story"], "story.json")
+FILEPATH_TEMPLATES["Insert"] = os.path.join(PATH_TEMPLATES["Insert"], "insert.json")
 FILEPATH_TEMPLATES[SelectedKind.PANEL.value] = os.path.join(PATH_TEMPLATES[SelectedKind.PANEL.value], "panel.json")
 FILEPATH_TEMPLATES[SelectedKind.STYLED_VARIANT.value] = os.path.join(PATH_TEMPLATES[SelectedKind.STYLED_VARIANT.value], "styled_variant.json")
 FILEPATH_TEMPLATES[Publisher.__name__] = FILEPATH_TEMPLATES[SelectedKind.PUBLISHER.value]
@@ -126,6 +132,7 @@ IMAGE_PATH_TEMPLATES[Setting.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.SETTI
 # Series images: THE TITLE ART (style-keyed masthead wordmarks).
 IMAGE_PATH_TEMPLATES[SelectedKind.SERIES.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "images")
 IMAGE_PATH_TEMPLATES[Series.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.SERIES.value]
+IMAGE_PATH_TEMPLATES["Insert"] = os.path.join(PATH_TEMPLATES["Insert"], "images")
 
 UPLOAD_PATH_TEMPLATES = {}
 UPLOAD_PATH_TEMPLATES[SelectedKind.PANEL.value] = os.path.join(PATH_TEMPLATES[SelectedKind.PANEL.value], "uploads")
@@ -147,6 +154,7 @@ UPLOAD_PATH_TEMPLATES[SelectedKind.SETTING.value] = os.path.join(PATH_TEMPLATES[
 UPLOAD_PATH_TEMPLATES[Setting.__name__] = UPLOAD_PATH_TEMPLATES[SelectedKind.SETTING.value]
 UPLOAD_PATH_TEMPLATES["PropAsset"] = os.path.join(PATH_TEMPLATES["PropAsset"], "uploads")
 UPLOAD_PATH_TEMPLATES["Outfit"] = os.path.join(PATH_TEMPLATES["Outfit"], "uploads")
+UPLOAD_PATH_TEMPLATES["Insert"] = os.path.join(PATH_TEMPLATES["Insert"], "uploads")
 
 
 def get_basenames(path: str, exts: list[str] = None) -> list[str]:

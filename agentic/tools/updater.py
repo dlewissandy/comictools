@@ -1228,3 +1228,72 @@ def update_panel_dialogue(wrapper: RunContextWrapper[APPState],
     storage.update_object(data=panel)
     state.is_dirty = True
     return f"Letters for panel '{panel.name}' updated: " + (", ".join(changed) if changed else "nothing changed")
+
+
+@function_tool
+def update_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str,
+                 story_id: str, title: Optional[str], text: Optional[str]) -> str:
+    """
+    Update one of the issue's stories — its title, its script text, or both.
+    Use this when editing a story's words with the author.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        story_id: The ID of the story to update.
+        title: A new title for the story.  Optional.
+        text: The new script text.  Optional.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    from schema import Story
+    pk = {"series_id": series_id, "issue_id": issue_id, "story_id": story_id}
+    results = []
+    if title is not None:
+        results.append(update_attribute(wrapper=wrapper, cls=Story, primary_key=pk,
+                                        attribute="name", value=title))
+    if text is not None:
+        results.append(update_attribute(wrapper=wrapper, cls=Story, primary_key=pk,
+                                        attribute="text", value=text))
+    return "  ".join(results) if results else "Nothing to update — pass a title or text."
+
+
+@function_tool
+def update_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str,
+                  insert_id: str, description: Optional[str],
+                  after_scene_number: Optional[int]) -> str:
+    """
+    Update a full-page insert — its description or its place in the book.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        insert_id: The ID of the insert to update.
+        description: The new description of what the page shows.  Optional.
+        after_scene_number: Move the insert after this scene number
+            (0 = right after the script pages).  Optional.
+
+    Returns:
+        A status message indicating the result of the update.
+    """
+    from schema import Insert
+    pk = {"series_id": series_id, "issue_id": issue_id, "insert_id": insert_id}
+    results = []
+    if description is not None:
+        results.append(update_attribute(wrapper=wrapper, cls=Insert, primary_key=pk,
+                                        attribute="description", value=description))
+    if after_scene_number is not None:
+        from schema import SceneModel as _Scene
+        state: APPState = wrapper.context
+        obj = state.storage.read_object(cls=Insert, primary_key=pk)
+        if obj is None:
+            return f"Insert '{insert_id}' not found."
+        # the anchor must be a real place in the book
+        top = max((s.scene_number for s in state.storage.read_all_objects(
+            _Scene, {"series_id": series_id, "issue_id": issue_id})), default=0)
+        obj.after_scene_number = max(0, min(top, after_scene_number))
+        state.storage.update_object(obj)
+        state.is_dirty = True
+        results.append(f"Insert moved after scene {obj.after_scene_number}.")
+    return "  ".join(results) if results else "Nothing to update."

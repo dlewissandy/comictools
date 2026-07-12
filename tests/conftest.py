@@ -22,8 +22,25 @@ def tmp_data():
 
 @pytest.fixture()
 def storage(tmp_data):
+    """LocalStorage on the temp copy.  The author works in the LIVE data
+    while tests run, so the copy provisions its own preconditions: half the
+    suite's contracts assume the carnival issue has a RENDERED front cover —
+    paint one if the live data has it bare (e.g. mid-rework on its table)."""
+    from PIL import Image
     from storage.local import LocalStorage
-    return LocalStorage(base_path=tmp_data)
+    from schema import Cover
+    s = LocalStorage(base_path=tmp_data)
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    front = s.read_object(cls=Cover, primary_key={"series_id": WL, "issue_id": CARN,
+                                                  "cover_id": "front"})
+    if front is not None and not (front.image and os.path.exists(front.image)):
+        art_dir = os.path.join(tmp_data, "series", WL, "issues", CARN, "covers", "front", "images")
+        os.makedirs(art_dir, exist_ok=True)
+        art = os.path.join(art_dir, "test-front.png")
+        Image.new("RGB", (1024, 1536), (40, 45, 80)).save(art)
+        front.image = art
+        s.update_object(front)
+    return s
 
 
 @pytest.fixture()

@@ -219,9 +219,14 @@ async def test_issue_production_dashboard(user: User) -> None:
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    await user.should_see("THE SCRIPT")
+    # the detail dial reads the book at story, scene, or beat altitude
+    await user.should_see("STORIES")
+    await user.should_see("BEATS")
     await user.should_see("COLOPHON")
     await user.should_see("panels inked")
+    # a broken-down story steps back at beats detail; the dial brings it up
+    user.find(marker="detail-stories").click()
+    await user.should_see("THE SCRIPT")
 
 
 @pytest.mark.module_under_test(main)

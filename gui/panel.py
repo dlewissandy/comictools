@@ -124,6 +124,10 @@ def view_panel(state: APPState):
                 for row in pm.rows for r in row if r.panel_id == panel_id), None)
             if on_page is not None:
                 def back_to_book():
+                    # the book remembers the spot: land on this panel's page
+                    if not hasattr(state, '_book_anchor'):
+                        state._book_anchor = {}
+                    state._book_anchor[issue_id] = f'panel-{panel_id}'
                     i = next((j for j, s in enumerate(state.selection)
                               if s.kind.value == 'issue'), None)
                     if i is not None:

@@ -112,7 +112,29 @@ def delete_scene(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
         A status message indicating the result of the deletion.
     """
     pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
-    return deleter(wrapper=wrapper, cls=SceneModel, primary_key=pk)
+    result = deleter(wrapper=wrapper, cls=SceneModel, primary_key=pk)
+    # close the gap: renumber surviving scenes and carry insert anchors with
+    # them, so nothing in the book points at a scene number that's gone
+    try:
+        from schema import Insert
+        state = wrapper.context
+        storage = state.storage
+        sibs = sorted(storage.read_all_objects(SceneModel, {"series_id": series_id, "issue_id": issue_id}),
+                      key=lambda s: s.scene_number)
+        old_numbers = [s.scene_number for s in sibs]
+        for j, s in enumerate(sibs):
+            if s.scene_number != j + 1:
+                s.scene_number = j + 1
+                storage.update_object(s)
+        for ins in storage.read_all_objects(Insert, {"series_id": series_id, "issue_id": issue_id}):
+            new_anchor = sum(1 for n in old_numbers if n <= ins.after_scene_number)
+            if new_anchor != ins.after_scene_number:
+                ins.after_scene_number = new_anchor
+                storage.update_object(ins)
+    except Exception as ex:
+        from loguru import logger
+        logger.warning(f"scene renumber after delete skipped: {ex}")
+    return result
 
 @function_tool
 def delete_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, scene_id: str, panel_id: str) -> str:
@@ -230,3 +252,52 @@ def undo_last_delete(wrapper: RunContextWrapper[APPState]) -> str:
         return "Nothing to restore — the trash is empty (or the original location is occupied again)."
     state.is_dirty = True
     return f"Restored: {restored}"
+
+
+@function_tool
+def delete_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, story_id: str) -> str:
+    """
+    Delete a story from the issue.   You MUST ask for confirmation before using this tool.
+
+    Args:
+        series_id: The identifier of the series the issue belongs to.
+        issue_id: The identifier of the issue.
+        story_id: The identifier of the story to delete.
+
+    Returns:
+        A status message indicating the result of the deletion.
+    """
+    from schema import Story
+    pk = {"series_id": series_id, "issue_id": issue_id, "story_id": story_id}
+    result = deleter(wrapper=wrapper, cls=Story, primary_key=pk)
+    # close the gap in the running order
+    try:
+        state = wrapper.context
+        sibs = sorted(state.storage.read_all_objects(Story, {"series_id": series_id, "issue_id": issue_id}),
+                      key=lambda s: s.story_number)
+        for j, s in enumerate(sibs):
+            if s.story_number != j + 1:
+                s.story_number = j + 1
+                state.storage.update_object(s)
+    except Exception as ex:
+        from loguru import logger
+        logger.warning(f"story renumber after delete skipped: {ex}")
+    return result
+
+
+@function_tool
+def delete_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, insert_id: str) -> str:
+    """
+    Delete a full-page insert from the issue.   You MUST ask for confirmation before using this tool.
+
+    Args:
+        series_id: The identifier of the series the issue belongs to.
+        issue_id: The identifier of the issue.
+        insert_id: The identifier of the insert to delete.
+
+    Returns:
+        A status message indicating the result of the deletion.
+    """
+    from schema import Insert
+    pk = {"series_id": series_id, "issue_id": issue_id, "insert_id": insert_id}
+    return deleter(wrapper=wrapper, cls=Insert, primary_key=pk)

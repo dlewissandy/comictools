@@ -301,6 +301,39 @@ def compose_book(storage: GenericStorage, series_id: str, issue_id: str
             folio += 1
             interior.append((f"page {folio}", _folio_stamp(page, folio)))
 
+    # FULL-PAGE INSERTS: posters, ads, pin-ups, the mailbag — each anchored
+    # after a scene, slotted between interior pages (unfolioed, like the
+    # real thing)
+    from schema import Insert
+    inserts = sorted(storage.read_all_objects(Insert, {"series_id": series_id, "issue_id": issue_id}),
+                     key=lambda i: (i.after_scene_number, i.insert_id))
+    if inserts:
+        scene_no = {sc.scene_id: sc.scene_number
+                    for sc, _p in _reading_order(storage, series_id, issue_id)}
+        from schema import Page as _Page
+        page_models = storage.read_all_objects(_Page, {"series_id": series_id, "issue_id": issue_id},
+                                               order_by="page_number")
+        page_scenes = [[scene_no.get(r.scene_id, 0) for row in pm.rows for r in row]
+                       for pm in page_models]
+        for ins in reversed(inserts):
+            # after the LAST page carrying a panel of the anchored scene (or
+            # any earlier scene) — exactly where the open book slots it
+            at = 0
+            for pi, nums in enumerate(page_scenes):
+                if any(0 < num <= ins.after_scene_number for num in nums):
+                    at = pi + 1
+            if ins.image and os.path.exists(ins.image):
+                sheet = _full_bleed(ins.image)
+            else:
+                sheet = Image.new("RGB", (PAGE_W, PAGE_H), (244, 240, 232))
+                d = ImageDraw.Draw(sheet)
+                _center_text(d, PAGE_W // 2, PAGE_H // 2 - 40,
+                             ins.name.upper(), _font(40), (150, 144, 134))
+                _center_text(d, PAGE_W // 2, PAGE_H // 2 + 20,
+                             f"({ins.kind} — not rendered yet)", _font(22), (170, 164, 154))
+                missing.append(f"insert '{ins.name}' is not rendered (generate_insert_art)")
+            interior.insert(min(at, len(interior)), (f"insert — {ins.name}", sheet))
+
     if not interior and not front:
         return [], missing
 
@@ -377,6 +410,15 @@ def book_signature(storage: GenericStorage, series_id: str, issue_id: str) -> st
     parts.append(issue.model_dump_json() if issue else "no-issue")
     series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
     parts.append(series.name if series else "")
+    from schema import Insert, Story
+    for st in sorted(storage.read_all_objects(Story, {"series_id": series_id, "issue_id": issue_id}),
+                     key=lambda s: s.story_id):
+        # the text itself feeds the md5 below — never the salted builtin hash
+        parts.append(f"story:{st.story_id}#{st.story_number}={st.name}\n{st.text}")
+    for ins in sorted(storage.read_all_objects(Insert, {"series_id": series_id, "issue_id": issue_id}),
+                      key=lambda i: i.insert_id):
+        parts.append(f"insert:{ins.insert_id}@{ins.after_scene_number}="
+                     f"{stamp(ins.image) if ins.image else 'none'}")
     for cover in sorted(storage.read_all_objects(Cover, {"series_id": series_id, "issue_id": issue_id}),
                         key=lambda c: c.cover_id):
         parts.append(f"{cover.location.value}={stamp(cover.image) if cover.image else 'none'}")

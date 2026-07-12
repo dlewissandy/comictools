@@ -2,7 +2,9 @@ from schema.character import CharacterModel
 from schema.character_variant import CharacterVariant, CharacterVariantMinimal
 from schema.dialog import Narration, NarrationPosition, Dialogue, DialogueEmphasis
 from schema.issue import Issue
+from schema.insert import Insert
 from schema.page import Page, PanelCell, PanelRef
+from schema.story import Story
 from schema.prop import PropAsset, Outfit
 from schema.panel import Panel
 from schema.scene import SceneModel
@@ -42,6 +44,7 @@ __all__ = [
     "DialogType",
     "ExampleKind",
     "FrameLayout",
+    "Insert",
     "InsertionLocation",
     "Issue",
     "Setting",
@@ -59,6 +62,7 @@ __all__ = [
     "Relation",
     "SceneModel",
     "Series",
+    "Story",
     "StyledVariant",
     "StyleExample",
     "Cover",

@@ -428,3 +428,43 @@ def read_all_settings(wrapper: RunContextWrapper[APPState], series_id: str) -> l
         The list of settings in the series.
     """
     return read_all(wrapper=wrapper, cls=Setting, parent_key={"series_id": series_id}, order_by="name")
+
+
+@function_tool
+def read_all_stories(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+    """
+    List the issue's stories (a main feature and any backups) with their ids,
+    running order, titles and text — use the story_id with update_story /
+    delete_story.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+
+    Returns:
+        The stories in running order.
+    """
+    from schema import Story
+    return read_all(wrapper=wrapper, cls=Story,
+                    parent_key={"series_id": series_id, "issue_id": issue_id},
+                    order_by="story_number")
+
+
+@function_tool
+def read_all_inserts(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+    """
+    List the issue's full-page inserts (posters, ads, pin-ups, the mailbag)
+    with their ids, kinds, anchors and render state — use the insert_id with
+    update_insert / delete_insert / generate_insert_art.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+
+    Returns:
+        The inserts in book order.
+    """
+    from schema import Insert
+    return read_all(wrapper=wrapper, cls=Insert,
+                    parent_key={"series_id": series_id, "issue_id": issue_id},
+                    order_by="after_scene_number")
