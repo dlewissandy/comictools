@@ -468,3 +468,92 @@ def read_all_inserts(wrapper: RunContextWrapper[APPState], series_id: str, issue
     return read_all(wrapper=wrapper, cls=Insert,
                     parent_key={"series_id": series_id, "issue_id": issue_id},
                     order_by="after_scene_number")
+
+
+@function_tool
+def read_board_table(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str,
+                     scene_id: Optional[str] = None, panel_id: Optional[str] = None,
+                     cover_id: Optional[str] = None, insert_id: Optional[str] = None) -> str:
+    """
+    SEE THE LIGHT TABLE: everything on a board's table right now — every
+    acetate with its position, size, tilt, pin and eye state, the letters
+    as blocked, the pinned references.   A board is a panel (scene_id +
+    panel_id), a cover (cover_id), or an insert (insert_id).   Use this
+    before advising on composition or inking: the table IS the author's
+    intent.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        scene_id: The panel's scene (with panel_id).  Optional.
+        panel_id: The panel to look at.  Optional.
+        cover_id: The cover to look at.  Optional.
+        insert_id: The full-page insert to look at.  Optional.
+
+    Returns:
+        A human-readable inventory of the table.
+    """
+    import os
+    from schema import Cover, Insert, Panel
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    if cover_id:
+        board = storage.read_object(cls=Cover, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
+        what = f"the {getattr(getattr(board, 'location', None), 'value', 'front')} cover" if board else None
+    elif insert_id:
+        board = storage.read_object(cls=Insert, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "insert_id": insert_id})
+        what = f"the '{board.name}' {board.kind}" if board else None
+    else:
+        board = storage.read_object(cls=Panel, primary_key={
+            "series_id": series_id, "issue_id": issue_id,
+            "scene_id": scene_id, "panel_id": panel_id})
+        what = f"panel {board.panel_number} ('{board.name}')" if board else None
+    if board is None:
+        return "That board was not found."
+
+    blk = board.figure_blocking or {}
+
+    def state_of(key, dflt_on=1):
+        b = blk.get(key) or {}
+        bits = []
+        if not b.get('on', dflt_on):
+            bits.append("LIFTED OFF the table")
+        if b.get('lock'):
+            bits.append("pinned")
+        pos = (f"at {round(float(b.get('x', 50)))}% from left, "
+               f"{round(float(b.get('y', 0)))}% up, {round(float(b.get('h', 60)))}% tall")
+        if b.get('flip'):
+            bits.append("mirrored")
+        if b.get('rot'):
+            bits.append(f"tilted {float(b['rot']):g}°")
+        return pos + (" — " + ", ".join(bits) if bits else "")
+
+    lines = [f"THE LIGHT TABLE of {what} ({board.aspect.value}):"]
+    for ref in (board.character_references or []):
+        key = f"{ref.character_id}/{ref.variant_id}"
+        posed = bool((board.figure_images or {}).get(key))
+        lines.append(f"* figure {ref.character_id} ({ref.variant_id})"
+                     f"{' — POSED acetate' if posed else ' — no acetate yet'}; {state_of(key)}")
+    for key, path in sorted((board.figure_images or {}).items()):
+        if key.startswith('element/'):
+            lines.append(f"* element '{key.split('/', 1)[1].replace('-', ' ')}'; {state_of(key)}")
+        elif key == 'background/plate':
+            lines.append(f"* the background plate (a reworked take); {state_of('background')}")
+    for i, d in enumerate((getattr(board, 'dialogue', None) or [])[:4]):
+        lines.append(f"* balloon {i + 1}: {d.character_id} ({d.emphasis.value}) "
+                     f"“{d.text}”; {state_of(f'balloon/{i}')}")
+    for pos in ('top', 'bottom'):
+        caps = [n for n in (getattr(board, 'narration', None) or []) if n.position.value == pos]
+        for i, n in enumerate(caps[:2]):
+            lines.append(f"* {pos} caption {i + 1}: “{n.text}”; {state_of(f'caption/{pos}/{i}')}")
+    ups = [u for u in storage.list_uploads(board) if u and os.path.exists(u)]
+    if ups:
+        lines.append(f"* {len(ups)} pinned reference image(s)")
+    groups = getattr(board, 'layer_groups', None) or {}
+    for g, members in groups.items():
+        lines.append(f"* group '{g}': {len(members)} layer(s)")
+    if len(lines) == 1:
+        lines.append("* a bare board — nothing laid yet")
+    return "\n".join(lines)

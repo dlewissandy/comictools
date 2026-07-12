@@ -80,3 +80,31 @@ def test_dedupe_props_merges_and_repoints(storage):
     assert [p.prop_id for p in survivors] == ["glow-1"], "keeper survives, copy struck"
     v2 = storage.read_object(cls=CharacterVariant, primary_key=v.primary_key)
     assert "glow-1" in (v2.prop_ids or []) and "glow-2" not in (v2.prop_ids or [])
+
+
+def test_read_board_table_sees_everything(storage, tmp_path):
+    """The coauthor's eyes: the table inventory names acetates, letters,
+    pins, tilts, and lifted layers."""
+    import asyncio, json
+    from PIL import Image
+    from types import SimpleNamespace
+    from agentic.tools.reader import read_board_table
+    from schema import Insert
+
+    art = str(tmp_path / "el.png")
+    Image.new("RGBA", (100, 100), (10, 200, 10, 255)).save(art)
+    ins = Insert(insert_id="test-sight", issue_id="witchlight-carnival", series_id=WL,
+                 kind="poster", name="Sight Test", description="d",
+                 after_scene_number=0, image=None)
+    ins.figure_images["element/lantern"] = art
+    ins.figure_blocking["element/lantern"] = {"x": 30, "y": 10, "h": 40,
+                                              "rot": 12, "lock": 1}
+    ins.figure_blocking["element/ghost"] = {"on": 0}
+    ins.figure_images["element/ghost"] = art
+    storage.create_object(ins, overwrite=True)
+
+    wrapper = SimpleNamespace(context=SimpleNamespace(storage=storage, selection=[]))
+    out = asyncio.run(read_board_table.on_invoke_tool(wrapper, json.dumps({
+        "series_id": WL, "issue_id": "witchlight-carnival", "insert_id": "test-sight"})))
+    assert "lantern" in out and "tilted 12" in out and "pinned" in out
+    assert "ghost" in out and "LIFTED OFF" in out

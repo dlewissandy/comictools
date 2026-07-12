@@ -186,6 +186,25 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
     return stream.to_input_list()
 
 
+def _thread_key(selection):
+    if not selection:
+        return ("home", None)
+    return (selection[-1].kind.value, selection[-1].id)
+
+
+def _trim_thread(items: list, max_items: int = 80) -> list:
+    """Cap a thread without splitting a tool call from its output: trim at
+    the nearest whole user turn."""
+    if len(items) <= max_items:
+        return items
+    start = len(items) - max_items
+    for i in range(start, len(items)):
+        it = items[i]
+        if isinstance(it, dict) and it.get('role') == 'user':
+            return items[i:]
+    return items
+
+
 async def send(state: APPState):
     # THE SEND LOCK: Enter used to slip past the disabled button and start a
     # second agent run over the first — one conversation turn at a time.
@@ -217,8 +236,19 @@ async def send(state: APPState):
     send_button.disable()
     state._sending = True
 
-    # Build The Message History
-    messages = state.get_messages(role_map=ROLE_MAP)
+    # THE COAUTHOR REMEMBERS: each object's conversation keeps its OWN
+    # agent thread — tool calls and results included — so the coauthor
+    # stops forgetting what it just did between turns.  A fresh object
+    # starts from the visible chat history as before.
+    threads = getattr(state, '_agent_threads', None)
+    if threads is None:
+        threads = {}
+        state._agent_threads = threads
+    tkey = _thread_key(state.selection)
+    if threads.get(tkey):
+        messages = _trim_thread(list(threads[tkey]))
+    else:
+        messages = state.get_messages(role_map=ROLE_MAP)
     messages.append({"role": "user", "content": question})
 
     # Post the question to the message history
@@ -247,6 +277,8 @@ async def send(state: APPState):
     # Stream the responses from the agent, updating the UI as we go
     try:
         responses = await handle_agent_events(state, messages, response_markdown, divider)
+        if responses:
+            threads[tkey] = responses   # the thread survives to the next turn
     finally:
         # Now that we are done, clean up the ui and re-enable the send button
         # even if the agent run raised, so the user is never left stuck.

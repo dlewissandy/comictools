@@ -66,6 +66,7 @@ from agentic.tools.creator import create_variant, create_variant_from_image, cre
 from agentic.tools.creator import create_story, create_insert, derive_character
 from agentic.tools.reader import read_setting, read_all_settings
 from agentic.tools.reader import read_all_stories, read_all_inserts
+from agentic.tools.reader import read_board_table
 from agentic.tools.deleter import delete_setting, undo_last_delete
 from agentic.tools.deleter import delete_story, delete_insert
 from agentic.tools.updater import update_story, update_insert
@@ -202,6 +203,7 @@ TOOLKITS: dict[str,list[Tool]] = {
     "cover": [
         # Create
         # Read
+        read_board_table,
         read_cover,
         read_all_styles,
         read_setting,
@@ -286,6 +288,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         create_prop,
         create_setting,
         # Read
+        read_board_table,
         read_panel,
         read_scene,
         read_setting,
@@ -545,6 +548,7 @@ TOOLKITS["inside-back-cover"] = TOOLKITS["cover"]
 # composes on the light table and renders from its rough + description.
 TOOLKITS["insert"] = [
     # Read
+    read_board_table,
     read_all_inserts,
     read_all_styles,
     read_setting,
