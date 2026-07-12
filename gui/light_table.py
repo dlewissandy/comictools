@@ -60,6 +60,7 @@ if (!window._roughDragInit) {
     for (const f of cands) {
       const canvas = f.closest('.rough-canvas');
       if (canvas && canvas.dataset.locked) continue;   // the table is locked
+      if (window._lineDead) continue;                  // moves can't save — don't fake it
       if (f.dataset.lock) continue;                    // this acetate is pinned
       if (alphaAt(f, e.clientX, e.clientY) > 20) return f;
     }
@@ -171,6 +172,27 @@ if (!window._roughDragInit) {
   let drag = null;
   let resize = null;
   let tailDrag = null;
+
+  // THE LINE-DEAD GUARD: if the studio's connection drops, table edits
+  // would move pixels but save NOTHING — so the table freezes and says so,
+  // instead of letting work silently evaporate until the next reload.
+  window._lineDead = false;
+  function watchLine() {
+    const s = window.socket;
+    if (!s || !s.on) { setTimeout(watchLine, 1000); return; }
+    s.on('disconnect', () => {
+      window._lineDead = true;
+      document.querySelectorAll('.rough-canvas').forEach(c => c.classList.add('rough-line-dead'));
+    });
+    s.on('connect', () => {
+      if (!window._lineDead) return;
+      // a reconnect after death means a NEW server — this page is stale
+      document.querySelectorAll('.rough-line-dead').forEach(c => c.dataset.deadReload = '1');
+      setTimeout(() => location.reload(), 1200);
+    });
+  }
+  if (document.readyState === 'complete') watchLine();
+  else window.addEventListener('load', watchLine);
 
   // MOVE-UNDO: a ring of before-states; Cmd/Ctrl+Z walks it back
   window._roughUndo = window._roughUndo || [];

@@ -76,3 +76,14 @@ def unrendered_panel(storage):
               narration=[], dialogue=[], image=None, reference_images=[])
     storage.create_object(p, overwrite=True)
     return p
+
+
+@pytest.fixture()
+def api_alive():
+    """Skip API-dependent tests cleanly when the OpenAI account can't answer
+    (no key, no network, out of quota) instead of eating minutes of retries."""
+    try:
+        import openai
+        openai.OpenAI().models.list()
+    except Exception as e:
+        pytest.skip(f"OpenAI API unavailable: {e}")

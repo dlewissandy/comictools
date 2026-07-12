@@ -107,6 +107,10 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
             try:
                 result = await asyncio.to_thread(job)
                 done += 1
+                try:
+                    state._quota_warned = False   # ink flows again
+                except Exception:
+                    pass
                 note = str(result)
                 extra = ""
                 if "NOTE:" in note:
@@ -115,6 +119,26 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
             except Exception as e:
                 failed += 1
                 logger.error(f"render job '{label}' failed: {e}")
+                from helpers.generator import StudioOutOfInk
+                if isinstance(e, StudioOutOfInk):
+                    # out of ink: say it ONCE, plainly, and stop burning the
+                    # rest of the batch against a dead account
+                    if not getattr(state, '_quota_warned', False):
+                        try:
+                            state._quota_warned = True
+                        except Exception:
+                            pass
+                        _announce(f"🛑 **The studio is out of ink** — {e}  "
+                                  f"The rest of this batch is set aside; ask me to "
+                                  f"re-run it once the account is topped up.")
+                    failed += len(jobs) - i
+                    for skipped_label, _ in jobs[i:]:
+                        try:
+                            pending.remove(skipped_label)
+                        except ValueError:
+                            pass
+                        _slip_burn(slips.get(skipped_label, ""))
+                    break
                 _announce(f"⚠️ **{label}** — failed: {e}")
             finally:
                 _slip_burn(slips.get(label, ""))

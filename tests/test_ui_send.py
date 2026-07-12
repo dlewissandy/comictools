@@ -54,7 +54,7 @@ pytest_plugins = ["nicegui.testing.user_plugin"]
 @pytest.mark.api
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
-async def test_send_message_updates_history(user: User) -> None:
+async def test_send_message_updates_history(user: User, api_alive) -> None:
     # Patch AFTER the user plugin has reloaded main (reload re-binds the
     # original LocalStorage into main's namespace).
     main.LocalStorage = _TmpStorage
@@ -89,7 +89,7 @@ async def test_coauthor_speaks_first_with_chips(user: User) -> None:
 @pytest.mark.api
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
-async def test_conversations_persist_per_object(user: User) -> None:
+async def test_conversations_persist_per_object(user: User, api_alive) -> None:
     """The coauthor remembers: a thread survives reload on its own object and
     does not leak into another object's conversation."""
     main.LocalStorage = _TmpStorage

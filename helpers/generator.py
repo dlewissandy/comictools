@@ -126,6 +126,23 @@ def spend_today() -> tuple[int, float]:
         return 0, 0.0
 
 
+
+
+class StudioOutOfInk(RuntimeError):
+    """The OpenAI account is out of quota — every render fails until the
+    account is topped up.  Raised with a plain-language message so receipts
+    read like a colleague, not a stack trace."""
+
+
+def _reraise_plain(e: Exception):
+    msg = str(e)
+    if "quota" in msg.lower() or "billing" in msg.lower() or "insufficient_quota" in msg.lower():
+        raise StudioOutOfInk(
+            "the studio's OpenAI account is out of credit — renders will fail "
+            "until it's topped up (platform.openai.com/account/billing)") from e
+    raise e
+
+
 def invoke_generate_image_api(
     prompt: str,
     model: str = "gpt-image-1.5",
@@ -152,7 +169,7 @@ def invoke_generate_image_api(
         return decode_image_responses(response)
     except Exception as e:
         logger.error(f"Error invoking OpenAI image generation API: {e}")
-        raise e
+        _reraise_plain(e)
 
 
 def invoke_edit_image_api( 
@@ -201,7 +218,11 @@ def invoke_edit_image_api(
     args["image"] =  [filepath_to_filehandle(filepath) for filepath in reference_images]
     if mask:
         args["mask"] = filepath_to_filehandle(mask)
-    response = openai.images.edit(**args)
+    try:
+        response = openai.images.edit(**args)
+    except Exception as e:
+        logger.error(f"Error invoking OpenAI image edit API: {e}")
+        _reraise_plain(e)
     record_spend(quality.name.lower())
 
     if n == 1:

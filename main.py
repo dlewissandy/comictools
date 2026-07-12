@@ -179,6 +179,15 @@ def init_layout(logger):
         /* THE PIN: a pinned acetate stays put — clicks fall through to the
            acetates beneath it */
         .rough-locked { pointer-events: none !important; cursor: default; }
+        /* THE LINE IS DEAD: the connection dropped — edits can't save, so
+           the table says so instead of letting work silently evaporate */
+        .rough-line-dead::before {
+            content: '⚠ CONNECTION LOST — moves are NOT saving.  Reloading…';
+            position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+            z-index: 90; background: #b71c1c; color: #fff; font-weight: 700;
+            font-size: .72rem; padding: 4px 12px; border-radius: 3px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.4); white-space: nowrap; }
+        .rough-line-dead { outline: 3px solid #b71c1c; }
         /* SELECTION: dashed border + corner grab handles on the acetate */
         .rough-sel-box { position: absolute; inset: 0;
                          border: 1.5px dashed #3b82f6;
