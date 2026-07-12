@@ -136,11 +136,16 @@ if (!window._roughDragInit) {
 
   // SELECTION: border + corner grab handles, the familiar canvas metaphor
   function flushNudge() {
-    // a pending nudge write must land before the selection moves on
+    // pending debounced writes (nudge + wheel) must land BEFORE anything
+    // else happens — a button click writes the board and would clobber them
     if (window._nudgeT) { clearTimeout(window._nudgeT); window._nudgeT = null; }
     const p = window._nudgePending;
     window._nudgePending = null;
     if (p) report(p.f, p.c);
+    if (window._wheelT) { clearTimeout(window._wheelT); window._wheelT = null; }
+    const w = window._wheelPending;
+    window._wheelPending = null;
+    if (w) report(w.f, w.c);
   }
   function deselect() {
     flushNudge();
@@ -572,6 +577,19 @@ def board_label(board) -> str:
     return f"panel {board.panel_number}"
 
 
+def fresh_board(storage, board):
+    """Re-pull the LIVE table state into the page's board object.  Drags and
+    resizes persist out-of-band (no page rebuild), so every other write must
+    sync first or it clobbers the move the author just made."""
+    fresh = storage.read_object(cls=type(board), primary_key=board.primary_key)
+    if fresh is not None:
+        board.figure_blocking = fresh.figure_blocking
+        board.figure_images = fresh.figure_images
+        board.layer_groups = fresh.layer_groups
+        board.image = fresh.image
+    return board
+
+
 def read_board(storage, a: dict):
     """Resolve a rough/stack event back to its board (panel or cover)."""
     if a.get('cover'):
@@ -658,6 +676,7 @@ def pose_figure_bg(state, board, character_id: str, variant_id: str,
 
 def lay_figure_on_table(state, panel, character_id: str, variant_id: str,
                         name: str | None = None):
+    fresh_board(state.storage, panel)
     refs = panel.character_references or []
     if not any(c.character_id == character_id and c.variant_id == variant_id for c in refs):
         panel.character_references = refs + [CharacterRef(
@@ -673,6 +692,7 @@ def lay_background_on_table(state, scene, panel, setting):
     scene.setting_id = setting.setting_id
     state.storage.update_object(scene)
     # a new background replaces any split plate
+    fresh_board(state.storage, panel)
     if (panel.figure_images or {}).pop('background/plate', None) is not None:
         for gname in list(panel.layer_groups or {}):
             panel.layer_groups[gname] = [k for k in panel.layer_groups[gname]
@@ -714,6 +734,7 @@ def lay_prop_acetate(state, board, prop_asset, style_id: str | None = None) -> b
                                                prop_asset.prop_id, sid),
         )], role='the Prop Maker')
         return False
+    fresh_board(state.storage, board)
     slug = normalize_id(prop_asset.name)
     key = f'element/{slug}'
     n = 2
@@ -787,6 +808,7 @@ def style_swatch(state, scene):
 def rework_take_on_table(state, board, img: str):
     """A take becomes the table's background layer, ready to split, heal
     and layer over — and the table unlocks (no take selected)."""
+    fresh_board(state.storage, board)
     board.figure_images['background/plate'] = img
     board.image = None
     state.storage.update_object(board)
@@ -806,6 +828,7 @@ def tear_up_take(state, board, img: str):
     never clobbers an older wastebasket copy)."""
     from uuid import uuid4
     storage = state.storage
+    fresh_board(storage, board)
     trash = os.path.join(os.path.dirname(img), f".trash--{uuid4().hex[:6]}--{os.path.basename(img)}")
     try:
         os.replace(img, trash)
@@ -928,6 +951,7 @@ def takes_row(state, board, featured: str | None):
     storage = state.storage
 
     def set_image(locator: str):
+        fresh_board(storage, board)
         board.image = locator
         storage.update_object(board)
         table_receipt(state, '📌 featured a take — the table is locked to its arrangement')
@@ -1118,6 +1142,8 @@ def light_table(state: APPState, panel, scene, setting,
     # ---- THE ROUGH: the live mock --------------------------------------
     @ui.refreshable
     def rough():
+        # drags persist out-of-band: repaint from the LIVE table state
+        fresh_board(storage, panel)
         canvas = ui.element('div').classes('rough-canvas').style(canvas_style)
         canvas._props['data-series'] = series_id
         canvas._props['data-issue'] = panel.issue_id
@@ -1149,9 +1175,10 @@ def light_table(state: APPState, panel, scene, setting,
             def img_k(path):
                 return _img_ar(path) / canvas_ar  # width%% per height%%
 
+            live_blk = panel.figure_blocking or {}
             visible = [f for f in figures if f["on"] and f["img"]]
-            for f in sorted(visible, key=lambda g: g["blocking"].get("z", 0)):
-                b = f["blocking"]
+            for f in sorted(visible, key=lambda g: {**g["blocking"], **(live_blk.get(g["key"]) or {})}.get("z", 0)):
+                b = {**f["blocking"], **(live_blk.get(f["key"]) or {})}
                 k = img_k(f["img"])
                 cls = 'rough-figure rough-drag' + (' rough-figure-posed' if f["posed"] else '')
                 flip = ' scaleX(-1)' if b.get('flip') else ''
@@ -1318,6 +1345,7 @@ def light_table(state: APPState, panel, scene, setting,
             .props('flat round dense size=sm')
 
         def toggle():
+            fresh_board(storage, panel)
             layer["on"] = not layer["on"]
             # a layer with "keys" is a group of layers: the eye rules them ALL
             keys = ([layer["key"]] if layer.get("key") else []) + list(layer.get("keys") or [])
@@ -1422,6 +1450,7 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.space()
 
                     def unlock():
+                        fresh_board(storage, panel)
                         panel.image = None
                         storage.update_object(panel)
                         _receipt('🔓 unlocked the table — no take is selected while you rework it')
@@ -1440,6 +1469,7 @@ def light_table(state: APPState, panel, scene, setting,
                         .props('flat round dense size=xs')
 
                     def toggle(key=key, btn=btn):
+                        fresh_board(storage, panel)
                         b = dict((panel.figure_blocking or {}).get(key) or {})
                         b['on'] = 0 if b.get('on', 1) else 1
                         panel.figure_blocking[key] = b
@@ -1498,12 +1528,14 @@ def light_table(state: APPState, panel, scene, setting,
                             .props('dense borderless options-dense')
 
                         def restyle(e, i=i):
+                            fresh_board(storage, panel)
                             panel.dialogue[i].emphasis = DialogueEmphasis(e.value)
                             storage.update_object(panel)
                             rough.refresh()
                         sel.on_value_change(restyle)
 
                         def drop_balloon(i=i):
+                            fresh_board(storage, panel)
                             saved_dialogue = list(panel.dialogue)
                             saved_letters = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()
                                              if k.startswith('balloon/') or k.startswith('caption/')}
@@ -1538,6 +1570,7 @@ def light_table(state: APPState, panel, scene, setting,
                             ui.space()
 
                             def drop_caption(n=n, pos=pos, i=i):
+                                fresh_board(storage, panel)
                                 saved_narration = list(panel.narration)
                                 saved_letters = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()
                                                  if k.startswith('balloon/') or k.startswith('caption/')}
@@ -1565,6 +1598,7 @@ def light_table(state: APPState, panel, scene, setting,
             # last); split products sit nested under their group.
             def mirror_btn(f):
                 def flip(f=f):
+                    fresh_board(storage, panel)
                     b = dict((panel.figure_blocking or {}).get(f["key"]) or {})
                     b['flip'] = 0 if b.get('flip') else 1
                     f["blocking"]['flip'] = b['flip']
@@ -1606,6 +1640,7 @@ def light_table(state: APPState, panel, scene, setting,
 
                                 def go():
                                     import re as _re
+                                    fresh_board(storage, panel)
                                     new = (inp.value or '').strip()
                                     slug = _re.sub(r'[^a-z0-9]+', '-', new.lower()).strip('-')[:40]
                                     if not slug:
@@ -1653,6 +1688,7 @@ def light_table(state: APPState, panel, scene, setting,
                                                     .classes('text-xs text-center w-full')
 
                                             def link(ch=ch, v=v, key=key, nm=nm):
+                                                fresh_board(storage, panel)
                                                 fig_key = f"{ch.character_id}/{v.id}"
                                                 replaced = fig_key in (panel.figure_images or {})
                                                 _move_key(key, fig_key)
@@ -1686,6 +1722,7 @@ def light_table(state: APPState, panel, scene, setting,
 
                         def dup_element(key=f["key"], path=f["img"], nm=f["name"]):
                             import shutil
+                            fresh_board(storage, panel)
                             import re as _re
                             from uuid import uuid4
                             slug = _re.sub(r'[^a-z0-9]+', '-', nm.lower()).strip('-')[:36] or 'element'
@@ -1714,6 +1751,7 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.space()
 
                         def drop_element(key=f["key"], nm=f["name"]):
+                            fresh_board(storage, panel)
                             saved_img = (panel.figure_images or {}).get(key)
                             saved_blk = (panel.figure_blocking or {}).get(key)
                             saved_groups = {g: list(ks) for g, ks in (panel.layer_groups or {}).items()}
@@ -1785,6 +1823,7 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.space()
 
                     def uncast(ref=f["ref"]):
+                        fresh_board(storage, panel)
                         panel.character_references = [
                             c for c in panel.character_references
                             if not (c.character_id == ref.character_id and c.variant_id == ref.variant_id)]
@@ -1805,6 +1844,7 @@ def light_table(state: APPState, panel, scene, setting,
 
             def flatten_group(gname):
                 from uuid import uuid4
+                fresh_board(storage, panel)
                 from helpers.compositor import DIMS, base_canvas, paste_acetates
                 # capture everything the flatten touches, for the undo chip
                 saved_imgs = dict(panel.figure_images or {})
@@ -1904,6 +1944,7 @@ def light_table(state: APPState, panel, scene, setting,
                         .tooltip('Lift the whole group — every acetate in it')
 
                     def toggle_group(gname=gname, members=members, was_on=all_on):
+                        fresh_board(storage, panel)
                         # the group eye rules EVERY member recursively — the
                         # split plate included
                         now = not was_on
@@ -2191,6 +2232,7 @@ def light_table(state: APPState, panel, scene, setting,
 
                     def go():
                         dlg.close()
+                        fresh_board(storage, panel)
                         laid = []
                         for kind2, item, cb in checks:
                             if not cb.value:
@@ -2380,6 +2422,7 @@ def light_table(state: APPState, panel, scene, setting,
                     # THE MASTHEAD: lay the series title art as an acetate —
                     # art-only covers wear the title as a composited overlay
                     def lay_title():
+                        fresh_board(storage, panel)
                         from schema import Series as _Series
                         ser = storage.read_object(cls=_Series, primary_key={"series_id": series_id})
                         arts = (getattr(ser, 'title_images', {}) or {}) if ser else {}
@@ -2400,6 +2443,7 @@ def light_table(state: APPState, panel, scene, setting,
 
                     # THE PUBLISHER'S MARK: the little logo every cover wears
                     def lay_publisher_mark():
+                        fresh_board(storage, panel)
                         from schema import Publisher, Series as _Series
                         ser = storage.read_object(cls=_Series, primary_key={"series_id": series_id})
                         pub = storage.read_object(cls=Publisher, primary_key={
@@ -2425,6 +2469,7 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.label('New letters').classes('caption-box caption-box-sm')
 
                         def new_balloon(speaker: str):
+                            fresh_board(storage, panel)
                             panel.dialogue = list(panel.dialogue or []) + [
                                 Dialogue(character_id=speaker, text='Say something…',
                                          emphasis=DialogueEmphasis.CHAT)]
@@ -2434,6 +2479,7 @@ def light_table(state: APPState, panel, scene, setting,
                             state.refresh_details()
 
                         def new_caption():
+                            fresh_board(storage, panel)
                             panel.narration = list(panel.narration or []) + [
                                 Narration(text='Narration…', position=NarrationPosition.TOP)]
                             storage.update_object(panel)
@@ -2493,6 +2539,7 @@ def light_table(state: APPState, panel, scene, setting,
                         .classes('text-sm q-mt-sm')
 
                     def as_take():
+                        fresh_board(storage, panel)
                         data = flatten_bytes()
                         locator = storage.upload_binary_image(obj=panel, data=data)
                         panel.image = locator
@@ -2554,6 +2601,7 @@ def light_table(state: APPState, panel, scene, setting,
                 from schema import FrameLayout as _FL
 
                 def reshape(shape):
+                    fresh_board(storage, panel)
                     panel.aspect = shape
                     storage.update_object(panel)
                     state.refresh_details()

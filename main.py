@@ -611,5 +611,8 @@ def series_page(tail: str):
     _page_from_path('series/' + tail)
 
 
-ui.run()
+# reload=False: hot reload restarts the server on every source edit, which
+# drops every open tab AND silently kills any render on the drawing board.
+# The studio restarts deliberately, not whenever a file changes.
+ui.run(reload=False)
 

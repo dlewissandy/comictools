@@ -158,3 +158,27 @@ def test_read_board_resolves_panels_and_covers(storage):
     cover = read_board(storage, {"series": WL, "issue": CARN, "cover": "front"})
     assert cover is not None and cover.cover_id == "front"
     assert hasattr(cover, "figure_images") and hasattr(cover, "layer_groups")
+
+
+# ---------------------------------------------------------------------------
+# drags persist out-of-band: other writes must not clobber them
+# ---------------------------------------------------------------------------
+def test_fresh_board_pulls_live_blocking(storage):
+    """A page-build board snapshot goes stale the moment a drag persists —
+    fresh_board must pull the live blocking before any other write."""
+    from gui.light_table import fresh_board
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    pk = {"series_id": WL, "issue_id": CARN,
+          "scene_id": "7c736a63-e052-4ec9-9043-cddaaa880fd4",
+          "panel_id": "28c278fc-add3-4db6-bae3-e5c9483325d2"}
+    page_copy = storage.read_object(Panel, pk)     # what the GUI holds
+    drag_writer = storage.read_object(Panel, pk)   # what _on_block writes
+    drag_writer.figure_blocking["mr.-witch/base"] = {"x": 12.3, "y": 4.5, "h": 61.0}
+    storage.update_object(drag_writer)
+
+    fresh_board(storage, page_copy)
+    assert page_copy.figure_blocking["mr.-witch/base"]["x"] == 12.3
+    # a subsequent whole-object write from the page copy keeps the drag
+    storage.update_object(page_copy)
+    again = storage.read_object(Panel, pk)
+    assert again.figure_blocking["mr.-witch/base"]["x"] == 12.3
