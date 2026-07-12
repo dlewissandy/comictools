@@ -580,8 +580,9 @@ class LocalStorage(GenericStorage):
 
 
     def upload_binary_image(self, obj: BaseModel, data: bytes) -> str:
-        # Split the mime type to get the extension
-        ext = "jpg"
+        # sniff the actual format — transparent renders come back as PNG and
+        # must keep an extension that says so
+        ext = "png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "jpg"
        
         root_path = obj_to_imagepath(obj=obj, base_path=self.base_path)
         if not os.path.exists(root_path):

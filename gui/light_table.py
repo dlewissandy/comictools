@@ -577,6 +577,68 @@ def board_label(board) -> str:
     return f"panel {board.panel_number}"
 
 
+_OPAQUE_CACHE: dict = {}
+
+
+def _is_opaque(path: str) -> bool:
+    """True when an acetate has no working transparency (no alpha channel,
+    or a fully opaque backdrop) — cached by (path, mtime)."""
+    try:
+        key = (path, os.path.getmtime(path))
+    except OSError:
+        return False
+    v = _OPAQUE_CACHE.get(key)
+    if v is None:
+        try:
+            from PIL import Image
+            with Image.open(path) as im:
+                if 'A' not in im.getbands():
+                    v = True
+                else:
+                    a = im.getchannel('A')
+                    w, h = a.size
+                    corners = (a.getpixel((0, 0)), a.getpixel((w - 1, 0)),
+                               a.getpixel((0, h - 1)), a.getpixel((w - 1, h - 1)))
+                    v = min(corners) > 250
+        except Exception:
+            v = False
+        if len(_OPAQUE_CACHE) > 512:
+            _OPAQUE_CACHE.clear()
+        _OPAQUE_CACHE[key] = v
+    return v
+
+
+def make_cutout_body(state, board, key: str, path: str, name: str) -> str:
+    """Re-ink one acetate as a true cut-out: keep only the subject, erase the
+    backdrop to full transparency, and point the board at the new file (the
+    original stays put — it may be an asset's reference art)."""
+    from uuid import uuid4
+    from helpers.generator import invoke_edit_image_api, IMAGE_QUALITY
+    from storage.filepath import obj_to_imagepath
+    from PIL import Image
+    storage = state.storage
+    with Image.open(path) as im:
+        w, h = im.size
+    size = "1536x1024" if w > h else ("1024x1536" if h > w else "1024x1024")
+    data = invoke_edit_image_api(
+        f"""Reproduce this image EXACTLY — identical subject, identical style, identical
+scale and position within the frame — but keep ONLY the {name}: erase the
+background and any backdrop to FULL TRANSPARENCY.  A cut-out acetate.""",
+        reference_images=[path], size=size, quality=IMAGE_QUALITY.MEDIUM,
+        background="transparent", input_fidelity="high")
+    figures_dir = os.path.join(os.path.dirname(
+        obj_to_imagepath(obj=board, base_path=storage.base_path)), 'figures')
+    os.makedirs(figures_dir, exist_ok=True)
+    out = os.path.join(figures_dir, f"cutout--{uuid4().hex[:8]}.png")
+    with open(out, 'wb') as fh:
+        fh.write(data)
+    fresh = storage.read_object(cls=type(board), primary_key=board.primary_key) or board
+    if key in (fresh.figure_images or {}):
+        fresh.figure_images[key] = out
+        storage.update_object(fresh)
+    return f"Cut {name} out onto transparent acetate: {out}"
+
+
 def fresh_board(storage, board):
     """Re-pull the LIVE table state into the page's board object.  Drags and
     resizes persist out-of-band (no page rebuild), so every other write must
@@ -1610,6 +1672,24 @@ def light_table(state: APPState, panel, scene, setting,
                     .on('click', lambda _, f=f: flip(f))
 
             def figure_row(f, indent=False):
+                def cutout_btn(key, path, nm):
+                    # an acetate with an opaque backdrop can't composite —
+                    # offer the one-click cut-out right on its row
+                    if not (path and _is_opaque(path)):
+                        return
+
+                    def make_cutout(key=key, path=path, nm=nm):
+                        from helpers.render_queue import enqueue_renders
+                        _receipt(f"✂️ cutting **{nm}** out of its backdrop — "
+                                 f"the transparent acetate lands shortly")
+                        enqueue_renders(state, [(
+                            f"cut-out — {nm}",
+                            lambda: make_cutout_body(state, panel, key, path, nm),
+                        )], role='the Inker')
+                    ui.button(icon='opacity').props('flat round dense size=xs color=orange') \
+                        .tooltip('Opaque backdrop — cut it out to TRUE transparency') \
+                        .on('click', lambda _, k=key, p=path, n=nm: make_cutout(k, p, n))
+
                 row = ui.row().classes('light-layer stack-row w-full items-center flex-nowrap') \
                     .style('gap: 6px;' + (' margin-left: 14px; width: calc(100% - 14px);' if indent else ''))
                 row.props('draggable=true')
@@ -1748,6 +1828,7 @@ def light_table(state: APPState, panel, scene, setting,
                             .tooltip('Duplicate — another copy of this element on its own acetate') \
                             .on('click', lambda _, k=f["key"], p=f["img"], n=f["name"]: dup_element(k, p, n))
                         mirror_btn(f)
+                        cutout_btn(f["key"], f["img"], f["name"])
                         ui.space()
 
                         def drop_element(key=f["key"], nm=f["name"]):
@@ -1807,6 +1888,8 @@ def light_table(state: APPState, panel, scene, setting,
                             .tooltip('Pose this figure — describe the pose' if not f["posed"] else 'Re-pose — describe the new pose') \
                             .on('click', lambda _, r=f["ref"]: pose_dialog(r.character_id, r.variant_id))
                     mirror_btn(f)
+                    if f["img"]:
+                        cutout_btn(f["key"], f["img"], name_lbl)
                     if f["posed"]:
                         ui.button(icon='content_cut').props('flat round dense size=xs') \
                             .tooltip('Split: lift props/wardrobe off this figure, revealing the character beneath') \
