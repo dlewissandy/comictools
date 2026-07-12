@@ -152,17 +152,15 @@ async def test_inline_scalar_edit_affordance(user: User) -> None:
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    # THE COLOPHON page carries the credits' click-to-edit scalars
+    # THE COLOPHON prints the credits set in type — every line a pencil
     await user.should_see("COLOPHON")
-    await user.should_see("Click to edit writer")
-    await user.should_see("Click to edit price")
-
-    # clicking the editable value swaps in an input; setting it persists
-    labels = [e for e in user.client.elements.values()
-              if e.__class__.__name__ == "Label"
-              and any(ch.__class__.__name__ == "Tooltip" and "writer" in getattr(ch, "text", "")
-                      for ch in e.default_slot.children)]
-    assert labels, "editable writer label exists"
+    await user.should_see("WRITER")
+    await user.should_see("PRICE")
+    # every credit line advertises its pencil
+    tips = [getattr(e, "text", "") for e in user.client.elements.values()
+            if e.__class__.__name__ == "Tooltip"]
+    assert any("Set the writer" in t for t in tips), "writer line is a pencil"
+    assert any("Set the price" in t for t in tips), "price line is a pencil"
 
 
 @pytest.mark.module_under_test(main)
@@ -279,3 +277,119 @@ async def test_cast_card_corner_remove(user: User) -> None:
                                         "issue_id": "witchlight-carnival",
                                         "scene_id": SC, "panel_id": P})
     assert len(panel.character_references) < 2, "a reference was detached"
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_slips_pack_every_bare_scene_exactly_once(user: User) -> None:
+    """MANUSCRIPT SLIPS: at the PANELS stop every bare scene appears exactly
+    once, in reading order, 1-3 to a sheet — and the printed pagination
+    (view/print folio parity) is untouched by the packing."""
+    main.LocalStorage = _TmpStorage
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("COLOPHON")          # default dial stop is PANELS
+
+    from schema import SceneModel, Panel
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    storage = _TmpStorage()
+    scenes = storage.read_all_objects(SceneModel, {"series_id": WL, "issue_id": CARN},
+                                      order_by="scene_number")
+    bare = [sc for sc in scenes if not storage.read_all_objects(
+        Panel, {"series_id": WL, "issue_id": CARN, "scene_id": sc.scene_id})]
+
+    sheets = [e for e in user.client.elements.values()
+              if 'book-page--slips' in getattr(e, "_classes", [])]
+    slips_per_sheet = [[c for c in sh.default_slot.children
+                        if 'page-slip' in getattr(c, "_classes", [])] for sh in sheets]
+    assert slips_per_sheet and all(1 <= len(s) <= 3 for s in slips_per_sheet)
+
+    # one slip per bare scene, in reading order, panelled scenes never slip
+    banchors = [s._props['data-banchor'] for slips in slips_per_sheet for s in slips]
+    assert banchors == [f'scene-{sc.scene_id}' for sc in bare]
+
+    # slips are view-only working paper: the print pagination is unchanged
+    from helpers.stitcher import stitch_pages
+    flow = [e for e in user.client.elements.values()
+            if str(e._props.get('data-banchor', '')).startswith('flow-')]
+    assert len(flow) == len(stitch_pages(storage, WL, CARN))
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_long_manuscript_fades_at_200_words(user: User) -> None:
+    """STORY FADE: 201 words clamps with a 'continues' door to the full
+    text; exactly 200 does not.  The door opens the whole manuscript."""
+    main.LocalStorage = _TmpStorage
+    from schema import SceneModel, Panel
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    storage = _TmpStorage()
+    scenes = storage.read_all_objects(SceneModel, {"series_id": WL, "issue_id": CARN},
+                                      order_by="scene_number")
+    bare = [sc for sc in scenes if not storage.read_all_objects(
+        Panel, {"series_id": WL, "issue_id": CARN, "scene_id": sc.scene_id})]
+    long_sc, edge_sc = bare[0], bare[1]
+    keep = (long_sc.story, edge_sc.story)
+    long_sc.story = ('mirror ' * 201).strip()
+    edge_sc.story = ('lantern ' * 200).strip()
+    storage.update_object(long_sc)
+    storage.update_object(edge_sc)
+    try:
+        json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
+                                 {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                                 {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
+                   "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+        await user.open("/")
+        await user.should_see("COLOPHON")
+        user.find(marker="detail-scenes").click()
+        await user.should_see("continues — open to read")
+
+        # the boundary: the 201-word scene fades, the 200-word one does not
+        clamped = [e for e in user.client.elements.values()
+                   if 'script-clamp' in getattr(e, "_classes", [])]
+        assert len(clamped) == 1
+        chips = [e for e in user.client.elements.values()
+                 if e.__class__.__name__ == "Chip" and 'continues' in str(getattr(e, 'text', ''))]
+        assert len(chips) == 1
+
+        # the door holds the FULL text, not the faded view
+        user.find('continues — open to read').click()
+        await user.should_see('Save')
+        assert any(getattr(t, 'value', '') == long_sc.story
+                   for t in user.client.elements.values()
+                   if t.__class__.__name__ == 'Textarea')
+    finally:
+        long_sc.story, edge_sc.story = keep
+        storage.update_object(long_sc)
+        storage.update_object(edge_sc)
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_colophon_prints_all_credits_and_each_line_is_a_pencil(user: User, monkeypatch) -> None:
+    """THE CREDITS SET IN TYPE: all six roles print; set values show, unset
+    ones ghost; clicking a line posts the edit ask for THAT role."""
+    main.LocalStorage = _TmpStorage
+    sent = []
+    monkeypatch.setattr('gui.issue.post_user_message', lambda state, msg: sent.append(msg))
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("COLOPHON")
+    for role in ("WRITER", "ARTIST", "COLORIST", "CREATIVE MINDS", "PUBLICATION DATE", "PRICE"):
+        await user.should_see(role)
+    await user.should_see("Mud, scribe of the Earth")     # set in fixture data
+    await user.should_see("unset — pencil it in")
+
+    lines = [e for e in user.client.elements.values()
+             if 'credit-line' in getattr(e, "_classes", [])]
+    assert len(lines) == 6
+    for ev in lines[0]._event_listeners.values():
+        if ev.type.startswith("click"):
+            lines[0]._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+    assert sent == ["I would like to edit the writer."]

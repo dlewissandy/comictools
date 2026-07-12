@@ -23,7 +23,7 @@ from nicegui import ui
 
 from schema import (ComicStyle, Issue, Cover, Insert, Panel, SceneModel, Page,
                     Story, FrameLayout)
-from gui.elements import header, Attribute, view_attributes, crud_button, CrudButtonKind
+from gui.elements import header, crud_button, CrudButtonKind
 from gui.state import APPState
 from gui.messaging import post_user_message
 from gui.selection import SelectionItem, SelectedKind
@@ -395,13 +395,24 @@ def view_issue(state: APPState):
         name = story.name if story else 'THE SCRIPT'
         text = (story.text if story else issue.story) or ''
         wc = len(text.split())
+        long_read = wc > 200
         with ui.element('div').classes('book-page book-page--script') as sh:
             ui.label(name.upper()).classes('page-cap')
-            with ui.element('div').classes('script-body'):
+            with ui.element('div').classes('script-body' + (' script-clamp' if long_read else '')):
                 if text:
                     ui.markdown(text).classes('script-text')
                 else:
                     ui.label('This story has no words yet.').classes('page-ghost-hint q-mt-lg')
+            if long_read:
+                # the page never scrolls — the text fades like a real proof
+                # and the door opens the whole manuscript
+                ui.chip('continues — open to read', icon='auto_stories') \
+                    .props('dense outline clickable size=sm').classes('script-continues') \
+                    .on('click', lambda _, sid=sid, name=name, text=text: edit_text_dialog(
+                        name, text,
+                        lambda v, sid=sid: save_story_text(sid, v),
+                        f"Let's work on the story '{name}' together — read it back "
+                        f"to me and we'll edit it."))
             with ui.row().classes('script-foot items-center flex-nowrap').style('gap: 2px;'):
                 if story is not None:
                     if not first:
@@ -510,11 +521,20 @@ def view_issue(state: APPState):
             with cap:
                 scene_menu(sc)
             cap.on('click.stop', lambda _: None)
-            with ui.element('div').classes('script-body'):
+            long_read = wc > 200
+            with ui.element('div').classes('script-body' + (' script-clamp' if long_read else '')):
                 if text:
                     ui.markdown(text).classes('script-text')
                 else:
                     ui.label('Nothing written for this scene yet.').classes('page-ghost-hint q-mt-lg')
+            if long_read:
+                ui.chip('continues — open to read', icon='auto_stories') \
+                    .props('dense outline clickable size=sm').classes('script-continues') \
+                    .on('click', lambda _, s=sc: edit_text_dialog(
+                        f'Scene {s.scene_number} — {s.name}', s.story,
+                        lambda v, sid=s.scene_id: save_scene_text(sid, v),
+                        f"Let's work on scene '{s.name}' together — read it back to "
+                        f"me and we'll develop it."))
             with ui.row().classes('script-foot items-center flex-nowrap').style('gap: 2px;'):
                 footer_btn('chevron_left', 'Earlier in the book', lambda _, s=sc: move_scene(s, -1))
                 footer_btn('chevron_right', 'Later in the book', lambda _, s=sc: move_scene(s, 1))
@@ -550,6 +570,59 @@ def view_issue(state: APPState):
                 ui.label(str(folio)).classes('page-folio')
         sh._props['data-banchor'] = f'scene-{sc.scene_id}'
 
+    def slip_sheet(scs):
+        """MANUSCRIPT SLIPS: a run of bare scenes clipped to one sheet as
+        working paper — each slip carries its own cap, words and tools."""
+        with ui.element('div').classes('book-page book-page--script book-page--slips'):
+            for sc in scs:
+                text = sc.story or ''
+                wc = len(text.split())
+                slip = ui.element('div').classes('page-slip')
+                slip._props['data-banchor'] = f'scene-{sc.scene_id}'
+                with slip:
+                    cap = ui.label(f'{sc.scene_number} · {sc.name}'.upper()).classes('page-cap')
+                    with cap:
+                        scene_menu(sc)
+                    cap.on('click.stop', lambda _: None)
+                    with ui.element('div').classes('slip-body'):
+                        if text:
+                            ui.markdown(text).classes('script-text')
+                        else:
+                            ui.label('Nothing written for this scene yet.') \
+                                .classes('page-ghost-hint')
+                    if wc > 60:
+                        # a slip is a third of a page — every fade gets a door
+                        ui.chip('continues — open to read', icon='auto_stories') \
+                            .props('dense outline clickable size=sm').classes('script-continues') \
+                            .on('click', lambda _, s=sc: edit_text_dialog(
+                                f'Scene {s.scene_number} — {s.name}', s.story,
+                                lambda v, sid=s.scene_id: save_scene_text(sid, v),
+                                f"Let's work on scene '{s.name}' together — read it "
+                                f"back to me and we'll develop it."))
+                    with ui.row().classes('script-foot items-center flex-nowrap').style('gap: 2px;'):
+                        footer_btn('edit', 'Rewrite the scene',
+                                   lambda _, s=sc: edit_text_dialog(
+                                       f'Scene {s.scene_number} — {s.name}', s.story,
+                                       lambda v, sid=s.scene_id: save_scene_text(sid, v),
+                                       f"Let's work on scene '{s.name}' together — read it "
+                                       f"back to me and we'll develop it."))
+                        if text and wc >= 40:
+                            ui.chip('break it into panels', icon='grid_on') \
+                                .props('dense outline clickable size=sm') \
+                                .on('click', lambda _, s=sc: post_user_message(
+                                    state, f"Break scene '{s.name}' into panels."))
+                        else:
+                            ui.chip('develop it with me', icon='forum') \
+                                .props('dense outline clickable size=sm') \
+                                .tooltip("It's thin — I'll interview you and we'll build it out") \
+                                .on('click', lambda _, s=sc: post_user_message(
+                                    state, f"Scene '{s.name}' is too thin to panelize — "
+                                           f"interview me and help me develop it."))
+                        ui.space()
+                        footer_btn('close', 'Tear this scene out…',
+                                   lambda _, s=sc: post_user_message(
+                                       state, f"I would like to delete scene '{s.name}'."))
+
     with details:
         # ---- the masthead stays put over the table ------------------------
         with ui.row().classes('book-masthead w-full flex-nowrap items-center').style('gap: 12px;'):
@@ -583,6 +656,8 @@ def view_issue(state: APPState):
             crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current issue."))
 
         # ---- THE OPEN BOOK ------------------------------------------------
+        # THE BOOK sizes itself to the bookroom (the details pane is a CSS
+        # container), so a narrow pane stacks single pages instead of clipping
         with ui.element('div').classes('book w-full'):
             cover_sheet('front', recto=True)
             cover_sheet('inside-front')
@@ -636,6 +711,32 @@ def view_issue(state: APPState):
                         segments.append(('insert', ins))
                 flush()
 
+                # MANUSCRIPT SLIPS: at panels altitude, a run of bare scenes
+                # packs 2–3 slips to a sheet — working paper clipped into the
+                # book, not seventeen full pages of it.  (At SCENES detail
+                # every scene still gets its own manuscript page.)
+                packed, slips = [], []
+
+                def flush_slips():
+                    nonlocal slips
+                    while slips:
+                        take, wc = [], 0
+                        while slips and len(take) < 3:
+                            w = len((slips[0].story or '').split())
+                            if take and len(take) >= 2 and wc + w > 120:
+                                break
+                            take.append(slips.pop(0))
+                            wc += w
+                        packed.append(('slips', take))
+                for kind, seg in segments:
+                    if kind == 'manuscript':
+                        slips.append(seg)
+                    else:
+                        flush_slips()
+                        packed.append((kind, seg))
+                flush_slips()
+                segments = packed
+
                 first_tiles = {ps[0].panel_id: sc for sc in scenes_all
                                for ps in [panels_by_scene[sc.scene_id]] if ps}
                 folio = 0
@@ -652,10 +753,10 @@ def view_issue(state: APPState):
                                          cap_scene=first_tiles.get(key[1]))
                                 ui.label(str(folio)).classes('page-folio')
                             sheet._props['data-banchor'] = f'flow-{folio}'
-                    elif kind == 'manuscript':
-                        # a bare scene holds its place but doesn't PRINT —
+                    elif kind == 'slips':
+                        # bare scenes hold their place but don't PRINT —
                         # no folio, so screen and book agree on page numbers
-                        scene_sheet(seg)
+                        slip_sheet(seg)
                     else:
                         insert_sheet(seg)
 
@@ -674,21 +775,23 @@ def view_issue(state: APPState):
                 colophon_sheet._props['data-banchor'] = 'colophon'
                 ui.label('COLOPHON').classes('page-cap')
                 with ui.element('div').classes('script-body'):
-                    def _set(field):
-                        def setter(value):
-                            setattr(issue, field, value or None)
-                            storage.update_object(data=issue)
-                        return setter
-                    view_attributes(
-                        state=state, caption="", individual_icons=False,
-                        attributes=[
-                            Attribute(caption="writer", get_value=lambda: issue.writer, set_value=_set("writer")),
-                            Attribute(caption="artist", get_value=lambda: issue.artist, set_value=_set("artist")),
-                            Attribute(caption="colorist", get_value=lambda: issue.colorist, set_value=_set("colorist")),
-                            Attribute(caption="creative minds", get_value=lambda: issue.creative_minds, set_value=_set("creative_minds")),
-                            Attribute(caption="publication date", get_value=lambda: issue.publication_date, set_value=_set("publication_date")),
-                            Attribute(caption="price", get_value=lambda: issue.price, set_value=lambda v: (setattr(issue, "price", float(v) if v else None), storage.update_object(data=issue))),
-                        ])
+                    # THE CREDITS, SET IN TYPE: the colophon prints like a
+                    # real indicia block — every line is still a pencil
+                    with ui.element('div').classes('colophon-credits q-mt-md'):
+                        for role, val in (("writer", issue.writer),
+                                          ("artist", issue.artist),
+                                          ("colorist", issue.colorist),
+                                          ("creative minds", issue.creative_minds),
+                                          ("publication date", issue.publication_date),
+                                          ("price", f"${issue.price:.2f}" if issue.price is not None else None)):
+                            line = ui.row().classes('credit-line items-baseline flex-nowrap')
+                            with line:
+                                ui.label(role.upper()).classes('credit-role')
+                                ui.label(str(val) if val else 'unset — pencil it in') \
+                                    .classes('credit-name' + ('' if val else ' credit-name--unset'))
+                            line.tooltip(f'Set the {role}')
+                            line.on('click', lambda _, r=role: post_user_message(
+                                state, f"I would like to edit the {r}."))
                     with ui.row().classes('q-mt-md items-center').style('gap: 6px; flex-wrap: wrap;'):
                         for fname, label in ((f"{issue_id}.pdf", '⤓ PDF'), (f"{issue_id}.cbz", '⤓ CBZ')):
                             path = os.path.join(export_dir, fname)

@@ -147,7 +147,8 @@ def issue_ledger(storage, series_id: str, issue_id: str) -> Ledger:
                  f"still typeset — render to print",
             count=len(unrendered_ins),
             items=[f"insert '{i.name}' ({i.kind}) is not rendered" for i in unrendered_ins],
-            anchor=f'insert-{unrendered_ins[0].insert_id}' if unrendered_ins else None))
+            anchor=f'insert-{unrendered_ins[0].insert_id}' if unrendered_ins else None,
+            detail='beats'))   # scene-anchored inserts only render at scenes/panels
 
     # THE PAGES: every panel placed on a page
     if all_panels:

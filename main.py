@@ -288,11 +288,21 @@ def init_layout(logger):
 
         /* THE OPEN BOOK: the issue view IS the comic — pages lie on the
            table in side-by-side spreads, the cover opening the book alone
-           on the recto like a real one */
-        .book { display: grid; --pw: min(380px, 42vw);
+           on the recto like a real one.  THE BOOKROOM is a CSS container:
+           pages size to the room they're in, not the window — a narrow
+           pane (chat open, split screen) stacks single pages instead of
+           clipping the spread */
+        .bookroom { container-type: inline-size; }
+        .book { display: grid; --pw: min(380px, 42cqw);
                 grid-template-columns: repeat(2, var(--pw));
                 column-gap: 8px; row-gap: 34px; justify-content: center;
                 padding: 18px 0 26px; }
+        @container (max-width: 560px) {
+            .book { --pw: min(420px, 88cqw);
+                    grid-template-columns: var(--pw) !important; }
+            .book-page--recto { grid-column: auto !important; }
+            .book-masthead { flex-wrap: wrap !important; }
+        }
         .book-page { width: var(--pw); aspect-ratio: 6.625 / 10.1875; position: relative;
                      background: #fdfcf8; border-radius: 2px; overflow: hidden;
                      box-shadow: 0 6px 18px rgba(0,0,0,.35), 0 1px 4px rgba(0,0,0,.25);
@@ -380,6 +390,37 @@ def init_layout(logger):
         .script-text p { margin-bottom: .5em; }
         .script-foot { padding: 2px 10px; }
         .script-bare { padding: 0 10px 10px; }
+        /* THE PAGE NEVER SCROLLS: a long manuscript fades out like a real
+           proof; the "continues" slip opens the whole text */
+        .script-clamp { overflow: hidden !important;
+                        -webkit-mask-image: linear-gradient(#000 72%, transparent 96%);
+                        mask-image: linear-gradient(#000 72%, transparent 96%); }
+        .script-continues { align-self: center; margin: -4px 0 2px; z-index: 6; }
+
+        /* MANUSCRIPT SLIPS: 2-3 bare scenes clipped to one working sheet */
+        .book-page--slips { padding-top: 4px; }
+        .page-slip { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column;
+                     overflow: hidden; position: relative; padding-top: 2px; }
+        .page-slip + .page-slip { border-top: 1.5px dashed rgba(28,26,23,.4); }
+        .page-slip .slip-body { flex: 1; min-height: 0; overflow: hidden; padding: 0 14px;
+                                -webkit-mask-image: linear-gradient(#000 70%, transparent 98%);
+                                mask-image: linear-gradient(#000 70%, transparent 98%); }
+        .page-slip .page-cap { position: relative; top: auto; left: auto;
+                               margin: 4px 0 3px 10px; cursor: pointer; }
+        /* hidden tools must not catch stray clicks — a ghost "tear this
+           scene out" button is a trap, not a tool */
+        .page-slip .script-foot { opacity: 0; pointer-events: none; transition: opacity .15s; }
+        .page-slip:hover .script-foot { opacity: 1; pointer-events: auto; }
+
+        /* THE CREDITS SET IN TYPE: the colophon prints like an indicia */
+        .colophon-credits { display: flex; flex-direction: column; gap: 2px;
+                            align-items: center; text-align: center; }
+        .credit-line { gap: 8px; cursor: pointer; padding: 1px 8px; border-radius: 2px; }
+        .credit-line:hover { background: rgba(28,26,23,.06); }
+        .credit-role { font-size: .52rem; font-weight: 800; letter-spacing: .14em;
+                       opacity: .6; }
+        .credit-name { font-size: .7rem; font-variant: small-caps; }
+        .credit-name--unset { opacity: .45; font-style: italic; font-variant: normal; }
 
         /* THE TRAY: loose panels waiting for a page */
         .tray-tiles { padding: 26px 10px 6px; overflow-y: auto; }
@@ -461,7 +502,9 @@ def init_layout(logger):
     with middle:
         with ui.splitter(limits=(20,80), value=70).classes('h-full w-full') as splitter:
             with splitter.before:
-                details = ui.scroll_area().classes("h-full w-full "+MIDDLE_STYLING_CLASSES).style('padding-left:12px; padding-right:12px;')
+                # the details pane is THE BOOKROOM: a CSS container, so the
+                # open book sizes its pages to this pane, not the window
+                details = ui.scroll_area().classes("h-full w-full bookroom "+MIDDLE_STYLING_CLASSES).style('padding-left:12px; padding-right:12px;')
             with splitter.after:
                 history = ui.scroll_area().classes("h-full w-full "+MIDDLE_STYLING_CLASSES+" border").style('padding-left:12px; padding-right:12px;')
 
