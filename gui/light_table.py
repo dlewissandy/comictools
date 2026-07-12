@@ -2067,9 +2067,12 @@ def light_table(state: APPState, panel, scene, setting,
                 elements conjured — with an approval pass first."""
                 import asyncio
                 from agentic.tools.imaging import breakdown_brief
-                brief = (panel.description or '').strip()
+                # a panel's brief is its BEAT + description — the action
+                # usually lives in the beat, the visuals in the description
+                beat = (getattr(panel, 'beat', '') or '').strip()
+                brief = f"{beat}\n\n{(panel.description or '').strip()}".strip()
                 if not brief:
-                    ui.notify('Write the visual description first — the table is built from the brief.',
+                    ui.notify('Write the beat or visual description first — the table is built from the brief.',
                               type='warning')
                     return
                 pending = getattr(state, '_render_pending', None)
