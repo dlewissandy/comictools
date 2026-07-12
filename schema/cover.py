@@ -2,6 +2,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 from schema.enums import CoverLocation, FrameLayout
 from schema.character_reference import CharacterRef
+from schema.dialog import Dialogue, Narration
 from schema.reference_image import ReferenceImage
 
 class Cover(BaseModel):
@@ -16,6 +17,12 @@ class Cover(BaseModel):
     reference_images: list[ReferenceImage] = Field(..., description="The reference images for the panel")
     description: str = Field(..., description="A detailed description of the image on the cover.   This should describe the image in sufficient detail so that different artists could from this information alone reproduce the same image.   This should include the setting, foreground, background, characters, props, scenery and any other elements in the cover.")
     image: str | None = Field(..., description="The selected image for this panel.   Default to None")
+
+    # COVER LETTERS: covers carry copy too — taglines in narrator boxes, a
+    # character speaking right off the cover.  Same shapes as Panel, so the
+    # light table's letters experience works on both.
+    narration: list[Narration] = Field(default_factory=list, description="Cover copy in narrator boxes — taglines, story hooks.  Default to empty list.")
+    dialogue: list[Dialogue] = Field(default_factory=list, description="Cover dialogue balloons — a character speaking from the cover.  Default to empty list.")
 
     # THE LIGHT TABLE (same acetate model as Panel — covers compose on the
     # same table, so the fields match exactly)

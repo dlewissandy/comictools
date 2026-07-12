@@ -1299,8 +1299,9 @@ def light_table(state: APPState, panel, scene, setting,
     def _key_on(key, default=1):
         return bool(((panel.figure_blocking or {}).get(key) or {}).get('on', default))
 
-    # LETTERS live on panels; covers carry their trade dress in the render
-    # instead — the whole letters experience simply doesn't apply to them.
+    # LETTERS live on panels AND covers (taglines, a balloon spoken right off
+    # the cover) — any board with dialogue/narration fields gets the full
+    # letters experience.
     supports_letters = hasattr(panel, 'dialogue')
     board_dialogue = getattr(panel, 'dialogue', None) or []
     board_narration = getattr(panel, 'narration', None) or []
@@ -1596,12 +1597,17 @@ def light_table(state: APPState, panel, scene, setting,
         pinned = [r for r in references if r["on"]]
         if pinned:
             parts.append(f"{len(pinned)} pinned reference image(s)")
-        if letters["on"] and has_letters:
+        from helpers.compositor import is_placeholder
+        real_letters = [t for t in ([n.text for n in board_narration] +
+                                    [d.text for d in board_dialogue])
+                        if t and not is_placeholder(t)]
+        if letters["on"] and has_letters and real_letters:
             fresh_blk = (storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel).figure_blocking or {}
             placed = []
             for i, d in enumerate(board_dialogue[:4]):
                 b = fresh_blk.get(f'balloon/{i}') or {}
-                if not b.get('on', 1):
+                # unwritten placeholder balloons never reach the inker's brief
+                if not b.get('on', 1) or is_placeholder(d.text):
                     continue
                 desc = f"{d.character_id}'s {d.emphasis.value} balloon at {round(b.get('x', 50))}%"
                 if b.get('tx') is not None:
@@ -1642,7 +1648,8 @@ def light_table(state: APPState, panel, scene, setting,
             ui.label('top of the stack prints last — drag rows to restack').classes('text-xs text-gray-500 italic')
             if has_letters:
                 layer_row('chat_bubble', 'Letters — balloons & captions', letters,
-                          edit_message='I would like to edit the narration and dialogue of this panel.')
+                          edit_message='I would like to edit the narration and dialogue of this '
+                                       + ('cover.' if cover_mode else 'panel.'))
 
                 def letter_eye(key):
                     b = dict((panel.figure_blocking or {}).get(key) or {})
@@ -2706,7 +2713,7 @@ def light_table(state: APPState, panel, scene, setting,
                             .classes('text-xs text-gray-500 q-mt-sm')
                     dlg.open()
 
-                if supports_letters:   # cover trade dress is lettered at render time
+                if supports_letters:   # panels AND covers letter on the table
                     ui.button(icon='chat_bubble').props('flat round dense size=sm') \
                         .tooltip('Letters — lay a balloon or narrator box on the table') \
                         .on('click', lambda _: new_letters())
@@ -2722,7 +2729,7 @@ def light_table(state: APPState, panel, scene, setting,
 
             def flatten_bytes() -> bytes:
                 import io
-                from helpers.compositor import base_canvas, paste_acetates
+                from helpers.compositor import base_canvas, paste_acetates, collect_letters, paste_letters
                 fresh = storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
                 base = base_canvas(panel.aspect.value,
                                    background if (bg_layer["on"] and background) else None)
@@ -2731,6 +2738,9 @@ def light_table(state: APPState, panel, scene, setting,
                                [(f["img"], {**f["blocking"],
                                             **((fresh.figure_blocking or {}).get(f["key"]) or {})})
                                 for f in live])
+                # letters print last, comic-craft order (placeholders never do)
+                if letters["on"]:
+                    paste_letters(base, panel.aspect.value, collect_letters(fresh))
                 buf = io.BytesIO()
                 base.save(buf, 'PNG')
                 return buf.getvalue()

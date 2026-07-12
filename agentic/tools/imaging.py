@@ -238,11 +238,14 @@ def _compose_table_rough(storage, board, scene) -> str | None:
     if not layers and not (plate and os.path.exists(plate) and on('background')):
         return None
 
-    from helpers.compositor import base_canvas, paste_acetates
+    from helpers.compositor import base_canvas, paste_acetates, collect_letters, paste_letters
     src, _ = _resolve_layer_source(board, scene, storage, board.series_id, 'background')
     base = base_canvas(board.aspect.value, src if (src and on('background')) else None)
     paste_acetates(base, board.aspect.value,
                    [(path, {**dflt, **(blk.get(key) or {})}) for key, path, dflt in layers])
+    # the author's blocked letters ride the rough too, so the inker sees
+    # where the balloons and captions land (placeholders never composite)
+    paste_letters(base, board.aspect.value, collect_letters(board))
 
     figures_dir = os.path.join(os.path.dirname(obj_to_imagepath(obj=board, base_path=storage.base_path)), "figures")
     os.makedirs(figures_dir, exist_ok=True)
@@ -1986,13 +1989,20 @@ def preflight_issue(wrapper: RunContextWrapper[APPState], series_id: str, issue_
 
     # PLACEHOLDER LETTERING is a print-killer: the table's scaffold text must
     # never reach the book
+    from helpers.compositor import is_placeholder
     placeholders = []
     for scene, scene_panels in _reading_order(storage, series_id, issue_id):
         for p in scene_panels:
             texts = [d.text for d in (p.dialogue or [])] + [n.text for n in (p.narration or [])]
-            if any(t.strip().rstrip('…').lower() in ('say something', 'narration') for t in texts if t):
+            if any(is_placeholder(t) for t in texts):
                 placeholders.append(f"panel {p.panel_number} of scene '{scene.name}' still has "
                                     f"placeholder lettering — write the real words before it prints")
+    for c in storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id}):
+        texts = [d.text for d in (getattr(c, 'dialogue', None) or [])] + \
+                [n.text for n in (getattr(c, 'narration', None) or [])]
+        if any(is_placeholder(t) for t in texts):
+            placeholders.append(f"the {c.location.value} cover still has placeholder lettering — "
+                                f"write the real words before it prints")
     missing = missing + placeholders
 
     report = [f"Rendered panels: {len(panels)}",

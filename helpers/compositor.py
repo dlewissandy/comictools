@@ -24,6 +24,141 @@ def base_canvas(aspect: str, background: str | None, transparent: bool = False):
     return Image.new('RGBA', DIMS[aspect], (0, 0, 0, 0) if transparent else PAPER)
 
 
+def is_placeholder(text: str | None) -> bool:
+    """Scaffold text the table lays down before the author writes — it must
+    never reach a composite, a render brief, or the printed book."""
+    return bool(text) and text.strip().rstrip('…').strip().lower() in ("say something", "narration")
+
+
+def collect_letters(board) -> list[dict]:
+    """The board's letters with their table blocking resolved — the same
+    defaults the rough displays, so a composite matches what the author saw.
+    Letters the author switched off and unwritten placeholders are skipped
+    (the guard against printing the table's training wheels)."""
+    if not hasattr(board, 'dialogue'):
+        return []
+    blk = getattr(board, 'figure_blocking', None) or {}
+
+    def b_of(key):
+        return blk.get(key) or {}
+
+    letters = []
+    narration = getattr(board, 'narration', None) or []
+    for pos, defaults, cap in (('top', lambda i: (2, 88 - i * 12), 2),
+                               ('bottom', lambda i: (2, 4), 1)):
+        for i, n in enumerate([n for n in narration if n.position.value == pos][:cap]):
+            b = b_of(f'caption/{pos}/{i}')
+            if not b.get('on', 1) or is_placeholder(n.text):
+                continue
+            dx, dy = defaults(i)
+            letters.append({"kind": "caption", "text": n.text,
+                            "x": b.get('x', dx), "y": b.get('y', dy), "fs": b.get('fs', 11)})
+    for i, d in enumerate((getattr(board, 'dialogue', None) or [])[:4]):
+        b = b_of(f'balloon/{i}')
+        if not b.get('on', 1) or is_placeholder(d.text):
+            continue
+        # the balloon hangs near its speaker when they're on the table
+        speaker = next((b_of(f"{r.character_id}/{r.variant_id}")
+                        for r in (getattr(board, 'character_references', None) or [])
+                        if r.character_id == d.character_id), {})
+        x = b.get('x', speaker.get('x', 25 + 22 * i))
+        y = b.get('y', 72 - (i % 2) * 14)
+        letters.append({"kind": "balloon", "text": d.text, "x": x, "y": y,
+                        "fs": b.get('fs', 11), "emphasis": d.emphasis.value,
+                        "tx": b.get('tx', x), "ty": b.get('ty', max(y - 14, 2))})
+    return letters
+
+
+def _letter_font(size: int):
+    """Comic lettering when the system has it, sans otherwise."""
+    from PIL import ImageFont
+    for name in ("Comic Sans MS.ttf", "Chalkboard.ttc", "Helvetica.ttc", "Arial.ttf", "DejaVuSans.ttf"):
+        try:
+            return ImageFont.truetype(name, size)
+        except OSError:
+            continue
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def paste_letters(base, aspect: str, letters: list[dict]) -> None:
+    """Draw caption boxes and balloons over the composite the way the rough
+    shows them: left/bottom-anchored percents, font scaled to the canvas,
+    speech tails aimed where the author dragged them."""
+    from PIL import ImageDraw
+    if not letters:
+        return
+    W, H = DIMS[aspect]
+    draw = ImageDraw.Draw(base)
+    INK = (28, 26, 23, 255)
+
+    def wrap(text, font, max_w):
+        lines, line = [], ""
+        for word in text.split():
+            trial = f"{line} {word}".strip()
+            if draw.textlength(trial, font=font) <= max_w or not line:
+                line = trial
+            else:
+                lines.append(line)
+                line = word
+        return lines + ([line] if line else [])
+
+    for L in letters:
+        emphasis = L.get('emphasis', '')
+        px = max(14, round(float(L.get('fs', 11)) * H / 520))
+        if emphasis in ('shout', 'sound effect'):
+            px = round(px * 1.35)
+        font = _letter_font(px)
+        lines = wrap(L['text'], font, W * (0.34 if L['kind'] == 'balloon' else 0.6))
+        line_h = round(px * 1.3)
+        text_w = max(draw.textlength(l, font=font) for l in lines)
+        pad = round(px * 0.7)
+        x0 = W * float(L['x']) / 100
+        y1 = H - H * float(L['y']) / 100          # the letter's bottom edge
+        box = (x0, y1 - line_h * len(lines) - 2 * pad, x0 + text_w + 2 * pad, y1)
+
+        if L['kind'] == 'caption':
+            draw.rectangle(box, fill=(253, 244, 198, 255), outline=INK, width=3)
+        elif emphasis == 'sound effect':
+            pass                                   # raw display lettering, no bubble
+        else:
+            radius = min(round(px * 1.2), round((box[3] - box[1]) / 2))
+            tip = (W * float(L.get('tx', L['x'])) / 100, H - H * float(L.get('ty', 0)) / 100)
+            cx = (box[0] + box[2]) / 2
+            if emphasis == 'thought':
+                # a chain of shrinking thought-puffs toward the thinker
+                for t, r in ((0.35, px * 0.45), (0.65, px * 0.3), (0.9, px * 0.18)):
+                    px_, py_ = cx + (tip[0] - cx) * t, box[3] + (tip[1] - box[3]) * t
+                    draw.ellipse([px_ - r, py_ - r, px_ + r, py_ + r],
+                                 fill=(255, 255, 255, 255), outline=INK, width=2)
+            elif tip[1] > box[3]:
+                draw.polygon([(cx - px * 0.6, box[3] - 2), (cx + px * 0.6, box[3] - 2), tip],
+                             fill=(255, 255, 255, 255), outline=INK)
+            outline_w = 5 if emphasis == 'shout' else 2 if emphasis == 'whisper' else 3
+            draw.rounded_rectangle(box, radius=radius, fill=(255, 255, 255, 255),
+                                   outline=INK, width=outline_w)
+            if emphasis != 'thought' and tip[1] > box[3]:
+                # reopen the bubble where the tail leaves it
+                draw.polygon([(cx - px * 0.6 + 3, box[3] - outline_w),
+                              (cx + px * 0.6 - 3, box[3] - outline_w),
+                              (cx, box[3] + 2)], fill=(255, 255, 255, 255))
+
+        fill = (110, 106, 100, 255) if emphasis == 'whisper' else INK
+        stroke = {}
+        if emphasis == 'sound effect':
+            # display lettering has no bubble to read against — knock it out
+            # of the art with comic-yellow fill and a heavy ink stroke
+            fill = (252, 216, 56, 255)
+            stroke = {"stroke_width": max(3, px // 6), "stroke_fill": INK}
+        ty0 = box[1] + pad
+        for line in lines:
+            lw = draw.textlength(line, font=font)
+            draw.text(((box[0] + box[2] - lw) / 2, ty0), line, font=font, fill=fill, **stroke)
+            ty0 += line_h
+
+
 def paste_acetates(base, aspect: str, layers) -> list[tuple]:
     """Paste acetates in z order, exactly as the rough displays them.
 
