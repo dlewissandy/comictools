@@ -2004,6 +2004,27 @@ def light_table(state: APPState, panel, scene, setting,
                         .tooltip('A foreground prop — one click from the prop shop').on('click', lambda _: pick_prop())
                 ui.button(icon='landscape').props('flat round dense size=sm') \
                     .tooltip('A background — one click from the settings').on('click', lambda _: pick_background())
+                if cover_mode:
+                    # THE MASTHEAD: lay the series title art as an acetate —
+                    # art-only covers wear the title as a composited overlay
+                    def lay_title():
+                        from schema import Series as _Series
+                        ser = storage.read_object(cls=_Series, primary_key={"series_id": series_id})
+                        arts = (getattr(ser, 'title_images', {}) or {}) if ser else {}
+                        art = arts.get(getattr(scene, 'style_id', None)) or next(
+                            (i for i in arts.values() if i and os.path.exists(i)), None)
+                        if not (art and os.path.exists(art)):
+                            ui.notify("No title art yet — letter the series masthead first "
+                                      "(it lives on the series page).", type='warning')
+                            return
+                        panel.figure_images['element/series-title'] = art
+                        panel.figure_blocking['element/series-title'] = {"x": 50, "y": 68, "h": 24, "z": 60}
+                        storage.update_object(panel)
+                        _receipt('🏷 laid the series title masthead on the table')
+                        state.refresh_details()
+                    ui.button(icon='title').props('flat round dense size=sm') \
+                        .tooltip('The series title masthead — lay it on the cover as an acetate') \
+                        .on('click', lambda _: lay_title())
                 def new_letters():
                     from schema.dialog import Dialogue, Narration, DialogueEmphasis, NarrationPosition
                     with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 380px;'):

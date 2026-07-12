@@ -81,6 +81,49 @@ def view_series(state: APPState):
                     ui.label("Click to select").classes('text-gray-500').style('text-align: center;')
             pub_sel = state.selection + [SelectionItem(name="Pick Publisher", id=get_id(), kind=SelectedKind.PICK_PUBLISHER)]
             pub_card.on('click', lambda _, s=pub_sel: state.change_selection(new=s))
+
+        # THE TITLE ART: the series masthead, hand-lettered per style — the
+        # reference every cover's title lettering is held to.  Ghost cards
+        # letter the styles the series' issues use but don't have art for.
+        from schema import ComicStyle
+        from gui.elements import HEADER_CLASSES
+
+        def ink_title(st):
+            from agentic.tools.imaging import generate_series_title_art_body
+            from helpers.render_queue import enqueue_renders
+            ui.notify(f"Lettering the {series.name.title()} masthead in {st.name.title()} — "
+                      f"it lands here when it's done.", type='info')
+            enqueue_renders(state, [(
+                f"title art — {series.name} in {st.name}",
+                lambda: generate_series_title_art_body(state, series.series_id, st.style_id),
+            )], role='the Letterer')
+
+        titled = {sid: img for sid, img in (getattr(series, 'title_images', {}) or {}).items()
+                  if img and os.path.exists(img)}
+        used_styles = {i.style_id for i in storage.read_all_objects(Issue, primary_key={"series_id": series.series_id})
+                       if i.style_id} | set(titled.keys())
+        title_entries = [(st, titled.get(st.style_id))
+                         for st in storage.read_all_objects(ComicStyle, order_by='name')
+                         if st.style_id in used_styles]
+        for ti, (st, timg) in enumerate(title_entries):
+            with packer.place_cell([(3, 2), (4, 8/3), (6, 4)], fudge=False):
+                with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'
+                                       + ('' if timg else ' ghost-card')):
+                    if ti == 0:
+                        with ui.element('div').classes('panel-caption'):
+                            _cap("Title Art", "I would like new title art (the series masthead) for this series.")()
+                    ui.label(st.name.title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                    if timg:
+                        ui.image(source=timg).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                    else:
+                        art = st.image.get('art') if isinstance(st.image, dict) else st.image
+                        if art and os.path.exists(art):
+                            ui.image(source=art).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                        with ui.column().classes('absolute inset-0 items-center justify-center z-10'):
+                            ui.button(f'Letter it in {st.name.title()}', icon='brush') \
+                                .props('unelevated dense no-caps size=sm') \
+                                .tooltip('Letter the series masthead in this style') \
+                                .on('click', lambda _, st=st: ink_title(st))
         if True:
             def _issue_label(_i, issue):
                 from schema import SceneModel, Panel

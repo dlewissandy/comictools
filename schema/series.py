@@ -8,6 +8,12 @@ class Series(BaseModel):
     description: str | None = Field(..., description="A short paragraph describing the comic book series")
     publisher_id: Optional[str] = Field(..., description="The publisher of the comic book.  Optional.  Default to None")
 
+    # THE TITLE ART: the series masthead (hand-lettered wordmark of the
+    # title), one per comic style, on transparent acetate — the reference
+    # art every cover's title lettering is held to, and an overlay for
+    # art-only covers.  Keyed by style_id.
+    title_images: dict[str, str] = Field(default_factory=dict, description="The series title masthead art, keyed by comic style id.  Transparent wordmark images used as the official title lettering reference on covers.  Default to empty dict.")
+
     @property
     def primary_key(self) -> dict[str, str]:
         """

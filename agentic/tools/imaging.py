@@ -420,12 +420,22 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
             + ("The NEXT reference image is the setting's master background — same architecture, "
                "same palette, reframed as the composition requires.\n" if background_first else ""))
 
+    # THE OFFICIAL MASTHEAD: when the series has title art in this style,
+    # the cover's title lettering is held to it
+    masthead_guidance = ""
+    title_art = (series.title_images or {}).get(cover.style_id)
+    if title_art and os.path.exists(title_art):
+        reference_image_locators.append(title_art)
+        masthead_guidance = ("One reference image shows THE OFFICIAL MASTHEAD — the series title "
+                             "wordmark.  Wherever the design shows the series title, reproduce that "
+                             "exact lettering.\n")
+
     # honor whatever the author arranged on the cover's light table
     table_layout = _table_layout_brief(cover)
 
     prompt = f"""
     Create a comic book {location_name} cover.   The image should be have a {cover.aspect.value} orientation/aspect ratio.
-{background_guidance}
+{background_guidance}{masthead_guidance}
 
 # Series
 {text_elements}
@@ -1503,6 +1513,73 @@ def outpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str
 # consistent across every panel that takes place there.
 # -------------------------------------------------------------------------
 from schema import Setting, SceneModel
+
+def generate_series_title_art_body(state, series_id: str, style_id: str) -> str:
+    """Render THE TITLE ART: the series masthead — the title hand-lettered in
+    one comic style on transparent acetate.  Stored on the series keyed by
+    style; covers hold their title lettering to it, and art-only covers can
+    wear it as an overlay on the light table."""
+    from helpers.generator import invoke_edit_image_api, invoke_generate_image_api
+
+    storage: GenericStorage = state.storage
+    series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
+    if series is None:
+        return f"Series '{series_id}' not found."
+    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
+    if style is None:
+        return f"Style '{style_id}' not found."
+
+    prompt = f"""Design THE MASTHEAD for a comic book series: the title
+"{series.name}" as hand-lettered display lettering — a comic logo/wordmark.
+
+Wide banner composition, lettering only: NO characters, NO scenery, NO frame,
+NO other text.  Bold and readable at cover size, with the inking, palette and
+energy of the comic style below.  COMPLETELY TRANSPARENT background — this is
+an acetate overlay to be composited onto cover art.
+
+{format_comic_style(style, include_bubble_styles=False, include_character_style=False, heading_level=1)}
+"""
+    art = style.image.get('art') if isinstance(style.image, dict) else style.image
+    refs = [art] if art and os.path.exists(art) else []
+    refs.extend(storage.list_uploads(obj=series))
+    if refs:
+        image_bytes = invoke_edit_image_api(
+            prompt, reference_images=refs, size="1536x1024",
+            quality=IMAGE_QUALITY.HIGH, background="transparent")
+    else:
+        image_bytes = invoke_generate_image_api(prompt, size="1536x1024",
+                                                quality=IMAGE_QUALITY.HIGH)
+    locator = storage.upload_binary_image(obj=series, data=image_bytes)
+
+    # persist onto a FRESH read — renders take minutes
+    fresh = storage.read_object(cls=Series, primary_key={"series_id": series_id}) or series
+    fresh.title_images[style_id] = locator
+    storage.update_object(data=fresh)
+    state.is_dirty = True
+    return f"Title art for '{series.name}' inked in style '{style_id}': {locator}"
+
+
+@function_tool
+def generate_series_title_art(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    style_id: str,
+) -> str:
+    """
+    Render THE TITLE ART for a series: the series title hand-lettered as a comic
+    masthead (logo/wordmark) in the given style, on a transparent background.
+    Stored on the series keyed by style.   Covers hold their title lettering to
+    this reference, and art-only covers can wear it as a composited overlay.
+
+    Args:
+        series_id: The ID of the series whose title to letter.
+        style_id: The comic style to letter the masthead in.
+
+    Returns:
+        A status message with the locator of the rendered title art.
+    """
+    return generate_series_title_art_body(wrapper.context, series_id, style_id)
+
 
 def generate_setting_background_body(state, series_id: str, setting_id: str, style_id: str) -> str:
     """Render a setting's master background in one style — callable directly

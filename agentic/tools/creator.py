@@ -641,36 +641,18 @@ def create_character(wrapper: RunContextWrapper[APPState], series_id: str, chara
         obj=character
     )
 
-@function_tool
-def create_cover(
-    wrapper: RunContextWrapper[APPState], 
+def create_cover_body(
+    state: APPState,
     series_id: str,
     issue_id: str,
-    setting: CoverLocation,
-    cover_id: Optional[str],
-    description: str,
-    characters: list[CharacterRef] = []
+    location: CoverLocation,
+    cover_id: Optional[str] = None,
+    description: str = "",
+    characters: Optional[list[CharacterRef]] = None,
 ) -> str:
-    """
-    Create a cover for the specified issue.    The foreground and optional background descriptions
-    will be used by artists to create the cover image, and should be detailed enough to ensure
-    that the cover could be faithfully rendered by an artist.   Focus on visual elements, composition,
-    and be specific.   Different artists given the same description should be able to produce
-    similar covers, even if they are not identical.
-
-    Args:
-        series_id: The ID of the comic series to create the cover for.
-        issue_id: The ID of the comic issue to create the cover for.
-        setting: The setting metadata for the cover. MUST BE ONE OF "front", "back", "inside-front", "inside-back".
-        cover_id: Optional unique identifier for the cover. If not provided, a unique ID will be generated.
-        description: A detailed description of the visual elements in the cover.
-        characters: A list of character references to include on the cover.   These references should
-            be characters that are in the series.   VERIFY that they exist to avoid errors.
-    Returns:
-        A confirmation message indicating the cover was created successfully.
-    """
+    """Create a cover on an issue — callable from the GUI or via the tool."""
+    characters = characters or []
     try:
-        state: APPState = wrapper.context
         storage: GenericStorage = state.storage
 
         # Normalize the identifiers
@@ -705,30 +687,72 @@ def create_cover(
                 return f"Character with ID '{char.character_id}' with Variant ID '{char.variant_id}' not found in series '{series.name}'.  The available variants (and their IDs) are: {existing_variant_names_and_ids}."
 
 
-        new_cover_id = normalize_id(cover_id) if cover_id else normalize_id(f"{setting.value}-{uuid4().hex[:8]}")
+        # the first cover at a location gets the friendly id ('front');
+        # extras get a suffix.  NOTE: the schema field is `location` — a
+        # `setting=` kwarg here once broke every cover creation.
+        if cover_id:
+            new_cover_id = normalize_id(cover_id)
+        elif storage.read_object(cls=Cover, primary_key={
+                "series_id": series_id, "issue_id": issue_id, "cover_id": location.value}) is None:
+            new_cover_id = location.value
+        else:
+            new_cover_id = normalize_id(f"{location.value}-{uuid4().hex[:8]}")
         cover = Cover(
             cover_id=new_cover_id,
-            setting=setting,
+            location=location,
             issue_id=issue_id,
             series_id=series_id,
             character_references=characters,
-            style_id=issue.style_id,
+            style_id=issue.style_id or "vintage-four-color",
             aspect=FrameLayout.PORTRAIT,
             description=description,
             image=None,  # Image will be set later if needed
             reference_images=[]  # Reference images can be added later
         )
 
-        return creator(
-            wrapper=wrapper,
-            obj=cover,
-            overwrite=True,
-        )
+        class _W:  # creator() expects a wrapper-shaped object
+            context = state
+        result = creator(wrapper=_W(), obj=cover, overwrite=True)
+        if isinstance(result, str):
+            return result
+        return f"Cover '{new_cover_id}' ({location.value}) created for issue '{issue.name}'."
     except Exception as e:
          # Get the full traceback
         tb = traceback.format_exc()
         logger.error(f"Error creating cover: {tb}")
         return f"Error creating cover: {str(e)}\n{tb}"
+
+
+@function_tool
+def create_cover(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    issue_id: str,
+    location: CoverLocation,
+    cover_id: Optional[str] = None,
+    description: str = "",
+    characters: Optional[list[CharacterRef]] = None,
+) -> str:
+    """
+    Create a cover for the specified issue.    The description will be used by artists to
+    create the cover image, and should be detailed enough that different artists would
+    produce similar covers.   Focus on visual elements and composition; be specific.
+
+    Args:
+        series_id: The ID of the comic series to create the cover for.
+        issue_id: The ID of the comic issue to create the cover for.
+        location: Where the cover sits on the book: "front", "back", "inside-front" or "inside-back".
+        cover_id: Optional unique identifier for the cover. If not provided, the location is used
+            (or a unique suffix when that location already has a cover).
+        description: A detailed description of the visual elements in the cover.
+        characters: A list of character references to include on the cover.   These references should
+            be characters that are in the series.   VERIFY that they exist to avoid errors.
+    Returns:
+        A confirmation message indicating the cover was created successfully.
+    """
+    return create_cover_body(wrapper.context, series_id, issue_id, location,
+                             cover_id, description, characters)
+
 
 def create_scene_body(state: APPState,
         name: str,

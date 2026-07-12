@@ -123,6 +123,9 @@ IMAGE_PATH_TEMPLATES["Outfit"] = os.path.join(PATH_TEMPLATES["Outfit"], "images"
 # Setting background plates are style-keyed, like styled variants.
 IMAGE_PATH_TEMPLATES[SelectedKind.SETTING.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SETTING.value], "images")
 IMAGE_PATH_TEMPLATES[Setting.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.SETTING.value]
+# Series images: THE TITLE ART (style-keyed masthead wordmarks).
+IMAGE_PATH_TEMPLATES[SelectedKind.SERIES.value] = os.path.join(PATH_TEMPLATES[SelectedKind.SERIES.value], "images")
+IMAGE_PATH_TEMPLATES[Series.__name__] = IMAGE_PATH_TEMPLATES[SelectedKind.SERIES.value]
 
 UPLOAD_PATH_TEMPLATES = {}
 UPLOAD_PATH_TEMPLATES[SelectedKind.PANEL.value] = os.path.join(PATH_TEMPLATES[SelectedKind.PANEL.value], "uploads")
