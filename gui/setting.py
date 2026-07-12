@@ -128,12 +128,32 @@ def view_setting(state: APPState):
                     lambda: generate_setting_background_body(state, series_id, setting.setting_id, st.style_id),
                 )], role='the Background Artist')
 
+            styles_by_id = {st.style_id: st for st in storage.read_all_objects(ComicStyle)}
+
+            def heal_master(img, style_id):
+                # the same inpaint/outpaint editor acetates get — masters are
+                # editable art, not just render targets
+                from gui.selection import SelectionItem as _SI, SelectedKind as _SK
+                itm = _SI(name=f"Edit {setting.name} master ({style_id.replace('-', ' ')})",
+                          id=img, kind=_SK.IMAGE_EDITOR)
+                state.change_selection(new=[*state.selection, itm])
+
             with ruled_page() as packer:
                 for style_id, img in rendered.items():
                     with packer.place_cell([(4, 8/3), (3, 2), (6, 4)], fudge=False):
                         with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'):
                             ui.label(style_id.replace('-', ' ').title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
                             ui.image(source=img).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                            with ui.row().classes('absolute top-1 right-1 z-10 items-center').style('gap: 4px;'):
+                                ui.button(icon='healing').props('flat round dense size=xs') \
+                                    .classes('bg-white/70 dark:bg-black/50') \
+                                    .tooltip('Edit this master — inpaint, outpaint, replace details') \
+                                    .on('click.stop', lambda _, i=img, sid=style_id: heal_master(i, sid))
+                                if style_id in styles_by_id:
+                                    ui.button(icon='brush').props('flat round dense size=xs') \
+                                        .classes('bg-white/70 dark:bg-black/50') \
+                                        .tooltip('Re-ink this master from scratch in the same style') \
+                                        .on('click.stop', lambda _, st=styles_by_id[style_id]: ink_in_style(st))
                 for st in storage.read_all_objects(ComicStyle, order_by='name'):
                     if st.style_id in rendered:
                         continue
