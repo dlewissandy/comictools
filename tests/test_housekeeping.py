@@ -68,15 +68,12 @@ def test_dedupe_props_merges_and_repoints(storage):
     out = dedupe_props.on_invoke_tool  # FunctionTool
     # call through the raw python function for simplicity
     fn = getattr(dedupe_props, 'func', None)
-    if fn is None:   # agents SDK stores the original under __wrapped__ or _func
-        import inspect
+    if fn is None:   # agents SDK: invoke through the tool wrapper (fresh loop —
+        import asyncio  # the suite's async UI tests leave no usable default loop)
         fn = dedupe_props.on_invoke_tool
-        import asyncio
-        res = asyncio.get_event_loop().run_until_complete(
-            fn(wrapper, _json.dumps({"series_id": WL, "confirm": False})))
+        res = asyncio.run(fn(wrapper, _json.dumps({"series_id": WL, "confirm": False})))
         assert "duplicated" in res
-        res = asyncio.get_event_loop().run_until_complete(
-            fn(wrapper, _json.dumps({"series_id": WL, "confirm": True})))
+        res = asyncio.run(fn(wrapper, _json.dumps({"series_id": WL, "confirm": True})))
         assert "struck" in res
     survivors = [p for p in storage.read_all_objects(PropAsset, {"series_id": WL})
                  if p.name == "Glowing Eyes" and p.prop_id in ("glow-1", "glow-2")]
