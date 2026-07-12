@@ -615,19 +615,44 @@ def table_receipt(state, text: str, undo=None):
         pass
 
 
+def pose_pending_key(board, character_id: str, variant_id: str) -> str:
+    return f"{board.id}/{character_id}/{variant_id}"
+
+
 def pose_figure_bg(state, board, character_id: str, variant_id: str,
                    pose_direction: str | None = None):
-    """Queue a posed-acetate render for a figure on this board (panel or cover)."""
+    """Queue a posed-acetate render for a figure on this board (panel or
+    cover).  One pose per figure at a time: while it's on the drawing board
+    the figure row shows a spinner and a second ask is refused — no more
+    double renders from an impatient second click."""
     from agentic.tools.imaging import generate_figure_acetate_body
     from helpers.render_queue import enqueue_renders
+    pending = getattr(state, '_poses_pending', None)
+    if pending is None:
+        pending = set()
+        try:
+            state._poses_pending = pending
+        except Exception:
+            pass
+    pkey = pose_pending_key(board, character_id, variant_id)
+    if pkey in pending:
+        ui.notify(f"{character_id.replace('-', ' ').title()} is already on the drawing board — "
+                  f"the pose lands when it's ready.", type='warning')
+        return
+    pending.add(pkey)
     kw = ({"cover_id": board.cover_id} if is_cover(board)
           else {"scene_id": board.scene_id, "panel_id": board.panel_id})
+
+    def job():
+        try:
+            return generate_figure_acetate_body(
+                state, board.series_id, board.issue_id,
+                character_id=character_id, variant_id=variant_id,
+                pose_direction=pose_direction, **kw)
+        finally:
+            pending.discard(pkey)
     enqueue_renders(state, [(
-        f"posing {character_id} for {board_label(board)}",
-        lambda: generate_figure_acetate_body(
-            state, board.series_id, board.issue_id,
-            character_id=character_id, variant_id=variant_id,
-            pose_direction=pose_direction, **kw),
+        f"posing {character_id} for {board_label(board)}", job,
     )], role="the Penciller")
 
 
@@ -668,6 +693,30 @@ def lay_prop_on_table(state, scene, prop_asset):
         state.storage.update_object(scene)
         table_receipt(state, f"🎪 laid the **{prop_asset.name}** prop on the table")
     state.refresh_details()
+
+
+def lay_prop_acetate(state, board, prop_asset, style_id: str | None = None) -> bool:
+    """Lay a prop's reference art on the board as an element acetate — covers
+    have no scene props, so the art itself goes on the table."""
+    from agentic.tools.normalization import normalize_id
+    imgs = prop_asset.images or {}
+    img = imgs.get(style_id) or next((i for i in imgs.values() if i and os.path.exists(i)), None)
+    if not (img and os.path.exists(img)):
+        ui.notify(f"No reference art for {prop_asset.name} yet — ink it on the prop page first.",
+                  type='warning')
+        return False
+    slug = normalize_id(prop_asset.name)
+    key = f'element/{slug}'
+    n = 2
+    while key in (board.figure_images or {}):
+        key = f'element/{slug}-{n}'
+        n += 1
+    board.figure_images[key] = img
+    board.figure_blocking[key] = {"x": 50, "y": 6, "h": 28, "z": 55}
+    state.storage.update_object(board)
+    table_receipt(state, f"🎪 laid **{prop_asset.name}** on the table as an acetate")
+    state.refresh_details()
+    return True
 
 
 def wear_style_on_table(state, scene, style):
@@ -1143,17 +1192,38 @@ def light_table(state: APPState, panel, scene, setting,
 
     # ---- POSE: describe the pose first, then render in the background ----
     def pose_figure(character_id: str, variant_id: str, pose_direction: str | None = None):
-        ui.notify(f"Posing {character_id.replace('-', ' ')} — the acetate lands on the table when it's ready.",
-                  type='info')
         pose_figure_bg(state, panel, character_id, variant_id, pose_direction)
+        # rebuild so the figure row shows its posing… spinner right away
+        state.refresh_details()
 
     async def split_flow(layer_key: str, source_path: str):
         import asyncio
         from agentic.tools.imaging import recognize_layer_entities, split_layer_body, series_cast_roster
         from helpers.render_queue import enqueue_renders
-        ui.notify('Reading the layer — recognizing its elements…', type='info')
-        roster = series_cast_roster(storage, series_id)
-        entities = await asyncio.to_thread(recognize_layer_entities, source_path, 8, roster)
+        # ALWAYS show the thinking: a persistent busy card while the vision
+        # pass reads the layer (a toast fades long before the ~10s it takes),
+        # and the drawing-board chip counts it too
+        pending = getattr(state, '_render_pending', None)
+        if pending is None:
+            pending = []
+            state._render_pending = pending
+        busy_label = f"reading the '{layer_key}' layer"
+        pending.append(busy_label)
+        with ui.dialog().props('persistent') as busy, \
+                ui.card().classes('soft-card').style('min-width: 340px;'):
+            with ui.row().classes('items-center').style('gap: 12px;'):
+                ui.spinner('dots', size='2em', color='primary')
+                ui.label('Reading the layer — recognizing its elements…').classes('text-sm')
+        busy.open()
+        try:
+            roster = series_cast_roster(storage, series_id)
+            entities = await asyncio.to_thread(recognize_layer_entities, source_path, 8, roster)
+        finally:
+            busy.close()
+            try:
+                pending.remove(busy_label)
+            except ValueError:
+                pass
         if not entities:
             ui.notify('No liftable elements recognized on that layer.', type='warning')
             return
@@ -1659,10 +1729,18 @@ def light_table(state: APPState, panel, scene, setting,
                     else:
                         ui.icon('person').classes('text-lg').style('width: 40px; text-align: center;')
                     name_lbl = f["ref"].character_id.replace('-', ' ').title()
-                    ui.label(name_lbl + ('' if f["posed"] else ' — unposed')).classes('text-sm')
-                    ui.button(icon='accessibility_new').props('flat round dense size=xs') \
-                        .tooltip('Pose this figure — describe the pose' if not f["posed"] else 'Re-pose — describe the new pose') \
-                        .on('click', lambda _, r=f["ref"]: pose_dialog(r.character_id, r.variant_id))
+                    posing = pose_pending_key(panel, f["ref"].character_id, f["ref"].variant_id) \
+                        in (getattr(state, '_poses_pending', None) or set())
+                    ui.label(name_lbl + (' — posing…' if posing
+                                         else ('' if f["posed"] else ' — unposed'))).classes('text-sm')
+                    if posing:
+                        # THE POSE IS ON THE DRAWING BOARD — say so, in place
+                        ui.spinner('dots', size='1.2em', color='primary') \
+                            .tooltip("On the drawing board — the acetate lands here when it's ready")
+                    else:
+                        ui.button(icon='accessibility_new').props('flat round dense size=xs') \
+                            .tooltip('Pose this figure — describe the pose' if not f["posed"] else 'Re-pose — describe the new pose') \
+                            .on('click', lambda _, r=f["ref"]: pose_dialog(r.character_id, r.variant_id))
                     mirror_btn(f)
                     if f["posed"]:
                         ui.button(icon='content_cut').props('flat round dense size=xs') \
@@ -1973,15 +2051,50 @@ def light_table(state: APPState, panel, scene, setting,
                                 dlg.close()
                                 lay_background_on_table(state, scene, panel, s)
                             card.on('click', lambda _, s=s: lay(s))
+
+                    # BUILD A NEW SET right from the board: name it, sketch
+                    # it, and its master background goes straight to the
+                    # drawing board in this board's style
+                    ui.label('…or build a new set').classes('caption-box caption-box-sm q-mt-md')
+                    s_nm = ui.input(placeholder='Name the setting — e.g. The Hall of Mirrors') \
+                        .props('outlined dense').classes('w-full')
+                    s_desc = ui.textarea(placeholder='Describe it: architecture, light, mood, era…') \
+                        .props('outlined dense rows=2').classes('w-full')
+                    s_int = ui.switch('interior', value=False).props('dense')
+
+                    def build_set():
+                        from agentic.tools.normalization import normalize_id as _nid
+                        name = (s_nm.value or '').strip()
+                        if not name:
+                            ui.notify('Name the setting first.', type='warning')
+                            return
+                        new_s = Setting(setting_id=_nid(name), series_id=series_id, name=name,
+                                        description=(s_desc.value or '').strip() or name,
+                                        interior=bool(s_int.value), props=[], images={})
+                        storage.create_object(data=new_s)
+                        dlg.close()
+                        lay_background_on_table(state, scene, panel, new_s)
+                        style_id = getattr(scene, 'style_id', None) or 'vintage-four-color'
+                        from agentic.tools.imaging import generate_setting_background_body
+                        from helpers.render_queue import enqueue_renders
+                        enqueue_renders(state, [(
+                            f"master background — {name} in {style_id}",
+                            lambda: generate_setting_background_body(state, series_id,
+                                                                     new_s.setting_id, style_id),
+                        )], role='the Background Artist')
+                    ui.button('Build the set & ink its master', icon='construction') \
+                        .props('unelevated dense no-caps').classes('q-mt-sm') \
+                        .on('click', lambda _: build_set())
                 dlg.open()
 
             def pick_prop():
+                from agentic.tools.normalization import normalize_id
                 with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 720px;'):
                     ui.label('Lay a prop on the table').classes('caption-box caption-box-sm')
-                    already = {p.name for p in (scene.props or [])} if scene is not None else set()
-                    with ui.row().classes('w-full').style('gap: 8px;'):
+                    already = {p.name for p in (getattr(scene, 'props', None) or [])}
+                    with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
                         for pa in storage.read_all_objects(PropAsset, primary_key={"series_id": series_id}, order_by="name"):
-                            if pa.name in already:
+                            if not cover_mode and pa.name in already:
                                 continue
                             img = next((i for i in (pa.images or {}).values() if i and os.path.exists(i)), None)
                             with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 130px;') as card:
@@ -1991,17 +2104,72 @@ def light_table(state: APPState, panel, scene, setting,
 
                             def lay(pa=pa):
                                 dlg.close()
-                                lay_prop_on_table(state, scene, pa)
+                                if cover_mode:
+                                    # covers have no scene props: the art
+                                    # itself lands as an acetate
+                                    lay_prop_acetate(state, panel, pa, getattr(scene, 'style_id', None))
+                                else:
+                                    lay_prop_on_table(state, scene, pa)
                             card.on('click', lambda _, pa=pa: lay(pa))
+
+                    # CONJURE A NEW PROP from a prompt, right on the board —
+                    # the asset is created, its reference art goes to the
+                    # drawing board in this board's style
+                    ui.label('…or conjure a new prop').classes('caption-box caption-box-sm q-mt-md')
+                    nm = ui.input(placeholder='Name it — e.g. cracked crystal ball') \
+                        .props('outlined dense').classes('w-full')
+                    desc = ui.textarea(placeholder='Describe it: size, materials, colors, wear…') \
+                        .props('outlined dense rows=2').classes('w-full')
+
+                    def conjure():
+                        name = (nm.value or '').strip()
+                        if not name:
+                            ui.notify('Name the prop first.', type='warning')
+                            return
+                        description = (desc.value or '').strip() or name
+                        prop = PropAsset(prop_id=normalize_id(name), series_id=series_id,
+                                         name=name, description=description)
+                        storage.create_object(data=prop)
+                        dlg.close()
+                        if not cover_mode and scene is not None:
+                            scene.props = (scene.props or []) + [Prop(name=name, description=description)]
+                            storage.update_object(scene)
+                        _receipt(f"🎪 conjured the **{name}** prop — its reference art "
+                                 f"is on the drawing board…")
+                        style_id = getattr(scene, 'style_id', None) or 'vintage-four-color'
+
+                        def job(prop_id=prop.prop_id, style_id=style_id):
+                            from agentic.tools.imaging import render_prop_reference_body
+                            note = render_prop_reference_body(state, series_id, prop_id, style_id)
+                            if cover_mode:
+                                # the finished art lands straight on the cover
+                                fb = storage.read_object(cls=type(panel), primary_key=panel.primary_key)
+                                pa2 = storage.read_object(cls=PropAsset, primary_key={
+                                    "series_id": series_id, "prop_id": prop_id})
+                                img2 = ((pa2.images or {}).get(style_id)) if pa2 is not None else None
+                                if fb is not None and img2 and os.path.exists(img2):
+                                    k = f'element/{normalize_id(pa2.name)}'
+                                    if k not in (fb.figure_images or {}):
+                                        fb.figure_images[k] = img2
+                                        fb.figure_blocking[k] = {"x": 50, "y": 6, "h": 28, "z": 55}
+                                        storage.update_object(fb)
+                            return note
+                        from helpers.render_queue import enqueue_renders
+                        enqueue_renders(state, [(f"prop reference — {name} in {style_id}", job)],
+                                        role='the Prop Maker')
+                        state.refresh_details()
+                    ui.button('Conjure & ink its reference', icon='auto_fix_high') \
+                        .props('unelevated dense no-caps').classes('q-mt-sm') \
+                        .on('click', lambda _: conjure())
                 dlg.open()
 
             with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 2px;'):
                 ui.label('lay a new acetate:').classes('text-xs text-gray-500')
                 ui.button(icon='person_add').props('flat round dense size=sm') \
                     .tooltip('A figure — one click from the cast').on('click', lambda _: pick_figure())
-                if hasattr(scene, 'props'):   # covers have no scene props
-                    ui.button(icon='category').props('flat round dense size=sm') \
-                        .tooltip('A foreground prop — one click from the prop shop').on('click', lambda _: pick_prop())
+                ui.button(icon='category').props('flat round dense size=sm') \
+                    .tooltip('A prop — from the prop shop, or conjure a brand-new one') \
+                    .on('click', lambda _: pick_prop())
                 ui.button(icon='landscape').props('flat round dense size=sm') \
                     .tooltip('A background — one click from the settings').on('click', lambda _: pick_background())
                 if cover_mode:
@@ -2025,6 +2193,28 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.button(icon='title').props('flat round dense size=sm') \
                         .tooltip('The series title masthead — lay it on the cover as an acetate') \
                         .on('click', lambda _: lay_title())
+
+                    # THE PUBLISHER'S MARK: the little logo every cover wears
+                    def lay_publisher_mark():
+                        from schema import Publisher, Series as _Series
+                        ser = storage.read_object(cls=_Series, primary_key={"series_id": series_id})
+                        pub = storage.read_object(cls=Publisher, primary_key={
+                            "publisher_id": ser.publisher_id}) \
+                            if (ser is not None and ser.publisher_id) else None
+                        art = pub.image if (pub is not None and pub.image
+                                            and os.path.exists(pub.image)) else None
+                        if art is None:
+                            ui.notify("No publisher logo yet — generate one on the "
+                                      "publisher page first.", type='warning')
+                            return
+                        panel.figure_images['element/publisher-mark'] = art
+                        panel.figure_blocking['element/publisher-mark'] = {"x": 10, "y": 82, "h": 12, "z": 61}
+                        storage.update_object(panel)
+                        _receipt("🔖 laid the publisher's mark on the cover")
+                        state.refresh_details()
+                    ui.button(icon='workspace_premium').props('flat round dense size=sm') \
+                        .tooltip("The publisher's mark — lay the logo on the cover as an acetate") \
+                        .on('click', lambda _: lay_publisher_mark())
                 def new_letters():
                     from schema.dialog import Dialogue, Narration, DialogueEmphasis, NarrationPosition
                     with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 380px;'):

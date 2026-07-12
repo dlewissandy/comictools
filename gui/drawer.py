@@ -158,11 +158,9 @@ def build_asset_drawer(state):
                 # a tile lays its asset straight on the light table when a
                 # board (panel or cover) is open and the asset is from its
                 # series (styles are studio-wide); otherwise it asks the
-                # coauthor.  Covers have no scene props — that kind falls
-                # back to chat.
-                layable = ("character", "variant", "setting", "style") + \
-                          (("prop",) if hasattr(cur_scene, "props") else ())
-                direct = (cur_panel is not None and kind in layable
+                # coauthor
+                direct = (cur_panel is not None
+                          and kind in ("character", "variant", "setting", "prop", "style")
                           and (sid is None or sid == cur_panel.series_id))
                 with ui.element('div').classes('cursor-pointer').style(
                         'width: 31%; min-width: 130px;') as card:
@@ -210,7 +208,13 @@ def build_asset_drawer(state):
                             "series_id": sid, "prop_id": aid})
                         if pa is None:
                             return False
-                        lt.lay_prop_on_table(state, cur_scene, pa)
+                        if hasattr(cur_scene, "props"):
+                            lt.lay_prop_on_table(state, cur_scene, pa)
+                        else:
+                            # a cover: the prop's art itself lands as an acetate
+                            if not lt.lay_prop_acetate(state, cur_panel, pa,
+                                                       getattr(cur_scene, 'style_id', None)):
+                                return False
                     elif kind == "style":
                         if cur_scene is None:
                             return False

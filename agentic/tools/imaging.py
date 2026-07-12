@@ -2022,10 +2022,24 @@ using this reference match the rest of the issue.
         reference_images=reference_images,
         aspect_ratio=FrameLayout.SQUARE, image_quality=IMAGE_QUALITY.HIGH,
         name=f"{asset_id}-{style_id}-reference")
-    asset.images[style_id] = locator
-    storage.update_object(data=asset)
+    # persist onto a FRESH read — renders take minutes
+    fresh = storage.read_object(cls, {"series_id": series_id, key: asset_id}) or asset
+    fresh.images[style_id] = locator
+    storage.update_object(data=fresh)
     state.is_dirty = True
     return f"Reference art for '{asset.name}' rendered in style '{style_id}': {locator}"
+
+
+def render_prop_reference_body(state, series_id: str, prop_id: str, style_id: str) -> str:
+    """Render a prop's reference art — GUI-callable (background job)."""
+    from schema import PropAsset
+
+    class _W:
+        context = state
+    return _render_asset_reference(
+        _W(), PropAsset, "prop_id", series_id, prop_id, style_id,
+        "a single prop",
+        "Show ONLY the prop on a neutral background — no characters, no scene — in a clear three-quarter view.")
 
 
 @function_tool
@@ -2410,6 +2424,7 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None 
     lifted_keys = []
     identified = []
     added_refs = []   # cast the SPLIT added — the only refs the merge may re-add
+    used_rects = []   # where things were lifted — the ONLY regions the repaint may touch
     for e in entities:
         name = e["name"]
         slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "element"
@@ -2506,6 +2521,8 @@ COMPLETELY TRANSPARENT background: a cut-out acetate.""",
             panel.figure_blocking[key] = {"x": 50, "y": 0, "h": 45, "z": 40}
         lifted.append(name)
         lifted_keys.append(key)
+        if crop_rect:
+            used_rects.append(crop_rect)
 
     # repaint the base with everything lifted removed — revealing what was
     # beneath (a figure keeps its transparency; a background stays opaque)
@@ -2527,20 +2544,34 @@ else must remain PIXEL-IDENTICAL — same composition, same style, same colors."
         background="transparent" if kind != 'background' else None,
         input_fidelity="high",
     )
+    # FIDELITY: the edit API redraws the WHOLE frame, so untouched art
+    # drifts.  Keep the ORIGINAL pixels everywhere except inside the lifted
+    # regions — only where something came off may the repaint show through.
+    from io import BytesIO as _BytesIO
+    repaint = _Img.open(_BytesIO(base_bytes)).convert('RGBA').resize((W0, H0))
+    if used_rects:
+        final = src_img.copy()
+        for rect in used_rects:
+            final.paste(repaint.crop(rect), (rect[0], rect[1]))
+    else:
+        final = repaint
+
+    stem = "plate" if kind == 'background' else "base"
+    base_path = os.path.join(figures_dir, f"{stem}--{uuid4().hex[:8]}.png")
+    final.save(base_path, 'PNG')
     if kind == 'background':
-        base_path = os.path.join(figures_dir, f"plate--{uuid4().hex[:8]}.png")
-        with open(base_path, "wb") as f:
-            f.write(base_bytes)
         panel.figure_images["background/plate"] = base_path
     else:
-        base_path = os.path.join(figures_dir, f"base--{uuid4().hex[:8]}.png")
-        with open(base_path, "wb") as f:
-            f.write(base_bytes)
         panel.figure_images[layer] = base_path
 
     # the split nests its products under a group named for the source layer
-    group_name = ('background' if layer == 'background'
-                  else layer.split('/', 1)[-1].replace('-', ' '))
+    if layer == 'background':
+        group_name = 'background'
+    else:
+        _ch = storage.read_object(cls=CharacterModel, primary_key={
+            "series_id": series_id, "character_id": layer.split('/', 1)[0]})
+        group_name = (_ch.name if _ch is not None
+                      else layer.split('/', 1)[-1]).replace('-', ' ')
     members = list(lifted_keys)
     base_key = 'background/plate' if kind == 'background' else layer
     members.append(base_key)
