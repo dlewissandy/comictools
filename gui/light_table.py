@@ -702,8 +702,17 @@ def lay_prop_acetate(state, board, prop_asset, style_id: str | None = None) -> b
     imgs = prop_asset.images or {}
     img = imgs.get(style_id) or next((i for i in imgs.values() if i and os.path.exists(i)), None)
     if not (img and os.path.exists(img)):
-        ui.notify(f"No reference art for {prop_asset.name} yet — ink it on the prop page first.",
-                  type='warning')
+        # SELF-HEALING: instead of scolding, ink the reference right now
+        from agentic.tools.imaging import render_prop_reference_body
+        from helpers.render_queue import enqueue_renders
+        sid = style_id or 'vintage-four-color'
+        table_receipt(state, f"🖌 **{prop_asset.name}** has no reference art yet — inking it "
+                             f"in {sid}; lay it once it lands")
+        enqueue_renders(state, [(
+            f"prop reference — {prop_asset.name} in {sid}",
+            lambda: render_prop_reference_body(state, prop_asset.series_id,
+                                               prop_asset.prop_id, sid),
+        )], role='the Prop Maker')
         return False
     slug = normalize_id(prop_asset.name)
     key = f'element/{slug}'
@@ -1023,15 +1032,20 @@ def light_table(state: APPState, panel, scene, setting,
 
     # ---- gather the acetates -------------------------------------------
     background = None
+    bg_style_missing = False   # the setting has no master inked in THIS style
     split_plate = (panel.figure_images or {}).get("background/plate")
     if split_plate and os.path.exists(split_plate):
         background = split_plate
     elif setting is not None:
         style_id = scene.style_id if scene is not None else None
-        background = (setting.images or {}).get(style_id) or next(
+        keyed = (setting.images or {}).get(style_id)
+        if keyed and not os.path.exists(keyed):
+            keyed = None
+        background = keyed or next(
             (img for img in (setting.images or {}).values() if img and os.path.exists(img)), None)
         if background and not os.path.exists(background):
             background = None
+        bg_style_missing = keyed is None
 
     _char_names = {c.character_id: c.name for c in storage.read_all_objects(
         CharacterModel, primary_key={"series_id": series_id})}
@@ -1115,6 +1129,10 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.label('bare board — no background on the table').classes('text-xs text-gray-500')
                     if not locked:
                         with ui.row().style('gap: 8px;'):
+                            if setting is not None and bg_style_missing:
+                                ui.button(f'Ink the {setting.name.title()} master', icon='brush') \
+                                    .props('outline dense size=sm') \
+                                    .on('click', lambda _: ink_master_here())
                             ui.button('Lay a background', icon='landscape').props('outline dense size=sm') \
                                 .on('click', lambda _: pick_background())
                             ui.button('Cast a figure', icon='person_add').props('outline dense size=sm') \
@@ -1987,9 +2005,24 @@ def light_table(state: APPState, panel, scene, setting,
                                     kind=SelectedKind.IMAGE_EDITOR)
                 state.change_selection(new=[*state.selection, itm])
 
+            def ink_master_here():
+                style_id2 = getattr(scene, 'style_id', None) or 'vintage-four-color'
+                from agentic.tools.imaging import generate_setting_background_body
+                from helpers.render_queue import enqueue_renders
+                _receipt(f"🖌 inking the **{setting.name}** master in {style_id2} — "
+                         f"it lands on the table when it's done")
+                enqueue_renders(state, [(
+                    f"master background — {setting.name} in {style_id2}",
+                    lambda: generate_setting_background_body(state, series_id,
+                                                             setting.setting_id, style_id2),
+                )], role='the Background Artist')
+
             bg_label = f"Background — {setting.name if setting else 'no setting yet'}"
             if split_plate and background == split_plate:
                 bg_label += " (split plate)"
+            elif setting is not None and bg_style_missing:
+                bg_label += " — not inked in this style yet" if background is None \
+                    else " (borrowed from another style)"
             with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
                 eye(bg_layer)
                 if background:
@@ -1999,6 +2032,12 @@ def light_table(state: APPState, panel, scene, setting,
                 else:
                     ui.icon('landscape').classes('text-lg').style('width: 40px; text-align: center;')
                 ui.label(bg_label).classes('text-sm').style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
+                if setting is not None and bg_style_missing:
+                    if not background:
+                        ui.space()
+                    ui.button(icon='brush').props('flat round dense size=xs') \
+                        .tooltip(f"Ink the {setting.name} master background in this board's style") \
+                        .on('click', lambda _: ink_master_here())
                 if background:
                     ui.space()
                     ui.button(icon='content_cut').props('flat round dense size=xs') \
@@ -2033,10 +2072,17 @@ def light_table(state: APPState, panel, scene, setting,
                 board's style; on covers the finished art lands on the table."""
                 from agentic.tools.normalization import normalize_id
                 from helpers.render_queue import enqueue_renders
-                prop = PropAsset(prop_id=normalize_id(name), series_id=series_id,
-                                 name=name, description=description or name)
-                storage.create_object(data=prop)
-                if not cover_mode and scene is not None:
+                # REUSE, don't duplicate: a same-named prop already in the
+                # shop is the asset the author means
+                prop = next((p for p in storage.read_all_objects(
+                                 PropAsset, primary_key={"series_id": series_id})
+                             if normalize_id(p.name) == normalize_id(name)), None)
+                if prop is None:
+                    prop = PropAsset(prop_id=normalize_id(name), series_id=series_id,
+                                     name=name, description=description or name)
+                    storage.create_object(data=prop)
+                if not cover_mode and scene is not None \
+                        and not any(p.name == name for p in (scene.props or [])):
                     scene.props = (scene.props or []) + [Prop(name=name, description=description or name)]
                     storage.update_object(scene)
                 style_id = getattr(scene, 'style_id', None) or 'vintage-four-color'

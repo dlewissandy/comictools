@@ -44,7 +44,8 @@ def generate_object_image(
     aspect_ratio: str = FrameLayout.SQUARE,
     image_quality: IMAGE_QUALITY = IMAGE_QUALITY.HIGH,
     image_mask: Optional[str] = None,
-    name: str = "generated_image"
+    name: str = "generated_image",
+    background: Optional[str] = None
     ) -> str:
     """
     Generate an image for the given object using the provided prompt.
@@ -79,7 +80,8 @@ def generate_object_image(
             reference_images=reference_images,
             mask=image_mask,
             size=dims,
-            quality=image_quality
+            quality=image_quality,
+            background=background
         )
 
     logger.debug("Uploading generated image to storage.")
@@ -2021,7 +2023,8 @@ using this reference match the rest of the issue.
         wrapper=wrapper, obj=asset, prompt=prompt,
         reference_images=reference_images,
         aspect_ratio=FrameLayout.SQUARE, image_quality=IMAGE_QUALITY.HIGH,
-        name=f"{asset_id}-{style_id}-reference")
+        name=f"{asset_id}-{style_id}-reference",
+        background="transparent")
     # persist onto a FRESH read — renders take minutes
     fresh = storage.read_object(cls, {"series_id": series_id, key: asset_id}) or asset
     fresh.images[style_id] = locator
@@ -2039,7 +2042,8 @@ def render_prop_reference_body(state, series_id: str, prop_id: str, style_id: st
     return _render_asset_reference(
         _W(), PropAsset, "prop_id", series_id, prop_id, style_id,
         "a single prop",
-        "Show ONLY the prop on a neutral background — no characters, no scene — in a clear three-quarter view.")
+        "Show ONLY the prop — no characters, no scene, no ground — in a clear three-quarter "
+        "view on a COMPLETELY TRANSPARENT background: a cut-out acetate to be layered onto boards.")
 
 
 @function_tool
@@ -2058,7 +2062,8 @@ def generate_prop_reference(wrapper: RunContextWrapper[APPState], series_id: str
     return _render_asset_reference(
         wrapper, PropAsset, "prop_id", series_id, prop_id, style_id,
         "a single prop",
-        "Show ONLY the prop on a neutral background — no characters, no scene — in a clear three-quarter view.")
+        "Show ONLY the prop — no characters, no scene, no ground — in a clear three-quarter "
+        "view on a COMPLETELY TRANSPARENT background: a cut-out acetate to be layered onto boards.")
 
 
 @function_tool
