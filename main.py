@@ -174,6 +174,9 @@ def init_layout(logger):
         .rough-drag { cursor: grab; touch-action: none; user-select: none;
                       max-width: none; }
         .rough-drag:active { cursor: grabbing; }
+        /* THE PIN: a pinned acetate stays put — clicks fall through to the
+           acetates beneath it */
+        .rough-locked { pointer-events: none !important; cursor: default; }
         /* SELECTION: dashed border + corner grab handles on the acetate */
         .rough-sel-box { position: absolute; inset: 0;
                          border: 1.5px dashed #3b82f6;

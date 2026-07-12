@@ -60,6 +60,7 @@ if (!window._roughDragInit) {
     for (const f of cands) {
       const canvas = f.closest('.rough-canvas');
       if (canvas && canvas.dataset.locked) continue;   // the table is locked
+      if (f.dataset.lock) continue;                    // this acetate is pinned
       if (alphaAt(f, e.clientX, e.clientY) > 20) return f;
     }
     return null;
@@ -280,6 +281,9 @@ if (!window._roughDragInit) {
   document.addEventListener('wheel', (e) => {
     const fig = pickFigure(e);
     if (!fig) return;
+    // resizing is DELIBERATE: only the selected acetate answers the wheel —
+    // a page scroll passing over the rough must never reshape the art
+    if (window._roughSel !== fig) return;
     e.preventDefault();
     const canvas = fig.closest('.rough-canvas');
     if (fig.dataset.scale === 'font') {
@@ -355,6 +359,7 @@ if (!window._roughDragInit) {
     const fig = window._roughSel;
     if (!fig) return;
     if (e.key === 'Escape') { deselect(); requestAnimationFrame(window.roughDrawTails); return; }
+    if (fig.dataset.lock) return;                      // pinned: it stays put
     const step = e.shiftKey ? 5 : 1;
     let dx = 0, dy = 0;
     if (e.key === 'ArrowLeft') dx = -step;
@@ -1188,7 +1193,7 @@ def takes_row(state, board, featured: str | None):
 
 def light_table(state: APPState, panel, scene, setting,
                 featured: str | None = None, actions=None,
-                description_label: str = "Visual Description"):
+                description_label: str = "The brief"):
     """
     actions: optional list of (icon, tooltip, handler) riding THE PRINT.
     A selected take LOCKS the table (the print corresponds to this exact
@@ -1383,6 +1388,8 @@ def light_table(state: APPState, panel, scene, setting,
                 b = {**f["blocking"], **(live_blk.get(f["key"]) or {})}
                 k = img_k(f["img"])
                 cls = 'rough-figure rough-drag' + (' rough-figure-posed' if f["posed"] else '')
+                if b.get('lock'):
+                    cls += ' rough-locked'
                 flip = ' scaleX(-1)' if b.get('flip') else ''
                 fig = ui.image(source=_src(f["img"])).props('fit=contain').classes(cls) \
                     .style(f'left: {b["x"]}%; bottom: {b["y"]}%; height: {b["h"]}%; '
@@ -1393,6 +1400,8 @@ def light_table(state: APPState, panel, scene, setting,
                 fig._props['data-war'] = f'{k:.4f}'
                 if b.get('flip'):
                     fig._props['data-flip'] = '1'
+                if b.get('lock'):
+                    fig._props['data-lock'] = '1'
 
             live_props = [p["name"] for p in props if p["on"]]
             if live_props:
@@ -1416,6 +1425,8 @@ def light_table(state: APPState, panel, scene, setting,
                     x, y = b.get('x', dx), b.get('y', dy)
                     fs = b.get('fs', 11)
                     cls = el_classes + ' rough-drag'
+                    if b.get('lock'):
+                        cls += ' rough-locked'
                     if emphasis:
                         cls += f" rough-balloon--{emphasis.replace(' ', '-')}"
                     lbl = ui.label(text).classes(cls).style(
@@ -1423,6 +1434,8 @@ def light_table(state: APPState, panel, scene, setting,
                     lbl._props['data-key'] = key
                     lbl._props['data-scale'] = 'font'
                     lbl._props['data-kind'] = kind
+                    if b.get('lock'):
+                        lbl._props['data-lock'] = '1'
                     if kind == 'balloon':
                         # the tail's endpoint: aimed at the speaker by default
                         lbl._props['data-tx'] = str(b.get('tx', x))
@@ -1566,10 +1579,35 @@ def light_table(state: APPState, panel, scene, setting,
         btn.on('click', toggle)
         btn.tooltip('Lift this acetate off the table' if layer["on"] else 'Lay it back down')
 
+    def padlock(layer: dict):
+        """THE PIN: a pinned acetate (or group) stays put — no drags, no
+        wheel, no nudges — until unpinned.  Locks live in the blocking."""
+        keys = ([layer["key"]] if layer.get("key") else []) + list(layer.get("keys") or [])
+        if not keys:
+            return
+        blk = panel.figure_blocking or {}
+        pinned = all((blk.get(k) or {}).get('lock') for k in keys)
+        btn = ui.button(icon='push_pin').props('flat round dense size=xs' +
+                                               ('' if pinned else ' color=grey-5'))
+
+        def toggle(pinned=pinned):
+            fresh_board(storage, panel)
+            now = not pinned
+            for k in keys:
+                cur = dict((panel.figure_blocking or {}).get(k) or {})
+                cur['lock'] = 1 if now else 0
+                panel.figure_blocking[k] = cur
+            storage.update_object(panel)
+            state.refresh_details()
+        btn.on('click', toggle)
+        btn.tooltip('Unpin — let it move again' if pinned
+                    else 'Pin this acetate down — no drags, no resizes')
+
     def layer_row(icon: str, label: str, layer: dict, thumb: str | None = None,
                   edit_message: str | None = None, on_heal=None, heal_tip: str = ''):
         with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
             eye(layer)
+            padlock(layer)
             if thumb:
                 ui.image(source=_src(thumb)).classes('light-thumb')
             else:
@@ -1845,6 +1883,7 @@ def light_table(state: APPState, panel, scene, setting,
                 with row:
                     ui.icon('drag_indicator').classes('text-sm text-gray-400')
                     eye(f)
+                    padlock(f)
                     if f["ref"] is None:
                         ui.image(source=_src(f["img"])).classes('light-thumb')
                         name_label = ui.label(f["name"].title()).classes('text-sm cursor-pointer') \
@@ -2191,6 +2230,7 @@ def light_table(state: APPState, panel, scene, setting,
                         storage.update_object(panel)
                         state.refresh_details()   # member rows' eyes follow the group
                     gbtn.on('click', lambda _, g=gname, m=members, w=all_on: toggle_group(g, m, w))
+                    padlock({"keys": [m["key"] for m in members]})
                     ui.icon('folder_open').classes('text-lg').style('width: 40px; text-align: center;')
                     glabel = ui.label(gname.title()).classes('text-sm text-bold cursor-pointer') \
                         .tooltip('Rename this group')
@@ -2404,6 +2444,8 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.notify('Write the beat or visual description first — the table is built from the brief.',
                               type='warning')
                     return
+                # the click answers IMMEDIATELY, before the slow read starts
+                ui.notify('📖 Reading the brief — breaking it into acetates…', type='info')
                 pending = getattr(state, '_render_pending', None)
                 if pending is None:
                     pending = []
@@ -2855,7 +2897,8 @@ def light_table(state: APPState, panel, scene, setting,
                         b.tooltip(tip)
                         b.on('click', lambda _, s=shape: reshape(s))
             rough()
-            # the margin notes: the visual description IS the textual rough
+            # THE BRIEF: the same margin notes under every rough — panel,
+            # cover, or insert page — the words the render is drawn from
             from gui.elements import markdown_field_editor
             markdown_field_editor(state, description_label, panel.description, header_size=3)
         # an EXPLODED take auto-opens the split flow on its fresh plate

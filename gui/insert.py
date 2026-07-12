@@ -13,8 +13,7 @@ from gui.selection import SelectionItem, SelectedKind
 from schema import Insert, Setting
 from gui.state import APPState
 from gui.elements import (
-    header, crud_button, comic_page, ccell, cpanel, CrudButtonKind,
-    markdown_field_editor,
+    header, crud_button, comic_page, ccell, CrudButtonKind,
 )
 from gui.messaging import post_user_message
 from gui.light_table import light_table, rework_take_on_table, takes_row, tear_up_take
@@ -102,13 +101,9 @@ def view_insert(state: APPState):
         page = comic_page()
         page.__enter__()
 
-        # THE PAGE'S WORDS: the mailbag's letters, the ad's copy — the render
-        # is drawn from these, so they stay front and center over the table.
-        with cpanel(12):
-            markdown_field_editor(state, "The page", insert.description)
-
         # THE LIGHT TABLE: same table as panels and covers — the insert
-        # doubles as its own scene (it owns style_id and setting_id).
+        # doubles as its own scene (it owns style_id and setting_id).  The
+        # page's words live in THE BRIEF under the rough, same as everywhere.
         with ccell(12):
             featured = storage.find_image(obj=insert, locator=insert.image) if insert.image else None
             if featured and not os.path.exists(featured):
