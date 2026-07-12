@@ -34,14 +34,60 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
         locator = storage.upload_reference_image(obj=asset, name=e.name, data=e.content, mime_type=e.type)
         post_user_message(state, f"I uploaded a reference image for this {kind_label}: {locator}")
 
+    # WHERE-USED: the truth that makes deleting safe — every scene, setting
+    # and wardrobe look that points at this asset
+    from schema import CharacterVariant, Issue, SceneModel, Setting
+    used_in = []
+    if key_name == "prop_id":
+        nm = asset.name
+        for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}):
+            if any(p.name == nm for p in (s.props or [])):
+                used_in.append((f"setting · {s.name}", None))
+        for iss in storage.read_all_objects(Issue, primary_key={"series_id": series_id}):
+            for sc in storage.read_all_objects(SceneModel, primary_key={
+                    "series_id": series_id, "issue_id": iss.issue_id}):
+                if any(p.name == nm for p in (getattr(sc, 'props', None) or [])):
+                    used_in.append((f"{iss.name} · {sc.name}", None))
+        from schema import CharacterModel
+        for ch in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
+            for v in storage.read_all_objects(CharacterVariant, primary_key={
+                    "series_id": series_id, "character_id": ch.character_id}):
+                if asset_id in (v.prop_ids or []):
+                    used_in.append((f"{ch.name} · {v.name or v.variant_id}", None))
+    else:   # outfit
+        from schema import CharacterModel
+        for ch in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
+            for v in storage.read_all_objects(CharacterVariant, primary_key={
+                    "series_id": series_id, "character_id": ch.character_id}):
+                if getattr(v, 'outfit_id', None) == asset_id:
+                    used_in.append((f"{ch.name} · {v.name or v.variant_id}", None))
+
     with details:
-        with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
+        with ui.row().classes('w-full flex-nowrap items-center').style('padding: 0; margin: 0; gap: 8px;'):
             header(asset.name.title(), 0)
             if asset.origin:
                 ui.badge(f"from {asset.origin.series_id}", color='grey').classes('self-center q-ml-md')
+            if not used_in:
+                ui.chip('unused — safe to strike', icon='delete_sweep', color='orange') \
+                    .props('dense outline clickable') \
+                    .tooltip(f'Nothing in the series points at this {kind_label} — one click strikes it') \
+                    .on('click', lambda _: post_user_message(
+                        state, f"Delete this {kind_label} — nothing uses it."))
             ui.space()
             crud_button(kind=CrudButtonKind.DELETE,
-                        action=lambda _: post_user_message(state, f"I would like to delete this {kind_label}."), size=1)
+                        action=lambda _: post_user_message(
+                            state, f"I would like to delete this {kind_label}."
+                            + (f"  It is still used in {len(used_in)} place(s) — tell me where before I confirm."
+                               if used_in else "  Nothing uses it.")), size=1)
+
+        with ui.row().classes('w-full items-center q-px-sm').style('gap: 6px;'):
+            ui.label('Used in').classes('comic-label-sm')
+            if not used_in:
+                ui.label(f'nothing points at this {kind_label} yet').classes('text-xs text-gray-500')
+            for label, _nav in used_in[:12]:
+                ui.chip(label, icon='place').props('dense outline')
+            if len(used_in) > 12:
+                ui.label(f'…and {len(used_in) - 12} more').classes('text-xs text-gray-500')
 
         markdown_field_editor(state, "Description", asset.description)
 

@@ -36,7 +36,13 @@ def deleter(wrapper: RunContextWrapper[APPState], cls: BaseModel, primary_key: d
     if obj is None:
         return f"Object with primary key {primary_key} not found."
 
-    if selection[-1].id == obj.id and selection[-1].kind == cls.__name__.lower():
+    # class names don't all match selection kinds (PropAsset -> 'prop',
+    # SceneModel -> 'scene') — deleting the thing on screen must pop the view
+    KIND_OF = {"PropAsset": "prop", "Outfit": "outfit", "SceneModel": "scene",
+               "CharacterModel": "character", "CharacterVariant": "variant",
+               "ComicStyle": "style", "Insert": "insert", "Cover": "cover"}
+    expected = KIND_OF.get(cls.__name__, cls.__name__.lower())
+    if selection and selection[-1].id == obj.id and selection[-1].kind.value == expected:
         new_selection = selection[:-1]
         state.change_selection(new=new_selection)
     state.is_dirty = True
