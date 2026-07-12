@@ -313,6 +313,23 @@ def init_layout(logger):
                            font-family: 'Comic Sans MS', 'Chalkboard SE', 'Comic Neue', sans-serif;
                            width: max-content; line-height: 1.3;
                            white-space: normal; }
+        /* RECEIPTS ARE PAPER SLIPS: stamped with the bench they came from */
+        .receipt-slip { position: relative; border: 1.5px dashed var(--ink);
+                        border-radius: 2px; background: rgba(243,229,171,.25);
+                        padding: 6px 10px 4px; transform: rotate(-.3deg); }
+        .receipt-slip__stamp { position: absolute; top: 3px; right: 8px;
+                               font-size: .54rem; letter-spacing: .1em;
+                               text-transform: uppercase; opacity: .55; }
+        /* THE RESUME CARD: the lobby's front door back to the last bench */
+        .resume-card { display: flex; align-items: center; gap: 14px;
+                       border: 2px solid var(--ink); border-radius: 4px;
+                       background: var(--paper); padding: 10px 14px;
+                       margin: 10px 0 4px; box-shadow: 3px 3px 0 rgba(0,0,0,.25);
+                       transition: transform .12s, box-shadow .12s; }
+        .resume-card:hover { transform: translate(-1px, -1px);
+                             box-shadow: 4px 4px 0 rgba(0,0,0,.3); }
+        .resume-card__art { width: 64px; aspect-ratio: 16/27; border-radius: 2px;
+                            border: 1.5px solid var(--ink); flex: 0 0 auto; }
         /* the mailbag's letter blocks: text plates, wider than captions */
         .rough-letterblock { max-width: 55%; text-align: left;
                              white-space: pre-line; }

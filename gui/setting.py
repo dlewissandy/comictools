@@ -154,20 +154,28 @@ def view_setting(state: APPState):
                                         .classes('bg-white/70 dark:bg-black/50') \
                                         .tooltip('Re-ink this master from scratch in the same style') \
                                         .on('click.stop', lambda _, st=styles_by_id[style_id]: ink_in_style(st))
-                for st in storage.read_all_objects(ComicStyle, order_by='name'):
-                    if st.style_id in rendered:
-                        continue
+                # ONE COMPARATOR CARD instead of a wall of ghosts: every
+                # style the setting isn't inked in yet, one chip each
+                ghosts = [st for st in storage.read_all_objects(ComicStyle, order_by='name')
+                          if st.style_id not in rendered]
+                if ghosts:
                     with packer.place_cell([(4, 8/3), (3, 2), (6, 4)], fudge=False):
                         with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative ghost-card'):
-                            art = st.image.get('art') if isinstance(st.image, dict) else st.image
-                            if art and os.path.exists(art):
-                                ui.image(source=art).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
-                            ui.label(st.name.title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
-                            with ui.column().classes('absolute inset-0 items-center justify-center z-10'):
-                                ui.button(f'Ink it in {st.name.title()}', icon='brush') \
-                                    .props('unelevated dense no-caps size=sm') \
-                                    .tooltip('Render this setting\'s master background in this style') \
-                                    .on('click', lambda _, st=st: ink_in_style(st))
+                            ui.label('NOT YET INKED').classes('caption-box caption-box-sm') \
+                                .style('position: absolute; top: 6px; left: 6px; z-index: 6;')
+                            with ui.column().classes('w-full h-full justify-center items-start') \
+                                    .style('gap: 4px; padding: 30px 10px 8px; overflow-y: auto;'):
+                                for st in ghosts:
+                                    art = st.image.get('art') if isinstance(st.image, dict) else st.image
+                                    with ui.row().classes('items-center flex-nowrap').style('gap: 6px;'):
+                                        if art and os.path.exists(art):
+                                            ui.image(source=art) \
+                                                .style('width: 26px; height: 26px; border-radius: 3px;') \
+                                                .props('fit=cover')
+                                        ui.chip(f'Ink it in {st.name.title()}', icon='brush') \
+                                            .props('dense outline clickable size=sm') \
+                                            .tooltip("Render this setting's master background in this style") \
+                                            .on('click', lambda _, st=st: ink_in_style(st))
 
         # Reference image uploads (sketches, photos, prior art) steer the rendering.
         with ui.expansion(value=True).classes('w-full section-flat') as expansion:

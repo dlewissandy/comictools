@@ -137,6 +137,41 @@ def view_panel(state: APPState):
                     .tooltip(f'Printed on page {on_page} — back up to the book') \
                     .on('click', lambda _: back_to_book())
 
+            def copy_panel():
+                # a new panel that starts from THIS table — layers, blocking,
+                # letters — with its own acetate files (sharing the original's
+                # would break the copy the day the original is redone)
+                import shutil
+                from uuid import uuid4
+                from storage.filepath import obj_to_imagepath
+                dup = panel.model_copy(deep=True)
+                dup.panel_id = str(uuid4())
+                dup.panel_number = max((p.panel_number for p in sibs), default=0) + 1
+                dup.name = f"{panel.name} (copy)"
+                dup.image = None   # the copy starts unlocked
+                storage.create_object(dup)
+                fig_dir = os.path.join(os.path.dirname(
+                    obj_to_imagepath(obj=dup, base_path=storage.base_path)), 'figures')
+                os.makedirs(fig_dir, exist_ok=True)
+                for key, path in list((dup.figure_images or {}).items()):
+                    if not (path and os.path.exists(path)):
+                        continue
+                    new_path = os.path.join(fig_dir, os.path.basename(path))
+                    try:
+                        shutil.copyfile(path, new_path)
+                        dup.figure_images[key] = new_path
+                    except OSError:
+                        pass
+                storage.update_object(dup)
+                from gui.light_table import table_receipt
+                table_receipt(state, f"📄 copied **{panel.name}** — layers and all — "
+                                     f"as panel {dup.panel_number}")
+                state.change_selection(new=[*selection[:-1], SelectionItem(
+                    name=dup.name, id=dup.panel_id, kind=SelectedKind.PANEL)])
+            ui.chip('copy', icon='content_copy').props('dense outline clickable') \
+                .tooltip('A new panel that starts from THIS table — layers, blocking, letters') \
+                .on('click', lambda _: copy_panel())
+
             ui.space()
             from gui.strike import strike
             from agentic.tools.deleter import delete_panel as _del_panel

@@ -46,11 +46,75 @@ def view_all_publishers(state: APPState):
                     lambda _: post_user_message(state, "I would like to create a new comic book publisher."), 3))
             packer.finalize()
         
+def _last_bench(storage):
+    """(series, issue) most recently touched anywhere under its issue dir —
+    the bench the author left their pencils on."""
+    from schema import Issue
+    base = str(storage.base_path)
+    newest, when = None, 0.0
+    for sdir in (os.scandir(os.path.join(base, 'series'))
+                 if os.path.isdir(os.path.join(base, 'series')) else []):
+        issues_dir = os.path.join(sdir.path, 'issues')
+        if not os.path.isdir(issues_dir):
+            continue
+        for idir in os.scandir(issues_dir):
+            if not idir.is_dir():
+                continue
+            m = 0.0
+            for root, _dirs, files in os.walk(idir.path):
+                for f in files:
+                    try:
+                        m = max(m, os.path.getmtime(os.path.join(root, f)))
+                    except OSError:
+                        pass
+            if m > when:
+                when, newest = m, (sdir.name, idir.name)
+    if newest is None:
+        return None, None
+    issue = storage.read_object(cls=Issue, primary_key={"series_id": newest[0],
+                                                        "issue_id": newest[1]})
+    return (newest[0], issue) if issue else (None, None)
+
+
 def view_all_series(state: APPState):
     from gui.messaging import new_item_messager
     storage: GenericStorage = state.storage
     with state.details:
         new_item_messager(state, "SERIES", "I would like to create a new comic book series.")
+
+        # THE RESUME CARD: the lobby's front door — the bench you left your
+        # pencils on, badged by the one production ledger
+        series_id, issue = _last_bench(storage)
+        if issue is not None:
+            from gui.selection import SelectionItem, SelectedKind
+            series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
+            cover = storage.find_series_image(series_id=series_id)
+            try:
+                from helpers.ledger import issue_ledger
+                summary = issue_ledger(storage, series_id, issue.issue_id).summary()
+            except Exception:
+                summary = None
+
+            def resume():
+                state.change_selection(new=[
+                    SelectionItem(name="Series", id=None, kind=SelectedKind.ALL_SERIES),
+                    SelectionItem(name=(series.name if series else series_id),
+                                  id=series_id, kind=SelectedKind.SERIES),
+                    SelectionItem(name=issue.name, id=issue.issue_id, kind=SelectedKind.ISSUE)])
+            card = ui.element('div').classes('resume-card cursor-pointer')
+            with card:
+                if cover and os.path.exists(cover):
+                    ui.image(source=cover).classes('resume-card__art').props('fit=cover')
+                with ui.column().style('gap: 2px; min-width: 0;'):
+                    ui.label('STILL ON THE DRAWING BOARD').classes('caption-box caption-box-sm')
+                    ui.label(f"{(series.name if series else series_id).title()} — "
+                             f"issue {issue.issue_number}: {issue.name}") \
+                        .classes('text-lg font-bold').style('line-height: 1.2;')
+                    if summary:
+                        ui.label(summary).classes('text-xs text-gray-500 italic')
+            card.tooltip('Open the book where you left it')
+            card.on('click', lambda _: resume())
+
         from gui.elements import ruled_page
         with ruled_page() as packer:
             view_all_instances(

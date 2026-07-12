@@ -1,11 +1,10 @@
 import os
 from nicegui import ui
-from gui.avatars import comic_chat_message
 from nicegui.events import UploadEventArguments
 from gui.selection import SelectionItem
 from gui.elements import markdown, markdown_field_editor, header, crud_button, CrudButtonKind, view_attributes, Attribute
 from gui.messaging import post_user_message
-from schema import SceneModel, Panel, FrameLayout
+from schema import SceneModel, Panel
 from gui.state import APPState
 from storage.generic import GenericStorage
 
@@ -204,129 +203,27 @@ def view_scene(state: APPState):
                 )
                 post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
 
-            from gui.elements import ruled_page, uploader_card, HEADER_CLASSES
-            if not panels or panels == []:
-                with ruled_page() as packer:
-                    uploader_card(state, on_upload=upload_panel, packer=packer,
-                                  variants=[(3, 3)], label='Drop image to create a panel')
-            else:
-                page_ctx = ruled_page()
-                packer = page_ctx.__enter__()
-                for panel in panels:
-                    # all three shapes rule at band height 3, so any mix of
-                    # panels packs into shared rows
-                    if panel.aspect == FrameLayout.LANDSCAPE:
-                        variants = [(4.5, 3), (3, 2), (6, 4)]
-                    elif panel.aspect == FrameLayout.PORTRAIT:
-                        variants = [(2, 3)]
-                    else:
-                        variants = [(3, 3)]
-                    image = None
-                    if getattr(panel, "image", None):
-                        # Resolve the stored locator to an actual image filepath.
-                        image = storage.find_image(obj=panel, locator=panel.image)
-                    with packer.place_cell(variants, fudge=image is None):
-                        with ui.card().classes('soft-card mb-2 p-2 break-inside-avoid mosaic-card relative panel-fill') as card:
-                            if image is not None:
-                                ui.label(f"Panel {panel.panel_number}: {panel.name}").classes(HEADER_CLASSES[3] + ' panel-hover-caption')
-                                # the art FILLS the frame — frame and art share
-                                # the same shape, so the page reads as the scene
-                                ui.image(source=image).props('fit=cover').classes('absolute inset-0 w-full h-full')
-                            else:
-                                with ui.scroll_area().classes('w-full h-full').style('overflow: auto;'):
-                                    header(f"Panel {panel.panel_number}: {panel.name}", 3)
-                                    markdown(panel.beat or panel.description)
-                        new_itm = SelectionItem(name=f"panel {panel.panel_number}", id=panel.panel_id, kind='panel')
-                        new_sel = [s for s in selection]+[new_itm]
-                        card.on('click', lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
-
-                        # Reorder without leaving the page: ◀ ▶ nudge the panel
-                        # through the reading order and receipt into the chat.
-                        def _nudge(panel_id, delta, number):
-                            ordered = storage.read_all_objects(Panel, primary_key={
-                                "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id},
-                                order_by="panel_number")
-                            idx = next((i for i, x in enumerate(ordered) if x.panel_id == panel_id), None)
-                            if idx is None or not (0 <= idx + delta < len(ordered)):
-                                return
-                            moved = ordered.pop(idx)
-                            ordered.insert(idx + delta, moved)
-                            for i, x in enumerate(ordered):
-                                if x.panel_number != i + 1:
-                                    x.panel_number = i + 1
-                                    storage.update_object(x)
-                            try:
-                                with state.history:
-                                    with comic_chat_message(name='You', sent=True).classes('w-full'):
-                                        ui.markdown(f"↔️ moved **{moved.name}** to position {idx + delta + 1}")
-                                state.history.scroll_to(percent=100)
-                            except Exception:
-                                pass
-                            state.refresh_details()
-
-                        with card:
-                            # delete rides the top corner of the art; the ask
-                            # goes through the coauthor, like every deletion
-                            ui.button(icon='delete').props('flat round dense size=xs') \
-                                .classes('absolute top-1 right-1 z-10 bg-white/70 dark:bg-black/50') \
-                                .tooltip('Delete this panel') \
-                                .on('click.stop', lambda _, n=panel.panel_number, nm=panel.name:
-                                    post_user_message(state, f"I would like to delete panel {n} ('{nm}') from this scene."))
-
-                            # copy: a new panel that starts from THIS panel's
-                            # table (layers, blocking, letters), not blank
-                            def _copy(src_panel=panel):
-                                import shutil
-                                from uuid import uuid4
-                                from storage.filepath import obj_to_imagepath
-                                dup = src_panel.model_copy(deep=True)
-                                dup.panel_id = str(uuid4())
-                                dup.panel_number = max((p.panel_number for p in panels), default=0) + 1
-                                dup.name = f"{src_panel.name} (copy)"
-                                dup.image = None   # the copy starts unlocked
-                                storage.create_object(dup)
-                                # the copy gets its OWN acetate files — sharing
-                                # the original's would break the copy the day
-                                # the original is deleted or its figures redone
-                                fig_dir = os.path.join(os.path.dirname(
-                                    obj_to_imagepath(obj=dup, base_path=storage.base_path)), 'figures')
-                                os.makedirs(fig_dir, exist_ok=True)
-                                for key, path in list((dup.figure_images or {}).items()):
-                                    if not (path and os.path.exists(path)):
-                                        continue
-                                    new_path = os.path.join(fig_dir, os.path.basename(path))
-                                    try:
-                                        shutil.copyfile(path, new_path)
-                                        dup.figure_images[key] = new_path
-                                    except OSError:
-                                        pass
-                                storage.update_object(dup)
-                                try:
-                                    with state.history:
-                                        with comic_chat_message(name='You', sent=True).classes('w-full'):
-                                            ui.markdown(f"📄 copied **{src_panel.name}** — layers and all — as panel {dup.panel_number}")
-                                    state.history.scroll_to(percent=100)
-                                except Exception:
-                                    pass
-                                state.refresh_details()
-                            ui.button(icon='content_copy').props('flat round dense size=xs') \
-                                .classes('absolute top-1 right-8 z-10 bg-white/70 dark:bg-black/50') \
-                                .tooltip('Copy this panel — layers and all') \
-                                .on('click.stop', lambda _, p=panel: _copy(p))
-                            # reading-order controls ride ON the art
-                            with ui.row().classes('absolute bottom-1 left-0 right-0 z-10 justify-between items-center').style('padding: 0 6px;'):
-                                ui.button(icon='chevron_left').props('flat round dense size=xs') \
-                                    .classes('bg-white/70 dark:bg-black/50') \
-                                    .tooltip('Move earlier in the reading order') \
-                                    .on('click.stop', lambda _, pid=panel.panel_id, n=panel.panel_number: _nudge(pid, -1, n))
-                                ui.label(f"#{panel.panel_number}").classes('text-xs self-center px-2 rounded bg-white/70 dark:bg-black/50')
-                                ui.button(icon='chevron_right').props('flat round dense size=xs') \
-                                    .classes('bg-white/70 dark:bg-black/50') \
-                                    .tooltip('Move later in the reading order') \
-                                    .on('click.stop', lambda _, pid=panel.panel_id, n=panel.panel_number: _nudge(pid, 1, n))
-                # A drop box for creating a new panel: same band height as
-                # the panels, so it packs into their rows
+            from gui.elements import ruled_page, uploader_card
+            # ONE HOME PER THING: panels live in the open book (and on
+            # their own benches) — the scene keeps a door, not a copy
+            if panels:
+                def read_in_book():
+                    if not hasattr(state, '_book_anchor'):
+                        state._book_anchor = {}
+                    if not hasattr(state, '_book_detail'):
+                        state._book_detail = {}
+                    state._book_detail[issue_id] = 'beats'
+                    state._book_anchor[issue_id] = f'panel-{panels[0].panel_id}'
+                    i = next((j for j, s in enumerate(state.selection)
+                              if s.kind.value == 'issue'), None)
+                    if i is not None:
+                        state.change_selection(new=state.selection[:i + 1])
+                with ui.row().classes('items-center').style('gap: 8px;'):
+                    ui.chip(f"{len(panels)} panel{'s' if len(panels) != 1 else ''} — read them in the book",
+                            icon='menu_book').props('outline clickable') \
+                        .tooltip("The book is the panels' home — open it to this scene's pages") \
+                        .on('click', lambda _: read_in_book())
+            with ruled_page() as packer:
                 uploader_card(state, on_upload=upload_panel, packer=packer,
                               variants=[(3, 3)], label='Drop image to create a panel')
-                page_ctx.__exit__(None, None, None)
         page.__exit__(None, None, None)

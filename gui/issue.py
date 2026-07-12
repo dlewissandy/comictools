@@ -128,7 +128,7 @@ def view_issue(state: APPState):
     from gui.light_table import table_receipt
 
     def receipt(text):
-        table_receipt(state, text)
+        table_receipt(state, text, bench='the open book')
         state.refresh_details()
 
     def goto(kind, id_, name, anchor=None):

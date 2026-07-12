@@ -427,3 +427,30 @@ async def test_mailbag_letter_blocks_ride_the_table(user: User) -> None:
     finally:
         ins.image = keep
         storage.update_object(ins)
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_lobby_resume_card_and_scene_door(user: User) -> None:
+    """ONE HOME PER THING: the lobby offers the last bench back; the scene
+    view keeps a door to the book instead of its own panel grid."""
+    main.LocalStorage = _TmpStorage
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("STILL ON THE DRAWING BOARD")
+
+    # the scene view: a door, not a grid
+    from schema import SceneModel, Panel
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    storage = _TmpStorage()
+    sc = next(s for s in storage.read_all_objects(SceneModel, {"series_id": WL, "issue_id": CARN})
+              if storage.read_all_objects(Panel, {"series_id": WL, "issue_id": CARN,
+                                                  "scene_id": s.scene_id}))
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": WL, "kind": "series"},
+                             {"name": "C", "id": CARN, "kind": "issue"},
+                             {"name": "S", "id": sc.scene_id, "kind": "scene"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("read them in the book")

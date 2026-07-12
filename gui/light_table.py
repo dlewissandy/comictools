@@ -1004,14 +1004,18 @@ def read_board(storage, a: dict):
 # own pickers AND the assets drawer (a drawer tile lays its asset right here
 # when a panel is open — the drawer IS part of the table).
 # ---------------------------------------------------------------------------
-def table_receipt(state, text: str, undo=None):
-    """A receipt panel in the chat history, spoken as the user.  When `undo`
-    is given, the receipt carries an UNDO chip — destructive table actions
-    always leave a way back."""
+def table_receipt(state, text: str, undo=None, bench: str = 'the light table'):
+    """A receipt panel in the chat history, spoken as the user — a paper
+    slip stamped with the bench it came from.  When `undo` is given, the
+    receipt carries an UNDO chip — destructive table actions always leave
+    a way back."""
     try:
         from gui.avatars import comic_chat_message
         with state.history:
-            with comic_chat_message(name='You', sent=True).classes('w-full'):
+            with comic_chat_message(name='You', sent=True).classes('w-full'), \
+                    ui.element('div').classes('receipt-slip'):
+                if bench:
+                    ui.label(bench).classes('receipt-slip__stamp')
                 ui.markdown(text)
                 if undo is not None:
                     btn = ui.button('Undo', icon='undo').props('outline dense size=sm').classes('q-mt-xs')
