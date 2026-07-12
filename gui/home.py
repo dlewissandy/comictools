@@ -31,7 +31,67 @@ def view_all_styles(state: APPState):
 def view_all_publishers(state: APPState):
     from gui.elements import PagePacker, caption_action, CrudButtonKind as _CK
     from gui.messaging import post_user_message
+    from storage import registry
     storage: GenericStorage = state.storage
+    houses = registry.registered()
+    if houses:
+        # THE RACK OF HOUSES: every publisher is its own git repo; the
+        # studio opens one house at a time (./data points at it)
+        open_slug = registry.open_slug()
+        with state.details:
+            with ui.row().classes('items-center q-mt-md').style('gap: 8px;'):
+                ui.label('PUBLISHING HOUSES').classes('caption-box')
+                ui.label('each house is its own repository — open one and the '
+                         'whole studio works inside it') \
+                    .classes('text-xs text-gray-500 italic')
+            with ui.row().classes('q-mt-md').style('gap: 14px; flex-wrap: wrap;'):
+                for h in houses:
+                    from storage.local import LocalStorage as _LS
+                    pubs = _LS(base_path=h['path']).read_all_objects(Publisher)
+                    pub = pubs[0] if pubs else None
+                    is_open = h['slug'] == open_slug
+                    card = ui.element('div').classes(
+                        'resume-card' + ('' if is_open else ' cursor-pointer'))
+                    with card:
+                        with ui.column().style('gap: 2px; min-width: 0;'):
+                            ui.label((pub.name if pub else h['slug']).upper()) \
+                                .classes('caption-box caption-box-sm')
+                            if pub is not None and pub.description:
+                                ui.label(pub.description[:90]).classes('text-xs') \
+                                    .style('opacity: .8;')
+                            ui.label(h['path']).classes('text-xs text-gray-500') \
+                                .style('font-family: monospace;')
+                            if is_open:
+                                ui.label('OPEN — the studio is working in this house') \
+                                    .classes('text-xs text-bold')
+                    if is_open:
+                        card.tooltip('This house is open')
+                    else:
+                        def open_house(slug=h['slug'], name=(pub.name if pub else h['slug'])):
+                            if registry.set_open(slug):
+                                # a selection from the OLD house resolves to
+                                # nothing here — land in the new house's lobby
+                                try:
+                                    import json as _json
+                                    from gui.state import STATE_FILEPATH
+                                    try:
+                                        data = _json.load(open(STATE_FILEPATH))
+                                    except Exception:
+                                        data = {}
+                                    data['selection'] = [{"kind": "all-series",
+                                                          "name": "Series", "id": None}]
+                                    _json.dump(data, open(STATE_FILEPATH, 'w'))
+                                except Exception:
+                                    pass
+                                ui.notify(f'Opening {name} — the studio moves houses…',
+                                          type='info')
+                                ui.run_javascript("setTimeout(() => location.href = '/', 600);")
+                            else:
+                                ui.notify('Could not open that house.', type='warning')
+                        card.tooltip('Open this house — the studio works in one at a time')
+                        card.on('click', lambda _, s=h['slug'],
+                                n=(pub.name if pub else h['slug']): open_house(s, n))
+        return
     with state.details:
         packer = PagePacker(12)
         with ui.element('div').classes('mosaic-host q-mt-md'), ui.element('div').classes('comic-mosaic w-full'):

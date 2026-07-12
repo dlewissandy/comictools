@@ -28,7 +28,7 @@ import gui.state as gui_state
 gui_state.STATE_FILEPATH = os.path.join(_tmp, "state.json")
 json.dump(
     {"selection": [{"name": "Series", "id": None, "kind": "all-series"},
-                   {"name": "Joey", "id": "joey", "kind": "series"}],
+                   {"name": "Rugor", "id": "3e3fdb21-8f39-42ff-add7-6fbdda798a21", "kind": "series"}],
      "messages": [], "dark_mode": False},
     open(gui_state.STATE_FILEPATH, "w"))
 
@@ -112,7 +112,7 @@ async def test_conversations_persist_per_object(user: User, api_alive) -> None:
     await user.should_see("ZEBRA-99")
 
     # a different object's conversation does not contain it
-    await user.open("/series/joey")
+    await user.open("/series/3e3fdb21-8f39-42ff-add7-6fbdda798a21")
     await user.should_not_see("ZEBRA-99")
 
 
@@ -238,13 +238,13 @@ async def test_drawer_scopes_to_current_series(user: User) -> None:
     await user.open("/")
     user.find("Assets").click()
     await user.should_see("Fortune Teller Tent")
-    await user.should_not_see("Joey")     # Joey's assets are out of scope
+    await user.should_not_see("Squonk")   # Rugor's assets are out of scope
 
     switches = [e for e in user.client.elements.values()
                 if e.__class__.__name__ == "Switch" and "only" in str(getattr(e, "text", ""))]
     assert switches, "scope switch exists"
     switches[-1].set_value(False)
-    await user.should_see("Joey")         # the whole studio
+    await user.should_see("Squonk")       # the whole HOUSE — one publisher at a time
 
 
 @pytest.mark.module_under_test(main)

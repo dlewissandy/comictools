@@ -22,35 +22,35 @@ def sel(*items):
 
 
 ISSUE_SEL = (("Series", None, SelectedKind.ALL_SERIES),
-             ("Joey", "joey", SelectedKind.SERIES),
-             ("Triumphs and Tumbles", "triumphs-and-tumbles", SelectedKind.ISSUE))
+             ("WL", "wonders-of-the-witchlight", SelectedKind.SERIES),
+             ("Witchlight Carnival", "witchlight-carnival", SelectedKind.ISSUE))
 
 
 def test_read_one_currently_selected_issue(storage):
     issue = reader.read_one(ctx(storage, sel(*ISSUE_SEL)), Issue,
-                            {"series_id": "joey", "issue_id": "triumphs-and-tumbles"})
+                            {"series_id": "wonders-of-the-witchlight", "issue_id": "witchlight-carnival"})
     assert isinstance(issue, Issue)
 
 
 def test_read_one_child_of_selected_series(storage):
     issue = reader.read_one(ctx(storage, sel(*ISSUE_SEL[:2])), Issue,
-                            {"series_id": "joey", "issue_id": "triumphs-and-tumbles"})
+                            {"series_id": "wonders-of-the-witchlight", "issue_id": "witchlight-carnival"})
     assert isinstance(issue, Issue)
 
 
 def test_read_one_top_level_with_empty_context(storage):
-    series = reader.read_one(ctx(storage, sel(ISSUE_SEL[0])), Series, {"series_id": "joey"})
+    series = reader.read_one(ctx(storage, sel(ISSUE_SEL[0])), Series, {"series_id": "wonders-of-the-witchlight"})
     assert isinstance(series, Series)
 
 
 def test_read_one_out_of_context_raises(storage):
     other_sel = sel(("Series", None, SelectedKind.ALL_SERIES),
-                    ("WL", "wonders-of-the-witchlight", SelectedKind.SERIES))
+                    ("Rugor", "3e3fdb21-8f39-42ff-add7-6fbdda798a21", SelectedKind.SERIES))
     with pytest.raises(ValueError):
         reader.read_one(ctx(storage, other_sel), Issue,
-                        {"series_id": "joey", "issue_id": "triumphs-and-tumbles"})
+                        {"series_id": "wonders-of-the-witchlight", "issue_id": "witchlight-carnival"})
 
 
 def test_read_all_children_of_selection(storage):
-    issues = reader.read_all(ctx(storage, sel(*ISSUE_SEL[:2])), Issue, {"series_id": "joey"})
+    issues = reader.read_all(ctx(storage, sel(*ISSUE_SEL[:2])), Issue, {"series_id": "wonders-of-the-witchlight"})
     assert len(issues) >= 1

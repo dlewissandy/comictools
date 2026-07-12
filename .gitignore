@@ -5,9 +5,10 @@ build/
 dist/
 wheels/
 *.egg-info
-# ignore anything in the data/publishers directory
-data/publishers/**
-data/characters/**
+# the studio's data lives in publisher repos; ./data is a symlink to the
+# open house, and the pre-split backup stays local
+data
+data.pre-split-backup/
 data/comics/**
 data/uploads/**
 data/series/**
