@@ -2655,6 +2655,7 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None 
             cid, key = None, f"element/{slug}"
         box = e.get("box") or {}
         crop_rect = None
+        wipe_rect = None
         if box:
             pad = 0.08
             left = int(max(0.0, float(box.get("x", 0)) / 100 - pad) * W0)
@@ -2663,6 +2664,21 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None 
             bottom = int(min(1.0, (float(box.get("y", 0)) + float(box.get("h", 100))) / 100 + pad) * H0)
             if right - left >= 32 and bottom - top >= 32:
                 crop_rect = (left, top, right, bottom)
+            # THE WIPE WINDOW is more generous than the crop: the repaint may
+            # only show through here, so it must cover the WHOLE entity even
+            # when it pokes past the vision box — anything less leaves a
+            # ghost copy of the lifted thing on the remainder.  A degenerate
+            # box still gets a real window (never silently unwiped).
+            gx, gy = int(W0 * 0.06), int(H0 * 0.06)
+            wl, wt = max(0, left - gx), max(0, top - gy)
+            wr, wb = min(W0, right + gx), min(H0, bottom + gy)
+            if wr - wl < 128:
+                cx = (wl + wr) // 2
+                wl, wr = max(0, cx - 64), min(W0, cx + 64)
+            if wb - wt < 128:
+                cy = (wt + wb) // 2
+                wt, wb = max(0, cy - 64), min(H0, cy + 64)
+            wipe_rect = (wl, wt, wr, wb)
 
         if crop_rect:
             crop = src_img.crop(crop_rect)
@@ -2741,8 +2757,14 @@ COMPLETELY TRANSPARENT background: a cut-out acetate.""",
             panel.figure_blocking[key] = {"x": 50, "y": 0, "h": 45, "z": 40}
         lifted.append(name)
         lifted_keys.append(key)
-        if crop_rect:
-            used_rects.append(crop_rect)
+        if wipe_rect:
+            used_rects.append(wipe_rect)
+        else:
+            # no box at all: the wipe can't be localized — open the whole
+            # frame to the repaint rather than leave a copy of the lifted
+            # thing sitting on the remainder
+            logger.warning(f"split: no box for '{name}' — whole-frame repaint window")
+            used_rects.append((0, 0, W0, H0))
 
     # repaint the base with everything lifted removed — revealing what was
     # beneath (a figure keeps its transparency; a background stays opaque)
@@ -2754,9 +2776,10 @@ COMPLETELY TRANSPARENT background: a cut-out acetate.""",
         base_size = "1536x1024" if _s.width > _s.height else ("1024x1536" if _s.height > _s.width else "1024x1024")
     base_bytes = invoke_edit_image_api(
         f"""Remove the following from this image ENTIRELY: {names}.
+Leave NO trace and NO copy of any of them anywhere in the frame.
 Reveal and draw what lies BENEATH each removed item, consistent with the
 image (a garment removed reveals the body/clothing beneath it, drawn
-on-model; a prop removed reveals the scenery behind it).   Keep everything
+on-model; a prop removed reveals the scenery behind it).   Everything
 else must remain PIXEL-IDENTICAL — same composition, same style, same colors.""",
         reference_images=[source],
         size=base_size,

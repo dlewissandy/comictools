@@ -221,6 +221,35 @@ def _stamp_indicia(art: "Image.Image", issue: Issue, series: Series | None,
     return out.convert("RGB")
 
 
+def _insert_text_sheet(ins) -> "Image.Image":
+    """A written insert (the mailbag's letters, ad copy) typeset as a page:
+    masthead caption up top, the text flowed beneath — the way letters pages
+    actually ran."""
+    page = Image.new("RGB", (PAGE_W, PAGE_H), (250, 247, 240))
+    draw = ImageDraw.Draw(page)
+    cx, inner_w = PAGE_W // 2, PAGE_W - 2 * MARGIN
+    ink, soft = (45, 42, 38), (120, 114, 104)
+    y = 120
+    for line in _wrap(draw, ins.name.upper(), _font(44), inner_w):
+        y = _center_text(draw, cx, y, line, _font(44), ink) + 8
+    y += 10
+    draw.line([(cx - 150, y), (cx + 150, y)], fill=soft, width=3)
+    y += 34
+    body = _font(20)
+    line_h = 28
+    for para in (ins.description or '').split("\n"):
+        if not para.strip():
+            y += line_h // 2
+            continue
+        for line in _wrap(draw, para.strip(), body, inner_w):
+            if y > PAGE_H - MARGIN - line_h:
+                break
+            draw.text((MARGIN, y), line, font=body, fill=ink)
+            y += line_h
+    _center_text(draw, cx, PAGE_H - 34, f"— the {ins.kind} —", _font(16), soft)
+    return page
+
+
 # ---------------------------------------------------------------------------
 # composing the book
 # ---------------------------------------------------------------------------
@@ -324,6 +353,11 @@ def compose_book(storage: GenericStorage, series_id: str, issue_id: str
                     at = pi + 1
             if ins.image and os.path.exists(ins.image):
                 sheet = _full_bleed(ins.image)
+            elif (ins.description or '').strip():
+                # a written page (the mailbag's letters, ad copy) prints
+                # typeset until it's inked — never a gray hole in the book
+                sheet = _insert_text_sheet(ins)
+                missing.append(f"insert '{ins.name}' is not rendered (generate_insert_art)")
             else:
                 sheet = Image.new("RGB", (PAGE_W, PAGE_H), (244, 240, 232))
                 d = ImageDraw.Draw(sheet)

@@ -444,9 +444,18 @@ def view_issue(state: APPState):
 
     def insert_sheet(ins):
         rendered = ins.image and os.path.exists(ins.image)
-        with ui.element('div').classes('book-page' + ('' if rendered else ' book-page--ghost book-page--insert')) as sh:
+        has_text = bool((ins.description or '').strip())
+        classes = 'book-page'
+        if not rendered:
+            classes += ' book-page--script' if has_text else ' book-page--ghost book-page--insert'
+        with ui.element('div').classes(classes) as sh:
             if rendered:
                 ui.image(source=ins.image).props('fit=cover').classes('absolute inset-0 w-full h-full')
+            elif has_text:
+                # a written page (the mailbag's letters, an ad's copy) reads
+                # as manuscript until it's inked
+                with ui.element('div').classes('script-body'):
+                    ui.markdown(ins.description).classes('script-text')
             else:
                 ui.icon({'poster': 'wallpaper', 'ad': 'storefront', 'pin-up': 'brush',
                          'mailbag': 'mail', 'title-page': 'title'}.get(ins.kind, 'wallpaper')) \
@@ -461,11 +470,15 @@ def view_issue(state: APPState):
                            lambda _, i=ins: move_insert(i, -1))
                 footer_btn('chevron_right', 'Later in the book (next scene)',
                            lambda _, i=ins: move_insert(i, 1))
-                footer_btn('edit', 'Describe what the page shows',
+                footer_btn('edit', 'Write the page — its words and what it shows',
                            lambda _, i=ins: edit_text_dialog(
                                f'{i.kind} — {i.name}', i.description,
                                lambda v, iid=i.insert_id: save_insert_description(iid, v),
                                f"Let's work on the '{i.name}' insert together."))
+                if not rendered:
+                    footer_btn('brush', 'Ink it — render the page as full art',
+                               lambda _, i=ins: post_user_message(
+                                   state, f"Render the '{i.name}' insert."))
                 ui.space()
                 footer_btn('close', 'Tear this insert out…',
                            lambda _, i=ins: post_user_message(

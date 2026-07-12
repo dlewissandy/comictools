@@ -645,10 +645,11 @@ def style_page(tail: str):
 @ui.page('/series/{series_id}/issue/{issue_id}/read')
 def read_issue_page(series_id: str, issue_id: str):
     """
-    THE READING ROOM: the bound issue, front to back — every sheet composed
-    with the SAME math that binds the PDF, so what you read IS the book.
-    Lights down, pages as paper sheets; arrow keys (or PageUp/PageDown) turn
-    the pages.  Read-only; no chat.
+    THE READING ROOM: the bound issue held open in your hands — two pages
+    side by side like a real comic, the cover opening the book alone on the
+    recto.  A thumb on either edge (or the arrow keys) turns the spread.
+    Every sheet is composed with the SAME math that binds the PDF, so what
+    you read IS the book.  Read-only; no chat.
     """
     from helpers.binder import reader_sheets
     from schema import Issue
@@ -656,50 +657,109 @@ def read_issue_page(series_id: str, issue_id: str):
     issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
     # lights down: this page alone reads against a dark tabletop
     ui.add_css("""
-        .reading-room { background: #211d1a !important; }
-        .reader-sheet { background: #fff; border-radius: 2px;
-                        box-shadow: 0 10px 32px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4); }
+        .reading-room { background: #211d1a !important; overflow: hidden; }
+        .reader-stage { position: fixed; inset: 90px 0 34px; display: flex;
+                        align-items: center; justify-content: center; }
+        .reader-spread { display: flex; align-items: stretch; justify-content: center;
+                         height: 100%; gap: 0; }
+        .reader-sheet { height: 100%; aspect-ratio: 6.625 / 10.1875; background: #fff;
+                        position: relative; flex-shrink: 0;
+                        box-shadow: 0 14px 44px rgba(0,0,0,.6), 0 2px 8px rgba(0,0,0,.4); }
+        .reader-sheet .q-img { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .reader-sheet--verso { border-radius: 4px 1px 1px 4px;
+                               box-shadow: -10px 12px 40px rgba(0,0,0,.55), inset -14px 0 18px -14px rgba(0,0,0,.5); }
+        .reader-sheet--recto { border-radius: 1px 4px 4px 1px;
+                               box-shadow: 10px 12px 40px rgba(0,0,0,.55), inset 14px 0 18px -14px rgba(0,0,0,.5); }
+        .reader-thumb { position: fixed; top: 0; bottom: 0; width: 12vw; min-width: 70px;
+                        display: flex; align-items: center; z-index: 20;
+                        color: #e8e2d8; cursor: pointer; opacity: .35;
+                        transition: opacity .15s; border: none; background: transparent;
+                        font-size: 64px; line-height: 1; }
+        .reader-thumb:hover { opacity: .95; }
+        .reader-thumb--left { left: 0; justify-content: flex-start; padding-left: 14px;
+                              background: linear-gradient(to right, rgba(0,0,0,.35), transparent); }
+        .reader-thumb--right { right: 0; justify-content: flex-end; padding-right: 14px;
+                               background: linear-gradient(to left, rgba(0,0,0,.35), transparent); }
+        .reader-counter { position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
+                          color: #8a8378; font-size: 12px; z-index: 20; }
         .reader-dl { color: #211d1a; background: #e8e2d8; padding: 5px 14px; border-radius: 16px;
                      font-size: 13px; font-weight: 600; text-decoration: none; }
         .reader-dl:hover { background: #fff; }
     """)
     ui.query('body').classes('reading-room')
     ui.add_body_html("""<script>
-    document.addEventListener('keydown', (e) => {
-      if (!['ArrowRight','ArrowLeft','PageDown','PageUp'].includes(e.key)) return;
+    window.readerSpread = 0;
+    window.showSpread = function (k) {
       const sheets = [...document.querySelectorAll('.reader-sheet')];
       if (!sheets.length) return;
+      const n = sheets.length;
+      const maxK = Math.ceil((n - 1) / 2);
+      k = Math.max(0, Math.min(maxK, k));
+      window.readerSpread = k;
+      // spread 0 = the cover alone on the recto; spread k = sheets 2k-1 | 2k
+      const visible = k === 0 ? [0] : [2 * k - 1, 2 * k].filter(i => i < n);
+      sheets.forEach((s, i) => {
+        s.style.display = visible.includes(i) ? '' : 'none';
+        s.classList.remove('reader-sheet--verso', 'reader-sheet--recto');
+      });
+      if (k === 0) { sheets[0].classList.add('reader-sheet--recto'); }
+      else {
+        sheets[visible[0]].classList.add('reader-sheet--verso');
+        if (visible[1] !== undefined) sheets[visible[1]].classList.add('reader-sheet--recto');
+      }
+      const counter = document.querySelector('.reader-counter');
+      if (counter) counter.textContent = k === 0 ? 'the cover' :
+        (visible.length === 2 ? `sheets ${visible[0] + 1}–${visible[1] + 1} of ${n}`
+                              : `sheet ${visible[0] + 1} of ${n}`);
+      const lt = document.querySelector('.reader-thumb--left');
+      const rt = document.querySelector('.reader-thumb--right');
+      if (lt) lt.style.visibility = k === 0 ? 'hidden' : 'visible';
+      if (rt) rt.style.visibility = k >= maxK ? 'hidden' : 'visible';
+    };
+    document.addEventListener('keydown', (e) => {
+      if (!['ArrowRight','ArrowLeft','PageDown','PageUp'].includes(e.key)) return;
       e.preventDefault();
       const fwd = (e.key === 'ArrowRight' || e.key === 'PageDown');
-      const cur = sheets.filter(s => s.getBoundingClientRect().top < 80).length - 1;
-      const next = fwd ? Math.min(sheets.length - 1, cur + 1) : Math.max(0, cur - 1);
-      sheets[next].scrollIntoView({behavior: 'smooth', block: 'start'});
+      window.showSpread(window.readerSpread + (fwd ? 1 : -1));
     });
+    window.addEventListener('load', () => setTimeout(() => window.showSpread(0), 60));
     </script>""")
-    with ui.column().classes('mx-auto items-center').style('max-width: 900px; width: 100%; padding: 32px 12px; gap: 28px;'):
-        if issue is None:
-            ui.markdown(f"Issue `{issue_id}` not found.").style('color: #e8e2d8;')
-            return
-        sheets, missing = reader_sheets(storage, series_id, issue_id)
-        ui.label(f"{issue.name}").classes('text-3xl font-bold').style('color: #e8e2d8;')
-        with ui.row().classes('items-center').style('gap: 12px;'):
-            ui.label('← → turn the pages').classes('text-xs').style('color: #8a8378;')
-            # take the book with you: the bound exports, one click each
-            exports_dir = os.path.join('data', 'series', series_id, 'issues', issue_id, 'exports')
-            for fname, label in ((f"{issue_id}.pdf", '⤓ PDF'), (f"{issue_id}.cbz", '⤓ CBZ')):
-                path = os.path.join(exports_dir, fname)
-                if os.path.exists(path):
-                    ui.html(f'<a class="reader-dl" href="/{path.replace(os.sep, "/")}" '
-                            f'download>{label}</a>')
-        for label, path in sheets:
-            ui.image(source=path).classes('w-full reader-sheet').style('max-width: 720px;')
+    if issue is None:
+        ui.markdown(f"Issue `{issue_id}` not found.").style('color: #e8e2d8;')
+        return
+    sheets, missing = reader_sheets(storage, series_id, issue_id)
+    with ui.row().classes('w-full items-center flex-nowrap').style(
+            'padding: 14px 20px 0; gap: 14px; position: relative; z-index: 25;'):
+        ui.label(f"{issue.name}").classes('text-2xl font-bold').style('color: #e8e2d8;')
+        # take the book with you: the bound exports, one click each
+        exports_dir = os.path.join('data', 'series', series_id, 'issues', issue_id, 'exports')
+        for fname, label in ((f"{issue_id}.pdf", '⤓ PDF'), (f"{issue_id}.cbz", '⤓ CBZ')):
+            path = os.path.join(exports_dir, fname)
+            if os.path.exists(path):
+                ui.html(f'<a class="reader-dl" href="/{path.replace(os.sep, "/")}" '
+                        f'download>{label}</a>')
+        ui.space()
         if missing:
-            with ui.expansion(f"{len(missing)} piece(s) still missing from a complete issue") \
-                    .classes('w-full').style('color: #e8e2d8;'):
+            with ui.expansion(f"{len(missing)} piece(s) still missing") \
+                    .style('color: #8a8378; max-width: 380px;'):
                 for m in missing:
-                    ui.markdown(f"* {m}")
-        if not sheets:
-            ui.markdown("Nothing rendered yet — render covers and panels, then come back.").style('color: #e8e2d8;')
+                    ui.markdown(f"* {m}").style('color: #8a8378;')
+    if not sheets:
+        ui.label("Nothing rendered yet — render covers and panels, then come back.") \
+            .style('color: #e8e2d8; padding: 40px;')
+        return
+    # THE BOOK IN HAND: all sheets in the spread; JS shows two at a time
+    with ui.element('div').classes('reader-stage'):
+        with ui.element('div').classes('reader-spread'):
+            for i, (label, path) in enumerate(sheets):
+                with ui.element('div').classes('reader-sheet') as sh:
+                    ui.image(source=path).props('no-spinner')
+                    sh.tooltip(label)
+    ui.html('<button class="reader-thumb reader-thumb--left" '
+            'onclick="window.showSpread(window.readerSpread - 1)">‹</button>')
+    ui.html('<button class="reader-thumb reader-thumb--right" '
+            'onclick="window.showSpread(window.readerSpread + 1)">›</button>')
+    ui.html('<div class="reader-counter"></div>')
 
 
 @ui.page('/series/{tail:path}')
@@ -710,5 +770,7 @@ def series_page(tail: str):
 # reload=False: hot reload restarts the server on every source edit, which
 # drops every open tab AND silently kills any render on the drawing board.
 # The studio restarts deliberately, not whenever a file changes.
-ui.run(reload=False)
+# COMIC_STUDIO_PORT lets a second instance verify new code against the same
+# data without dropping the author's live session.
+ui.run(reload=False, port=int(os.environ.get('COMIC_STUDIO_PORT', '8080')))
 

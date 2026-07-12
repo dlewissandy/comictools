@@ -12,10 +12,11 @@ def test_compose_book_order_and_trim(storage):
     sheets, _missing = compose_book(storage, WL, CARN)
     labels = [l for l, _img in sheets]
     # front cover first, indicia (no inside-front art in this data) second,
-    # then the interior pages in order
+    # then the interior in order (front-anchored inserts may precede page 1)
     assert labels[0] == "front cover"
     assert labels[1] == "indicia"
-    assert labels[2] == "page 1"
+    body = [l for l in labels[2:] if not l.startswith("insert — ")]
+    assert body[0] == "page 1"
     # every sheet is cut to the same trim — a real book
     assert all(img.size == (PAGE_W, PAGE_H) for _l, img in sheets)
 
