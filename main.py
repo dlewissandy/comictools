@@ -423,6 +423,12 @@ def init_layout(logger):
         .page-small-print { position: absolute; bottom: 10px; left: 10%; width: 80%;
                             text-align: center; font-size: .56rem; color: #8a8378;
                             font-style: italic; }
+        /* the colophon's ledger rows FLOW — seven absolute lines on one
+           spot is a smear, not a ledger */
+        .ledger-line { font-size: .56rem; color: #8a8378; font-style: italic; }
+        /* the coauthor must be readable in the dark room — Quasar pins
+           message text to black unless told to inherit the theme's ink */
+        .q-message-text-content { color: inherit !important; }
 
         /* tiles: the panels living on the page — art when inked, the beat's
            words on script paper until then */

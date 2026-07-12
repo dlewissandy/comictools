@@ -872,7 +872,7 @@ def view_issue(state: APPState):
                 with ui.column().classes('q-mt-sm w-full').style('gap: 0;'):
                     for ln in ledger.lines:
                         row = ui.row().classes(
-                            'items-center page-small-print w-full'
+                            'items-center ledger-line w-full'
                             + ('' if ln.ok else ' cursor-pointer')).style('gap: 6px; flex-wrap: nowrap; overflow: hidden;')
                         with row:
                             ui.icon('check' if ln.ok else 'radio_button_unchecked') \
