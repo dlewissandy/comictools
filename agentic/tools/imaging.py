@@ -2014,41 +2014,19 @@ def preflight_issue(wrapper: RunContextWrapper[APPState], series_id: str, issue_
     Returns:
         A human-readable completeness report.
     """
-    from helpers.binder import collect_issue, _reading_order
+    # ONE PRODUCTION LEDGER: this tool, the colophon, the masthead badge
+    # and the Editor's opener all quote helpers/ledger.py — one truth
+    from helpers.ledger import issue_ledger
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
-    front, panels, back, missing = collect_issue(storage, series_id, issue_id)
+    ledger = issue_ledger(storage, series_id, issue_id)
 
-    # PLACEHOLDER LETTERING is a print-killer: the table's scaffold text must
-    # never reach the book
-    from helpers.compositor import is_placeholder
-    placeholders = []
-    for scene, scene_panels in _reading_order(storage, series_id, issue_id):
-        for p in scene_panels:
-            texts = [d.text for d in (p.dialogue or [])] + [n.text for n in (p.narration or [])]
-            if any(is_placeholder(t) for t in texts):
-                placeholders.append(f"panel {p.panel_number} of scene '{scene.name}' still has "
-                                    f"placeholder lettering — write the real words before it prints")
-    for c in storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id}):
-        texts = [d.text for d in (getattr(c, 'dialogue', None) or [])] + \
-                [n.text for n in (getattr(c, 'narration', None) or [])]
-        if any(is_placeholder(t) for t in texts):
-            placeholders.append(f"the {c.location.value} cover still has placeholder lettering — "
-                                f"write the real words before it prints")
-    # full-page inserts print too — an unrendered one is a gray placeholder page
-    from schema import Insert as _Insert
-    for ins in storage.read_all_objects(_Insert, primary_key={"series_id": series_id, "issue_id": issue_id}):
-        if not (ins.image and os.path.exists(ins.image)):
-            placeholders.append(f"insert '{ins.name}' ({ins.kind}) is not rendered (generate_insert_art)")
-    missing = missing + placeholders
-
-    report = [f"Rendered panels: {len(panels)}",
-              f"Front cover: {'rendered' if front else 'MISSING'}",
-              f"Back cover: {'rendered' if back else 'none'}"]
-    if missing:
+    report = [("[ok] " if line.ok else "[--] ") + line.text for line in ledger.lines]
+    todos = [item for line in ledger.todos for item in line.items]
+    if todos:
         report.append("To complete the issue:")
-        report += [f"  - {m}" for m in missing]
-    else:
+        report += [f"  - {t}" for t in todos]
+    if ledger.complete:
         report.append("The issue is complete — ready to export (export_issue_pdf).")
     return "\n".join(report)
 

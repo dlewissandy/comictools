@@ -852,9 +852,15 @@ def read_issue_page(series_id: str, issue_id: str):
                         f'download>{label}</a>')
         ui.space()
         if missing:
-            with ui.expansion(f"{len(missing)} piece{'s' if len(missing) != 1 else ''} still missing") \
+            # the reading room quotes THE PRODUCTION LEDGER — the same
+            # truth the studio's colophon prints
+            from helpers.ledger import issue_ledger
+            _led = issue_ledger(storage, series_id, issue_id)
+            todo_items = [item for line in _led.todos for item in line.items] \
+                or [line.text for line in _led.todos] or missing
+            with ui.expansion(f"reading a proof — {_led.summary()}") \
                     .style('color: #8a8378; max-width: 380px;'):
-                for m in missing:
+                for m in todo_items:
                     ui.markdown(f"* {m}").style('color: #8a8378;')
     if not sheets:
         ui.label("Nothing rendered yet — render covers and panels, then come back.") \

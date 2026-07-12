@@ -85,9 +85,6 @@ def view_issue(state: APPState):
         Panel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": sc.scene_id},
         order_by="panel_number") for sc in scenes_all}
     panel_of = {p.panel_id: p for ps in panels_by_scene.values() for p in ps}
-    total = len(panel_of)
-    inked = sum(1 for p in panel_of.values() if p.image and os.path.exists(p.image))
-    bare_scenes = [sc for sc in scenes_all if not panels_by_scene[sc.scene_id]]
 
     stories_all = storage.read_all_objects(Story, primary_key={"series_id": series_id, "issue_id": issue_id})
     stories_all.sort(key=lambda s: s.story_number)
@@ -107,11 +104,27 @@ def view_issue(state: APPState):
         remember_stitch(storage, series_id, issue_id)
     except Exception as ex:
         logger.warning(f"remember_stitch skipped: {ex}")
-    from helpers.binder import page_coverage
-    _has, _placed, unplaced, dangling = page_coverage(storage, series_id, issue_id)
+    # ONE PRODUCTION LEDGER: the single truth the masthead badge, the
+    # colophon and the Editor all quote — computed once per paint
+    from helpers.ledger import issue_ledger
+    ledger = issue_ledger(storage, series_id, issue_id)
     export_dir = os.path.join("data", "series", series_id, "issues", issue_id, "exports")
 
-    from gui.pages_board import open_panel
+    def open_panel(state, series_id, issue_id, scene_id, panel_id):
+        """Walk from the book into a panel's light table."""
+        sc = storage.read_object(SceneModel, {"series_id": series_id, "issue_id": issue_id,
+                                              "scene_id": scene_id})
+        p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
+                                        "scene_id": scene_id, "panel_id": panel_id})
+        base = state.selection
+        # the issue anchors the chain — trim anything deeper before descending
+        idx = next((i for i, s in enumerate(base) if s.kind.value == 'issue'), None)
+        if idx is not None:
+            base = base[:idx + 1]
+        state.change_selection(new=[*base,
+            SelectionItem(name=(sc.name if sc else scene_id), id=scene_id, kind=SelectedKind.SCENE),
+            SelectionItem(name=(p.name if p else panel_id), id=panel_id, kind=SelectedKind.PANEL)])
+
     from gui.light_table import table_receipt
 
     def receipt(text):
@@ -555,6 +568,14 @@ def view_issue(state: APPState):
                     chip.tooltip(f'Read the book as {hint}')
                     chip.on('click', lambda _, k=key: set_detail(k))
             ui.space()
+            # THE LEDGER BADGE: the one production truth, worn on the
+            # masthead — click it and the book opens to the colophon
+            badge = ui.chip(ledger.summary(),
+                            icon='verified' if ledger.complete else 'fact_check') \
+                .props('dense outline clickable size=sm')
+            badge.tooltip('  ·  '.join(l.text for l in ledger.todos)
+                          or 'Every board inked, every panel placed — bind it')
+            badge.on('click', lambda _: (remember_spot('colophon'), state.refresh_details()))
             ui.button('Read', icon='menu_book').props('rounded') \
                 .tooltip('Read the issue front to back') \
                 .on('click', lambda _: ui.run_javascript(
@@ -649,7 +670,8 @@ def view_issue(state: APPState):
             cover_sheet('back')
 
             # THE COLOPHON: credits, downloads, the production small print
-            with ui.element('div').classes('book-page book-page--script'):
+            with ui.element('div').classes('book-page book-page--script') as colophon_sheet:
+                colophon_sheet._props['data-banchor'] = 'colophon'
                 ui.label('COLOPHON').classes('page-cap')
                 with ui.element('div').classes('script-body'):
                     def _set(field):
@@ -675,18 +697,35 @@ def view_issue(state: APPState):
                                     .on('click', lambda _, u='/' + path.replace(os.sep, '/'):
                                         ui.run_javascript(f"window.open('{u}', '_blank');"))
                         ui.chip('bind it', icon='menu_book').props('dense outline clickable') \
-                            .tooltip("I'll bind the book and hand you the download") \
+                            .tooltip("I'll bind the book and hand you the download"
+                                     if ledger.complete else
+                                     f"I'll bind the book as it stands — {ledger.summary()}, "
+                                     f"so placeholders will print") \
                             .on('click', lambda _: post_user_message(state, "Export the issue as a PDF."))
                         ui.chip('+ insert', icon='add_photo_alternate').props('dense outline clickable') \
                             .on('click', lambda _: post_user_message(
                                 state, "Add a full-page insert to this issue — ask me what "
                                        "kind and where it goes."))
-                bits = [f"{inked} of {total} panels inked" if total else "no panels yet",
-                        "every panel placed" if not unplaced and not dangling and total
-                        else f"{len(unplaced)} panel(s) loose" if unplaced else "no pages yet"]
-                if bare_scenes:
-                    bits.append(f"{len(bare_scenes)} scene(s) still to break down")
-                ui.label("  ·  ".join(bits)).classes('page-small-print')
+                # THE PRODUCTION LEDGER, set in the colophon's small print —
+                # every line is a door to the first thing it counts
+                def ledger_door(line):
+                    if line.detail:
+                        state._book_detail[issue_id] = line.detail
+                    if line.anchor:
+                        remember_spot(line.anchor)
+                    state.refresh_details()
+                with ui.column().classes('q-mt-sm w-full').style('gap: 0;'):
+                    for ln in ledger.lines:
+                        row = ui.row().classes(
+                            'items-center page-small-print w-full'
+                            + ('' if ln.ok else ' cursor-pointer')).style('gap: 6px; flex-wrap: nowrap; overflow: hidden;')
+                        with row:
+                            ui.icon('check' if ln.ok else 'radio_button_unchecked') \
+                                .style('font-size: 12px;' + ('' if ln.ok else ' opacity: .7;'))
+                            ui.label(ln.text)
+                        if not ln.ok and (ln.anchor or ln.detail):
+                            row.tooltip('Open the book to it')
+                            row.on('click', lambda _, l=ln: ledger_door(l))
 
         # THE BOOK REMEMBERS YOUR SPOT: walking into a panel and back lands
         # you on the page you left.  The spot is spent once used — editing

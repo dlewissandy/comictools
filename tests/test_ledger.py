@@ -1,0 +1,54 @@
+"""ONE PRODUCTION LEDGER: every surface quotes helpers/ledger.py, so the
+counts can never disagree.  These tests pin the ledger's honesty."""
+import os
+
+from helpers.ledger import issue_ledger
+from schema import Panel, SceneModel
+
+WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+
+
+def test_ledger_counts_match_storage(storage):
+    led = issue_ledger(storage, WL, CARN)
+    keys = [line.key for line in led.lines]
+    assert len(keys) == len(set(keys)), "one line per truth — no duplicates"
+    assert 'script' in keys and 'covers' in keys
+
+    # the panels line must count exactly what storage holds
+    scenes = storage.read_all_objects(SceneModel, {"series_id": WL, "issue_id": CARN})
+    panels = [p for sc in scenes for p in storage.read_all_objects(
+        Panel, {"series_id": WL, "issue_id": CARN, "scene_id": sc.scene_id})]
+    unrendered = [p for p in panels if not (p.image and os.path.exists(p.image))]
+    by = {line.key: line for line in led.lines}
+    if panels:
+        assert by['panels'].count == len(unrendered)
+        assert by['panels'].ok == (not unrendered)
+
+
+def test_every_todo_line_is_a_door(storage):
+    """A line that reports work must point somewhere: an anchor in the open
+    book or at least a dial stop."""
+    led = issue_ledger(storage, WL, CARN)
+    for line in led.todos:
+        assert line.anchor or line.detail, f"ledger line '{line.key}' has no door"
+
+
+def test_ledger_notices_an_uninked_panel(storage):
+    import pytest
+    scenes = storage.read_all_objects(SceneModel, {"series_id": WL, "issue_id": CARN})
+    panel = next((p for sc in scenes for p in storage.read_all_objects(
+        Panel, {"series_id": WL, "issue_id": CARN, "scene_id": sc.scene_id})
+        if p.image and os.path.exists(p.image)), None)
+    if panel is None:
+        pytest.skip("no inked panel in the fixture data to un-ink")
+    before = issue_ledger(storage, WL, CARN)
+    n0 = {l.key: l for l in before.lines}['panels'].count
+    panel.image = None
+    storage.update_object(panel)
+    led = issue_ledger(storage, WL, CARN)
+    line = {l.key: l for l in led.lines}['panels']
+    assert line.count == n0 + 1 and not line.ok
+    # the door leads to the FIRST uninked panel so the click answers
+    assert line.anchor and line.anchor.startswith('panel-')
+    assert not led.complete
+    assert 'before press' in led.summary()

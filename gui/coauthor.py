@@ -13,18 +13,6 @@ from loguru import logger
 from schema import CharacterModel, CharacterVariant, Cover, Issue, Panel, SceneModel, Series, Setting
 
 
-def _issue_pulse(storage, series_id, issue_id):
-    """(total_panels, unrendered_panels, scene_count) for an issue."""
-    scenes = storage.read_all_objects(SceneModel, {"series_id": series_id, "issue_id": issue_id})
-    total = missing = 0
-    for sc in scenes:
-        for p in storage.read_all_objects(Panel, {"series_id": series_id, "issue_id": issue_id, "scene_id": sc.scene_id}):
-            total += 1
-            if not (p.image and os.path.exists(p.image)):
-                missing += 1
-    return total, missing, len(scenes)
-
-
 def opening_and_chips(state) -> tuple[str | None, list[str]]:
     """
     Returns (opening_line, suggestion_chips) for the current selection.
@@ -54,18 +42,32 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                         ["Create a new issue", "Create a character", "Import an asset from the library"])
 
             case "issue":
+                # the Editor quotes THE PRODUCTION LEDGER — the same truth
+                # the masthead badge and the colophon print
                 series_id, issue_id = sel[-2].id, sel[-1].id
-                total, missing, scene_count = _issue_pulse(storage, series_id, issue_id)
-                if scene_count == 0:
+                from helpers.ledger import issue_ledger
+                led = issue_ledger(storage, series_id, issue_id)
+                by = {l.key: l for l in led.lines}
+                if not by['script'].ok:
                     return ("Paste the story you want in this issue and I'll break it down — scenes with settings and cast, then panels.",
                             ["Break my story into scenes", "Create a front cover"])
-                if missing:
-                    return (f"{scene_count} scenes, {total} panels — {missing} still unrendered.  Want me to work through them?",
-                            [f"Render the {missing} missing panels", "Export the issue as a PDF", "Add another scene"])
-                if total:
-                    return (f"All {total} panels are rendered.  This issue is ready to bind.",
-                            ["Export the issue as a PDF", "Create a front cover"])
-                return (None, ["Break the scenes into panels", "Export the issue as a PDF"])
+                if led.complete:
+                    return ("The ledger is clean — every panel inked and placed.  This issue is ready to bind.",
+                            ["Export the issue as a PDF", "Read the issue"])
+                chips = []
+                if 'panels' in by and not by['panels'].ok:
+                    chips.append(f"Render the {by['panels'].count} missing panels")
+                if 'scenes' in by and not by['scenes'].ok:
+                    chips.append("Break the scenes into panels")
+                if not by['covers'].ok:
+                    chips.append("Create a front cover" if 'no front cover' in by['covers'].text
+                                 else "Render the front cover")
+                if 'inserts' in by and not by['inserts'].ok:
+                    chips.append("Render the inserts")
+                chips.append("Export the issue as a PDF")
+                todo = ";  ".join(l.text for l in led.todos[:3])
+                return (f"The production ledger reads: {todo}.  Want me to work through it?",
+                        chips[:3])
 
             case "scene":
                 series_id, issue_id, scene_id = sel[-3].id, sel[-2].id, sel[-1].id
