@@ -373,6 +373,33 @@ if (!window._roughDragInit) {
     window._nudgeT = setTimeout(() => { window._nudgePending = null; report(fig, canvas); }, 400);
   });
 
+  // A MISSED FILE-DROP MUST NEVER NAVIGATE THE APP AWAY: if no drop zone
+  // handled it, swallow the browser default (opening the image in the tab)
+  document.addEventListener('dragover', (e) => {
+    const t = e.dataTransfer && e.dataTransfer.types;
+    if (t && Array.prototype.includes.call(t, 'Files')) e.preventDefault();
+  });
+  document.addEventListener('drop', (e) => {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) e.preventDefault();
+  });
+
+  // PASTE AN IMAGE from the clipboard — lands like a drop, wherever you are
+  document.addEventListener('paste', (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (const it of items) {
+      if (it.type && it.type.startsWith('image/')) {
+        const f = it.getAsFile();
+        if (!f) continue;
+        e.preventDefault();
+        const r = new FileReader();
+        r.onload = () => emitEvent('clipboard_image', {data: r.result, mime: it.type});
+        r.readAsDataURL(f);
+        return;
+      }
+    }
+  });
+
   // double-click a balloon or caption: edit the words IN PLACE
   document.addEventListener('dblclick', (e) => {
     const fig = e.target.closest('.rough-drag');
@@ -650,6 +677,88 @@ def fresh_board(storage, board):
         board.layer_groups = fresh.layer_groups
         board.image = fresh.image
     return board
+
+
+def current_board(state):
+    """The board (panel or cover) the user is looking at, else None."""
+    from schema import Panel, Cover
+    sel = state.selection or []
+    if not sel:
+        return None
+    ids = {}
+    for item in sel:
+        k = item.kind.value
+        if k == 'series':
+            ids = {'series_id': item.id}
+        elif k == 'issue':
+            ids['issue_id'] = item.id
+        elif k == 'scene':
+            ids['scene_id'] = item.id
+        elif k == 'panel':
+            ids['panel_id'] = item.id
+        elif k == 'cover':
+            ids['cover_id'] = item.id
+    last = sel[-1].kind.value
+    if last == 'panel' and {'series_id', 'issue_id', 'scene_id', 'panel_id'} <= ids.keys():
+        return state.storage.read_object(cls=Panel, primary_key={
+            k: ids[k] for k in ('series_id', 'issue_id', 'scene_id', 'panel_id')})
+    if last == 'cover' and {'series_id', 'issue_id', 'cover_id'} <= ids.keys():
+        return state.storage.read_object(cls=Cover, primary_key={
+            k: ids[k] for k in ('series_id', 'issue_id', 'cover_id')})
+    return None
+
+
+def handle_clipboard_image(state, args: dict):
+    """A pasted image: on a board, offer take / table-reference / plate; on
+    any other view, file it as a reference on the object being worked on."""
+    import base64
+    from io import BytesIO
+    from uuid import uuid4
+    data_url = (args or {}).get('data') or ''
+    if ',' not in data_url:
+        return
+    raw = base64.b64decode(data_url.split(',', 1)[1])
+    mime = (args or {}).get('mime') or 'image/png'
+    name = f"pasted-{uuid4().hex[:6]}.png"
+    board = current_board(state)
+    if board is None:
+        from types import SimpleNamespace
+        from gui.messaging import attach_reference
+        attach_reference(state, SimpleNamespace(name=name, content=BytesIO(raw), type=mime))
+        return
+    storage = state.storage
+    with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 380px;'):
+        ui.label('Pasted image').classes('caption-box caption-box-sm')
+        ui.image(source=data_url).style('max-height: 180px;').props('fit=contain').classes('q-mt-sm')
+
+        def as_take():
+            dlg.close()
+            locator = storage.upload_image(obj=board, name=name, data=BytesIO(raw), mime_type=mime)
+            fresh_board(storage, board)
+            board.image = locator
+            storage.update_object(board)
+            table_receipt(state, '📋 pasted an image in as a take — the table is locked to it')
+            state.refresh_details()
+
+        def as_reference():
+            dlg.close()
+            storage.upload_reference_image(board, name, BytesIO(raw), mime)
+            table_receipt(state, '📋 pinned the pasted image to the table as a reference')
+            state.refresh_details()
+
+        def as_plate():
+            dlg.close()
+            locator = storage.upload_image(obj=board, name=name, data=BytesIO(raw), mime_type=mime)
+            rework_take_on_table(state, board, locator)
+
+        with ui.column().classes('w-full q-mt-sm').style('gap: 6px;'):
+            ui.button('A take of this board', icon='filter_frames').props('unelevated dense no-caps') \
+                .classes('w-full').on('click', lambda _: as_take())
+            ui.button('The background layer (rework it here)', icon='layers').props('outline dense no-caps') \
+                .classes('w-full').on('click', lambda _: as_plate())
+            ui.button('A reference pinned to the table', icon='attachment').props('outline dense no-caps') \
+                .classes('w-full').on('click', lambda _: as_reference())
+    dlg.open()
 
 
 def read_board(storage, a: dict):
@@ -1019,6 +1128,12 @@ def takes_row(state, board, featured: str | None):
         table_receipt(state, '📌 featured a take — the table is locked to its arrangement')
         state.refresh_details()
 
+    def explode_take(img: str):
+        """A take (or an imported image) goes BACK to layers: it becomes the
+        plate and the split flow opens on it — recognize, lift, rework."""
+        state._auto_split_board = board.id
+        rework_take_on_table(state, board, img)
+
     takes = [img for img in storage.list_images(board) if os.path.exists(img)]
     with ui.row().classes('w-full items-center').style('gap: 10px;'):
         header("Takes", 4)
@@ -1038,6 +1153,11 @@ def takes_row(state, board, featured: str | None):
                         .classes('absolute bottom-1 right-1 z-10 bg-white/70 dark:bg-black/50') \
                         .tooltip('Rework this take on the table (becomes the background layer)') \
                         .on('click.stop', lambda _, img=img: rework_take_on_table(state, board, img))
+                    ui.button(icon='splitscreen').props('flat round dense size=xs') \
+                        .classes('absolute bottom-1 left-8 z-10 bg-white/70 dark:bg-black/50') \
+                        .tooltip('EXPLODE into layers — it becomes the background and its '
+                                 'figures and elements are recognized and lifted onto acetates') \
+                        .on('click.stop', lambda _, img=img: explode_take(img))
                 take.on('click', lambda _, img=img: set_image(img))
 
         def on_upload_take(e):
@@ -2706,6 +2826,11 @@ def light_table(state: APPState, panel, scene, setting,
             # the margin notes: the visual description IS the textual rough
             from gui.elements import markdown_field_editor
             markdown_field_editor(state, description_label, panel.description, header_size=3)
+        # an EXPLODED take auto-opens the split flow on its fresh plate
+        if getattr(state, '_auto_split_board', None) == panel.id and split_plate:
+            state._auto_split_board = None
+            ui.timer(0.6, lambda: split_flow('background', split_plate), once=True)
+
         if featured is not None:
             with ui.column().style('flex: 1 1 0; min-width: 0;'):
                 ui.label('THE PRINT').classes('comic-label-sm')

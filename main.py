@@ -471,6 +471,11 @@ def build_page(selection_override: list[SelectionItem] | None = None):
             board_label = ui.label('').classes('text-xs')
         board_chip.tooltip('The studio is at work — receipts land in the chat as pieces finish')
 
+    # PASTE AN IMAGE anywhere: boards offer take/plate/reference; other
+    # views file it as a reference on what you're working on
+    from gui.light_table import handle_clipboard_image
+    ui.on('clipboard_image', lambda e: handle_clipboard_image(state, e.args))
+
     def _board_tick():
         n = len(getattr(state, '_render_pending', None) or [])
         if n:
