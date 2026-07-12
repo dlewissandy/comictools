@@ -28,77 +28,48 @@ def view_all_styles(state: APPState):
                     .classes('caption-box caption-box-sm')
                     .style('position: absolute; bottom: 6px; left: 6px; z-index: 6;'))
         
+def all_house_publishers(storage) -> list[Publisher]:
+    """Every publisher on the wall — one per registered house (each house
+    is a git repo holding exactly one publisher).  Falls back to the open
+    storage when no registry exists (legacy single-directory layout)."""
+    from storage import registry
+    from storage.local import LocalStorage as _LS
+    houses = registry.registered()
+    if not houses:
+        return storage.read_all_objects(Publisher)
+    out = []
+    for h in houses:
+        for pub in _LS(base_path=h['path']).read_all_objects(Publisher):
+            PUBLISHER_HOUSE[pub.publisher_id] = h
+            out.append(pub)
+    return out
+
+
+# publisher_id -> {"slug", "path"} of the house holding it (filled on render)
+PUBLISHER_HOUSE: dict[str, dict] = {}
+
+
+def house_logo(pub: Publisher):
+    """The publisher's logo path, resolved into ITS house — records store
+    'data/…' locators, which only resolve for the OPEN house's symlink."""
+    img = pub.image
+    home = PUBLISHER_HOUSE.get(pub.publisher_id)
+    if img and home and os.path.realpath('data') != os.path.realpath(home['path']):
+        return os.path.join(home['path'], os.path.relpath(img, 'data'))
+    return img
+
+
 def view_all_publishers(state: APPState):
     from gui.elements import PagePacker, caption_action, CrudButtonKind as _CK
     from gui.messaging import post_user_message
-    from storage import registry
     storage: GenericStorage = state.storage
-    houses = registry.registered()
-    if houses:
-        # THE RACK OF HOUSES: every publisher is its own git repo; the
-        # studio opens one house at a time (./data points at it)
-        open_slug = registry.open_slug()
-        with state.details:
-            with ui.row().classes('items-center q-mt-md').style('gap: 8px;'):
-                ui.label('PUBLISHING HOUSES').classes('caption-box')
-                ui.label('each house is its own repository — open one and the '
-                         'whole studio works inside it') \
-                    .classes('text-xs text-gray-500 italic')
-            with ui.row().classes('q-mt-md').style('gap: 14px; flex-wrap: wrap;'):
-                for h in houses:
-                    from storage.local import LocalStorage as _LS
-                    pubs = _LS(base_path=h['path']).read_all_objects(Publisher)
-                    pub = pubs[0] if pubs else None
-                    is_open = h['slug'] == open_slug
-                    card = ui.element('div').classes(
-                        'resume-card' + ('' if is_open else ' cursor-pointer'))
-                    with card:
-                        with ui.column().style('gap: 2px; min-width: 0;'):
-                            ui.label((pub.name if pub else h['slug']).upper()) \
-                                .classes('caption-box caption-box-sm')
-                            if pub is not None and pub.description:
-                                ui.label(pub.description[:90]).classes('text-xs') \
-                                    .style('opacity: .8;')
-                            ui.label(h['path']).classes('text-xs text-gray-500') \
-                                .style('font-family: monospace;')
-                            if is_open:
-                                ui.label('OPEN — the studio is working in this house') \
-                                    .classes('text-xs text-bold')
-                    if is_open:
-                        card.tooltip('This house is open')
-                    else:
-                        def open_house(slug=h['slug'], name=(pub.name if pub else h['slug'])):
-                            if registry.set_open(slug):
-                                # a selection from the OLD house resolves to
-                                # nothing here — land in the new house's lobby
-                                try:
-                                    import json as _json
-                                    from gui.state import STATE_FILEPATH
-                                    try:
-                                        data = _json.load(open(STATE_FILEPATH))
-                                    except Exception:
-                                        data = {}
-                                    data['selection'] = [{"kind": "all-series",
-                                                          "name": "Series", "id": None}]
-                                    _json.dump(data, open(STATE_FILEPATH, 'w'))
-                                except Exception:
-                                    pass
-                                ui.notify(f'Opening {name} — the studio moves houses…',
-                                          type='info')
-                                ui.run_javascript("setTimeout(() => location.href = '/', 600);")
-                            else:
-                                ui.notify('Could not open that house.', type='warning')
-                        card.tooltip('Open this house — the studio works in one at a time')
-                        card.on('click', lambda _, s=h['slug'],
-                                n=(pub.name if pub else h['slug']): open_house(s, n))
-        return
     with state.details:
         packer = PagePacker(12)
         with ui.element('div').classes('mosaic-host q-mt-md'), ui.element('div').classes('comic-mosaic w-full'):
             view_all_instances(
                 state=state,
-                get_image_locator=lambda publisher: publisher.image,
-                get_instances=lambda: storage.read_all_objects(Publisher),
+                get_image_locator=house_logo,
+                get_instances=lambda: all_house_publishers(storage),
                 kind="publisher",
                 aspect_ratio="1/1",
                 packer=packer, variants=[(2, 2)],

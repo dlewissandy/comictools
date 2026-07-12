@@ -23,6 +23,26 @@ def view_publisher(state: APPState):
     publisher = storage.read_object(Publisher, primary_key={"publisher_id": publisher_id}) if publisher_id else None
     details = state.details
 
+    if publisher is None and publisher_id:
+        # EVERY HOUSE ITS OWN REPO: this publisher lives in another house —
+        # open it (the ./data symlink re-points) and carry on as if the
+        # wall were one studio.  Git is infrastructure; the page is not.
+        from storage import registry
+        from storage.local import LocalStorage as _LS
+        for h in registry.registered():
+            if h['slug'] == registry.open_slug():
+                continue
+            if _LS(base_path=h['path']).read_object(
+                    Publisher, primary_key={"publisher_id": publisher_id}) is not None:
+                if registry.set_open(h['slug']):
+                    publisher = storage.read_object(
+                        Publisher, primary_key={"publisher_id": publisher_id})
+                    try:
+                        ui.notify(f"Opened the {publisher.name} house", type='info')
+                    except Exception:
+                        pass
+                break
+
     if publisher is None:
         details.clear()
         header(f"Publisher {publisher_id} not found", 0)
