@@ -2,6 +2,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 from schema.character_reference import CharacterRef
 from schema.setting import Prop
+from schema.layout_feel import LayoutFeel
 
 class SceneModel(BaseModel):
     """
@@ -25,6 +26,7 @@ class SceneModel(BaseModel):
     cast: list[CharacterRef] = Field(default_factory=list, description="The characters appearing in this scene with the variant (wardrobe) they wear.  Default to empty list.")
     props: list[Prop] = Field(default_factory=list, description="Scene-specific props beyond the setting's standing props.  Default to empty list.")
     blocking: Optional[str] = Field(None, description="Blocking notes: how the characters are staged and move through the setting during the scene.  Default to None.")
+    layout_feel: Optional[LayoutFeel] = Field(None, description="This scene's OVERRIDE of the book's page-flow feel (density/verticality/irregularity/variety); None means inherit the issue's feel.  Default None.")
 
     @property
     def primary_key(self) -> dict[str, str]:

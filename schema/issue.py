@@ -1,4 +1,5 @@
 from typing import Optional
+from schema.layout_feel import LayoutFeel
 from pydantic import BaseModel, Field
 
         
@@ -19,6 +20,7 @@ class Issue(BaseModel):
     artist: Optional[str] = Field(..., description="The artist of the issue.  Optional.   Default to None")
     colorist: Optional[str] = Field(..., description="The colorist of the issue.  Optional.   Default to None")
     creative_minds: Optional[str] = Field(..., description="The creative minds behind the issue. Optional. Default to None")
+    layout_feel: LayoutFeel = Field(default_factory=LayoutFeel, description="The book's page-flow FEEL — density, verticality, irregularity, variety (each -1..1, 0 neutral).  A scene may override it.  Default all-neutral.")
 
     @property
     def primary_key(self) -> dict[str, str]:

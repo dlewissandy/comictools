@@ -41,6 +41,16 @@ def layout_note(series_id: str, issue_id: str) -> str | None:
     """The latest 'couldn't make an exact-fill layout' reason for this issue,
     or None when the whole book flowed exactly."""
     return _LAYOUT_NOTES.get((series_id, issue_id))
+
+
+def resolve_layout_feel(issue, scene) -> dict | None:
+    """The FEEL a scene's panels flow to: the scene's own override, else the
+    book's feel (as a plain {density, verticality, irregularity, variety} dict);
+    None when neither is set (the plain flow)."""
+    feel = getattr(scene, "layout_feel", None)
+    if feel is None:
+        feel = getattr(issue, "layout_feel", None)
+    return feel.model_dump() if feel is not None else None
 GAP_MAX = 0.5   # slack becomes gutters between bands, up to this much each
 
 
@@ -261,7 +271,8 @@ def flow_run(part: list) -> tuple[list[tuple[list, float]], str | None]:
     the book still binds; the note says why."""
     from helpers.pagination import LayoutImpossible, paginate as exact_paginate
     try:
-        flow = exact_paginate([{"aspect": it[3], "size": it[2], "locked": it[4]}
+        flow = exact_paginate([{"aspect": it[3], "size": it[2], "locked": it[4],
+                                "feel": (it[5] if len(it) > 5 else None)}
                                for it in part])
     except LayoutImpossible as ex:
         out = []
@@ -297,18 +308,20 @@ def stitch_pages(storage, series_id: str, issue_id: str) -> list[Page]:
     what prints IS what the issue view shows.  Returns the new Page objects
     (not yet saved)."""
     from helpers.binder import _reading_order
-    from schema import Insert
+    from schema import Insert, Issue
     anchors = {i.after_scene_number
                for i in storage.read_all_objects(Insert, {"series_id": series_id,
                                                           "issue_id": issue_id})}
+    issue = storage.read_object(Issue, {"series_id": series_id, "issue_id": issue_id})
     segments, run = [], []
     for scene, panels in _reading_order(storage, series_id, issue_id):
         if panels:
-            # (key, aspect-ratio float [band flow], size, aspect NAME + locked
-            # [exact-fill flow]) — pack_bands reads [:3], the solver reads [3:]
+            # (key, aspect-ratio float [band flow], size, aspect NAME, locked,
+            # feel [exact-fill flow]) — pack_bands reads [:3], the solver [3:]
+            feel = resolve_layout_feel(issue, scene)
             run += [((p.scene_id, p.panel_id), AR.get(p.aspect.value, 1.5),
                      getattr(p, 'size', None) or '1x',
-                     p.aspect.value, bool(getattr(p, 'shape_locked', False)))
+                     p.aspect.value, bool(getattr(p, 'shape_locked', False)), feel)
                     for p in panels]
         if (not panels or scene.scene_number in anchors) and run:
             segments.append(run)

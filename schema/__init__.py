@@ -1,6 +1,7 @@
 from schema.character import CharacterModel
 from schema.character_variant import CharacterVariant, CharacterVariantMinimal
 from schema.dialog import Narration, NarrationPosition, Dialogue, DialogueEmphasis
+from schema.layout_feel import LayoutFeel
 from schema.issue import Issue
 from schema.insert import Insert
 from schema.page import Page, PanelCell, PanelRef
@@ -47,6 +48,7 @@ __all__ = [
     "Insert",
     "InsertionLocation",
     "Issue",
+    "LayoutFeel",
     "Setting",
     "SettingShot",
     "Narration",

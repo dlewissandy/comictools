@@ -865,7 +865,7 @@ def view_issue(state: APPState):
                 # way text reflows across lines — turning, resizing, or moving
                 # a panel carries neighbors onto the next or previous page.
                 # Bare scenes and inserts hold their place as full pages.
-                from helpers.stitcher import flow_run, AR
+                from helpers.stitcher import flow_run, AR, resolve_layout_feel
                 segments, run = [], []
 
                 def flush():
@@ -876,10 +876,12 @@ def view_issue(state: APPState):
                 for sc in scenes_all:
                     panels = panels_by_scene[sc.scene_id]
                     if panels:
-                        # (key, AR float, size, aspect NAME, locked) — flow_run reads [3:]
+                        # (key, AR float, size, aspect NAME, locked, feel) —
+                        # flow_run reads [3:]; the feel steers the exact-fill flow
+                        feel = resolve_layout_feel(issue, sc)
                         run += [((sc.scene_id, p.panel_id), AR.get(p.aspect.value, 1.5),
                                  getattr(p, 'size', None) or '1x',
-                                 p.aspect.value, bool(getattr(p, 'shape_locked', False)))
+                                 p.aspect.value, bool(getattr(p, 'shape_locked', False)), feel)
                                 for p in panels]
                     else:
                         flush()
