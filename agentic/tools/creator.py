@@ -250,10 +250,10 @@ def create_comic_series(wrapper: RunContextWrapper[APPState], series_title: str,
         logger.info(f"The title '{series_title}' is available.")
     series = Series(series_id=series_id, name=series_title, description=description, publisher_id=pub_id)
     new_id = storage.create_object(data=series)
-    selection = state.selection
-    new_itm = SelectionItem(name=series.name, id=new_id, kind=SelectedKind.SERIES)
-    new_sel = [s for s in selection]+[new_itm]
-    state.change_selection(new=new_sel)
+    # THE ONE TRAIL: the new series opens on the same canonical trail every
+    # UI door builds — never appended to whatever room the chat was in
+    from gui.routes import series_ancestry
+    state.change_selection(new=series_ancestry(state.storage, new_id))
     state.is_dirty = True
     return series
 
@@ -305,10 +305,8 @@ def create_style(
         image=None
     )
     style_id = storage.create_object(style)
-    selection = state.selection
-    new_itm = SelectionItem(name=style.name, id=style_id, kind=SelectedKind.STYLE)
-    new_sel = [s for s in selection]+[new_itm]
-    state.change_selection(new=new_sel)
+    from gui.routes import style_ancestry
+    state.change_selection(new=style_ancestry(state.storage, style_id))
     return style
 
 @function_tool

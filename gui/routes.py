@@ -212,6 +212,12 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
 
     sid = parts[1]
     sel = series_ancestry(storage, sid)
+    # every child crumb below the series resolves its NAME through the house
+    # that holds it — the root storage sees nothing under mount-all, and a
+    # shared link must never read as a trail of raw UUIDs
+    from storage import registry as _reg
+    storage = _storage_holding(storage, Series, {"series_id": sid},
+                               house_of=_reg.house_of_series, key=sid)
     rest = parts[2:]
     if not rest:
         return sel

@@ -34,16 +34,19 @@ def select_publisher(wrapper: RunContextWrapper[APPState], publisher_id: str) ->
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
 
-    publisher: Publisher = storage.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
+    # EVERY HOUSE IS MOUNTED: resolve which house holds it, then walk the
+    # same canonical trail the UI walks — never append to the current room
+    from gui.routes import _storage_holding
+    from storage import registry as _reg
+    st = _storage_holding(storage, Publisher, {"publisher_id": publisher_id},
+                          house_of=_reg.house_of_publisher, key=publisher_id)
+    publisher: Publisher = st.read_object(cls=Publisher, primary_key={"publisher_id": publisher_id})
     if publisher is None:
         return f"Publisher '{publisher_id}' not found.  Maybe try looking at the list of publishers first?"
-    sel_itm = SelectionItem(
-        id=publisher.publisher_id,
-        name=publisher.name,
-        kind=SelectedKind.PUBLISHER,
-    )
-    new_selection = state.selection + [sel_itm]
-    state.change_selection(new=new_selection)
+    state.change_selection(new=[
+        SelectionItem(id=None, name="Publishers", kind=SelectedKind.ALL_PUBLISHERS),
+        SelectionItem(id=publisher.publisher_id, name=publisher.name,
+                      kind=SelectedKind.PUBLISHER)])
     return f"Selected publisher: {publisher.publisher_id}"
 
 @function_tool
@@ -61,16 +64,15 @@ def select_series(wrapper: RunContextWrapper[APPState], series_id: str) -> str:
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
 
-    series = storage.read_object(Series, {"series_id": series_id})
+    from gui.routes import series_ancestry, _storage_holding
+    from storage import registry as _reg
+    st = _storage_holding(storage, Series, {"series_id": series_id},
+                          house_of=_reg.house_of_series, key=series_id)
+    series: Series = st.read_object(Series, {"series_id": series_id})
     if series is None:
         return f"Comic series '{series_id}' not found.  Maybe try looking at the list of comic series first?"
-    series: Series = series
-    sel_itm = SelectionItem(
-        id=series.series_id,
-        name=series.name,
-        kind=SelectedKind.SERIES,
-    )
-    state.change_selection(new=state.selection + [sel_itm])
+    # THE ONE TRAIL: Publishers → house → series, same as every UI door
+    state.change_selection(new=series_ancestry(storage, series_id))
     return f"Selected comic series: {series.name}"
 
 @function_tool
@@ -87,14 +89,14 @@ def select_comic_style(wrapper: RunContextWrapper[APPState], style_id: str) -> s
     """
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
-    style = storage.read_object(ComicStyle, {"style_id": style_id})
+    from gui.routes import style_ancestry, _storage_holding
+    from storage import registry as _reg
+    st = _storage_holding(storage, ComicStyle, {"style_id": style_id},
+                          house_of=_reg.house_of_style, key=style_id)
+    style: ComicStyle = st.read_object(ComicStyle, {"style_id": style_id})
     if style is None:
         return f"Comic style '{style_id}' not found.  Maybe try looking at the list of comic styles first?"
-    style: ComicStyle = style
-    sel_itm = SelectionItem(
-        id=style.style_id,
-        name=style.name,
-        kind=SelectedKind.STYLE,
-    )
-    state.change_selection(new=[s for s in state.selection] + [sel_itm])
+    # THE ONE TRAIL: Publishers → house → style, so the thread keys the
+    # same conversation the UI keys
+    state.change_selection(new=style_ancestry(storage, style_id))
     return f"Selected comic style: {style.name}"

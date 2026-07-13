@@ -736,6 +736,23 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         suggestions_row = suggestions_row,
      )
 
+    # STYLES MOVED INTO THE HOUSE: legacy '/styles…' threads re-key to the
+    # canonical trail (bare style ids are ambiguous across houses by design —
+    # first mounted hit wins, same as every legacy-link fallback)
+    try:
+        if any(k == "/styles" or k.startswith("/styles/") for k in conversations):
+            from storage import registry as _reg
+            from schema import Publisher as _Pub
+            _pid = None
+            for _h in _reg.registered():
+                _pubs = _reg.storage_for(_h["slug"]).read_all_objects(_Pub)
+                if _pubs:
+                    _pid = _pubs[0].publisher_id
+                    break
+            conversations = APPState.migrate_style_threads(conversations, _pid)
+    except Exception as _ex:
+        logger.debug(f"legacy styles-thread migration skipped: {_ex}")
+
     state.conversations = conversations
     if messages is None:
         # the selection's own thread; fall back to the legacy single history
@@ -1060,9 +1077,15 @@ def _page_from_path(path: str):
     from gui.routes import selection_from_path
     parts = [p for p in path.split('/') if p]
     selection = selection_from_path(LocalStorage(base_path="data"), parts)
-    if selection is None:
+    lost = selection is None
+    if lost:
         selection = [SelectionItem(**item) for item in DEFAULT_SELECTION]
     build_page(selection_override=selection)
+    if lost:
+        # NEVER a lobby that pretends nothing happened
+        ui.timer(0.6, lambda p=path: ui.notify(
+            f"'/{p}' didn't match anything — this is the front door.",
+            type='info'), once=True)
 
 
 # Serve the data directory (images) from app start, not first page build.
@@ -1231,5 +1254,13 @@ def series_page(tail: str):
 # The studio restarts deliberately, not whenever a file changes.
 # COMIC_STUDIO_PORT lets a second instance verify new code against the same
 # data without dropping the author's live session.
+# A MISTYPED ADDRESS GETS THE FRONT DOOR, told plainly — never a bare
+# JSON wall.  Registered LAST so every real route above wins (FastAPI
+# matches in registration order).
+@ui.page('/{path:path}')
+def lost_page(path: str):
+    _page_from_path(path)
+
+
 ui.run(reload=False, port=int(os.environ.get('COMIC_STUDIO_PORT', '8080')))
 
