@@ -70,6 +70,12 @@ def view_setting(state: APPState):
 
         def _remove_prop(key):
             setting.props = [p for p in setting.props if p.name != key]
+            if setting.images:
+                # undressing the set stales its masters — say so, in place
+                setting.images_stale = sorted(set((setting.images_stale or [])
+                                                  + list(setting.images.keys())))
+                ui.notify(f"the masters of {setting.name} are now stale — "
+                          f"re-ink them from the badges below", type='info')
             storage.update_object(data=setting)
 
         with ui.column().classes('w-full q-px-sm').style('gap: 2px;'):
@@ -178,14 +184,15 @@ def view_setting(state: APPState):
             from schema import ComicStyle
             rendered = {style_id: img for style_id, img in (setting.images or {}).items() if img and os.path.exists(img)}
 
-            def ink_in_style(st):
+            def ink_in_style(st, orientation='landscape'):
                 from agentic.tools.imaging import generate_setting_background_body
                 from helpers.render_queue import enqueue_renders
                 ui.notify(f"Inking {setting.name.title()} in {st.name.title()} — "
                           f"the master lands here when it's done.", type='info')
                 enqueue_renders(state, [(
-                    f"master background — {setting.name} in {st.name}",
-                    lambda: generate_setting_background_body(state, series_id, setting.setting_id, st.style_id),
+                    f"master background — {setting.name} in {st.name} ({orientation})",
+                    lambda: generate_setting_background_body(state, series_id, setting.setting_id,
+                                                             st.style_id, orientation),
                 )], role='the Background Artist')
 
             styles_by_id = {st.style_id: st for st in storage.read_all_objects(ComicStyle)}
@@ -200,24 +207,39 @@ def view_setting(state: APPState):
 
             with ruled_page() as packer:
                 for style_id, img in rendered.items():
+                    from helpers.masters import split_key
+                    _base, _orient = split_key(style_id)
+                    _stale = style_id in (setting.images_stale or [])
                     with packer.place_cell([(4, 8/3), (3, 2), (6, 4)], fudge=False):
                         with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'):
-                            ui.label(style_id.replace('-', ' ').title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                            ui.label(_base.replace('-', ' ').title()
+                                     + (f' · {_orient}' if _orient != 'landscape' else '')) \
+                                .classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                            if _stale:
+                                ui.badge('STALE', color='amber-8').props('floating') \
+                                    .classes('absolute top-1 left-1 z-10') \
+                                    .tooltip('This master predates the latest set change — '
+                                             're-ink it (the brush) to catch up')
                             ui.image(source=img).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
                             with ui.row().classes('absolute top-1 right-1 z-10 items-center').style('gap: 4px;'):
                                 ui.button(icon='healing').props('flat round dense size=xs') \
                                     .classes('bg-white/70 dark:bg-black/50') \
                                     .tooltip('Take this master to the healing bench — repaint a patch or extend the paper') \
                                     .on('click.stop', lambda _, i=img, sid=style_id: heal_master(i, sid))
-                                if style_id in styles_by_id:
+                                if _base in styles_by_id:
+                                    # re-ink writes THIS card's own key —
+                                    # style AND orientation, no clobber
                                     ui.button(icon='brush').props('flat round dense size=xs') \
                                         .classes('bg-white/70 dark:bg-black/50') \
-                                        .tooltip('Re-ink this master from scratch in the same style') \
-                                        .on('click.stop', lambda _, st=styles_by_id[style_id]: ink_in_style(st))
+                                        .tooltip('Re-ink this master from scratch — same style, same orientation') \
+                                        .on('click.stop', lambda _, st=styles_by_id[_base], o=_orient:
+                                            ink_in_style(st, o))
                 # ONE COMPARATOR CARD instead of a wall of ghosts: every
                 # style the setting isn't inked in yet, one chip each
+                from helpers.masters import split_key as _sk
+                _inked_bases = {_sk(k)[0] for k in rendered}
                 ghosts = [st for st in storage.read_all_objects(ComicStyle, order_by='name')
-                          if st.style_id not in rendered]
+                          if st.style_id not in _inked_bases]
                 if ghosts:
                     with packer.place_cell([(4, 8/3), (3, 2), (6, 4)], fudge=False):
                         with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative ghost-card'):

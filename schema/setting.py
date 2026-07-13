@@ -35,7 +35,8 @@ class Setting(BaseModel):
     interior: bool = Field(True, description="True for interior settings, False for exterior settings.")
     props: list[Prop] = Field(default_factory=list, description="The props that dress this setting.  Default to empty list.")
     origin: Optional[AssetOrigin] = Field(None, description="Provenance if this setting was imported from another series' collection.  Default to None.")
-    images: dict[str, str] = Field(default_factory=dict, description="Style-keyed master backgrounds: maps style_id to the filepath of the rendered background for that style.  Default to empty dict.")
+    images: dict[str, str] = Field(default_factory=dict, description="Master backgrounds keyed by style (landscape) or 'style_id/orientation' (portrait, square): maps the key to the rendered background's filepath.  Default to empty dict.")
+    images_stale: list[str] = Field(default_factory=list, description="Master keys whose art predates the latest setting/prop edit — re-render to clear.  Default to empty list.")
 
     @property
     def primary_key(self) -> dict[str, str]:

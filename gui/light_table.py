@@ -1524,20 +1524,11 @@ def light_table(state: APPState, panel, scene, setting,
         background = split_plate
     elif setting is not None:
         style_id = scene.style_id if scene is not None else None
-        keyed = (setting.images or {}).get(style_id)
-        if keyed and not os.path.exists(keyed):
-            keyed = None
-        background = keyed or next(
-            (img for img in (setting.images or {}).values() if img and os.path.exists(img)), None)
-        if background and not os.path.exists(background):
-            background = None
-        bg_style_missing = keyed is None
-        if keyed:
-            # a master in the WRONG ORIENTATION cover-crops badly — detect it
-            def _orient(a):
-                return 'landscape' if a > 1.2 else ('portrait' if a < 0.83 else 'square')
-            board_ar = {'landscape': 1.5, 'portrait': 2 / 3, 'square': 1.0}[panel.aspect.value]
-            bg_style_missing = _orient(_img_ar(keyed)) != _orient(board_ar)
+        from helpers.masters import master_for
+        background, _exact = master_for(setting, style_id, panel.aspect)
+        # not exact = borrowed style or orientation — the honest re-ink
+        # offer stands, and re-inking writes ITS OWN key (no clobber)
+        bg_style_missing = not _exact
 
     _char_names = {c.character_id: c.name for c in storage.read_all_objects(
         CharacterModel, primary_key={"series_id": series_id})}
@@ -2706,10 +2697,15 @@ def light_table(state: APPState, panel, scene, setting,
             elif setting is not None and bg_style_missing:
                 if background is None:
                     bg_label += " — not inked in this style yet"
-                elif (setting.images or {}).get(getattr(scene, 'style_id', None)) == background:
-                    bg_label += f" — re-ink for this {panel.aspect.value} board"
                 else:
-                    bg_label += " (borrowed from another style)"
+                    # borrowed: right style/wrong orientation, or another
+                    # style entirely — either way the honest re-ink writes
+                    # this board's OWN key and clobbers nothing
+                    _sid = getattr(scene, 'style_id', None) or ''
+                    _same_style = any((k == _sid or k.startswith(_sid + '/')) and v == background
+                                      for k, v in (setting.images or {}).items()) if _sid else False
+                    bg_label += (f" — borrowed; re-ink for this {panel.aspect.value} board"
+                                 if _same_style else " (borrowed from another style)")
             with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
                 eye(bg_layer)
                 if background:
@@ -3208,7 +3204,8 @@ def light_table(state: APPState, panel, scene, setting,
                     def as_master():
                         data = flatten_bytes()
                         locator = storage.upload_binary_image(obj=setting, data=data)
-                        setting.images[scene.style_id] = locator
+                        from helpers.masters import master_key
+                        setting.images[master_key(scene.style_id, panel.aspect)] = locator
                         storage.update_object(setting)
                         _receipt(f"🗜 flattened the table into a new master background for **{setting.name}**")
                         dlg.close()

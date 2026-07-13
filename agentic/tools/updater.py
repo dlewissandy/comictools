@@ -1154,7 +1154,22 @@ def update_setting_description(wrapper: RunContextWrapper[APPState],
     """
     from schema import Setting
     pk = {"series_id": series_id, "setting_id": setting_id}
-    return update_attribute(wrapper=wrapper, cls=Setting, primary_key=pk, attribute="description", value=description)
+    result = update_attribute(
+        wrapper=wrapper,
+        cls=Setting,
+        primary_key=pk,
+        attribute="description",
+        value=description
+    )
+    # VOLUNTEER THE TRUTH: a re-described set makes every master stale
+    setting = wrapper.context.storage.read_object(Setting, pk)
+    if setting is not None and (setting.images or {}):
+        setting.images_stale = sorted(set((setting.images_stale or []) + list(setting.images.keys())))
+        wrapper.context.storage.update_object(data=setting)
+        result += (f"  NOTE: the masters in {', '.join(sorted(setting.images.keys()))} "
+                   f"are now STALE — re-ink them (generate_setting_background); "
+                   f"the setting room badges them.")
+    return result
 
 
 @function_tool
@@ -1184,6 +1199,8 @@ def update_setting_props(wrapper: RunContextWrapper[APPState],
     storage.update_object(data=setting)
     state.is_dirty = True
     stale = ", ".join(setting.images.keys()) if setting.images else None
+    if setting.images:
+        setting.images_stale = sorted(set((setting.images_stale or []) + list(setting.images.keys())))
     note = f"  Background masters for style(s) {stale} are now stale and should be re-inked." if stale else ""
     return f"Props of setting '{setting.name}' set to: " + ", ".join(p.name for p in props) + note
 

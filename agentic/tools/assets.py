@@ -88,6 +88,9 @@ def update_prop_description(wrapper: RunContextWrapper[APPState], series_id: str
                 snap.description = description
                 hit = True
         if hit:
+            if st_obj.images:
+                st_obj.images_stale = sorted(set((st_obj.images_stale or [])
+                                                 + list(st_obj.images.keys())))
             storage.update_object(data=st_obj)
             touched_settings.append(st_obj)
     for issue in storage.read_all_objects(Issue, {"series_id": series_id}):

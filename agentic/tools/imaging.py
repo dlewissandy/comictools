@@ -410,7 +410,8 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
         if setting is None:
             missing.append(f"setting '{cover.setting_id}' (create_setting)")
         else:
-            background = setting.images.get(cover.style_id)
+            from helpers.masters import master_for
+            background, _exact = master_for(setting, cover.style_id, cover.aspect)
             if background and os.path.exists(background):
                 reference_image_locators.append(background)
                 background_first = True
@@ -1896,7 +1897,11 @@ panels composed on top of this background match the rest of the issue.
     # persist onto a FRESH read: the render takes minutes and the author may
     # have kept working on the setting meanwhile
     fresh = storage.read_object(cls=Setting, primary_key=setting.primary_key) or setting
-    fresh.images[style_id] = locator
+    from helpers.masters import master_key
+    _mk = master_key(style_id, aspect)
+    fresh.images[_mk] = locator
+    if _mk in (fresh.images_stale or []):
+        fresh.images_stale = [k for k in fresh.images_stale if k != _mk]
     storage.update_object(data=fresh)
     state.is_dirty = True
     return f"Master background for '{setting.name}' rendered in style '{style_id}': {locator}"
@@ -2074,7 +2079,8 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
     if scene.setting_id:
         setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": scene.setting_id})
         if setting is not None:
-            background = setting.images.get(scene.style_id)
+            from helpers.masters import master_for
+            background, _exact = master_for(setting, scene.style_id, panel.aspect)
             if background and os.path.exists(background):
                 reference_images.append(background)
                 background_first = True
@@ -3026,8 +3032,9 @@ def _resolve_layer_source(panel, scene, storage, series_id: str, layer: str):
             setting: Setting = storage.read_object(cls=Setting, primary_key={
                 "series_id": series_id, "setting_id": owner.setting_id})
             if setting is not None:
-                cand = (setting.images or {}).get(getattr(owner, 'style_id', None)) or next(
-                    (i for i in (setting.images or {}).values() if i and os.path.exists(i)), None)
+                from helpers.masters import master_for
+                cand, _exact = master_for(setting, getattr(owner, 'style_id', None),
+                                          getattr(owner, 'aspect', 'landscape'))
                 if cand and os.path.exists(cand):
                     return cand, 'background'
         return None, 'background'
