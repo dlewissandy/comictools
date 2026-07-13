@@ -192,3 +192,23 @@ def test_create_outfit_from_image_stores_the_exemplar_and_renders_nothing(storag
     # no image-generation call happened (mock_imaging records 'generate'/'edit')
     assert all(k not in ("generate", "edit") for k, *_ in mock_imaging), \
         "no image was rendered creating the wardrobe"
+
+
+def test_ink_cascade_never_infinitely_recurses_without_a_base(storage, mock_imaging):
+    """Two looks with no formal 'base' must not ink each other forever —
+    a fallback anchor is used as-is, never recursively inked."""
+    from types import SimpleNamespace
+    from schema import CharacterModel, CharacterVariant
+    from agentic.tools.imaging import create_styled_image_body
+    WL = "wonders-of-the-witchlight"
+    storage.create_object(CharacterModel(character_id="twins", series_id=WL,
+        name="Twins", description="two looks, no base"), overwrite=True)
+    for vid in ("look-a", "look-b"):
+        storage.create_object(CharacterVariant(variant_id=vid, series_id=WL,
+            character_id="twins", name=vid, description="d", race="troll",
+            gender="m", age="adult", height="tall", attire="a", behavior="b",
+            appearance="green", images={}), overwrite=True)
+    st = SimpleNamespace(storage=storage, selection=[], is_dirty=False)
+    # must return (not hang / RecursionError)
+    out = str(create_styled_image_body(st, WL, "twins", "look-a", "vintage-four-color"))
+    assert "locator" in out.lower() or "created" in out.lower()

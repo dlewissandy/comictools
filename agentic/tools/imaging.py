@@ -751,14 +751,30 @@ def create_styled_image_body(state, series_id: str, character_id: str,
             # INK THE BASE FIRST: if the character has no sheet in this style
             # yet, render it now (from its own description/exemplars) so this
             # look anchors to a clean style-matched identity, not nothing.
-            if not ((base_variant.images or {}).get(style_id)
-                    and os.path.exists(base_variant.images[style_id])):
+            # ONLY a GENUINE base is cascade-inked — a fallback anchor (some
+            # other look) is used as-is, never recursively inked, or two
+            # baseless looks would ink each other forever.  A re-entrancy
+            # guard is the belt to that suspenders.
+            _bnm = (base_variant.name or "").strip().lower()
+            base_is_true = (base_variant.variant_id == "base"
+                            or _bnm == "base" or _bnm.endswith(" base"))
+            _guard = getattr(state, "_inking_looks", None)
+            if _guard is None:
+                _guard = set(); state._inking_looks = _guard
+            _key = (character_id, base_variant.variant_id, style_id)
+            if (base_is_true
+                    and not ((base_variant.images or {}).get(style_id)
+                             and os.path.exists(base_variant.images[style_id]))
+                    and _key not in _guard):
+                _guard.add(_key)
                 try:
                     create_styled_image_body(state, series_id, character_id,
                                              base_variant.variant_id, style_id)
                     base_variant = storage.read_object(CharacterVariant, base_variant.primary_key) or base_variant
                 except Exception as ex:
                     logger.warning(f"cascade-ink of base look failed: {ex}")
+                finally:
+                    _guard.discard(_key)
             base_img = (base_variant.images or {}).get(style_id) or next(
                 (i for i in (base_variant.images or {}).values() if i and os.path.exists(i)), None)
             base_ups = [u for u in storage.list_uploads(obj=base_variant) if u and os.path.exists(u)]
