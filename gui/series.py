@@ -57,6 +57,12 @@ def view_series(state: APPState):
         from gui.constants import TAILWIND_CARD
         def _cap(text, msg):
             return lambda: caption_action(text, _CK.CREATE, lambda _, m=msg: post_user_message(state, m), 3)
+        def _create_cap(text, asset_kind):
+            # THE CREATE DOOR: three paths (describe / from an image / copy),
+            # the same for every reusable asset
+            from gui.create_asset import create_asset_dialog
+            return lambda: caption_action(text, _CK.CREATE,
+                lambda _, k=asset_kind: create_asset_dialog(state, series.series_id, k), 3)
         page = comic_page()
         page.__enter__()
         packer = PagePacker(12)
@@ -181,7 +187,7 @@ def view_series(state: APPState):
                 aspect_ratio="6/5",
                 get_name=lambda _,x: x.name,
                 packer=packer, variants=[(3, 2)],
-                overlap_caption=_cap("Characters", "I would like to create a new character")
+                overlap_caption=_create_cap("Characters", "character")
                 ):
                 pass
         uploader_card(
@@ -189,7 +195,7 @@ def view_series(state: APPState):
             on_upload=lambda e: upload_and_ask(e, "I would like to create a new character"),
             packer=packer,
             label='Drop image to create a character',
-            overlap_caption=None if characters else _cap("Characters", "I would like to create a new character")
+            overlap_caption=None if characters else _create_cap("Characters", "character")
         )
 
         # A cardwall for viewing and adding the recurring settings of the series.
@@ -207,14 +213,14 @@ def view_series(state: APPState):
                 aspect_ratio="3/2",
                 get_name=lambda _, x: x.name,
                 packer=packer, variants=[(3, 2), (6, 4)],
-                overlap_caption=_cap("Settings", "I would like to create a new setting")
+                overlap_caption=_create_cap("Settings", "setting")
                 ).style('margin-top: 0px; margin-bottom: 0px')
         uploader_card(
             state=state,
             on_upload=lambda e: upload_and_ask(e, "I would like to create a new setting"),
             packer=packer,
             label='Drop image to create a setting',
-            overlap_caption=None if settings else _cap("Settings", "I would like to create a new setting")
+            overlap_caption=None if settings else _create_cap("Settings", "setting")
         )
 
         # Props and wardrobe: the reusable stuff panels are dressed with.
@@ -231,14 +237,14 @@ def view_series(state: APPState):
                 aspect_ratio="3/2",
                 get_name=lambda _, x: x.name,
                 packer=packer, variants=[(3, 2)],
-                overlap_caption=_cap("Props", "I would like to create a new prop")
+                overlap_caption=_create_cap("Props", "prop")
                 )
         uploader_card(
             state=state,
             on_upload=lambda e: upload_and_ask(e, "I would like to create a new prop"),
             packer=packer,
             label='Drop image to create a prop',
-            overlap_caption=None if props else _cap("Props", "I would like to create a new prop")
+            overlap_caption=None if props else _create_cap("Props", "prop")
         )
 
         outfits = storage.read_all_objects(Outfit, primary_key={"series_id": series.series_id}, order_by="name")
@@ -251,14 +257,14 @@ def view_series(state: APPState):
                 aspect_ratio="3/2",
                 get_name=lambda _, x: x.name,
                 packer=packer, variants=[(3, 2)],
-                overlap_caption=_cap("Wardrobe", "I would like to create a new outfit")
+                overlap_caption=_create_cap("Wardrobe", "outfit")
                 )
         uploader_card(
             state=state,
             on_upload=lambda e: upload_and_ask(e, "I would like to create a new outfit"),
             packer=packer,
             label='Drop image to create an outfit',
-            overlap_caption=None if outfits else _cap("Wardrobe", "I would like to create a new outfit")
+            overlap_caption=None if outfits else _create_cap("Wardrobe", "outfit")
         )
         packer.finalize()
         mosaic.__exit__(None, None, None)

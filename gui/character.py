@@ -104,7 +104,21 @@ def view_character(state:APPState):
                 ui.label(f'…and {len(appears) - 12} more').classes('text-xs text-gray-500')
 
         from gui.elements import caption_action, ruled_page, uploader_card, CrudButtonKind as _CK
+
+        def _compose_look():
+            # THE LOOK COMPOSER: dress the base in wardrobe + props
+            from gui.create_asset import compose_look_dialog
+            compose_look_dialog(state, series_id, character_id)
+
         with ui.element('div').classes('w-full q-mt-md'):
+            # a prominent door to the composer, above the Looks wall
+            with ui.row().classes('w-full items-center q-mb-sm').style('gap: 8px;'):
+                ui.button('Compose a look', icon='checkroom') \
+                    .props('unelevated no-caps dense') \
+                    .tooltip('Dress the base character in wardrobe and props to make a new look') \
+                    .on('click', lambda _: _compose_look())
+                ui.label('— dress the base character in wardrobe and props') \
+                    .classes('text-xs text-gray-500')
             def on_upload(e: UploadEventArguments):
                 locator = storage.upload_reference_image(
                     obj=character,
@@ -123,11 +137,11 @@ def view_character(state:APPState):
                     aspect_ratio="3:2",
                     packer=packer, variants=[(3, 2), (4, 8/3), (6, 4)],
                     overlap_caption=lambda: caption_action("Looks", _CK.CREATE,
-                        lambda _: post_user_message(state, "I would like to create a new variant for this character."), 3)
+                        lambda _: _compose_look(), 3)
                     )
-                # Drop an image here to create a new variant from it
+                # Drop an image here to create a new look from it
                 uploader_card(state, on_upload=on_upload, packer=packer,
-                              label='Drop image to create a variant')
+                              label='Drop image to create a look')
         
         
             

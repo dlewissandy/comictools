@@ -408,6 +408,12 @@ TOOLKITS: dict[str,list[Tool]] = {
 
     ],
     "series": [
+        # the Create dialog's three paths render their art here
+        create_variant,
+        create_variant_from_image,
+        compose_character_variant,
+        generate_setting_background,
+        create_styled_image_for_character_variant,
         select_issue,
         select_character,
         # Create
