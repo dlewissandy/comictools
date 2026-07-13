@@ -137,7 +137,12 @@ async def handle_tool_call_event(state: APPState, event: RunItemStreamEvent, div
             pass
     container = thoughts_container(divider) if quiet else divider
     with container:
-        ui.markdown(line).classes("w-full text-sm" + ("" if quiet else " q-px-md"))
+        md = ui.markdown(line).classes("w-full text-sm" + ("" if quiet else " q-px-md"))
+        if not quiet:
+            # the transcript serializer keeps NAMED text — receipts must
+            # survive the archive, or 'the receipts above' points at nothing
+            md._props['name'] = 'the receipts'
+            md._props['sent'] = False
 
 
 async def handle_tool_output_event(state: APPState, event: RunItemStreamEvent, divider: ui.row):
@@ -187,6 +192,17 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
     selection = state.selection
     kind = "home" if not selection else selection[-1].kind
     agent = agents.get(kind, None)
+    if agent is None:
+        # a picker or reference room has no coworker of its own — the
+        # nearest addressable ancestor answers (the same walk the visible
+        # thread already makes), never a jargon ValueError forever
+        for item in reversed(selection or []):
+            k = getattr(item.kind, 'value', item.kind)
+            if agents.get(k) is not None:
+                kind, agent = k, agents[k]
+                break
+        else:
+            kind, agent = "all-series", agents.get("all-series")
     logger.debug(f"Handling agent events for kind: {kind}")
     if agent is None:
         raise ValueError(f"Agent not found for kind: {kind}")
@@ -221,10 +237,20 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
     return stream.to_input_list()
 
 
-def _thread_key(selection):
-    if not selection:
+def _thread_key(state_or_selection, selection=None):
+    """ONE MEMORY, ONE THREAD: agent memory keys by the SAME canonical
+    address the visible chat keys by — a bench session and its panel share
+    one mind, not a chat that remembers and a coauthor that denies."""
+    state = state_or_selection if selection is not None else None
+    sel = selection if selection is not None else state_or_selection
+    if not sel:
         return ("home", None)
-    return (selection[-1].kind.value, selection[-1].id)
+    if state is not None:
+        try:
+            return ("conv", state.conversation_key(sel))
+        except Exception:
+            pass
+    return (sel[-1].kind.value, sel[-1].id)
 
 
 def _trim_thread(items: list, max_items: int = 80) -> list:
@@ -313,7 +339,7 @@ async def send(state: APPState):
     if threads is None:
         threads = {}
         state._agent_threads = threads
-    tkey = _thread_key(state.selection)
+    tkey = _thread_key(state, state.selection)
     if threads.get(tkey):
         messages = _trim_thread(list(threads[tkey]))
     else:

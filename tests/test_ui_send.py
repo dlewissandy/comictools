@@ -926,3 +926,19 @@ def test_the_stop_door_cancels_the_stream():
     for w in ("stop", "Stop", "cancel", "STOP IT"):
         assert w.lower() in _STOP_WORDS or w.lower() in _STOP_WORDS
     assert "stop" in _STOP_WORDS and "cancel" in _STOP_WORDS
+
+
+def test_agent_memory_keys_like_the_chat():
+    """The coauthor's memory and the visible thread share ONE address —
+    a bench session and its panel share one mind."""
+    from types import SimpleNamespace
+    from messaging import _thread_key
+    from gui.selection import SelectionItem as S, SelectedKind as K
+    sel = [S(name="Series", id=None, kind=K.ALL_SERIES),
+           S(name="WL", id="wl", kind=K.SERIES)]
+    state = SimpleNamespace(conversation_key=lambda s: "/series/wl")
+    assert _thread_key(state, sel) == ("conv", "/series/wl")
+    # a picker deep-link shares the ancestor's key, so memory follows
+    deeper = sel + [S(name="Healing", id="x.png", kind=K.IMAGE_EDITOR)]
+    state2 = SimpleNamespace(conversation_key=lambda s: "/series/wl")
+    assert _thread_key(state2, deeper) == _thread_key(state, sel)
