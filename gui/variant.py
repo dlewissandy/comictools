@@ -18,6 +18,46 @@ from storage.generic import GenericStorage
 
 
 
+def _pick_take_dialog(state, variant, style_id, takes):
+    """Compare the re-rolls of one reference sheet and choose which is the
+    keeper — every take stays; the pick just moves to the front."""
+    from nicegui import ui as _ui
+    storage = state.storage
+    current = (variant.images or {}).get(style_id)
+    with _ui.dialog() as dlg, _ui.card().classes('soft-card') \
+            .style('min-width: 640px; max-width: 900px;'):
+        _ui.label(f"Takes — {style_id.replace('-', ' ').title()}") \
+            .classes('caption-box caption-box-sm')
+        _ui.markdown("Every re-roll is kept.  Click a take to make it the "
+                     "reference sheet this look is drawn from.").classes('text-sm')
+        with _ui.element().classes('grid grid-cols-2 gap-3 w-full q-mt-sm'):
+            for t in takes:
+                card = _ui.card().classes('soft-card p-1 cursor-pointer relative') \
+                    .style('aspect-ratio: 3/2;')
+                with card:
+                    _ui.image(source=t).props('fit=contain')
+                    if t == current:
+                        _ui.badge('CURRENT', color='green').props('floating') \
+                            .classes('absolute top-1 right-1 z-10')
+
+                    def _use(t=t):
+                        fresh = storage.read_object(type(variant), primary_key=variant.primary_key) or variant
+                        order = [t] + [x for x in (fresh.image_takes or {}).get(style_id, []) if x != t]
+                        fresh.image_takes = {**(fresh.image_takes or {}), style_id: order}
+                        fresh.images[style_id] = t
+                        storage.update_object(data=fresh)
+                        from gui.light_table import table_receipt
+                        table_receipt(state, f"🖼 picked a different take for the "
+                                             f"{style_id.replace('-', ' ')} sheet")
+                        dlg.close()
+                        state.refresh_details()
+                    card.on('click', lambda _, f=_use: f())
+        with _ui.row().classes('w-full justify-end q-mt-sm'):
+            _ui.button('Done', icon='check').props('flat no-caps') \
+                .on('click', lambda _: dlg.close())
+    dlg.open()
+
+
 def view_character_variant(state:APPState):
     """
     View the details of a character.
@@ -261,8 +301,21 @@ def view_character_variant(state:APPState):
                 st = styles_by_id.get(styled_image.style_id)
                 art_tools(state, img,
                           on_reink=(lambda st=st: ink_sheet(st)) if st else None,
-                          reink_tip='Re-ink this reference sheet from scratch in the same style',
+                          reink_tip='Re-ink this reference sheet — the prior take is kept',
                           heal_name=f"{character.name}'s sheet")
+                # NON-DESTRUCTIVE RE-ROLL: every take is kept — a chip opens
+                # the takes so the author compares and picks the keeper
+                sid = styled_image.style_id
+                takes = [t for t in (variant.image_takes or {}).get(sid, [])
+                         if t and os.path.exists(t)]
+                if len(takes) > 1:
+                    def _open_takes(sid=sid, takes=takes):
+                        _pick_take_dialog(state, variant, sid, takes)
+                    ui.chip(f"{len(takes)} takes", icon='burst_mode') \
+                        .props('dense clickable size=sm color=primary') \
+                        .classes('absolute bottom-1 left-1 z-10') \
+                        .tooltip('Compare the re-rolls and pick the keeper') \
+                        .on('click.stop', lambda _, f=_open_takes: f())
 
             with ruled_page() as packer:
                 view_all_instances(

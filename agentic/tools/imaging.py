@@ -731,6 +731,45 @@ def create_styled_image_body(state, series_id: str, character_id: str,
         reference_images.extend(exemplars[:3])
         prompt += ("\n\n## EXEMPLARS\nThe first reference image(s) show THIS EXACT "
                    "CHARACTER — hold the face, build, and identity to them precisely.")
+
+    # THE BASE ANCHORS CONTINUITY: a look is the SAME PERSON in different
+    # wardrobe — so a non-base look must carry the base's reference image
+    # (the face and build to hold to) AND the base's identity text, or the
+    # render drifts into a different character.
+    _nm = (variant.name or "").strip().lower()
+    is_base_look = (variant_id == "base" or _nm == "base" or _nm.endswith(" base"))
+    if not is_base_look:
+        _looks = storage.read_all_objects(CharacterVariant,
+            {"series_id": series_id, "character_id": character_id})
+        base_variant = next((v for v in _looks
+            if v.variant_id == "base" or (v.name or "").strip().lower() == "base"
+            or (v.name or "").strip().lower().endswith(" base")), None)
+        if base_variant is None:   # no formal base — the fullest OTHER look anchors it
+            base_variant = next((v for v in _looks
+                if v.variant_id != variant_id and ((v.images or {}) or v.appearance)), None)
+        if base_variant is not None:
+            base_img = (base_variant.images or {}).get(style_id) or next(
+                (i for i in (base_variant.images or {}).values() if i and os.path.exists(i)), None)
+            base_ups = [u for u in storage.list_uploads(obj=base_variant) if u and os.path.exists(u)]
+            anchor = base_img if (base_img and os.path.exists(base_img)) else (base_ups[0] if base_ups else None)
+            if anchor:
+                # the identity anchor leads every other reference
+                reference_images.insert(0, anchor)
+                prompt += (f"\n\n## THE CHARACTER — identity anchor (FIRST reference image)\n"
+                           f"The first reference image IS {character_name}.  Hold their FACE, "
+                           f"BUILD, SKIN, HAIR and every identifying feature to it EXACTLY — "
+                           f"this look changes only their wardrobe and what they carry, never "
+                           f"who they are.")
+            else:
+                missing.append(f"the base look's reference sheet — render {character_name}'s "
+                               f"base look first, or this look won't match the character")
+            # identity is inherited from the base, in text too
+            prompt += (f"\n\n## Identity (unchanging across every look)\n"
+                       f"* Race: {base_variant.race}\n* Gender: {base_variant.gender}\n"
+                       f"* Age: {base_variant.age}\n* Height: {base_variant.height}\n"
+                       f"* Physical appearance: {base_variant.appearance}\n"
+                       f"* Behavior/bearing: {base_variant.behavior}")
+
     if variant.outfit_id:
         outfit = storage.read_object(Outfit, {"series_id": series_id, "outfit_id": variant.outfit_id})
         if outfit is None:
@@ -773,8 +812,16 @@ def create_styled_image_body(state, series_id: str, character_id: str,
     )
 
     # Update the variant with the new image locator — onto a FRESH read; the
-    # render takes minutes and the variant may have changed meanwhile
+    # render takes minutes and the variant may have changed meanwhile.
+    # NON-DESTRUCTIVE RE-ROLL: every take is kept (newest first); the new
+    # one becomes the current pick, the prior sheet waits to be compared.
     fresh = storage.read_object(cls=CharacterVariant, primary_key=variant.primary_key) or variant
+    takes = list((fresh.image_takes or {}).get(style.style_id, []))
+    prior = fresh.images.get(style.style_id)
+    if prior and prior not in takes:      # fold an untracked existing sheet in
+        takes.insert(0, prior)
+    takes = [locator] + [t for t in takes if t != locator]
+    fresh.image_takes = {**(fresh.image_takes or {}), style.style_id: takes}
     fresh.images[style.style_id] = locator
     storage.update_object(data=fresh)
 

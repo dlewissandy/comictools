@@ -26,7 +26,8 @@ class CharacterVariant(BaseModel):
     attire: str = Field(..., description="What the character is wearing")
     behavior: str  = Field(..., description="Notes on the The character's behavior")
     appearance: str  = Field(..., description="Notes on the The character's physical appearance and attributes")
-    images: dict[str,str] = Field(..., description="The reference images that can be used by artists to draw this character.   defaults {}")
+    images: dict[str,str] = Field(..., description="The CURRENT reference sheet per style (style_id -> locator).   defaults {}")
+    image_takes: dict[str, list[str]] = Field(default_factory=dict, description="Every rendered take per style (style_id -> [locators], newest first) so a re-roll never destroys the prior sheet; images[style] holds the current pick.  Default to empty dict.")
 
     # COMPOSITION (a variant is constructed like a panel: base character +
     # wardrobe + props; these reference the studio assets it is built from)

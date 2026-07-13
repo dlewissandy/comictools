@@ -77,3 +77,62 @@ def test_styled_render_reports_missing_asset_art(storage, mock_imaging):
     out = _invoke(imaging.create_styled_image_for_character_variant, st,
                   series_id=WL, character_id="ezra", variant_id="festival-look", style_id="vintage-four-color")
     assert "generate_outfit_reference" in str(out), "missing outfit art is reported with the fix"
+
+
+def test_reroll_keeps_prior_takes(storage, mock_imaging):
+    """Rerolling a reference sheet must NEVER destroy the prior — every
+    take is kept, newest current."""
+    import asyncio, json as _json
+    from types import SimpleNamespace
+    from agentic.tools.imaging import create_styled_image_body
+    from schema import CharacterVariant, ComicStyle
+    WL = "wonders-of-the-witchlight"
+    ch = "ezra"
+    style = storage.read_all_objects(ComicStyle)[0].style_id
+    st = SimpleNamespace(storage=storage, selection=[], is_dirty=False)
+    create_styled_image_body(st, WL, ch, "base", style)
+    v = storage.read_object(CharacterVariant, {"series_id": WL, "character_id": ch, "variant_id": "base"})
+    first = v.images.get(style)
+    assert first and v.image_takes.get(style) == [first]
+    create_styled_image_body(st, WL, ch, "base", style)
+    v = storage.read_object(CharacterVariant, {"series_id": WL, "character_id": ch, "variant_id": "base"})
+    takes = v.image_takes.get(style)
+    assert len(takes) == 2, "the prior take survived the re-roll"
+    assert v.images[style] == takes[0], "newest is current"
+    assert first in takes, "the first sheet is still there to pick"
+
+
+def test_composed_look_render_anchors_to_the_base(storage, mock_imaging):
+    """A composed look must be inked WITH the base look's reference image and
+    identity text — or it drifts into a different person."""
+    import os
+    from types import SimpleNamespace
+    from agentic.tools.imaging import create_styled_image_body
+    from schema import CharacterVariant, ComicStyle
+    from PIL import Image
+    WL, ch = "wonders-of-the-witchlight", "ezra"
+    style = storage.read_all_objects(ComicStyle)[0].style_id
+
+    # give the base look a rendered sheet in this style (any real file)
+    base = storage.read_object(CharacterVariant, {"series_id": WL, "character_id": ch, "variant_id": "base"})
+    d = os.path.join(str(storage.base_path), "series", WL, "characters", ch,
+                     "variants", "base", "images")
+    os.makedirs(d, exist_ok=True)
+    art = os.path.join(d, "base-sheet.png")
+    Image.new("RGB", (200, 133), (30, 60, 90)).save(art)
+    base.images = {style: art}
+    base.appearance = "A weathered fortune-teller with silver eyes."
+    storage.update_object(base)
+
+    # a composed look (no own uploads)
+    look = CharacterVariant(variant_id="festival", series_id=WL, character_id=ch,
+        name="Festival", description="the festival look", race=base.race, gender=base.gender,
+        age=base.age, height=base.height, attire="", behavior="", appearance="", images={})
+    storage.create_object(look, overwrite=True)
+
+    st = SimpleNamespace(storage=storage, selection=[], is_dirty=False)
+    create_styled_image_body(st, WL, ch, "festival", style)
+    kind, prompt, refs = mock_imaging[-1]
+    assert art in refs, "the base sheet anchors the composed look's render"
+    assert "identity anchor" in prompt.lower()
+    assert "silver eyes" in prompt, "the base's identity text rides along"
