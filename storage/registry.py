@@ -1,13 +1,14 @@
 """EVERY HOUSE ITS OWN REPO: a git repository IS a publisher.
 
 The studio keeps a small machine-local registry (~/.comic-studio/
-publishers.json) of the publisher repos it knows and which one is open.
-The open house is mounted AT ./data — a symlink — so every path the
-studio ever stored ('data/series/…' locators inside records included)
-keeps resolving, and the app genuinely sees one publisher at a time.
+publishers.json) of the publisher repos it knows.  ALL of them are
+mounted at once: ./data is a real directory holding one symlink per
+house (data/<slug> -> the repo), so every window sees every house and
+there is no open-house state to trip over.  Repos stay self-contained —
+their records hold 'data/…' locators relative to their OWN root, and
+LocalStorage translates at the JSON boundary.
 
-Switching houses re-points the symlink; git syncs the repos; the studio
-never becomes a version control system.
+Git syncs the repos; the studio never becomes a version control system.
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ import json
 import os
 
 REGISTRY_PATH = os.path.expanduser(os.path.join("~", ".comic-studio", "publishers.json"))
-DATA_LINK = "data"
+DATA_DIR = "data"
 
 
 def _load() -> dict:
@@ -27,6 +28,8 @@ def _load() -> dict:
 
 
 def _save(reg: dict) -> None:
+    # the open-house concept is gone — a stale key must not linger
+    reg.pop("open", None)
     os.makedirs(os.path.dirname(REGISTRY_PATH), exist_ok=True)
     tmp = REGISTRY_PATH + ".tmp"
     with open(tmp, "w") as f:
@@ -40,55 +43,125 @@ def registered() -> list[dict]:
             if os.path.isdir(os.path.expanduser(p.get("path", "")))]
 
 
-def _link_target() -> str | None:
-    """The path ./data points at, when it is a mount of any kind — a POSIX
-    symlink or a Windows junction.  None for a plain directory (the legacy
-    single-studio layout) or nothing at all."""
-    if not os.path.exists(DATA_LINK):
-        return None
-    real = os.path.realpath(DATA_LINK)
-    if real == os.path.abspath(DATA_LINK):
-        return None
-    return real
+def mount_path(slug: str) -> str:
+    """Where the named house is mounted: data/<slug>."""
+    return os.path.join(DATA_DIR, slug)
 
 
-def _unmount() -> None:
-    """Remove the ./data mount itself, never its contents: os.remove for a
-    symlink; os.rmdir for a Windows junction (which deletes the reparse
-    point only)."""
-    if os.path.islink(DATA_LINK):
-        os.remove(DATA_LINK)
-    elif os.path.isdir(DATA_LINK):
-        os.rmdir(DATA_LINK)
-
-
-def _mount(target: str) -> None:
-    """Point ./data at target: a symlink on POSIX (and on Windows with
-    Developer Mode), a junction on Windows without symlink privilege —
-    junctions need no elevation and resolve identically for our use."""
+def _symlink(target: str, at: str) -> None:
+    """A symlink on POSIX (and on Windows with Developer Mode), a junction
+    on Windows without symlink privilege — junctions need no elevation and
+    resolve identically for our use."""
     try:
-        os.symlink(target, DATA_LINK, target_is_directory=True)
+        os.symlink(target, at, target_is_directory=True)
     except OSError:
         if os.name != "nt":
             raise
         import _winapi
-        _winapi.CreateJunction(target, DATA_LINK)
+        _winapi.CreateJunction(target, at)
 
 
-def open_slug() -> str | None:
-    """The slug of the house ./data points at (None if data is a plain
-    directory — the legacy single-studio layout)."""
-    target = _link_target()
-    if target is None:
-        return None
-    for p in registered():
-        if os.path.realpath(os.path.expanduser(p["path"])) == target:
-            return p["slug"]
+def _unmount(at: str) -> None:
+    """Remove a mount itself, never its contents: os.remove for a symlink;
+    os.rmdir for a Windows junction (deletes the reparse point only)."""
+    if os.path.islink(at):
+        os.remove(at)
+    elif os.path.isdir(at) and os.path.realpath(at) != os.path.abspath(at):
+        os.rmdir(at)
+
+
+def mount_all() -> list[dict]:
+    """MOUNT EVERY HOUSE (idempotent, runs at startup).
+
+    Turns the legacy single-house symlink at ./data into a real directory,
+    then ensures data/<slug> points at each registered repo.  Prunes ONLY
+    symlinks that dangle or match no registered slug — a real file or
+    directory under data/ is never touched (a half-migrated state stays
+    visible instead of being destroyed).
+    """
+    if os.path.islink(DATA_DIR):
+        os.remove(DATA_DIR)               # the old open-house mount retires
+    elif os.path.isdir(DATA_DIR) and os.path.realpath(DATA_DIR) != os.path.abspath(DATA_DIR):
+        os.rmdir(DATA_DIR)                # a Windows junction
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+    houses = registered()
+    want = {h["slug"]: os.path.realpath(os.path.expanduser(h["path"])) for h in houses}
+    for slug, target in want.items():
+        at = mount_path(slug)
+        if os.path.islink(at):
+            if os.path.realpath(at) != target:
+                os.remove(at)
+                _symlink(target, at)
+        elif not os.path.exists(at):
+            _symlink(target, at)
+        # a real dir/file where a mount belongs: leave it — visible beats gone
+    for entry in os.listdir(DATA_DIR):
+        at = os.path.join(DATA_DIR, entry)
+        if os.path.islink(at) and (entry not in want or not os.path.isdir(at)):
+            os.remove(at)
+    return houses
+
+
+def storage_for(slug: str):
+    """A house-scoped LocalStorage rooted at the house's mount.  Repairs
+    the mounts first if the one we need is missing — LocalStorage would
+    otherwise mkdir a REAL directory where the symlink belongs."""
+    from storage.local import LocalStorage
+    at = mount_path(slug)
+    if not os.path.isdir(at):
+        mount_all()
+    return LocalStorage(base_path=at)
+
+
+def mounted_storages() -> list[tuple[str | None, "object"]]:
+    """[(slug, storage)] for every registered house — what every fan-out
+    view iterates.  Falls back to the legacy single-root layout when no
+    registry exists."""
+    from storage.local import LocalStorage
+    houses = registered()
+    if not houses:
+        return [(None, LocalStorage(base_path=DATA_DIR))]
+    return [(h["slug"], storage_for(h["slug"])) for h in houses]
+
+
+def house_of_publisher(publisher_id: str) -> str | None:
+    """The slug of the house holding the named publisher record."""
+    from schema.publisher import Publisher
+    for slug, st in mounted_storages():
+        if slug is None:
+            continue
+        try:
+            if st.read_object(Publisher, primary_key={"publisher_id": publisher_id}) is not None:
+                return slug
+        except Exception:
+            continue
+    return None
+
+
+def house_of_series(series_id: str) -> str | None:
+    """The slug of the house holding the named series — a directory probe,
+    no JSON parse.  First hit wins (registry order)."""
+    for h in registered():
+        if os.path.isdir(os.path.join(mount_path(h["slug"]), "series", series_id)):
+            return h["slug"]
+    return None
+
+
+def house_of_style(style_id: str) -> str | None:
+    """The slug of a house holding the named style.  FIRST HIT — bare
+    style ids are ambiguous by design (default styles are copies sharing
+    ids across houses); canonical style URLs carry the publisher, so this
+    is only the legacy-link fallback."""
+    for h in registered():
+        if os.path.isdir(os.path.join(mount_path(h["slug"]), "styles", style_id)):
+            return h["slug"]
     return None
 
 
 def register(path: str, slug: str | None = None) -> str:
-    """Add a publisher repo to the registry (idempotent).  Returns its slug."""
+    """Add a publisher repo to the registry (idempotent) and mount it.
+    Returns its slug."""
     path = os.path.abspath(os.path.expanduser(path))
     slug = slug or os.path.basename(path.rstrip(os.sep))
     reg = _load()
@@ -96,42 +169,24 @@ def register(path: str, slug: str | None = None) -> str:
     pubs.append({"slug": slug, "path": path})
     reg["publishers"] = pubs
     _save(reg)
+    if os.path.isdir(DATA_DIR) and not os.path.islink(DATA_DIR):
+        at = mount_path(slug)
+        if not os.path.exists(at):
+            _symlink(os.path.realpath(path), at)
     return slug
 
 
-def set_open(slug: str) -> bool:
-    """Point ./data at the named house.  Refuses to touch a real directory
-    (the legacy layout must be migrated deliberately, never clobbered)."""
-    target = next((p["path"] for p in registered() if p["slug"] == slug), None)
-    if target is None:
-        return False
-    if os.path.exists(DATA_LINK) and _link_target() is None:
-        return False
-    _unmount()
-    _mount(os.path.expanduser(target))
-    reg = _load()
-    reg["open"] = slug
-    _save(reg)
-    return True
-
 def unregister(slug: str) -> bool:
-    """Retire a house from the studio: the registry forgets it, the disk is
-    NEVER touched.  Refuses to retire the open house while it is the only
-    one — the studio must always stand somewhere."""
+    """Retire a house from the studio: the registry forgets it, its mount
+    is removed, the repo on disk is NEVER touched.  An empty rack is legal
+    — the wall renders its founding card."""
     reg = _load()
     pubs = [p for p in reg.get("publishers", []) if p.get("slug") != slug]
     if len(pubs) == len(reg.get("publishers", [])):
         return False
-    if slug == open_slug():
-        others = [p for p in pubs if os.path.isdir(os.path.expanduser(p.get("path", "")))]
-        if not others:
-            return False
-        reg["publishers"] = pubs
-        _save(reg)
-        set_open(others[0]["slug"])   # the symlink re-points, nothing deleted
-    else:
-        reg["publishers"] = pubs
-        _save(reg)
+    reg["publishers"] = pubs
+    _save(reg)
+    _unmount(mount_path(slug))
     return True
 
 
@@ -166,7 +221,8 @@ _HOUSE_GITIGNORE = """# working paper — the studio's local scratch, never hist
 def found_house(name: str, target_dir: str, template_dir: str | None = None) -> str:
     """FOUND A NEW HOUSE: a fresh git repo at target_dir carrying the
     studio's default styles, prompts and references, the publisher's own
-    record, and a founding commit.  Registers and returns the slug."""
+    record, and a founding commit.  Registers (which mounts) and returns
+    the slug."""
     import re
     import shutil
     import subprocess
@@ -183,9 +239,11 @@ def found_house(name: str, target_dir: str, template_dir: str | None = None) -> 
         if os.path.isdir(src) and not os.path.isdir(dst):
             shutil.copytree(src, dst)
         elif not os.path.isdir(dst):
-            # no template on this machine: the open house lends its copies
-            fallback = os.path.join(os.path.realpath(DATA_LINK), sub)
-            if os.path.isdir(fallback):
+            # no template on this machine: a sister house lends its copies
+            houses = registered()
+            fallback = (os.path.join(os.path.realpath(os.path.expanduser(houses[0]["path"])), sub)
+                        if houses else None)
+            if fallback and os.path.isdir(fallback):
                 shutil.copytree(fallback, dst)
     LocalStorage(base_path=target_dir).create_object(
         Publisher(publisher_id=slug, name=name, description=None, logo=None))

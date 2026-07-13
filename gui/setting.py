@@ -147,7 +147,7 @@ def view_setting(state: APPState):
                             with ui.row().classes('absolute top-1 right-1 z-10 items-center').style('gap: 4px;'):
                                 ui.button(icon='healing').props('flat round dense size=xs') \
                                     .classes('bg-white/70 dark:bg-black/50') \
-                                    .tooltip('Edit this master — inpaint, outpaint, replace details') \
+                                    .tooltip('Take this master to the healing bench — repaint a patch or extend the paper') \
                                     .on('click.stop', lambda _, i=img, sid=style_id: heal_master(i, sid))
                                 if style_id in styles_by_id:
                                     ui.button(icon='brush').props('flat round dense size=xs') \

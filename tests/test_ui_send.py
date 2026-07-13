@@ -734,3 +734,26 @@ async def test_style_rename_saves_on_the_spot(user: User) -> None:
     field.set_value(st.name)
     click(save)
     assert storage.read_object(ComicStyle, {"style_id": st.style_id}).name == st.name
+
+
+def test_legacy_style_threads_migrate_to_the_house():
+    """No conversation orphans: threads keyed under the retired /styles room
+    re-key to the canonical house trail — all three legacy shapes."""
+    convs = {"/styles": [{"m": "room"}],
+             "/styles/van-gogh": [{"m": "vg"}],
+             "/styles/style/conte-crayon": [{"m": "cc"}],
+             "/series/joey": [{"m": "stay"}]}
+    out = gui_state.APPState.migrate_style_threads(convs, "i-do-it")
+    assert out["/publishers/i-do-it"] == [{"m": "room"}]
+    assert out["/publishers/i-do-it/style/van-gogh"] == [{"m": "vg"}]
+    assert out["/publishers/i-do-it/style/conte-crayon"] == [{"m": "cc"}]
+    assert out["/series/joey"] == [{"m": "stay"}]
+    assert not any(k.startswith("/styles") for k in out)
+    # an existing thread at the new address is never clobbered
+    convs = {"/styles/van-gogh": [{"m": "old"}],
+             "/publishers/i-do-it/style/van-gogh": [{"m": "new"}]}
+    out = gui_state.APPState.migrate_style_threads(convs, "i-do-it")
+    assert out["/publishers/i-do-it/style/van-gogh"] == [{"m": "new"}]
+    # a publisher-less repo leaves keys alone rather than guessing
+    convs = {"/styles/van-gogh": [{"m": "vg"}]}
+    assert gui_state.APPState.migrate_style_threads(convs, None) == convs

@@ -129,6 +129,16 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                             ["Render this page", "Work on the words with me", "Move it in the book"])
                 return (None, ["Re-render this page", "Rework it on the table", "Move it in the book"])
 
+            case "image-editor":
+                return ("The acetate's on the bench.  Drag a marquee over what needs "
+                        "fixing and tell me what belongs there — I'll repaint just that "
+                        "patch.  Or we can extend the paper past its edges.",
+                        ["Heal the marked patch: …", "Extend the paper into …"])
+
+            case "image-editor-choices":
+                return ("The takes are on the sheet — pick the one that reads best and "
+                        "paste it down.  The original stays safe either way.", [])
+
             case "style":
                 return (None, ["Generate an art style example", "Tune the bubble styles"])
 

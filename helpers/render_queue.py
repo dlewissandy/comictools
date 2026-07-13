@@ -16,7 +16,7 @@ from loguru import logger
 # THE DOCKET: every queued render leaves a slip on disk until it finishes,
 # so a restart can't silently swallow work — the studio reports what died
 # and offers the labels back.
-QUEUE_DIR = os.path.join("data", ".queue")
+QUEUE_DIR = os.path.expanduser(os.path.join("~", ".comic-studio", "queue"))
 
 
 def _slip_write(label: str) -> str:

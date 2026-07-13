@@ -335,6 +335,22 @@ class APPState:
         except Exception:
             btn.set_visibility(True)
 
+    @staticmethod
+    def migrate_style_threads(conversations: dict, pid: str | None) -> dict:
+        """STYLES MOVED INTO THE HOUSE: threads saved under the retired
+        room's addresses re-key to the canonical trail so no conversation
+        orphans.  Handles all three legacy shapes: '/styles',
+        '/styles/<sid>', and the stale-trail '/styles/style/<sid>'."""
+        if not pid:
+            return conversations
+        for k in [k for k in conversations if k == "/styles" or k.startswith("/styles/")]:
+            sid = k[len("/styles/"):] if k != "/styles" else ""
+            if sid.startswith("style/"):
+                sid = sid[len("style/"):]
+            new = f"/publishers/{pid}/style/{sid}" if sid else f"/publishers/{pid}"
+            conversations.setdefault(new, conversations.pop(k))
+        return conversations
+
     def conversation_key(self, selection: list[SelectionItem]) -> str:
         """
         The conversation an object owns is keyed by its canonical URL; views

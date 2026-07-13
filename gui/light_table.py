@@ -1901,7 +1901,7 @@ def light_table(state: APPState, panel, scene, setting,
                     .on('click', lambda _, m=edit_message: post_user_message(state, m))
             if on_heal:
                 ui.button(icon='healing').props('flat round dense size=xs') \
-                    .tooltip(heal_tip or 'Correct this acetate in the image editor') \
+                    .tooltip(heal_tip or 'Take this acetate to the healing bench') \
                     .on('click', lambda _: on_heal())
 
     # ---- INK: hand the rough to the coauthor -----------------------------
@@ -2283,7 +2283,7 @@ def light_table(state: APPState, panel, scene, setting,
                             state.change_selection(new=[*state.selection, itm])
                         ui.button(icon='healing').props('flat round dense size=xs') \
                             .classes('row-tool') \
-                            .tooltip('Correct this element in the image editor') \
+                            .tooltip('Take this element to the healing bench') \
                             .on('click', lambda _, p=f["img"], n=f["name"]: heal_element(p, n))
                         ui.button(icon='content_cut').props('flat round dense size=xs') \
                             .classes('row-tool') \
@@ -2676,7 +2676,7 @@ def light_table(state: APPState, panel, scene, setting,
                         .tooltip('Split this background into its elements (recognize, lift, repaint beneath)') \
                         .on('click', lambda _, p=background: split_flow('background', p))
                     ui.button(icon='healing').props('flat round dense size=xs') \
-                        .tooltip('Inpaint/outpaint this background in the image editor') \
+                        .tooltip('Heal or extend this background on the healing bench') \
                         .on('click', lambda _: heal_background())
 
             # LAY A NEW ACETATE: figures, props and backgrounds lay down in

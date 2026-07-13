@@ -227,7 +227,7 @@ Ask for the take (inking the rough does this; you can also just say *"render thi
 Every render is a **take**. They line up in the **takes row** beneath the table — tap any one to make it the featured print. Not quite right? You have options, all conversational:
 
 - **Render another take** and compare.
-- Open a take in the **image editor** and fix just one region — *"clean up her left hand," "add rain on the window"* — with inpainting and outpainting, no need to redo the whole panel.
+- Take a panel to the **healing bench** — *"clean up her left hand," "add rain on the window"* — drag a marquee to aim the fix at just that patch, say the change, and pick your favorite of the takes that come back. Or **extend the paper** past its edges for a wider shot.
 - **Rework a take on the table** — drop the render back as a background layer and stage a new pass over it.
 
 Unpicked takes aren't thrown away — they wait in the wastebasket in case you change your mind. When Vera's office panel looks right, feature it and move on. Do the same for the rest of the scene — or just say **"render the missing panels"** and let the studio work through the batch while you get coffee.

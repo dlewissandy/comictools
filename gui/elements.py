@@ -1162,7 +1162,7 @@ class PagePacker:
 def art_tools(state, img_path, *, on_reink=None,
               reink_tip='Re-ink this art from scratch', heal_name='this art'):
     """EVERY IMAGE IS EDITABLE WHERE YOU SEE IT: a small tool row riding the
-    card — heal (inpaint/outpaint in the image editor) and, when offered, a
+    card — heal (repaint a patch, or extend the paper, on the healing bench) and, when offered, a
     re-ink.  The same affordance everywhere art shows: masters, sheets,
     mastheads, references."""
     from gui.selection import SelectionItem, SelectedKind
@@ -1175,7 +1175,7 @@ def art_tools(state, img_path, *, on_reink=None,
             state.change_selection(new=[*state.selection, itm])
         ui.button(icon='healing').props('flat round dense size=xs') \
             .classes('bg-white/70 dark:bg-black/50') \
-            .tooltip('Edit this art — inpaint, outpaint, fix the details') \
+            .tooltip('Take this art to the healing bench — repaint a patch or extend the paper') \
             .on('click.stop', lambda _: heal())
         if on_reink:
             ui.button(icon='brush').props('flat round dense size=xs') \

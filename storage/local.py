@@ -41,6 +41,40 @@ class LocalStorage(GenericStorage):
         if not os.path.exists(self.base_path):
             os.makedirs(self.base_path)
 
+    def _rewrite_locators(self, tree, outbound: bool):
+        """EVERY HOUSE SELF-CONTAINED: repos store locators relative to
+        their OWN root ('data/series/…'); the studio's runtime form is
+        'data/<slug>/series/…' (the house's mount).  Translation happens
+        HERE, at the JSON boundary, and nowhere else — a generic walk over
+        the tree so every image field, named or nested, is covered.
+        Identity when base_path == 'data' (the legacy single-root layout).
+        """
+        base = str(self.base_path)
+        if base == "data":
+            return tree
+        prefix_in = "data" + os.sep
+        prefix_out = base + os.sep
+
+        def fix(s: str) -> str:
+            if outbound:
+                if s.startswith(prefix_out):
+                    return "data" + s[len(base):]
+                return s
+            if s.startswith(prefix_in) and not s.startswith(prefix_out):
+                return base + s[len("data"):]
+            return s
+
+        def walk(node):
+            if isinstance(node, str):
+                return fix(node)
+            if isinstance(node, list):
+                return [walk(v) for v in node]
+            if isinstance(node, dict):
+                return {k: walk(v) for k, v in node.items()}
+            return node
+
+        return walk(tree)
+
     def create_object(self, data: BaseModel, overwrite: bool=False) -> str:
         """
         Create a new object in the specified path with the given data.   This new object will
@@ -103,7 +137,9 @@ class LocalStorage(GenericStorage):
         tmp = f"{filepath}.{_uuid4().hex[:8]}.tmp"
         with _WRITE_LOCK:
             with open(tmp, 'w') as f:
-                f.write(data.model_dump_json(indent=2))
+                f.write(json.dumps(
+                    self._rewrite_locators(json.loads(data.model_dump_json()), outbound=True),
+                    indent=2))
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, filepath)
@@ -138,7 +174,7 @@ class LocalStorage(GenericStorage):
             raise FileNotFoundError(f"Path {filepath} is not a file.")
         
         with open(filepath, 'r') as f:
-            data = json.load(f)
+            data = self._rewrite_locators(json.load(f), outbound=False)
             f.flush()
             os.fsync(f.fileno())
 
@@ -251,7 +287,9 @@ class LocalStorage(GenericStorage):
         tmp = f"{filepath}.{_uuid4().hex[:8]}.tmp"
         with _WRITE_LOCK:
             with open(tmp, 'w') as f:
-                f.write(json.dumps(data.model_dump(), indent=2))
+                f.write(json.dumps(
+                    self._rewrite_locators(json.loads(data.model_dump_json()), outbound=True),
+                    indent=2))
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, filepath)

@@ -5,7 +5,7 @@ from loguru import logger
 
 from gui.selection import SelectionItem
 from gui.state import APPState
-from agentic.constants import BOILERPLATE_INSTRUCTIONS
+from agentic.constants import boilerplate_instructions
 from agentic.tools import read_context
 from schema import Publisher, Series, ComicStyle
 
@@ -262,13 +262,16 @@ PERSONAS = {
         variants wearing this outfit are stale.
         """,
     "image-editor": """
-        You are an image editing assistant. The user gives you an instruction in chat,
-        and you apply it to the selected image using the image editing tools.
-        If image_editor_mode is "inpaint", call inpaint_image_region using the user's
-        latest message as the instruction. If image_editor_mode is "outpaint", call
-        outpaint_image_region the same way. If image_editor_mode is not set, ask whether
-        they want inpaint or outpaint. If no region is selected for inpaint, proceed
-        with a full-image edit.
+        You are THE INKER at the healing bench. The user speaks a change in
+        chat and you apply it to the acetate with the image editing tools.
+        THE MESSAGE'S OWN VERB WINS over any remembered mode: if it asks to
+        EXTEND the paper, grow the canvas, or widen the shot, call
+        outpaint_image_region.  If it asks to HEAL, repaint, fix, remove or
+        replace something, call inpaint_image_region.  Only when the message
+        names neither, fall back to image_editor_mode (the last tool-rail
+        press); if that is not set either, ask whether they want the patch
+        healed or the paper extended.  If no region is selected for a heal,
+        proceed with a full-image edit.
     """
     ,
     "image-editor-choices": """
@@ -374,7 +377,7 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
 
     instructions = "\n".join([
         dedent(PERSONAS.get(agent.name, "").strip()),
-        BOILERPLATE_INSTRUCTIONS,
+        boilerplate_instructions(),
         dedent(SPEAK_ONLY_DONE_WORK),
         dedent(SELECTION_INSTRUCTIONS.format(
             wrapper=wrapper

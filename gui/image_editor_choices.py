@@ -68,16 +68,35 @@ def view_image_editor_choices(state: APPState):
             logger.debug(f"Failed to scan choice files: {e}")
 
     with details:
-        with ui.row().classes("w-full flex-nowrap").style("padding: 0; margin: 0;"):
-            header("Choose an Edit", 0)
+        with ui.row().classes("w-full flex-nowrap items-center").style("padding: 0; margin: 0; gap: 12px;"):
+            header("The choices sheet", 0)
             ui.space()
-            ui.button("Cancel", icon="close", on_click=lambda: _cancel(state)).classes("text-base")
+            ui.button(icon="logout").props("flat round") \
+                .tooltip("Leave the bench — the original stays; unpicked takes go to the wastebasket") \
+                .on("click", lambda _: _cancel(state))
 
-        ui.markdown("Pick one option to replace the current image.")
+        ui.markdown("Every take is the same heal, tried four ways — pick the one that "
+                    "reads best and **paste it down**.  The original is pinned first; "
+                    "choosing it leaves the acetate exactly as it was.")
 
         selected = state.image_editor_choice_selected
 
         with ui.element().classes("grid grid-cols-2 gap-3 w-full"):
+            # THE ORIGINAL, PINNED: the sheet always shows what you'd be
+            # giving up — and keeping it is a first-class pick
+            if original and os.path.exists(original):
+                card = ui.card().classes(TAILWIND_CARD).style("aspect-ratio: 3/2")
+                with card:
+                    url = _image_path_to_url(original)
+                    ui.image(source=f"{url}{'&' if '?' in url else '?'}v={uuid4().hex[:8]}") \
+                        .style("top-padding: 0; bottom-padding:0")
+                    ui.badge("THE ORIGINAL", color="grey-8").props("floating") \
+                        .classes("absolute top-0 left-0 z-10")
+                    if selected is None:
+                        ui.badge("✓", color="green").props("floating").classes("absolute top-0 right-0 z-10")
+                card.tooltip("Keep it as it was — no take is pasted down")
+                card.on("click", lambda _: _select_choice(state, None))
+
             for path in choices:
                 card = ui.card().classes(TAILWIND_CARD).style("aspect-ratio: 3/2")
                 with card:
@@ -92,11 +111,25 @@ def view_image_editor_choices(state: APPState):
                 card.on("click", lambda _, p=path: _select_choice(state, p))
 
         if not choices:
-            ui.markdown("No choices found. Try the edit again.").style("color: red;")
+            ui.markdown("No takes on the sheet — run the heal again.").style("color: red;")
 
-        with ui.row().classes("w-full gap-2"):
-            ui.button("Apply Selection", icon="check", on_click=lambda: _apply(state)).classes("w-1/2")
-            ui.button("Cancel", icon="close", on_click=lambda: _cancel(state)).classes("w-1/2")
+        with ui.row().classes("w-full gap-2 q-mt-sm"):
+            if selected is None:
+                ui.button("Keep the original", icon="verified").classes("w-1/2") \
+                    .props("no-caps") \
+                    .tooltip("The acetate stays exactly as it was; the takes wait in the wastebasket") \
+                    .on("click", lambda _: _cancel(state))
+            else:
+                ui.button("Paste it down", icon="check").classes("w-1/2") \
+                    .props("no-caps") \
+                    .tooltip("Repaint the acetate with this take — the original goes "
+                             "to the wastebasket first, with a way back") \
+                    .on("click", lambda _: _apply(state))
+            ui.button("Leave the bench", icon="logout").classes("w-1/2") \
+                .props("flat no-caps") \
+                .on("click", lambda _: _cancel(state))
+        ui.label("Unpicked takes wait in the wastebasket — nothing paid-for burns.") \
+            .classes("text-xs text-gray-500")
 
 
 def _select_choice(state: APPState, path: str):
@@ -109,13 +142,13 @@ def _apply(state: APPState):
     original = state.image_editor_original_image or state.image_editor_image
 
     if not chosen or not original:
-        ui.notify("No choice selected.", type="warning")
+        ui.notify("Pick a take first — or keep the original.", type="warning")
         return
     if not os.path.exists(chosen):
-        ui.notify("Selected file is missing.", type="negative")
+        ui.notify("That take has gone missing — pick another.", type="negative")
         return
     if not os.path.exists(original):
-        ui.notify("Original image is missing.", type="negative")
+        ui.notify("The original acetate is missing.", type="negative")
         return
 
     # THE ORIGINAL GOES TO THE WASTEBASKET FIRST: applying an edit must
@@ -133,22 +166,29 @@ def _apply(state: APPState):
         applied = False
         try:
             from PIL import Image
+            # the heal's manifest knows the REGION and the MODE — an
+            # extend-take's grown paper must never be squashed back to the
+            # original trim by the alpha-preserving heal path
+            region = None
+            heal_mode = None
+            try:
+                import json as _json
+                manifest = os.path.join(
+                    os.path.dirname(original),
+                    f".choices-{state.image_editor_session_id}.json")
+                if os.path.exists(manifest):
+                    payload = _json.load(open(manifest))
+                    region = payload.get('region')
+                    heal_mode = payload.get('mode')
+            except Exception:
+                region, heal_mode = None, None
             src = Image.open(original)
-            if src.mode in ('RGBA', 'LA') or 'transparency' in src.info:
+            if heal_mode != 'outpaint' and (
+                    src.mode in ('RGBA', 'LA') or 'transparency' in src.info):
                 src = src.convert('RGBA')
                 a_min, _ = src.getchannel('A').getextrema()
                 if a_min < 250:
                     new = Image.open(chosen).convert('RGBA').resize(src.size)
-                    region = None
-                    try:
-                        import json as _json
-                        manifest = os.path.join(
-                            os.path.dirname(original),
-                            f".choices-{state.image_editor_session_id}.json")
-                        if os.path.exists(manifest):
-                            region = _json.load(open(manifest)).get('region')
-                    except Exception:
-                        region = None
                     alpha = src.getchannel('A').copy()
                     if region and all(k in region for k in ('x', 'y', 'width', 'height')):
                         # inside the healed patch, the take's own alpha rules
@@ -179,7 +219,7 @@ def _apply(state: APPState):
         _sb(_base, original, note=f"the healed art an undo replaced — {os.path.basename(original)}")
         shutil.copyfile(backup, original)
     from gui.light_table import table_receipt
-    table_receipt(state, "🖌 applied the edit — the artwork was repainted in place.  "
+    table_receipt(state, "🖌 pasted the take down — the acetate was repainted in place.  "
                          "The other takes wait in the wastebasket.", undo=undo)
 
     # Return to editor view

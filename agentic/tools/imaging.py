@@ -1198,6 +1198,10 @@ def _is_intent_only(text: str, mode: str) -> bool:
             "inpaint",
             "inpaint a region",
             "inpaint a region of this image",
+            "heal the marked patch of this image.",
+            "heal the marked patch of this image",
+            "heal the patch",
+            "heal the marked patch",
         }
     if mode == "outpaint":
         return lowered in {
@@ -1206,6 +1210,9 @@ def _is_intent_only(text: str, mode: str) -> bool:
             "outpaint",
             "outpaint a region",
             "outpaint a region of this image",
+            "extend the paper on this image.",
+            "extend the paper on this image",
+            "extend the paper",
         }
     return False
 

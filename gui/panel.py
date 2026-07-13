@@ -200,7 +200,7 @@ def view_panel(state: APPState):
                 state, panel, scene, setting,
                 featured=featured,
                 actions=[
-                    ('edit', 'Open this artwork in the image editor', lambda _: open_editor()),
+                    ('edit', 'Take this artwork to the healing bench', lambda _: open_editor()),
                     ('layers', 'Rework this take on the table — it becomes the background layer',
                      lambda _: rework_take_on_table(state, panel, featured)),
                     ('brush', 'Render a new take', lambda _: post_user_message(state, "I would like to render this panel.")),

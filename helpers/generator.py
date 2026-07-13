@@ -88,7 +88,7 @@ def invoke_generate_api(
 # THE SPEND LEDGER: every render costs real money — the studio counts them
 # so the header can tell the truth.  {"YYYY-MM-DD": {"low": n, ...}}
 # ---------------------------------------------------------------------------
-SPEND_LEDGER = os.path.join("data", ".spend.json")
+SPEND_LEDGER = os.path.expanduser(os.path.join("~", ".comic-studio", "spend.json"))
 # rough gpt-image rates per image by quality — an estimate, shown as one
 EST_COST = {"low": 0.02, "medium": 0.07, "high": 0.19}
 
