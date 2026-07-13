@@ -503,8 +503,12 @@ class LocalStorage(GenericStorage):
         Find the image of a character.
         """
         logger.trace("character.image_filepath() called")
-        # Get the base variant
+        # THE BASE LOOK IS THE IDENTITY: the portrait prefers the base
+        # variant (by id, then by name) before falling back to any look —
+        # a character card must never silently wear a costume
         variants = self.read_all_objects(cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id})
+        variants.sort(key=lambda v: (v.variant_id != "base",
+                                     (v.name or "").strip().lower() != "base"))
         while len(variants) > 0:
             variant = variants.pop(0)
             filepath = self.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant.variant_id)

@@ -121,8 +121,10 @@ def read_all_outfits(wrapper: RunContextWrapper[APPState], series_id: str) -> li
 @function_tool
 def update_outfit_description(wrapper: RunContextWrapper[APPState], series_id: str, outfit_id: str, description: str) -> str:
     """
-    Update an outfit's attire description.  NOTE: existing reference art and
-    variants wearing it become stale (re-render their reference sheets).
+    Update an outfit's attire description.  Every look WEARING the outfit is
+    re-dressed too (their frozen attire text re-syncs, so render prompts never
+    carry two disagreeing costumes), and the result names the wearers and the
+    now-stale reference art.
 
     Args:
         series_id: The series that owns the outfit.
@@ -130,7 +132,31 @@ def update_outfit_description(wrapper: RunContextWrapper[APPState], series_id: s
         description: The new attire description.
     """
     from agentic.tools.updater import update_attribute
-    return update_attribute(wrapper, Outfit, {"series_id": series_id, "outfit_id": outfit_id}, "description", description)
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    result = update_attribute(wrapper, Outfit, {"series_id": series_id, "outfit_id": outfit_id}, "description", description)
+
+    # RE-DRESS THE WEARERS: composed looks freeze attire=outfit.description
+    # at compose time — an outfit edit must reach them or the render prompt
+    # carries both the stale attire AND the fresh outfit text
+    wearers = []
+    for ch in storage.read_all_objects(CharacterModel, {"series_id": series_id}):
+        for v in storage.read_all_objects(CharacterVariant,
+                {"series_id": series_id, "character_id": ch.character_id}):
+            if getattr(v, "outfit_id", None) == outfit_id:
+                v.attire = description
+                storage.update_object(data=v)
+                wearers.append(f"{ch.name}'s '{v.name or v.variant_id}'")
+    outfit = storage.read_object(Outfit, {"series_id": series_id, "outfit_id": outfit_id})
+    stale_art = sorted((outfit.images or {}).keys()) if outfit is not None else []
+    if wearers:
+        result += (f"  Re-dressed the look{'s' if len(wearers) != 1 else ''} wearing it: "
+                   f"{', '.join(wearers)} — their reference sheets are now STALE "
+                   f"(re-ink with create_styled_image_for_character_variant).")
+    if stale_art:
+        result += (f"  The outfit's own reference art in style{'s' if len(stale_art) != 1 else ''} "
+                   f"{', '.join(stale_art)} is stale too (generate_outfit_reference).")
+    return result
 
 
 @function_tool

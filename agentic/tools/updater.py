@@ -411,6 +411,24 @@ def update_variant_description(wrapper: RunContextWrapper[APPState], series_id: 
         value=description
     )
 
+
+def _stale_sheets_note(wrapper, series_id: str, character_id: str, variant_id: str) -> str:
+    """VOLUNTEER THE TRUTH: a changed look makes every styled reference
+    sheet (and any posed figures built from them) quietly wrong — say so
+    instead of letting the renders lie."""
+    try:
+        v = wrapper.context.storage.read_object(CharacterVariant, {
+            "series_id": series_id, "character_id": character_id, "variant_id": variant_id})
+        styles = sorted((v.images or {}).keys()) if v is not None else []
+    except Exception:
+        styles = []
+    if not styles:
+        return ""
+    return (f"  NOTE: the reference sheets in style{'s' if len(styles) != 1 else ''} "
+            f"{', '.join(styles)} are now STALE — re-ink them "
+            f"(create_styled_image_for_character_variant), and re-pose any figures "
+            f"drawn from them.")
+
 @function_tool
 def update_variant_appearance(wrapper: RunContextWrapper[APPState], series_id: str, character_id: str, variant_id: str, appearance: str) -> str:
     """
@@ -436,7 +454,7 @@ def update_variant_appearance(wrapper: RunContextWrapper[APPState], series_id: s
         primary_key=primary_key,
         attribute="appearance",
         value=appearance
-    )
+    ) + _stale_sheets_note(wrapper, series_id, character_id, variant_id)
 
 @function_tool
 def update_variant_attire(wrapper: RunContextWrapper[APPState], series_id: str, character_id: str, variant_id: str, attire: str) -> str:
@@ -463,7 +481,7 @@ def update_variant_attire(wrapper: RunContextWrapper[APPState], series_id: str, 
         primary_key=primary_key,
         attribute="attire",
         value=attire
-    )
+    ) + _stale_sheets_note(wrapper, series_id, character_id, variant_id)
 
 @function_tool
 def update_variant_behavior(wrapper: RunContextWrapper[APPState], series_id: str, character_id: str, variant_id: str, behavior: str) -> str:

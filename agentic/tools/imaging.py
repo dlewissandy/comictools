@@ -2699,10 +2699,19 @@ def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id:
     if variant is None:
         return f"Variant '{variant_id}' of '{character_id}' not found."
 
-    # the best on-model reference we have: styled sheet, else any sheet
+    # the best on-model reference we have: styled sheet, else any sheet —
+    # and if we settle for another style's sheet, we SAY so
     sheet = variant.images.get(style_id) if (style_id and variant.images) else None
+    style_fallback = None
     if not (sheet and os.path.exists(sheet)):
         sheet = storage.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant_id)
+        if sheet and style_id:
+            worn = next((sid for sid, pth in (variant.images or {}).items() if pth == sheet), None)
+            style_fallback = (f"NOTE: no reference sheet in this scene's style ('{style_id}') — "
+                              f"the figure was posed from the "
+                              f"{'sheet in style ' + repr(worn) if worn else 'unstyled sheet'} instead.  "
+                              f"Ink their sheet in this style (create_styled_image_for_character_variant) "
+                              f"and re-pose for an on-style figure.")
     if not (sheet and os.path.exists(sheet)):
         return (f"No reference art for '{character_id}' ({variant_id}) yet — "
                 f"create the variant's reference sheet first.")
@@ -2754,7 +2763,8 @@ This is a cut-out acetate to be layered over a background."""
     fresh.figure_images[f"{character_id}/{variant_id}"] = filepath
     storage.update_object(data=fresh)
     state.is_dirty = True
-    return f"Posed figure acetate for {character_id} ({variant_id}): {filepath}"
+    return (f"Posed figure acetate for {character_id} ({variant_id}): {filepath}"
+            + (f"\n{style_fallback}" if style_fallback else ""))
 
 
 @function_tool
