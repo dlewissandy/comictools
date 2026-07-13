@@ -146,6 +146,13 @@ def create_publisher(wrapper: RunContextWrapper[APPState], name: str, descriptio
         The created Publisher object or an error message if the publisher already exists.
     """
     from storage import registry as _registry
+    if not name or name.strip().lower() in ("new publisher", "publisher",
+                                            "new house", "untitled"):
+        # never found a house on a placeholder — a repo is a real commitment
+        return ("Every publisher is its own git repository, so it needs a real "
+                "name before founding.  Ask the author what the house is called "
+                "(or point them at the + on the publishers wall, which also "
+                "lets them pick where the repo lives).")
     if _registry.registered():
         # EVERY HOUSE ITS OWN REPO: founding a publisher founds a git repo
         # (at ~/git/<slug>-comics by default) carrying the studio's default

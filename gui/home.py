@@ -99,14 +99,18 @@ def found_house_dialog(state: APPState):
                 return
             if chosen['existing']:
                 status.text = (f"{d} already holds “{chosen['existing']}” — "
-                               f"it will join the rack unchanged.")
+                               f"it joins the rack exactly as it is.")
+                go_btn.set_text('Adopt this house')
             elif os.path.isdir(d) and os.listdir(d):
                 import re
                 slug = re.sub(r'[^a-z0-9]+', '-', (name.value or 'new house').lower()).strip('-')
-                status.text = (f"{d} isn’t empty — the house will be founded in "
-                               f"{os.path.join(d, slug + '-comics')}")
+                status.text = (f"{d} isn’t a comics repo yet (and isn’t empty) — "
+                               f"initialize one at {os.path.join(d, slug + '-comics')}?")
+                go_btn.set_text('Initialize the repo there')
             else:
-                status.text = f'The house will be founded at {d}'
+                status.text = (f"{d} isn’t a comics repo yet — initialize it as one, "
+                               f"with the studio's default styles?")
+                go_btn.set_text('Initialize & found here')
 
         async def pick(_=None):
             d = await choose_folder()
@@ -169,8 +173,8 @@ def found_house_dialog(state: APPState):
                                      f"a fresh repository with the studio's default styles",
                               bench='the publishers wall')
                 state.refresh_details()
-            ui.button('Found the house', icon='gavel').props('unelevated dense no-caps') \
-                .on('click', lambda _: go())
+            go_btn = ui.button('Found the house', icon='gavel').props('unelevated dense no-caps')
+            go_btn.on('click', lambda _: go())
     dlg.open()
 
 
