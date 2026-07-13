@@ -636,6 +636,51 @@ def view_issue(state: APPState):
                                    lambda _, s=sc: post_user_message(
                                        state, f"I would like to delete scene '{s.name}'."))
 
+    def open_layout_dialog(ordered_panel_ids):
+        """THE LAYOUT SWATCH BOOK: every exact-fill layout for this page's
+        panel count, as printer's swatches — pick one and the panels take
+        its shapes in reading order (the book reflows around them)."""
+        from helpers.tilings import swatches_for, PIECE_PANEL, W as TW, H as TH
+        panels = [panel_of[pid] for pid in ordered_panel_ids if pid in panel_of]
+        n = len(panels)
+        swatches = swatches_for(n)
+        with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                .style('min-width: 560px; max-width: 860px;'):
+            ui.label(f'THE SWATCH BOOK — {n}-PANEL PAGES').classes('caption-box caption-box-sm')
+            if not swatches:
+                ui.label(f"No exact-fill layout tiles a page with {n} panels — "
+                         f"exact fills exist for 4 to 15.  Add or remove a panel, "
+                         f"or let the book keep flowing.").classes('text-sm q-mt-sm')
+            else:
+                ui.label(f"{len(swatches)} layouts fill the page exactly.  Pick one — "
+                         f"these panels take its shapes in reading order and the "
+                         f"book reflows.").classes('text-sm q-mt-sm')
+
+            def apply(tiling):
+                for p, (x, y, w, h) in zip(panels, tiling['pieces']):
+                    aspect, size = PIECE_PANEL[(w, h)]
+                    fresh = storage.read_object(Panel, p.primary_key)
+                    if fresh is None:
+                        continue
+                    fresh.aspect = FrameLayout(aspect)
+                    fresh.size = size
+                    storage.update_object(fresh)
+                dlg.close()
+                receipt(f"📐 shaped {n} panels to a swatch-book layout — the book reflowed")
+
+            with ui.row().classes('q-mt-sm').style('gap: 10px; flex-wrap: wrap; '
+                                                   'max-height: 60vh; overflow-y: auto;'):
+                for sw in swatches:
+                    card = ui.element('div').classes('layout-swatch')
+                    with card:
+                        for x, y, w, h in sw['pieces']:
+                            ui.element('div').classes('layout-swatch__piece').style(
+                                f'left: {x / TW * 100:.1f}%; top: {y / TH * 100:.1f}%; '
+                                f'width: {w / TW * 100:.1f}%; height: {h / TH * 100:.1f}%;')
+                    card.tooltip('Shape the page to this layout')
+                    card.on('click', lambda _, sw=sw: apply(sw))
+        dlg.open()
+
     def print_sheets():
         """PRINT: the bound proof, sheet for sheet — composed with the exact
         math that binds the PDF.  Every sheet is a door back to its bench."""
@@ -813,6 +858,16 @@ def view_issue(state: APPState):
                                     tile(key[0], key[1], x, y, w, h, grid_h,
                                          cap_scene=first_tiles.get(key[1]))
                                 ui.label(str(folio)).classes('page-folio')
+                                # THE SWATCH BOOK DOOR: exact-fill layouts
+                                # for this page's panels, one hover away
+                                ordered = [k[1] for k, x, y, _w, _h in sorted(
+                                    ((k, x, y, w2, h2) for k, x, y, w2, h2 in cells),
+                                    key=lambda c: (c[2], c[1]))]
+                                with ui.row().classes('page-tools items-center'):
+                                    ui.button(icon='dashboard_customize') \
+                                        .props('flat round dense size=xs') \
+                                        .tooltip('The swatch book — exact-fill layouts for this page') \
+                                        .on('click.stop', lambda _, o=ordered: open_layout_dialog(o))
                             sheet._props['data-banchor'] = f'flow-{folio}'
                     elif kind == 'slips':
                         # bare scenes hold their place but don't PRINT —

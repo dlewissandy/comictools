@@ -117,3 +117,20 @@ def test_state_write_merges_conversations(tmp_path, monkeypatch):
     assert data["conversations"]["other-window"][0]["text_html"] == "THEIRS"
     assert data["conversations"]["mine"][0]["text_html"] == "MINE"
     assert "home" in data["conversations"]
+
+
+def test_swatch_book_matches_the_catalog():
+    """THE LAYOUT SWATCH BOOK reproduces the author's catalog exactly:
+    1125 raw exact tilings of the 6x10 page, 354 unique modulo mirrors
+    and 180-degree rotation, every piece speaking the panel vocabulary."""
+    from helpers.tilings import swatch_book, swatches_for, PIECE_PANEL, _enumerate_raw
+    assert len(_enumerate_raw()) == 1125
+    book = swatch_book()
+    assert len(book) == 354
+    for entry in book:
+        area = sum(w * h for _x, _y, w, h in entry["pieces"])
+        assert area == 60, "every swatch fills the page exactly"
+        for _x, _y, w, h in entry["pieces"]:
+            assert (w, h) in PIECE_PANEL, "every piece speaks panel vocabulary"
+    assert len(swatches_for(15)) == 1      # the all-squares page
+    assert swatches_for(3) == []           # no exact fill below four panels

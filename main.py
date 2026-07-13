@@ -444,6 +444,16 @@ def init_layout(logger):
         .tile-beat__text { font-size: .6rem; line-height: 1.25; color: #333;
                            display: -webkit-box; -webkit-line-clamp: 6;
                            -webkit-box-orient: vertical; overflow: hidden; }
+        /* THE SWATCH BOOK: exact-fill page layouts as printer's swatches */
+        .layout-swatch { position: relative; width: 84px; aspect-ratio: 6/10;
+                         background: #fdfcf8; border: 1.5px solid var(--ink);
+                         border-radius: 2px; cursor: pointer;
+                         box-shadow: 2px 2px 0 rgba(0,0,0,.25);
+                         transition: transform .1s; flex: 0 0 auto; }
+        .layout-swatch:hover { transform: translate(-1px, -1px);
+                               box-shadow: 3px 3px 0 rgba(0,0,0,.3); }
+        .layout-swatch__piece { position: absolute; border: 1.2px solid #1c1a17;
+                                background: #f9f4e0; }
         /* a rough face wears a pencil tag — clearly not ink yet */
         .tile-rough-tag { position: absolute; bottom: 2px; left: 2px; z-index: 6;
                           background: rgba(249,244,224,.9); color: #6b6455;
