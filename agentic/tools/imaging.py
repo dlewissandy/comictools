@@ -3019,11 +3019,16 @@ Render a single FULL-BODY figure, head to toe, feet at the bottom edge, on a
 COMPLETELY TRANSPARENT background.  No scenery, no ground, no frame, no text,
 no speech balloons, no turnaround strip — ONE figure only, posed as directed.
 This is a cut-out acetate to be layered over a background."""
+    # BLOCKING IS FAST AND CHEAP: a pose acetate is a throwaway spatial guide,
+    # not a deliverable — the final ink render redraws it from scratch, and the
+    # character's identity is anchored twice over (input_fidelity holds the sheet
+    # here, and the final render gets the styled sheet directly).  So we rough it
+    # in at LOW: the cut-out only has to say WHERE the figure stands and WHO it is.
     image_bytes = invoke_edit_image_api(
         prompt,
         reference_images=[sheet],
         size="1024x1536",
-        quality=IMAGE_QUALITY.MEDIUM,
+        quality=IMAGE_QUALITY.LOW,
         background="transparent",
         input_fidelity="high",
     )
