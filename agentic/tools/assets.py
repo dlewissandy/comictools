@@ -14,7 +14,7 @@ from loguru import logger
 
 from gui.state import APPState
 from storage.generic import GenericStorage
-from schema import CharacterModel, CharacterVariant, ComicStyle, Outfit, PropAsset, Series
+from schema import CharacterModel, CharacterVariant, ComicStyle, Outfit, PropAsset, Series, Setting
 from agentic.tools.normalization import normalize_id
 from agentic.tools.creator import creator
 
@@ -155,6 +155,76 @@ def create_outfit(wrapper: RunContextWrapper[APPState], series_id: str, name: st
         return f"Series '{series_id}' not found."
     outfit = Outfit(outfit_id=normalize_id(name), series_id=series_id, name=name, description=description)
     return creator(wrapper=wrapper, obj=outfit, overwrite=True)
+
+
+def _asset_from_image(wrapper, cls, key, kind_label, series_id, name, image_locator,
+                     describe_prompt):
+    """Shared 'from an image' create: KEEP the image as the asset's exemplar,
+    describe it from the picture, render NOTHING (style art inks on demand)."""
+    import os, io
+    from helpers.generator import invoke_generate_api
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    if storage.read_object(cls=Series, primary_key={"series_id": series_id}) is None:
+        return f"Series '{series_id}' not found."
+    if not os.path.isfile(image_locator):
+        return f"Image '{image_locator}' not found.  Upload it first."
+    try:
+        description = str(invoke_generate_api(describe_prompt, image=image_locator))
+    except Exception as e:
+        logger.warning(f"{kind_label} description extraction failed: {e}")
+        description = ""
+    obj = cls(**{key: normalize_id(name), "series_id": series_id,
+                 "name": name, "description": description})
+    result = creator(wrapper=wrapper, obj=obj, overwrite=True)
+    if isinstance(result, str):
+        return result
+    with open(image_locator, "rb") as f:
+        storage.upload_reference_image(obj=obj, name=os.path.basename(image_locator),
+                                       data=io.BytesIO(f.read()), mime_type="image/png")
+    state.is_dirty = True
+    return (f"Created {kind_label} '{name}' from the image (the image is its exemplar; "
+            f"nothing rendered yet — its style art inks on demand).")
+
+
+@function_tool
+def create_prop_from_image(wrapper: RunContextWrapper[APPState], series_id: str,
+                           name: str, image_locator: str) -> str:
+    """
+    Create a PROP from a dropped/uploaded image — the IMAGE BECOMES THE PROP'S
+    EXEMPLAR, described from the picture.  Nothing is rendered; its style
+    reference art inks on demand.
+
+    Args:
+        series_id: The series that will own the prop.
+        name: A short (1-4 word) name.
+        image_locator: The filepath of the uploaded reference image.
+    """
+    return _asset_from_image(wrapper, PropAsset, "prop_id", "prop", series_id, name,
+        image_locator,
+        "Describe ONLY THE OBJECT in this image as a reusable prop: size, materials, "
+        "colors, wear, distinguishing details — 1-2 paragraphs.  Ignore any background, "
+        "hands or scene; describe only the object itself.")
+
+
+@function_tool
+def create_setting_from_image(wrapper: RunContextWrapper[APPState], series_id: str,
+                              name: str, image_locator: str) -> str:
+    """
+    Create a SETTING from a dropped/uploaded image — the IMAGE BECOMES THE
+    SETTING'S EXEMPLAR, described from the picture.  Nothing is rendered; its
+    master backgrounds ink on demand and are held to this image.
+
+    Args:
+        series_id: The series that will own the setting.
+        name: A short (1-5 word) name.
+        image_locator: The filepath of the uploaded reference image.
+    """
+    return _asset_from_image(wrapper, Setting, "setting_id", "setting", series_id, name,
+        image_locator,
+        "Describe THE PLACE in this image as a reusable setting: architecture, layout, "
+        "lighting, mood, era, palette — detailed enough that different artists draw the "
+        "same place.  1-2 paragraphs.")
 
 
 @function_tool

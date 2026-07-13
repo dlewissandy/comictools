@@ -467,7 +467,22 @@ def create_variant_from_image(wrapper: RunContextWrapper[APPState],
         behavior=attrs.behavior,
         images = {}
     )
-    storage.create_object(data=variant)
+    new_id = storage.create_object(data=variant)
+    # KEEP THE IMAGE AS THE EXEMPLAR: the dropped reference is uploaded onto
+    # the look, so every styled sheet is held to the actual picture (not just
+    # the text read off it) — the render composites variant uploads first.
+    # Upload onto the STORED object (create_object may reassign the id).
+    try:
+        import io as _io
+        stored = storage.read_object(cls=CharacterVariant, primary_key={
+            "series_id": character.series_id, "character_id": character.character_id,
+            "variant_id": new_id}) or variant
+        with open(image_locator, "rb") as _f:
+            storage.upload_reference_image(obj=stored, name=os.path.basename(image_locator),
+                                           data=_io.BytesIO(_f.read()), mime_type="image/png")
+        variant = stored
+    except Exception as _ex:
+        logger.warning(f"could not keep the reference image as an exemplar: {_ex}")
     state.is_dirty = True
     return variant
 

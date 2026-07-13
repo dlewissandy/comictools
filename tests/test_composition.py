@@ -212,3 +212,52 @@ def test_ink_cascade_never_infinitely_recurses_without_a_base(storage, mock_imag
     # must return (not hang / RecursionError)
     out = str(create_styled_image_body(st, WL, "twins", "look-a", "vintage-four-color"))
     assert "locator" in out.lower() or "created" in out.lower()
+
+
+def test_create_variant_from_image_keeps_the_exemplar(storage, mock_imaging, monkeypatch, tmp_path):
+    """A character look built from an image KEEPS the image as its exemplar,
+    so its styled sheets are held to the actual picture."""
+    import asyncio, json as _json, os
+    from types import SimpleNamespace
+    from PIL import Image
+    import agentic.tools.creator as C
+    from schema import CharacterVariant
+    WL, ch = "wonders-of-the-witchlight", "ezra"
+    src = tmp_path / "face.png"; Image.new("RGB", (64, 96), (30, 80, 30)).save(src)
+    monkeypatch.setattr("helpers.generator.invoke_generate_api",
+                        lambda prompt, image=None, text_format=None, **k:
+                        text_format(race="human", gender="f", age="40s", height="avg",
+                                    general_description="d", physical_appearance="ap",
+                                    attire="a", behavior="b") if text_format else "x")
+    state = SimpleNamespace(storage=storage, is_dirty=False, selection=[])
+    out = asyncio.run(C.create_variant_from_image.on_invoke_tool(
+        SimpleNamespace(context=state), _json.dumps({
+            "series_id": WL, "character_id": ch, "name": "From Photo",
+            "image_locator": str(src)})))
+    # create_object may reassign the id — find the new look by name
+    v = next(x for x in storage.read_all_objects(CharacterVariant,
+             {"series_id": WL, "character_id": ch}) if (x.name or "") == "From Photo")
+    ups = storage.list_uploads(obj=v)
+    assert ups and os.path.exists(ups[0]), "the reference image is kept as the look's exemplar"
+
+
+def test_create_prop_and_setting_from_image_keep_the_exemplar(storage, mock_imaging, monkeypatch, tmp_path):
+    import asyncio, json as _json, os
+    from types import SimpleNamespace
+    from PIL import Image
+    import agentic.tools.assets as A
+    from schema import PropAsset, Setting
+    WL = "wonders-of-the-witchlight"
+    monkeypatch.setattr("helpers.generator.invoke_generate_api",
+                        lambda prompt, image=None, **k: "described from the picture")
+    for tool, cls, key, kind, vid in (
+            (A.create_prop_from_image, PropAsset, "prop_id", "prop", "brass-lantern"),
+            (A.create_setting_from_image, Setting, "setting_id", "setting", "foggy-pier")):
+        src = tmp_path / f"{vid}.png"; Image.new("RGB", (48, 48), (90, 90, 90)).save(src)
+        state = SimpleNamespace(storage=storage, is_dirty=False, selection=[])
+        name = vid.replace("-", " ").title()
+        asyncio.run(tool.on_invoke_tool(SimpleNamespace(context=state), _json.dumps({
+            "series_id": WL, "name": name, "image_locator": str(src)})))
+        obj = storage.read_object(cls, {"series_id": WL, key: vid})
+        assert obj is not None and storage.list_uploads(obj=obj), \
+            f"{kind} keeps the image as its exemplar"

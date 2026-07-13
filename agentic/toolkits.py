@@ -88,8 +88,9 @@ from agentic.tools.updater import (
 from agentic.tools.imaging import generate_setting_background, generate_series_title_art, generate_panel_image, generate_figure_acetate, split_layer, export_issue_pdf, export_issue_cbz, preflight_issue, layout_issue_pages, stitch_issue_pages, render_missing_panels
 from agentic.tools.library import list_library_assets, import_character, import_setting, import_prop, import_outfit
 from agentic.tools.assets import (
-    create_prop, read_all_props, update_prop_description, delete_prop,
-    create_outfit, create_outfit_from_image, read_all_outfits, update_outfit_description, delete_outfit,
+    create_prop, create_prop_from_image, read_all_props, update_prop_description, delete_prop,
+    create_outfit, create_outfit_from_image, create_setting_from_image,
+    read_all_outfits, update_outfit_description, delete_outfit,
     compose_character_variant, extract_outfit_from_variant, dedupe_props,
     swap_variant_outfit)
 from agentic.tools.imaging import generate_prop_reference, generate_outfit_reference
@@ -181,6 +182,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_series
     ],
     "character": [
+        create_prop_from_image,
+        create_setting_from_image,
         create_outfit_from_image,
         # the compose flow's own advice names this tool
         create_styled_image_for_character_variant,
@@ -409,6 +412,8 @@ TOOLKITS: dict[str,list[Tool]] = {
 
     ],
     "series": [
+        create_prop_from_image,
+        create_setting_from_image,
         create_outfit_from_image,
         # the Create dialog's three paths render their art here
         create_variant,

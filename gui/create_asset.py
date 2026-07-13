@@ -216,19 +216,25 @@ def _create_from_scratch(state, kind, name, description):
 
 def _create_from_image(state, kind, name, image_path, notes):
     change = f"  Change from the picture: {notes}" if notes else ""
-    ref = f"![reference]({image_path})"
+    # every path KEEPS the dropped image as the asset's exemplar (an upload)
+    # and renders nothing — the style art inks on demand, held to the picture
     if kind == "character":
         post_user_message(state,
-            f"Create a new character named '{name}' from this reference image: {ref}.  "
-            f"Read their look off the picture as their BASE identity.{change}")
+            f"Create a new character named '{name}', then create their BASE look from this "
+            f"reference image with create_variant_from_image (which KEEPS the image as the "
+            f"look's exemplar) — read their identity off the picture.{change}  "
+            f"Don't render a sheet yet.  Image: {image_path}")
     elif kind == "setting":
         post_user_message(state,
-            f"Create a new setting named '{name}' from this reference image: {ref}.{change}  "
-            f"Use it as the master background.")
+            f"Create a new setting named '{name}' from this reference image with "
+            f"create_setting_from_image — the image is its EXEMPLAR, nothing renders yet "
+            f"(its master background inks on demand, held to the image).{change}  "
+            f"Image: {image_path}")
     elif kind == "prop":
         post_user_message(state,
-            f"Create a new prop named '{name}' from this reference image: {ref}.{change}  "
-            f"Use it as the prop's reference art.")
+            f"Create a new prop named '{name}' from this reference image with "
+            f"create_prop_from_image — the image is its EXEMPLAR, nothing renders yet.{change}  "
+            f"Image: {image_path}")
     else:
         post_user_message(state,
             f"Create a WARDROBE (outfit) named '{name}' from this reference image using "

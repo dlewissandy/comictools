@@ -29,12 +29,18 @@ def test_from_scratch_speaks_each_kind(monkeypatch):
     assert "outfit" in posts[3] and "Trench Coat" in posts[3]
 
 
-def test_from_image_carries_the_reference_and_notes(monkeypatch):
+def test_from_image_keeps_exemplar_and_carries_notes(monkeypatch):
     posts = _capture(monkeypatch)
     ca._create_from_image(_State(), "character", "Vera", "/data/up/x.png", "older, grey hair")
-    assert "![reference](/data/up/x.png)" in posts[0]
+    # routes to the exemplar-keeping tool with the image path and notes
+    assert "create_variant_from_image" in posts[0] and "/data/up/x.png" in posts[0]
     assert "older, grey hair" in posts[0]
-    assert "BASE identity" in posts[0]
+    for kind, tool in (("setting", "create_setting_from_image"),
+                       ("prop", "create_prop_from_image"),
+                       ("outfit", "create_outfit_from_image")):
+        posts.clear()
+        ca._create_from_image(_State(), kind, "X", "/data/up/y.png", "")
+        assert tool in posts[0] and "EXEMPLAR" in posts[0] and "/data/up/y.png" in posts[0]
 
 
 def test_copy_derives_characters_and_copies_the_rest(monkeypatch):
