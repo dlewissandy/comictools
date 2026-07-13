@@ -2395,8 +2395,10 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
     if scene.setting_id:
         setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": scene.setting_id})
         if setting is not None:
-            from helpers.masters import master_for
-            background, _exact = master_for(setting, scene.style_id, panel.aspect)
+            from helpers.masters import scene_background
+            # the scene's chosen SHOT (angle + time of day) wins over the master
+            background, _exact = scene_background(setting, scene.style_id, panel.aspect,
+                                                  getattr(scene, 'setting_shot_id', None))
             if background and os.path.exists(background):
                 reference_images.append(background)
                 background_first = True
@@ -3445,9 +3447,10 @@ def _resolve_layer_source(panel, scene, storage, series_id: str, layer: str):
             setting: Setting = storage.read_object(cls=Setting, primary_key={
                 "series_id": series_id, "setting_id": owner.setting_id})
             if setting is not None:
-                from helpers.masters import master_for
-                cand, _exact = master_for(setting, getattr(owner, 'style_id', None),
-                                          getattr(owner, 'aspect', 'landscape'))
+                from helpers.masters import scene_background
+                cand, _exact = scene_background(setting, getattr(owner, 'style_id', None),
+                                                getattr(owner, 'aspect', 'landscape'),
+                                                getattr(owner, 'setting_shot_id', None))
                 if cand and os.path.exists(cand):
                     return cand, 'background'
         return None, 'background'

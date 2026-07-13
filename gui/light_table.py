@@ -1199,8 +1199,11 @@ def lay_figure_on_table(state, panel, character_id: str, variant_id: str,
     state.refresh_details()
 
 
-def lay_background_on_table(state, scene, panel, setting):
+def lay_background_on_table(state, scene, panel, setting, shot=None):
     scene.setting_id = setting.setting_id
+    # picking a set (or its master) clears any prior shot; picking a shot pins it
+    if scene is not None and hasattr(scene, 'setting_shot_id'):
+        scene.setting_shot_id = shot.shot_id if shot is not None else None
     state.storage.update_object(scene)
     # a new background replaces any split plate
     fresh_board(state.storage, panel)
@@ -1211,7 +1214,8 @@ def lay_background_on_table(state, scene, panel, setting):
             if not panel.layer_groups[gname]:
                 panel.layer_groups.pop(gname)
         state.storage.update_object(panel)
-    table_receipt(state, f"🏔 laid the **{setting.name}** background on the table")
+    _what = f"{setting.name} · {shot.name}" if shot is not None else setting.name
+    table_receipt(state, f"🏔 laid the **{_what}** background on the table")
     state.refresh_details()
 
 
@@ -1619,8 +1623,11 @@ def light_table(state: APPState, panel, scene, setting,
         background = split_plate
     elif setting is not None:
         style_id = scene.style_id if scene is not None else None
-        from helpers.masters import master_for
-        background, _exact = master_for(setting, style_id, panel.aspect)
+        from helpers.masters import scene_background
+        # the scene's chosen SHOT (angle + time of day) rides the table in place
+        # of the establishing master
+        background, _exact = scene_background(setting, style_id, panel.aspect,
+                                              getattr(scene, 'setting_shot_id', None))
         # not exact = borrowed style or orientation — the honest re-ink
         # offer stands, and re-inking writes ITS OWN key (no clobber)
         bg_style_missing = not _exact
@@ -3071,18 +3078,31 @@ def light_table(state: APPState, panel, scene, setting,
             def pick_background():
                 with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 720px;'):
                     ui.label('Lay a background on the table').classes('caption-box caption-box-sm')
-                    with ui.row().classes('w-full').style('gap: 8px;'):
+                    _can_shot = not (cover_mode or insert_mode)  # shots pin to a scene
+                    with ui.row().classes('w-full items-start').style('gap: 8px;'):
                         for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}, order_by="name"):
                             img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
-                            with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 150px;') as card:
-                                if img:
-                                    ui.image(source=img).style('height: 80px;').props('fit=cover')
-                                ui.label(s.name.title()).classes('text-xs text-center w-full')
+                            with ui.column().classes('items-stretch').style('gap: 4px; width: 150px;'):
+                                with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 150px;') as card:
+                                    if img:
+                                        ui.image(source=img).style('height: 80px;').props('fit=cover')
+                                    ui.label(s.name.title() + '  · establishing').classes('text-xs text-center w-full')
 
-                            def lay(s=s):
-                                dlg.close()
-                                lay_background_on_table(state, scene, panel, s)
-                            card.on('click', lambda _, s=s: lay(s))
+                                def lay(s=s):
+                                    dlg.close()
+                                    lay_background_on_table(state, scene, panel, s)
+                                card.on('click', lambda _, s=s: lay(s))
+
+                                # SHOTS of this set — angle/time re-frames, one click
+                                # each (a shot without art yet falls back to the master)
+                                for sh in ((getattr(s, 'shots', None) or []) if _can_shot else []):
+                                    def lay_shot(s=s, sh=sh):
+                                        dlg.close()
+                                        lay_background_on_table(state, scene, panel, s, sh)
+                                    ui.chip(sh.name, icon='photo_camera') \
+                                        .props('dense outline clickable size=sm') \
+                                        .tooltip(f"Use the '{sh.name}' shot of {s.name}") \
+                                        .on('click', lambda _, s=s, sh=sh: lay_shot(s, sh))
 
                     # BUILD A NEW SET right from the board: name it, sketch
                     # it, and its master background goes straight to the

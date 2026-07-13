@@ -19,6 +19,7 @@ class SceneModel(BaseModel):
 
     # PRODUCTION METADATA (all optional so pre-existing scenes still load)
     setting_id: Optional[str] = Field(None, description="The setting where this scene takes place.  Default to None.")
+    setting_shot_id: Optional[str] = Field(None, description="Which named SHOT of the setting this scene uses (angle + time of day); None means the establishing master.  Default to None.")
     time_of_day: Optional[str] = Field(None, description="The time of day of the scene's setting, e.g. 'day', 'night', 'dusk'.  Default to None.")
     mood: Optional[str] = Field(None, description="The emotional tone and lighting mood of the scene, e.g. 'tense, low warm lamplight'.  Default to None.")
     cast: list[CharacterRef] = Field(default_factory=list, description="The characters appearing in this scene with the variant (wardrobe) they wear.  Default to empty list.")

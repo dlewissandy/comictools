@@ -37,6 +37,21 @@ def master_for(setting, style_id: str, aspect) -> tuple[str | None, bool]:
     return None, False
 
 
+def scene_background(setting, style_id: str, aspect, shot_id: str | None = None) -> tuple[str | None, bool]:
+    """The background a board should use: the setting's chosen SHOT when one is
+    picked and has art in this style/orientation, else the establishing master.
+    A shot carries its own style-keyed `images`, so it resolves through exactly
+    the same master_for logic.  Returns (image_path, exact)."""
+    if shot_id and setting is not None:
+        shot = next((s for s in (getattr(setting, "shots", None) or [])
+                     if s.shot_id == shot_id), None)
+        if shot is not None:
+            img, exact = master_for(shot, style_id, aspect)
+            if img:
+                return img, exact
+    return master_for(setting, style_id, aspect)
+
+
 def split_key(key: str) -> tuple[str, str]:
     """'vintage-four-color/portrait' -> (style_id, orientation)."""
     if "/" in key:

@@ -71,6 +71,22 @@ def test_setting_shot_renders_high_from_the_master(storage, tmp_data, monkeypatc
     assert fresh.images["vintage-four-color"] == master   # master untouched
 
 
+def test_scene_background_prefers_shot_then_falls_back(tmp_data):
+    # a scene that picked a shot uses the shot's art; a shot with no art (or an
+    # unknown shot, or no shot) falls back to the establishing master
+    from helpers.masters import scene_background
+    master = _png(os.path.join(tmp_data, "bg", "master.png"))
+    shot_art = _png(os.path.join(tmp_data, "bg", "night.png"))
+    st = Setting(setting_id="x", series_id="y", name="Gate", description="d",
+                 images={"vfc": master})
+    st.shots = [SettingShot(shot_id="night", name="night", images={"vfc": shot_art}),
+                SettingShot(shot_id="dawn", name="dawn", images={})]
+    assert scene_background(st, "vfc", "landscape", "night")[0] == shot_art
+    assert scene_background(st, "vfc", "landscape", None)[0] == master
+    assert scene_background(st, "vfc", "landscape", "dawn")[0] == master   # shot has no art
+    assert scene_background(st, "vfc", "landscape", "zzz")[0] == master    # unknown shot
+
+
 def test_setting_shot_survives_json_round_trip(storage):
     st = storage.read_object(cls=Setting, primary_key={"series_id": WL, "setting_id": SETTING})
     st.shots = [SettingShot(shot_id="wide-dawn", name="wide · dawn",
