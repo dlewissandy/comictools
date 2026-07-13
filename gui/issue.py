@@ -188,9 +188,10 @@ def view_issue(state: APPState):
         # normalize the size to the multiplier it packs at under the NEW
         # aspect (legacy 'regular' stays 1x; a square's 3x clamps to 2x)
         p.size = _norm_size(getattr(p, 'size', None), p.aspect.value)
+        p.shape_locked = True   # OVERRIDE IS A LOCK: the flow now honors this shape
         storage.update_object(p)
         _repack_prints(panel_id)
-        receipt(f"🔲 turned the panel {p.aspect.value} — the book reflowed around it")
+        receipt(f"🔒 turned the panel {p.aspect.value} and held it — the book reflowed around it")
 
     def cycle_size(scene_id, panel_id):
         p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
@@ -200,9 +201,23 @@ def view_issue(state: APPState):
         sizes = _sizes_for(p.aspect.value)
         cur = _norm_size(getattr(p, 'size', None), p.aspect.value)
         p.size = sizes[(sizes.index(cur) + 1) % len(sizes)]
+        p.shape_locked = True   # OVERRIDE IS A LOCK: the flow now honors this shape
         storage.update_object(p)
         _repack_prints(panel_id)
-        receipt(f"🔲 sized the panel {p.size} — the book reflowed around it")
+        receipt(f"🔒 sized the panel {p.size} and held it — the book reflowed around it")
+
+    def toggle_lock(scene_id, panel_id):
+        p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
+                                        "scene_id": scene_id, "panel_id": panel_id})
+        if p is None:
+            return
+        p.shape_locked = not bool(getattr(p, 'shape_locked', False))
+        storage.update_object(p)
+        _repack_prints(panel_id)
+        if p.shape_locked:
+            receipt(f"🔒 held the panel at {p.aspect.value} {p.size} — the flow works around it")
+        else:
+            receipt("🔓 released the panel — the flow may reshape it to fill the page")
 
     def move_beat(scene_id, panel_id, d):
         sibs = sorted(storage.read_all_objects(Panel, primary_key={
@@ -367,6 +382,15 @@ def view_issue(state: APPState):
                         ui.label(size)
                     sz.tooltip(f'{size} of {"/".join(_sizes_for(p.aspect.value))} — click to resize')
                     sz.on('click.stop', lambda _, s=scene_id, pid=panel_id: cycle_size(s, pid))
+                    # THE LOCK: a held panel keeps its shape; the flow works
+                    # around it.  Overriding aspect/size holds it automatically;
+                    # this releases it back to flexible.
+                    _held = bool(getattr(p, 'shape_locked', False))
+                    ui.button(icon='lock' if _held else 'lock_open') \
+                        .props('flat round dense size=xs') \
+                        .tooltip('Held to this shape — the flow honors it (click to release)'
+                                 if _held else 'Flexes to fill the page (click to hold this shape)') \
+                        .on('click.stop', lambda _, s=scene_id, pid=panel_id: toggle_lock(s, pid))
                     ui.button(icon='chevron_right').props('flat round dense size=xs') \
                         .tooltip('Later in the scene') \
                         .on('click.stop', lambda _, s=scene_id, pid=panel_id: move_beat(s, pid, 1))
@@ -780,6 +804,24 @@ def view_issue(state: APPState):
         # THE BOOK sizes itself to the bookroom (the details pane is a CSS
         # container), so a narrow pane stacks single pages instead of clipping
         with ui.element('div').classes('book w-full'):
+            # THE ADVISORY BANNER: when a lock config can't tile, the flow falls
+            # back to bands so the book still binds — say so, non-blocking, with
+            # the reason and the fix.
+            try:
+                from helpers.stitcher import layout_note
+                _lnote = layout_note(series_id, issue_id)
+            except Exception:
+                _lnote = None
+            if _lnote:
+                with ui.element('div').style(
+                        'margin: 0 auto 12px; max-width: 640px; padding: 8px 14px; '
+                        'border-radius: 8px; display: flex; gap: 8px; align-items: center; '
+                        'font-size: 13px; background: rgba(230,160,30,.14); '
+                        'border: 1px solid rgba(230,160,30,.5);'):
+                    ui.icon('report_problem').style('color: #b8860b;')
+                    ui.label(f"Couldn't make an exact-fill layout — {_lnote}  "
+                             f"Showing a flowed layout meanwhile; release a lock or move a "
+                             f"panel to fix it.")
             if detail == 'print':
                 # THE PRINT STOP: the reading room folded into the studio —
                 # the covers, pages and inserts live INSIDE the proof sheets
