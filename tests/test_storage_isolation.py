@@ -23,7 +23,10 @@ def test_read_uses_base_path(storage):
 
 
 def test_update_does_not_leak_to_real_data(storage, tmp_data):
-    real_file = os.path.join(REPO, "data", SCENE_REL)
+    # MOUNT-ALL: the real house lives at data/<slug> (or wherever the
+    # registry mounts it) — resolve through the same pin the fixture uses
+    from tests.conftest import fixture_source
+    real_file = os.path.join(fixture_source(), SCENE_REL)
     before = open(real_file).read()
 
     scene = storage.read_object(SceneModel, {"series_id": WL, "issue_id": CARN, "scene_id": SCENE})
@@ -35,9 +38,10 @@ def test_update_does_not_leak_to_real_data(storage, tmp_data):
 
 
 def test_create_does_not_leak_to_real_data(storage, tmp_data):
+    from tests.conftest import fixture_source
     series = Series(series_id="tmp-test", name="Tmp", description="d", publisher_id=None)
     storage.create_object(series)
-    assert not os.path.exists(os.path.join(REPO, "data", "series", "tmp-test"))
+    assert not os.path.exists(os.path.join(fixture_source(), "series", "tmp-test"))
 
 
 def test_list_images_resolves_under_base_path(storage, tmp_data):

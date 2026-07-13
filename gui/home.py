@@ -8,71 +8,24 @@ from schema.style.comic import ComicStyle
 from storage.generic import GenericStorage
         
 
-def view_all_styles(state: APPState):
-    from gui.messaging import new_item_messager
-    storage: GenericStorage = state.storage
-    with state.details:
-        new_item_messager(state, "STYLES", "I would like to create a new comic book style.")
-        from gui.elements import ruled_page
-        with ruled_page() as packer:
-            view_all_instances(
-                state=state,
-                get_image_locator=lambda style: style.image.get('art', None) if style.image else None,
-                get_instances=lambda: storage.read_all_objects(ComicStyle),
-                kind="style",
-                aspect_ratio="1/1",
-                packer=packer, variants=[(3, 3)],
-                # a style's art is abstract — its NAME must be readable
-                # without hovering
-                card_overlay=lambda style: ui.label(style.name.title())
-                    .classes('caption-box caption-box-sm')
-                    .style('position: absolute; bottom: 6px; left: 6px; z-index: 6;'))
-        
-def open_house_holding(storage, cls, primary_key) -> object | None:
-    """EVERY HOUSE ITS OWN REPO: the thing lives in another house — find it,
-    open that house (the ./data symlink re-points), and return the object
-    re-read through the open storage.  None when no house holds it."""
-    from storage import registry
-    from storage.local import LocalStorage as _LS
-    for h in registry.registered():
-        if h['slug'] == registry.open_slug():
-            continue
-        if _LS(base_path=h['path']).read_object(cls, primary_key=primary_key) is not None:
-            if registry.set_open(h['slug']):
-                return storage.read_object(cls, primary_key=primary_key)
-            break
-    return None
-
-
 def all_house_publishers(storage) -> list[Publisher]:
     """Every publisher on the wall — one per registered house (each house
-    is a git repo holding exactly one publisher).  Falls back to the open
-    storage when no registry exists (legacy single-directory layout)."""
+    is a git repo holding exactly one publisher, mounted at data/<slug>).
+    Falls back to the handed storage when no registry exists (legacy
+    single-directory layout)."""
     from storage import registry
-    from storage.local import LocalStorage as _LS
-    houses = registry.registered()
-    if not houses:
+    if str(getattr(storage, 'base_path', '')) != registry.DATA_DIR or not registry.registered():
         return storage.read_all_objects(Publisher)
     out = []
-    for h in houses:
-        for pub in _LS(base_path=h['path']).read_all_objects(Publisher):
-            PUBLISHER_HOUSE[pub.publisher_id] = h
-            out.append(pub)
+    for _slug, st in registry.mounted_storages():
+        out.extend(st.read_all_objects(Publisher))
     return out
 
 
-# publisher_id -> {"slug", "path"} of the house holding it (filled on render)
-PUBLISHER_HOUSE: dict[str, dict] = {}
-
-
 def house_logo(pub: Publisher):
-    """The publisher's logo path, resolved into ITS house — records store
-    'data/…' locators, which only resolve for the OPEN house's symlink."""
-    img = pub.image
-    home = PUBLISHER_HOUSE.get(pub.publisher_id)
-    if img and home and os.path.realpath('data') != os.path.realpath(home['path']):
-        return os.path.join(home['path'], os.path.relpath(img, 'data'))
-    return img
+    """The publisher's logo, already mount-resolved: house storages
+    translate 'data/…' locators to 'data/<slug>/…' on read."""
+    return pub.image
 
 
 async def choose_folder() -> str | None:
@@ -163,10 +116,9 @@ def found_house_dialog(state: APPState):
                     ui.notify('Pick a folder first.', type='warning')
                     return
                 if chosen['existing']:
-                    slug = registry.register(d)
-                    registry.set_open(slug)
+                    registry.register(d)
                     dlg.close()
-                    ui.notify(f"“{chosen['existing']}” joined the rack — its house is open.",
+                    ui.notify(f"“{chosen['existing']}” joined the rack — it's on the wall now.",
                               type='positive')
                     state.refresh_details()
                     return
@@ -182,7 +134,6 @@ def found_house_dialog(state: APPState):
                 except Exception as ex:
                     ui.notify(f'Could not found the house: {ex}', type='warning')
                     return
-                registry.set_open(slug)
                 dlg.close()
                 from gui.light_table import table_receipt
                 table_receipt(state, f"\U0001F3DB founded **{nm}** at `{target}` — "
@@ -212,8 +163,23 @@ def view_all_publishers(state: APPState):
             packer.finalize()
         
 def _last_bench(storage):
-    """(series, issue) most recently touched anywhere under its issue dir —
-    the bench the author left their pencils on."""
+    """(series, issue, storage) most recently touched anywhere under any
+    mounted house — the bench the author left their pencils on."""
+    from storage import registry
+    if str(getattr(storage, 'base_path', '')) != registry.DATA_DIR or not registry.registered():
+        sid, issue, _when = _house_bench(storage)
+        return sid, issue, storage
+    best = (None, None, storage)
+    best_when = 0.0
+    for _slug, st in registry.mounted_storages():
+        sid, issue, when = _house_bench(st)
+        if issue is not None and when > best_when:
+            best, best_when = (sid, issue, st), when
+    return best
+
+
+def _house_bench(storage):
+    """(series_id, issue, mtime) of one house's freshest bench."""
     from schema import Issue
     base = str(storage.base_path)
     newest, when = None, 0.0
@@ -235,10 +201,10 @@ def _last_bench(storage):
             if m > when:
                 when, newest = m, (sdir.name, idir.name)
     if newest is None:
-        return None, None
+        return None, None, 0.0
     issue = storage.read_object(cls=Issue, primary_key={"series_id": newest[0],
                                                         "issue_id": newest[1]})
-    return (newest[0], issue) if issue else (None, None)
+    return (newest[0], issue, when) if issue else (None, None, 0.0)
 
 
 def view_all_series(state: APPState):
@@ -249,14 +215,14 @@ def view_all_series(state: APPState):
 
         # THE RESUME CARD: the lobby's front door — the bench you left your
         # pencils on, badged by the one production ledger
-        series_id, issue = _last_bench(storage)
+        series_id, issue, bench_storage = _last_bench(storage)
         if issue is not None:
             from gui.selection import SelectionItem, SelectedKind
-            series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
-            cover = storage.find_series_image(series_id=series_id)
+            series = bench_storage.read_object(cls=Series, primary_key={"series_id": series_id})
+            cover = bench_storage.find_series_image(series_id=series_id)
             try:
                 from helpers.ledger import issue_ledger
-                summary = issue_ledger(storage, series_id, issue.issue_id).summary()
+                summary = issue_ledger(bench_storage, series_id, issue.issue_id).summary()
             except Exception:
                 summary = None
 
@@ -281,11 +247,30 @@ def view_all_series(state: APPState):
             card.on('click', lambda _: resume())
 
         from gui.elements import ruled_page
+        from storage import registry as _reg
+
+        _rooted = (str(getattr(storage, 'base_path', '')) == _reg.DATA_DIR
+                   and _reg.registered())
+
+        def _all_series():
+            # THE LOBBY SEES EVERY HOUSE: the wall unions the mounted repos
+            if not _rooted:
+                return storage.read_all_objects(Series, order_by="name")
+            out = []
+            for _slug, st in _reg.mounted_storages():
+                out.extend(st.read_all_objects(Series))
+            return sorted(out, key=lambda x: x.name)
+
+        def _series_face(x):
+            slug = _reg.house_of_series(x.series_id) if _rooted else None
+            st = _reg.storage_for(slug) if slug else storage
+            return st.find_series_image(series_id=x.series_id)
+
         with ruled_page() as packer:
             view_all_instances(
                 state=state,
-                get_image_locator=lambda x: storage.find_series_image(series_id=x.series_id),
-                get_instances=lambda: storage.read_all_objects(Series),
+                get_image_locator=_series_face,
+                get_instances=_all_series,
                 kind="series",
                 aspect_ratio="16/27",
                 packer=packer, variants=[(2, 3), (8/3, 4), (4, 6)])

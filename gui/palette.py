@@ -19,13 +19,26 @@ K = SelectedKind
 
 
 def _index(storage):
-    """Build the searchable index: (icon, label, sublabel, selection)."""
+    """Build the searchable index across EVERY mounted house:
+    (icon, label, sublabel, selection)."""
     entries = []
     # THE ROOT ROOMS themselves are jumpable
     for icon, label, kind in (("🏢", "Publishers", K.ALL_PUBLISHERS),
                               ("📚", "Series", K.ALL_SERIES),
                               ("🗄️", "Library", K.LIBRARY)):
         entries.append((icon, label, "room", [S(name=label, id=None, kind=kind)]))
+    from storage import registry as _reg
+    if str(getattr(storage, 'base_path', '')) == _reg.DATA_DIR and _reg.registered():
+        for _slug, st in _reg.mounted_storages():
+            entries.extend(_house_index(st))
+    else:
+        entries.extend(_house_index(storage))
+    return entries
+
+
+def _house_index(storage):
+    """One house's palette entries."""
+    entries = []
     from gui.routes import series_ancestry
     for series in storage.read_all_objects(Series, order_by="name"):
         sid = series.series_id

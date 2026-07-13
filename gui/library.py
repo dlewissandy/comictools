@@ -31,8 +31,21 @@ def view_library(state: APPState):
     storage: GenericStorage = state.storage
     S = SelectionItem
 
-    all_series: list[Series] = storage.read_all_objects(Series, order_by="name")
-    publishers = {p.publisher_id: p for p in storage.read_all_objects(Publisher)}
+    # THE COLLECTION SPANS THE RACK: every mounted house contributes, and
+    # each series' assets are read through its OWN house's storage
+    from storage import registry as _reg
+    houses = (_reg.mounted_storages()
+              if str(getattr(storage, 'base_path', '')) == _reg.DATA_DIR and _reg.registered()
+              else [(None, storage)])
+    series_home: dict[str, GenericStorage] = {}
+    all_series: list[Series] = []
+    publishers = {}
+    for _slug, st in houses:
+        for sr in st.read_all_objects(Series):
+            all_series.append(sr)
+            series_home[sr.series_id] = st
+        publishers.update({p.publisher_id: p for p in st.read_all_objects(Publisher)})
+    all_series.sort(key=lambda x: x.name)
 
     with state.details:
         header("Asset Library", 0)
@@ -40,6 +53,7 @@ def view_library(state: APPState):
                     "*“import Mr. Witch into Dustfall”* — or click through to its home.")
 
         for series in all_series:
+            storage = series_home.get(series.series_id, state.storage)
             pub = publishers.get(series.publisher_id)
             pub_name = pub.name.title() if pub else "Independent"
             characters = storage.read_all_objects(CharacterModel, {"series_id": series.series_id})

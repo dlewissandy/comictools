@@ -51,6 +51,14 @@ def read_all(
         raise ValueError(CONTEXT_ERROR_MSG)
 
     if len(context) == 0:
+        # AT THE LOBBY the studio spans every mounted house — top-level
+        # reads (Series, Publisher, ComicStyle) aggregate across the rack
+        from storage import registry as _reg
+        if _reg.registered() and str(storage.base_path) == _reg.DATA_DIR:
+            out = []
+            for _slug, st in _reg.mounted_storages():
+                out.extend(st.read_all_objects(cls=cls))
+            return out
         return storage.read_all_objects(cls=cls)
 
     # If we reach here, the requested object is a child of the last item in the hierarchy
@@ -123,6 +131,17 @@ def read_one(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], pk: dic
     else:
         logger.error(CONTEXT_ERROR_MSG)
         raise ValueError(CONTEXT_ERROR_MSG)
+
+    # a top-level id names its OWN house — resolve the mount before reading
+    if len(pk_keys) == 1 and pk_keys[0] in TOP_LEVEL_IDS:
+        from storage import registry as _reg
+        if _reg.registered() and str(storage.base_path) == _reg.DATA_DIR:
+            _find = {"series_id": _reg.house_of_series,
+                     "publisher_id": _reg.house_of_publisher,
+                     "style_id": _reg.house_of_style}[pk_keys[0]]
+            _slug = _find(pk[pk_keys[0]])
+            if _slug:
+                storage = _reg.storage_for(_slug)
 
     obj = storage.read_object(cls=cls, primary_key=pk)
     if obj is None:

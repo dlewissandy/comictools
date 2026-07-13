@@ -126,3 +126,33 @@ def selection_to_context(
 
                 raise ValueError(f"Unknown selection kind: {kind.value}")
     return context
+
+
+def house_for_selection(selection) -> str | None:
+    """WHICH HOUSE ARE WE IN: derive the selection's publisher repo slug.
+
+    Deterministic order — the trail's publisher, else its series' home,
+    else its style's holder (first hit; bare style ids are ambiguous by
+    design since default styles are copies).  None at the lobby or in the
+    legacy single-root layout — callers fall back to an inert root or fan
+    out across every mounted house.
+    """
+    from storage import registry
+    if not registry.registered():
+        return None
+    for item in selection or []:
+        if item.kind == SelectedKind.PUBLISHER and item.id:
+            slug = registry.house_of_publisher(item.id)
+            if slug:
+                return slug
+    for item in selection or []:
+        if item.kind == SelectedKind.SERIES and item.id:
+            slug = registry.house_of_series(item.id)
+            if slug:
+                return slug
+    for item in selection or []:
+        if item.kind in (SelectedKind.STYLE, SelectedKind.STYLED_VARIANT) and item.id:
+            slug = registry.house_of_style(str(item.id).split("|", 1)[0]) if item.kind == SelectedKind.STYLED_VARIANT else registry.house_of_style(item.id)
+            if slug:
+                return slug
+    return None

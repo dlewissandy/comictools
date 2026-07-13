@@ -33,7 +33,22 @@ def _catalog(storage: GenericStorage):
     """
     Yield catalog entries:
     (kind, title, subtitle, series_id, asset_id, image, use_message, open_url).
+
+    House-scoped storage → that house's catalog (the asset view sees only
+    the current publisher).  The inert root (no house in scope) fans out
+    the series sections across every mounted house and SKIPS styles — a
+    house-less style list is meaningless.
     """
+    from storage import registry as _reg
+    if str(storage.base_path) == _reg.DATA_DIR and _reg.registered():
+        for _slug, st in _reg.mounted_storages():
+            yield from _series_catalog(st)
+        return
+    yield from _series_catalog(storage)
+    yield from _style_catalog(storage)
+
+
+def _series_catalog(storage: GenericStorage):
     for series in storage.read_all_objects(Series, order_by="name"):
         sid = series.series_id
         for c in storage.read_all_objects(CharacterModel, {"series_id": sid}):
@@ -69,6 +84,8 @@ def _catalog(storage: GenericStorage):
                    f"e.g. compose a character variant wearing it.  Import it first if needed.",
                    f"/series/{sid}/outfit/{o.outfit_id}")
 
+
+def _style_catalog(storage: GenericStorage):
     from schema import Publisher
     pubs = storage.read_all_objects(Publisher)
     house = pubs[0] if pubs else None

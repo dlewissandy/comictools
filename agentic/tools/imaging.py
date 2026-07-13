@@ -607,7 +607,7 @@ def _create_character_style_example_image_sync(
     style: ComicStyle = style
 
     try:
-        with open(os.path.join("data", "prompts", "imaging", "character-style-example.md"), "r") as f:
+        with open(os.path.join(str(storage.base_path), "prompts", "imaging", "character-style-example.md"), "r") as f:
             template = f.read()
     except FileNotFoundError:
         return "Prompt file not found."
@@ -688,7 +688,7 @@ def create_styled_image_body(state, series_id: str, character_id: str,
 
     # Generate the styled image
     try:
-        with open(os.path.join("data","prompts","imaging","styled-variant.md"), "r") as f:
+        with open(os.path.join(str(storage.base_path), "prompts", "imaging", "styled-variant.md"), "r") as f:
             template = f.read()
     except FileNotFoundError:
         return "Prompt file not found."
@@ -845,7 +845,7 @@ def _create_art_style_example_image_sync(
         return f"Cannot create art style image.   Style with ID {style_id} not found."
     style: ComicStyle = style
 
-    REFERENCE_IMAGE = "data/references/art-style.jpg"
+    REFERENCE_IMAGE = os.path.join(str(storage.base_path), "references", "art-style.jpg")
     
     # Serialize the descripiton of the style
     style_info = format_comic_style(
@@ -858,7 +858,7 @@ def _create_art_style_example_image_sync(
 
     # Render the image using the OpenAI images API and the art style description
     logger.debug(f"Rendering art style image with style: {style.name}")
-    with open(os.path.join("data", "prompts", "imaging", "art-style-example.md"), "r") as f:
+    with open(os.path.join(str(storage.base_path), "prompts", "imaging", "art-style-example.md"), "r") as f:
         template = f.read()
     prompt = template.format(
         style_name=style.name,
@@ -935,7 +935,7 @@ def _create_dialog_style_example_image_sync(
     style: ComicStyle = style
 
     # Create the prompt
-    with open(os.path.join("data", "prompts", "imaging", "dialog-style-example.md"), "r") as f:
+    with open(os.path.join(str(storage.base_path), "prompts", "imaging", "dialog-style-example.md"), "r") as f:
         template = f.read()
     logger.debug
 

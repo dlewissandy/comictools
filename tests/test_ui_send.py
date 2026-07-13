@@ -175,11 +175,31 @@ async def test_inline_scalar_edit_affordance(user: User) -> None:
     assert any("Set the price" in t for t in tips), "price line is a pencil"
 
 
+def _seat_tent_cast(storage):
+    """The tent tests direct their own extras: make sure Ezra is cast in the
+    scene AND standing on the tent panel — the LIVE fixture is the author's
+    working data and they may strike anyone they like."""
+    from schema import SceneModel, Panel, CharacterRef
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    SC, P = "b3cc50eb-5a57-463c-ba10-927d941c9779", "667ca06e-8b94-4d98-ab88-f996d6f3c8f9"
+    ref = CharacterRef(series_id=WL, character_id="ezra", variant_id="base")
+    sc = storage.read_object(SceneModel, {"series_id": WL, "issue_id": CARN, "scene_id": SC})
+    if not any(c.character_id == "ezra" for c in (sc.cast or [])):
+        sc.cast = [*(sc.cast or []), ref]
+        storage.update_object(sc)
+    pnl = storage.read_object(Panel, {"series_id": WL, "issue_id": CARN,
+                                      "scene_id": SC, "panel_id": P})
+    if not any(r.character_id == "ezra" for r in (pnl.character_references or [])):
+        pnl.character_references = [*(pnl.character_references or []), ref]
+        storage.update_object(pnl)
+
+
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
 async def test_palette_and_chip_removal(user: User) -> None:
     """Cmd-K palette lists objects; scene assets are removable chips."""
     main.LocalStorage = _TmpStorage
+    _seat_tent_cast(_TmpStorage())
     # scene with attached setting + cast: the tent consultation
     json.dump({"selection": [
         {"name": "Series", "id": None, "kind": "all-series"},
@@ -266,6 +286,7 @@ async def test_drawer_scopes_to_current_series(user: User) -> None:
 async def test_cast_card_corner_remove(user: User) -> None:
     """The cast card itself carries the remove control: corner ✕ detaches."""
     main.LocalStorage = _TmpStorage
+    _seat_tent_cast(_TmpStorage())
     SC, P = "b3cc50eb-5a57-463c-ba10-927d941c9779", "667ca06e-8b94-4d98-ab88-f996d6f3c8f9"
     json.dump({"selection": [
         {"name": "Series", "id": None, "kind": "all-series"},
@@ -476,16 +497,7 @@ async def test_cast_chip_is_a_door_to_the_character(user: User) -> None:
     """The cast chip's BODY walks to the character's room; firing ✕ detaches
     without walking anywhere — one chip, two honest verbs."""
     main.LocalStorage = _TmpStorage
-    # the removal test upstream may have detached Ezra from the shared tmp
-    # copy — seat him again so the door has a chip to hang on
-    from schema import SceneModel, CharacterRef
-    storage = _TmpStorage()
-    sc_pk = {"series_id": "wonders-of-the-witchlight", "issue_id": "witchlight-carnival",
-             "scene_id": "b3cc50eb-5a57-463c-ba10-927d941c9779"}
-    sc = storage.read_object(SceneModel, sc_pk)
-    if not any(c.character_id == "ezra" for c in (sc.cast or [])):
-        sc.cast = [*(sc.cast or []), CharacterRef(series_id="wonders-of-the-witchlight", character_id="ezra", variant_id="base")]
-        storage.update_object(sc)
+    _seat_tent_cast(_TmpStorage())
     json.dump({"selection": [
         {"name": "Series", "id": None, "kind": "all-series"},
         {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
@@ -757,3 +769,113 @@ def test_legacy_style_threads_migrate_to_the_house():
     # a publisher-less repo leaves keys alone rather than guessing
     convs = {"/styles/van-gogh": [{"m": "vg"}]}
     assert gui_state.APPState.migrate_style_threads(convs, None) == convs
+
+
+def test_bench_defaults_stay_intent_only():
+    """THE THREE-FILE STRING CONTRACT: the bench's default chat messages must
+    read as intent-only to the imaging tools — otherwise a bare tool-rail
+    press becomes a paid render of the literal sentence."""
+    from agentic.tools.imaging import _is_intent_only
+    assert _is_intent_only("Heal the marked patch of this image.", "inpaint")
+    assert _is_intent_only("Extend the paper on this image.", "outpaint")
+    assert not _is_intent_only("heal the scratched sky", "inpaint")
+    assert not _is_intent_only("extend the paper into a wide alley shot", "outpaint")
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_the_healing_bench_speaks_comics(user: User) -> None:
+    """The rebuilt bench: named acetate in the masthead, comics verbs on the
+    rail, the honesty line, and a door out."""
+    main.LocalStorage = _TmpStorage
+    from schema import Panel
+    storage = _TmpStorage()
+    WL, CARN, SC = ("wonders-of-the-witchlight", "witchlight-carnival",
+                    "b3cc50eb-5a57-463c-ba10-927d941c9779")
+    pnl = next(p for p in storage.read_all_objects(
+        Panel, {"series_id": WL, "issue_id": CARN, "scene_id": SC})
+        if p.image)
+    img = os.path.join(_tmp, pnl.image)
+    assert os.path.exists(img)
+    json.dump({"selection": [
+        {"name": "Series", "id": None, "kind": "all-series"},
+        {"name": "WL", "id": WL, "kind": "series"},
+        {"name": "C", "id": CARN, "kind": "issue"},
+        {"name": "T", "id": SC, "kind": "scene"},
+        {"name": pnl.name, "id": pnl.panel_id, "kind": "panel"},
+        {"name": "Edit Panel Image", "id": img, "kind": "image-editor"}],
+        "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see(f"Healing the {pnl.name} acetate")
+    await user.should_see("Heal the patch")
+    await user.should_see("Extend the paper")
+    await user.should_see("Lift the marquee")
+    await user.should_see("nothing paid-for burns")
+    # a fresh acetate on the bench forgets the last one's marquee and mode
+    states = [e for e in user.client.elements.values()]
+    assert states, "page rendered"
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_the_choices_sheet_pins_the_original(user: User) -> None:
+    """THE ORIGINAL is pinned as a first-class pick; choosing it flips the
+    verb to 'Keep the original'; leaving the bench moves unpicked takes to
+    the wastebasket — nothing paid-for burns."""
+    import shutil, time as _time
+    main.LocalStorage = _TmpStorage
+    from schema import Panel
+    storage = _TmpStorage()
+    WL, CARN, SC = ("wonders-of-the-witchlight", "witchlight-carnival",
+                    "b3cc50eb-5a57-463c-ba10-927d941c9779")
+    pnl = next(p for p in storage.read_all_objects(
+        Panel, {"series_id": WL, "issue_id": CARN, "scene_id": SC})
+        if p.image)
+    orig = os.path.join(_tmp, pnl.image)
+    folder = os.path.dirname(orig)
+    takes = []
+    for i in range(2):
+        t = os.path.join(folder, f"choice-sheettest-{i}.jpg")
+        shutil.copyfile(orig, t)
+        takes.append(t)
+    json.dump({"image": orig, "choices": takes, "session_id": "sheettest",
+               "written_at": _time.time(), "mode": "inpaint"},
+              open(os.path.join(folder, ".choices-sheettest.json"), "w"))
+    json.dump({"selection": [
+        {"name": "Series", "id": None, "kind": "all-series"},
+        {"name": "WL", "id": WL, "kind": "series"},
+        {"name": "C", "id": CARN, "kind": "issue"},
+        {"name": "T", "id": SC, "kind": "scene"},
+        {"name": pnl.name, "id": pnl.panel_id, "kind": "panel"},
+        {"name": "Choices", "id": f"sheettest|{orig}", "kind": "image-editor-choices"}],
+        "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("The choices sheet")
+    await user.should_see("THE ORIGINAL")
+    await user.should_see("Paste it down")
+
+    # click THE ORIGINAL's card — the verb flips to keeping it
+    badge = next(e for e in user.client.elements.values()
+                 if e.__class__.__name__ == "Badge"
+                 and "THE ORIGINAL" in str(getattr(e, "text", "")))
+    card = badge.parent_slot.parent
+    for ev in card._event_listeners.values():
+        if ev.type == "click":
+            card._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+    await user.should_see("Keep the original")
+
+    # leave the bench: the takes go to the wastebasket, not to os.remove
+    leave = next(e for e in user.client.elements.values()
+                 if e.__class__.__name__ == "Button"
+                 and "Leave the bench" in str(getattr(e, "text", "")))
+    for ev in leave._event_listeners.values():
+        if ev.type == "click":
+            leave._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+    for _ in range(20):
+        if all(not os.path.exists(t) for t in takes):
+            break
+        await asyncio.sleep(0.1)
+    assert all(not os.path.exists(t) for t in takes), "unpicked takes left the folder"
+    from storage.trash import list_entries
+    notes = " ".join(e.get("note", "") for e in list_entries(os.path.join(_tmp, "data")))
+    assert "unpicked take" in notes, "the takes wait in the ONE wastebasket"

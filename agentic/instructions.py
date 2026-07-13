@@ -319,14 +319,15 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
         try:
             i = ["all-publishers", "all-series", "all-styles"].index(selection[0].kind.value)
             cls = [Publisher, Series, ComicStyle][i]
-            if cls is Publisher:
-                # EVERY HOUSE ITS OWN REPO: the rack, not just the open house
-                from storage import registry as _registry
-                if _registry.registered():
-                    from gui.home import all_house_publishers
-                    objects = all_house_publishers(state.storage)
-                else:
-                    objects = state.storage.read_all_objects(cls=cls, order_by='name')
+            # EVERY HOUSE ITS OWN REPO: the roster spans the whole rack —
+            # publishers, series and styles from every mounted house
+            from storage import registry as _registry
+            _handed = getattr(state, '_storage', state.storage)
+            if _registry.registered() and str(getattr(_handed, 'base_path', '')) == _registry.DATA_DIR:
+                objects = []
+                for _slug, _st in _registry.mounted_storages():
+                    objects.extend(_st.read_all_objects(cls=cls))
+                objects.sort(key=lambda o: (o.name or ''))
             else:
                 objects = state.storage.read_all_objects(cls=cls, order_by='name')
             kvs = { obj.id: obj.name for obj in objects }

@@ -23,26 +23,9 @@ def view_publisher(state: APPState):
     publisher = storage.read_object(Publisher, primary_key={"publisher_id": publisher_id}) if publisher_id else None
     details = state.details
 
-    if publisher is None and publisher_id:
-        # EVERY HOUSE ITS OWN REPO: this publisher lives in another house —
-        # open it (the ./data symlink re-points) and carry on as if the
-        # wall were one studio.  Git is infrastructure; the page is not.
-        from storage import registry
-        from storage.local import LocalStorage as _LS
-        for h in registry.registered():
-            if h['slug'] == registry.open_slug():
-                continue
-            if _LS(base_path=h['path']).read_object(
-                    Publisher, primary_key={"publisher_id": publisher_id}) is not None:
-                if registry.set_open(h['slug']):
-                    publisher = storage.read_object(
-                        Publisher, primary_key={"publisher_id": publisher_id})
-                    try:
-                        ui.notify(f"Opened the {publisher.name} house", type='info')
-                    except Exception:
-                        pass
-                break
-
+    # MOUNT-ALL: every house is visible at once — the selection's trail
+    # already scoped state.storage to this publisher's own house, so a
+    # miss here is a genuine not-found, never a mount problem
     if publisher is None:
         details.clear()
         header(f"Publisher {publisher_id} not found", 0)
@@ -82,9 +65,9 @@ def view_publisher(state: APPState):
                 # deleting a publisher UN-REGISTERS its repo — the disk is
                 # never touched; the house can always rejoin the rack
                 from storage import registry
-                # viewing a publisher means its house is the open one
+                slug = registry.house_of_publisher(publisher_id)
                 house = next((h for h in registry.registered()
-                              if h['slug'] == registry.open_slug()), None)
+                              if h['slug'] == slug), None)
                 if house is None:
                     post_user_message(state, "I would like to delete the current publisher.")
                     return
@@ -97,17 +80,13 @@ def view_publisher(state: APPState):
                         ui.button('Keep it').props('flat dense no-caps').on('click', lambda _: dlg.close())
 
                         def go():
-                            if registry.unregister(house['slug']):
-                                dlg.close()
-                                ui.notify(f"{publisher.name} retired — the repo stays at "
-                                          f"{house['path']}.", type='info')
-                                from gui.selection import SelectionItem, SelectedKind
-                                state.change_selection(new=[SelectionItem(
-                                    name='Publishers', id=None, kind=SelectedKind.ALL_PUBLISHERS)])
-                            else:
-                                ui.notify('The studio must always stand somewhere — '
-                                          'open another house before retiring this one.',
-                                          type='warning')
+                            registry.unregister(house['slug'])
+                            dlg.close()
+                            ui.notify(f"{publisher.name} retired — the repo stays at "
+                                      f"{house['path']}.", type='info')
+                            from gui.selection import SelectionItem, SelectedKind
+                            state.change_selection(new=[SelectionItem(
+                                name='Publishers', id=None, kind=SelectedKind.ALL_PUBLISHERS)])
                         ui.button('Retire the house', icon='logout').props('unelevated dense no-caps') \
                             .on('click', lambda _: go())
                 dlg.open()

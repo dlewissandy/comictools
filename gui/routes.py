@@ -93,25 +93,53 @@ def _named(storage: GenericStorage, kind: SelectedKind, id: str, cls, pk: dict, 
     return SelectionItem(name=name, id=id, kind=kind)
 
 
+def _storage_holding(storage: GenericStorage, cls, primary_key: dict,
+                     house_of=None, key: str | None = None) -> GenericStorage:
+    """HANDED-STORAGE FIRST: if the given storage holds the thing, use it
+    (tests and the legacy single-root layout); otherwise ask the registry
+    which mounted house does.  Falls back to the handed storage."""
+    try:
+        if storage.read_object(cls=cls, primary_key=primary_key) is not None:
+            return storage
+    except Exception:
+        pass
+    from storage import registry as _reg
+    if str(getattr(storage, 'base_path', '')) != _reg.DATA_DIR:
+        return storage        # a fixture or repo-rooted storage answers alone
+    if house_of is not None and key is not None:
+        try:
+            from storage import registry
+            slug = house_of(key)
+            if slug:
+                return registry.storage_for(slug)
+        except Exception as e:
+            logger.debug(f"routes: house resolution for {key} skipped: {e}")
+    return storage
+
+
 def series_ancestry(storage: GenericStorage, sid: str) -> list[SelectionItem]:
     """THE ONE TRAIL: every door to a series walks Publishers → house →
     series — a reload, a palette jump and the breadcrumbs all agree."""
     from schema import Series, Publisher
+    from storage import registry as _reg
+    st = _storage_holding(storage, Series, {"series_id": sid},
+                          getattr(_reg, 'house_of_series', None), sid)
     sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
     try:
-        series_obj = storage.read_object(cls=Series, primary_key={"series_id": sid})
+        series_obj = st.read_object(cls=Series, primary_key={"series_id": sid})
         if series_obj is not None and series_obj.publisher_id:
-            sel.append(_named(storage, SelectedKind.PUBLISHER, series_obj.publisher_id,
+            sel.append(_named(st, SelectedKind.PUBLISHER, series_obj.publisher_id,
                               Publisher, {"publisher_id": series_obj.publisher_id}))
     except Exception as e:
         logger.debug(f"routes: publisher resolution for {sid} skipped: {e}")
-    sel.append(_named(storage, SelectedKind.SERIES, sid, Series, {"series_id": sid}))
+    sel.append(_named(st, SelectedKind.SERIES, sid, Series, {"series_id": sid}))
     return sel
 
 
 def house_ancestry(storage: GenericStorage) -> list[SelectionItem]:
-    """Publishers → the open house's publisher (the one publisher this repo
-    holds).  The trail every house-owned thing hangs from."""
+    """Publishers → the publisher the given HOUSE-SCOPED storage holds (a
+    repo holds exactly one).  Over the inert root this is just Publishers
+    — the wall.  The trail every house-owned thing hangs from."""
     from schema import Publisher
     sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
     try:
@@ -127,10 +155,14 @@ def house_ancestry(storage: GenericStorage) -> list[SelectionItem]:
 def style_ancestry(storage: GenericStorage, style_id: str) -> list[SelectionItem]:
     """THE ONE TRAIL to a style: Publishers → the house → the style.  A
     house's styles are its OWN copies — they belong to the publisher the
-    way its series do."""
+    way its series do.  Bare style ids are ambiguous across houses (default
+    styles are copies); the first mounted holder wins for legacy links."""
     from schema import ComicStyle
-    sel = house_ancestry(storage)
-    sel.append(_named(storage, SelectedKind.STYLE, style_id, ComicStyle, {"style_id": style_id}))
+    from storage import registry as _reg
+    st = _storage_holding(storage, ComicStyle, {"style_id": style_id},
+                          getattr(_reg, 'house_of_style', None), style_id)
+    sel = house_ancestry(st)
+    sel.append(_named(st, SelectedKind.STYLE, style_id, ComicStyle, {"style_id": style_id}))
     return sel
 
 
@@ -164,11 +196,14 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
         sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
         if len(parts) == 1:
             return sel
-        sel.append(_named(storage, SelectedKind.PUBLISHER, parts[1], Publisher, {"publisher_id": parts[1]}))
+        from storage import registry as _reg
+        st = _storage_holding(storage, Publisher, {"publisher_id": parts[1]},
+                              getattr(_reg, 'house_of_publisher', None), parts[1])
+        sel.append(_named(st, SelectedKind.PUBLISHER, parts[1], Publisher, {"publisher_id": parts[1]}))
         if len(parts) == 2:
             return sel
         if len(parts) == 4 and parts[2] == "style":
-            sel.append(_named(storage, SelectedKind.STYLE, parts[3], ComicStyle, {"style_id": parts[3]}))
+            sel.append(_named(st, SelectedKind.STYLE, parts[3], ComicStyle, {"style_id": parts[3]}))
             return sel
         return None
 

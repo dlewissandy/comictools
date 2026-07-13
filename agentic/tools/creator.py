@@ -193,7 +193,8 @@ def resolve_publisher_id(storage, publisher: Optional[str], selection=None) -> O
     resolves; '' means a reference was given but matches no publisher."""
     if publisher:
         cand = normalize_id(publisher)
-        for p in storage.read_all_objects(Publisher):
+        from gui.home import all_house_publishers
+        for p in all_house_publishers(storage):
             if publisher in (p.publisher_id, p.name) or cand == p.publisher_id \
                     or cand == normalize_id(p.name or ''):
                 return p.publisher_id
@@ -228,6 +229,17 @@ def create_comic_series(wrapper: RunContextWrapper[APPState], series_title: str,
     if pub_id == '':
         return (f"Publisher '{publisher}' not found — create it first with "
                 f"create_publisher, or pick an existing one.")
+
+    # THE SERIES LIVES IN ITS PUBLISHER'S REPO: route the write to that
+    # house's mount; with no publisher in scope, ask instead of guessing
+    from storage import registry as _reg
+    if _reg.registered() and str(getattr(storage, 'base_path', '')) == _reg.DATA_DIR:
+        if pub_id is None:
+            return ("Which publishing house should carry this series?  "
+                    "Name one (or open its page) and I'll create it there.")
+        _slug = _reg.house_of_publisher(pub_id)
+        if _slug:
+            storage = _reg.storage_for(_slug)
 
     # check to see if the series already exists.
     series_id = normalize_id(series_title)

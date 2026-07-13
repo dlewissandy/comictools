@@ -10,6 +10,11 @@ from dotenv import load_dotenv
 from gui.selection import (SelectionItem)
 from messaging import send
 from storage.local import LocalStorage
+# MOUNT EVERY HOUSE FIRST: data/ becomes the rack of publisher mounts
+# (data/<slug> -> repo) before anything constructs a storage or reads a
+# path — the old single-house symlink migrates itself here
+from storage import registry as _registry
+_registry.mount_all()
 from helpers.render_queue import orphaned_slips as _orphaned_slips
 # listed at import, BURNED only after the report lands in a window —
 # a crash between import and first paint never eats the labels
@@ -716,16 +721,6 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         suggestions_row = suggestions_row,
      )
 
-    # STYLES MOVED INTO THE HOUSE: threads saved under the retired room's
-    # addresses re-key to the canonical trail so no conversation orphans
-    try:
-        from schema import Publisher as _Pub
-        _pubs = LocalStorage(base_path="data").read_all_objects(_Pub)
-        APPState.migrate_style_threads(
-            conversations, _pubs[0].publisher_id if _pubs else None)
-    except Exception as e:
-        logger.debug(f"legacy styles-thread migration skipped: {e}")
-
     state.conversations = conversations
     if messages is None:
         # the selection's own thread; fall back to the legacy single history
@@ -812,7 +807,21 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         def open_wastebasket():
             import time as _time
             from storage.trash import list_entries, restore_entry, purge
-            entries = list_entries("data")
+            from storage import registry as _reg
+            # ONE WASTEBASKET across every mounted house — each entry
+            # remembers which house's basket it sits in (a handed non-root
+            # storage, e.g. a test fixture, stays authoritative)
+            _handed = getattr(state, '_storage', None)
+            mounts = (_reg.mounted_storages()
+                      if _handed is not None and str(getattr(_handed, 'base_path', '')) == _reg.DATA_DIR
+                      and _reg.registered()
+                      else [(None, _handed or state.storage)])
+            entries = []
+            for _slug, _st in mounts:
+                for en in list_entries(str(_st.base_path)):
+                    en['house'], en['base'] = _slug, str(_st.base_path)
+                    entries.append(en)
+            entries.sort(key=lambda e: e.get('deleted_at', 0), reverse=True)
             with ui.dialog() as dlg, ui.card().classes('soft-card') \
                     .style('min-width: 560px; max-width: 760px; max-height: 70vh;'):
                 with ui.row().classes('w-full items-center'):
@@ -836,7 +845,8 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                                         .on('click', lambda _: confirm.close())
 
                                     def go():
-                                        n = purge("data", older_than_days=30)
+                                        n = sum(purge(str(_st.base_path), older_than_days=30)
+                                                for _slug, _st in mounts)
                                         confirm.close()
                                         ui.notify(f"Emptied {n} entr{'y' if n == 1 else 'ies'} "
                                                   f"older than 30 days.", type='info')
@@ -855,7 +865,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                     ui.label('Empty — nothing has been struck.').classes('text-sm text-gray-500 q-mt-sm')
                 with ui.column().classes('w-full q-mt-sm').style('gap: 4px; overflow-y: auto;'):
                     for en in entries:
-                        rel = os.path.relpath(en['original_path'], 'data') if en['original_path'] else '?'
+                        rel = os.path.relpath(en['original_path'], en['base']) if en['original_path'] else '?'
                         age_h = (_time.time() - en['deleted_at']) / 3600
                         age = (f"{age_h * 60:.0f}m ago" if age_h < 1
                                else f"{age_h:.0f}h ago" if age_h < 48 else f"{age_h / 24:.0f}d ago")
@@ -863,14 +873,15 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                                 .style('gap: 8px; padding: 2px 8px;'):
                             # the row speaks the studio's language: the note
                             # names what this WAS; art shows its face
-                            payload = os.path.join('data', '.trash', en['entry'], 'payload')
+                            payload = os.path.join(en['base'], '.trash', en['entry'], 'payload')
                             if os.path.isfile(payload) and payload.lower().endswith(
                                     ('.png', '.jpg', '.jpeg', '.webp')):
                                 ui.image(source=payload).classes('light-thumb').props('fit=cover')
                             else:
                                 ui.icon('folder' if not en['occupied'] else 'block') \
                                     .classes('text-sm text-gray-500')
-                            ui.label(en['note'] or rel).classes('text-xs') \
+                            _house_tag = f" · {en['house']}" if en.get('house') and len(mounts) > 1 else ''
+                            ui.label((en['note'] or rel) + _house_tag).classes('text-xs') \
                                 .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;') \
                                 .tooltip(rel)
                             ui.label(age).classes('text-xs text-gray-500').style('flex-shrink: 0;')
@@ -878,8 +889,8 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                                 ui.label('superseded').classes('text-xs text-gray-500') \
                                     .tooltip('An older copy — the current version holds its place')
                             else:
-                                def bring_back(entry=en['entry'], rel=rel):
-                                    restored = restore_entry("data", entry)
+                                def bring_back(entry=en['entry'], rel=rel, base=en['base']):
+                                    restored = restore_entry(base, entry)
                                     if restored:
                                         ui.notify(f"Brought back {rel}.", type='positive')
                                         dlg.close()
@@ -889,7 +900,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                                                   type='warning')
                                 ui.button(icon='restore_from_trash').props('flat round dense size=xs') \
                                     .tooltip('Bring it back exactly where it was') \
-                                    .on('click', lambda _, e2=en['entry'], r2=rel: bring_back(e2, r2))
+                                    .on('click', lambda _, e2=en['entry'], r2=rel, b2=en['base']: bring_back(e2, r2, b2))
             dlg.open()
 
         ui.button(icon='delete_outline').props('flat round dense') \
@@ -1040,7 +1051,7 @@ def _page_from_path(path: str):
 
 
 # Serve the data directory (images) from app start, not first page build.
-app.add_static_files('/data', './data')
+app.add_static_files('/data', './data', follow_symlink=True)
 
 
 @ui.page('/')
@@ -1078,7 +1089,9 @@ def read_issue_page(series_id: str, issue_id: str):
     """
     from helpers.binder import reader_sheets
     from schema import Issue
-    storage = LocalStorage(base_path="data")
+    from storage import registry as _reg
+    _slug = _reg.house_of_series(series_id)
+    storage = _reg.storage_for(_slug) if _slug else LocalStorage(base_path="data")
     issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
     # lights down: this page alone reads against a dark tabletop
     ui.add_css("""
@@ -1157,7 +1170,7 @@ def read_issue_page(series_id: str, issue_id: str):
             'padding: 14px 20px 0; gap: 14px; position: relative; z-index: 25;'):
         ui.label(f"{issue.name}").classes('text-2xl font-bold').style('color: #e8e2d8;')
         # take the book with you: the bound exports, one click each
-        exports_dir = os.path.join('data', 'series', series_id, 'issues', issue_id, 'exports')
+        exports_dir = os.path.join(str(storage.base_path), 'series', series_id, 'issues', issue_id, 'exports')
         for fname, label in ((f"{issue_id}.pdf", '⤓ PDF'), (f"{issue_id}.cbz", '⤓ CBZ')):
             path = os.path.join(exports_dir, fname)
             if os.path.exists(path):

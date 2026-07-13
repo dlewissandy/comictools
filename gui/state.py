@@ -75,13 +75,24 @@ class APPState:
         
     @property
     def storage(self) -> GenericStorage:
-        """
-        Get the current storage instance for the GUI state.
-        
-        Returns:
-            The GenericStorage instance used for data persistence.
-        """
-        return self._storage
+        """THE SELECTION NAMES THE HOUSE: storage is scoped to the house
+        the current trail walks through (data/<slug>), recomputed only
+        when the selection changes.  With no house in scope (the lobby,
+        the legacy layout) the constructor's root storage answers — inert
+        under mount-all, exactly right under a single-root data/."""
+        from storage import registry
+        # a handed non-root storage (a test fixture, an absolute repo root)
+        # is authoritative — only the inert root re-scopes by selection
+        if str(getattr(self._storage, 'base_path', '')) != registry.DATA_DIR:
+            return self._storage
+        key = tuple((s.kind.value, s.id) for s in (self._selection or []))
+        if getattr(self, '_storage_key', None) != key:
+            from gui.selection import house_for_selection
+            slug = house_for_selection(self._selection)
+            self._house_slug = slug
+            self._house_storage = registry.storage_for(slug) if slug else self._storage
+            self._storage_key = key
+        return self._house_storage
     
 
     @property
@@ -443,7 +454,7 @@ class APPState:
         except Exception:
             pass
         # These imports are here to avoid circular imports
-        from gui.home import view_all_styles, view_all_series, view_all_publishers
+        from gui.home import view_all_series, view_all_publishers
         from gui.style import view_style, view_pick_style
         from gui.series import view_series
         from gui.setting import view_setting
@@ -475,7 +486,9 @@ class APPState:
             case "all-publishers":
                 return view_all_publishers(self)
             case "all-styles":
-                return view_all_styles(self)
+                # THE RETIRED ROOM: styles live in the house — a stale
+                # persisted trail lands on the wall instead
+                return view_all_publishers(self)
             case "library":
                 from gui.library import view_library
                 return view_library(self)

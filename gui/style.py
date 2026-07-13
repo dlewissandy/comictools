@@ -20,34 +20,11 @@ def view_style(state: APPState):
     selection = state.selection
     storage: GenericStorage = state.storage
 
-    # THE TRAIL NAMES THE HOUSE: default styles are COPIES sharing the same
-    # ids in every repo, so a /publishers/<pid>/style/<sid> link opened
-    # while another house is open must first walk to the trail's OWN house
-    # — resolving by style_id alone would silently edit the wrong copy
-    pub_item = next((s for s in selection if s.kind.value == 'publisher'), None)
-    if pub_item and pub_item.id:
-        from schema import Publisher
-        if storage.read_object(Publisher, primary_key={"publisher_id": pub_item.id}) is None:
-            from gui.home import open_house_holding
-            pub = open_house_holding(storage, Publisher, {"publisher_id": pub_item.id})
-            if pub is not None:
-                try:
-                    ui.notify(f"Opened the {pub.name} house", type='info')
-                except Exception:
-                    pass
-
+    # THE TRAIL NAMES THE HOUSE: default styles are COPIES sharing ids in
+    # every repo, and state.storage is already scoped to the trail's own
+    # house (publisher first, series second, style holder last) — so this
+    # read edits the RIGHT copy, and a miss is a genuine not-found
     style = storage.read_object(cls=ComicStyle, primary_key={"style_id": selection[-1].id}) if selection and selection[-1].id else None
-
-    if style is None and selection and selection[-1].id:
-        # a bare /styles/<id> trail: the style may live in ANOTHER house —
-        # open it and carry on, the same silent switch a publisher link makes
-        from gui.home import open_house_holding
-        style = open_house_holding(storage, ComicStyle, {"style_id": selection[-1].id})
-        if style is not None:
-            try:
-                ui.notify(f"Opened the house that holds {style.name}", type='info')
-            except Exception:
-                pass
 
     # Sanity check
     if style is None:
