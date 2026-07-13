@@ -261,3 +261,38 @@ def test_create_prop_and_setting_from_image_keep_the_exemplar(storage, mock_imag
         obj = storage.read_object(cls, {"series_id": WL, key: vid})
         assert obj is not None and storage.list_uploads(obj=obj), \
             f"{kind} keeps the image as its exemplar"
+
+
+def test_cast_castmates_anchor_the_shared_hand(storage, mock_imaging):
+    """Inking a character passes already-inked castmates (same style) as a
+    shared-hand reference — the whole cast is drawn by one artist."""
+    import os
+    from types import SimpleNamespace
+    from schema import CharacterModel, CharacterVariant
+    from agentic.tools.imaging import create_styled_image_body
+    from storage.filepath import obj_to_imagepath
+    from PIL import Image
+    WL = "wonders-of-the-witchlight"
+    style = storage.read_all_objects(__import__("schema", fromlist=["ComicStyle"]).ComicStyle)[0].style_id
+
+    def _rendered_base(cid, name):
+        storage.create_object(CharacterModel(character_id=cid, series_id=WL, name=name,
+            description="d"), overwrite=True)
+        v = CharacterVariant(variant_id="base", series_id=WL, character_id=cid, name="base",
+            description="d", race="r", gender="g", age="a", height="h", attire="",
+            behavior="b", appearance="ap", images={})
+        storage.create_object(v, overwrite=True)
+        d = os.path.join(str(storage.base_path), "series", WL, "characters", cid,
+                         "variants", "base", "images", style)
+        os.makedirs(d, exist_ok=True)
+        art = os.path.join(d, "sheet.jpg"); Image.new("RGB", (60, 40), (20, 30, 40)).save(art)
+        v.images = {style: art}; storage.update_object(v)
+        return art
+
+    peer_art = _rendered_base("castmate-a", "Castmate A")
+    _rendered_base("hero-x", "Hero X")   # the one we ink; give it a base too
+    st = SimpleNamespace(storage=storage, selection=[], is_dirty=False)
+    create_styled_image_body(st, WL, "hero-x", "base", style)
+    kind, prompt, refs = mock_imaging[-1]
+    assert peer_art in refs, "a castmate's sheet anchors the shared hand"
+    assert "SHARED HAND" in prompt and "DIFFERENT PEOPLE" in prompt

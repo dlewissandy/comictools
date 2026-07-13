@@ -846,6 +846,36 @@ def create_styled_image_body(state, series_id: str, character_id: str,
                            f"(needs an exemplar or description to ink)")
         prompt += f"\n\n## Carried prop: {prop.name}\n{prop.description}"
 
+    # ONE HAND FOR THE WHOLE CAST: pass up to two ALREADY-INKED castmates
+    # (other characters' base looks in THIS style) as a shared-style anchor,
+    # so a new character is drawn by the same artist as the established cast
+    # — not a fresh interpretation of the style prose.  Labeled hard as
+    # DIFFERENT PEOPLE so their faces and builds never bleed in.
+    peers = []
+    for other in storage.read_all_objects(CharacterModel, {"series_id": series_id}):
+        if other.character_id == character_id:
+            continue
+        peer_img = storage.find_character_image(series_id=series_id,
+                                                character_id=other.character_id)
+        # only a peer whose sheet is in THIS style anchors the shared hand
+        ov = next((v for v in storage.read_all_objects(CharacterVariant,
+                   {"series_id": series_id, "character_id": other.character_id})
+                   if (v.images or {}).get(style_id) and os.path.exists(v.images[style_id])), None)
+        if ov is not None:
+            peers.append((other.name, ov.images[style_id]))
+        if len(peers) >= 2:
+            break
+    if peers:
+        reference_images.extend(p for _n, p in peers)
+        who = ", ".join(n for n, _p in peers)
+        prompt += (f"\n\n## THE CAST'S SHARED HAND (last reference image(s))\n"
+                   f"The final reference image(s) show OTHER characters of this book "
+                   f"({who}) already drawn in this style.  Match their ARTIST'S HAND "
+                   f"exactly — the same linework weight, inking, palette, shading, level "
+                   f"of detail and rendering — so the whole cast looks drawn by one "
+                   f"artist.  They are DIFFERENT PEOPLE: do NOT copy their faces, hair, "
+                   f"builds or wardrobe; take ONLY the drawing style from them.")
+
     styled_variant = StyledVariant(
         style_id=style_id,
         variant_id=variant_id,
