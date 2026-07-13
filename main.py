@@ -558,6 +558,15 @@ def init_layout(logger):
         @media (max-width: 900px) {
           .cspan-3, .cspan-4, .cspan-6, .cspan-8, .cspan-9 { grid-column: span 12; }
         }
+        /* NARROW PAPER: below 800px the book and the conversation STACK —
+           a sliver of chat beside a sliver of book serves neither */
+        @media (max-width: 800px) {
+          .q-splitter--vertical { flex-direction: column !important; }
+          .q-splitter--vertical > .q-splitter__panel { width: 100% !important; }
+          .q-splitter--vertical > .q-splitter__before { height: 58% !important; }
+          .q-splitter--vertical > .q-splitter__after { height: 42% !important; }
+          .q-splitter--vertical > .q-splitter__separator { display: none; }
+        }
         /* markdown inside panels: no extra air */
         .cpanel .q-pa-md { padding: 4px 2px !important; }
 
@@ -605,7 +614,9 @@ def init_layout(logger):
     ui.query('.nicegui-content').classes('w-full')
     ui.query('.q-page').classes('flex')   
     header = ui.header().classes().classes(HEADFOOT_STYLING_CLASSES)
-    middle = ui.row().classes('w-screen flex-1 overflow-hidden ' + MIDDLE_STYLING_CLASSES).style('padding-left:12px; padding-right:12px;')
+    # w-full, never w-screen: w-screen ignores the vertical scrollbar's
+    # 16px and pushes a phantom horizontal scroll onto every page
+    middle = ui.row().classes('w-full flex-1 overflow-hidden ' + MIDDLE_STYLING_CLASSES).style('padding-left:12px; padding-right:12px;')
     footer = ui.footer().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300')
 
     # INITIALIZE EACH OF THE REGIONS

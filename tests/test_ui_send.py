@@ -296,9 +296,16 @@ async def test_cast_card_corner_remove(user: User) -> None:
         {"name": "P", "id": P, "kind": "panel"}],
         "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    # the panel's cast cardwall has ✕ buttons (icon=close) on each card
-    closers = [e for e in user.client.elements.values()
-               if e.__class__.__name__ == "Button" and 'uncast' in getattr(e, "_markers", [])]
+    # the panel's cast cardwall has ✕ buttons (icon=close) on each card —
+    # poll: the light table builds after the palette satisfies should_see
+    import asyncio as _asyncio
+    closers = []
+    for _ in range(50):
+        closers = [e for e in user.client.elements.values()
+                   if e.__class__.__name__ == "Button" and 'uncast' in getattr(e, "_markers", [])]
+        if closers:
+            break
+        await _asyncio.sleep(0.1)
     assert closers, "uncast ✕ exists on figure acetate rows"
     btn = closers[0]
     for ev in btn._event_listeners.values():

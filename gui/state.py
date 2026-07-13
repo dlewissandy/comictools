@@ -585,19 +585,6 @@ class APPState:
                 json.dump(state_json, f, indent=2)
             os.replace(tmp, STATE_FILEPATH)
 
-    def init_breadcrumbs(self):
-        """
-        Initialize the breadcrumbs UI element.
-        
-        Returns:
-            The initialized breadcrumbs UI element.
-        """
-        logger.debug("Initializing breadcrumbs")
-        self.breadcrumbs = ui.button_group().classes('w-full flex-nowrap overflow-x-auto')
-        with self.breadcrumbs:
-            breadcrumb_selector(self)
-        return self.breadcrumbs
-
 
 def breadcrumb_selector(state: APPState):
     from gui.selection import SelectionItem, SelectedKind
