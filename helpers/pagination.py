@@ -59,10 +59,75 @@ def _tilings_by_count() -> dict[int, list[tuple[tuple, tuple]]]:
     return by
 
 
-def _best_page(shapes: tuple, locks: tuple):
-    """The cheapest exact tiling of these panels honoring the locked ones, or
-    None.  Returns (flex_cost, pieces) — flex_cost counts unlocked panels whose
-    beat-shape the tiling had to change."""
+# ---------------------------------------------------------------------------
+# THE FEEL KNOBS: four aesthetic dials that steer WHICH exact tiling the flow
+# picks, and how many panels ride a page.  Each is a float in [-1, 1]; 0 is
+# neutral (today's behavior).  They move only UNLOCKED panels — a locked panel
+# is always honored — and flex (keeping beat-shapes) still anchors the choice.
+# ---------------------------------------------------------------------------
+FEEL_KEYS = ("density", "verticality", "irregularity", "variety")
+_NEUTRAL_FEEL = {k: 0.0 for k in FEEL_KEYS}
+
+# weights are calibrated so a maxed knob can OVERCOME flex (change unlocked
+# panels' beat-shapes), while a mid setting is a gentle nudge — see
+# tests/test_layout_feel.py
+_W_VERT = 0.7       # verticality reward per portrait-over-landscape piece
+_W_IRREG = 3.0      # irregularity reward per unit of size-variance (coeff. of variation)
+_W_VARIETY = 8.0    # penalty for a page that repeats the previous page's shape multiset
+                    # (high, because breaking a repeat of uniform panels means
+                    # accepting some flex — that is what the knob asks for)
+_W_DENSITY = 1.2    # how hard the density knob pulls the page toward its target size
+
+
+def _feel_of(panel: dict) -> dict:
+    f = panel.get("feel") or {}
+    return {k: max(-1.0, min(1.0, float(f.get(k, 0.0)))) for k in FEEL_KEYS}
+
+
+def _agg_feel(slice_: list) -> dict:
+    """The feel a PAGE flows to: the average of its panels' feels (a page that
+    straddles two scenes gets the blend)."""
+    if not slice_:
+        return dict(_NEUTRAL_FEEL)
+    acc = {k: 0.0 for k in FEEL_KEYS}
+    for p in slice_:
+        f = _feel_of(p)
+        for k in FEEL_KEYS:
+            acc[k] += f[k]
+    return {k: acc[k] / len(slice_) for k in FEEL_KEYS}
+
+
+def _verticality(piece_shapes: tuple) -> int:
+    """Portrait pieces minus landscape pieces in a tiling (squares neutral).  A
+    per-piece count, not a share, so the knob scales against flex."""
+    port = sum(1 for a, _s in piece_shapes if a == "portrait")
+    land = sum(1 for a, _s in piece_shapes if a == "landscape")
+    return port - land
+
+
+def _irregularity(pieces: tuple) -> float:
+    """A tiling's size variance as a coefficient of variation: 0 for a uniform
+    grid, higher when a page mixes a big panel with small ones."""
+    areas = [w * h for (_x, _y, w, h) in pieces]
+    m = sum(areas) / len(areas) if areas else 0.0
+    if m <= 0:
+        return 0.0
+    var = sum((a - m) ** 2 for a in areas) / len(areas)
+    return (var ** 0.5) / m
+
+
+def _sig(piece_shapes: tuple) -> tuple:
+    """A page's 'look' fingerprint — its multiset of shapes, order-independent."""
+    return tuple(sorted(piece_shapes))
+
+
+def _best_page(shapes: tuple, locks: tuple, feel: dict | None = None,
+               avoid_sig: tuple | None = None):
+    """The best exact tiling of these panels honoring the locked ones, or None.
+    Returns (score, flex, pieces).  `score` = flex (unlocked panels whose beat-
+    shape changed) MINUS the aesthetic reward the feel knobs grant this tiling,
+    PLUS a variety penalty when the tiling repeats `avoid_sig`."""
+    feel = feel or _NEUTRAL_FEEL
     best = None
     for pieces, piece_shapes in _tilings_by_count().get(len(shapes), ()):
         flex = 0
@@ -75,10 +140,17 @@ def _best_page(shapes: tuple, locks: tuple):
                     break
             elif not same:
                 flex += 1
-        if ok and (best is None or flex < best[0]):
-            best = (flex, pieces)
-            if flex == 0:
-                break                       # can't do better than no flexing
+        if not ok:
+            continue
+        # the knobs: verticality and irregularity REWARD (negative cost); a knob
+        # turned negative flips the reward into a penalty (wide / grid)
+        score = (flex
+                 - feel["verticality"] * _verticality(piece_shapes) * _W_VERT
+                 - feel["irregularity"] * _irregularity(pieces) * _W_IRREG)
+        if avoid_sig is not None and feel["variety"] > 0 and _sig(piece_shapes) == avoid_sig:
+            score += feel["variety"] * _W_VARIETY
+        if best is None or score < best[0]:
+            best = (score, flex, pieces)
     return best
 
 
@@ -109,21 +181,26 @@ def paginate(panels: list[dict]) -> list[dict]:
             f"{n} panel{'s' if n != 1 else ''} can't fill an exact page (a tiled page "
             f"needs {lo}–{hi}); hand-lay this page or add panels.")
 
-    # DP from the back: dp[i] = (cost, j, pieces) — the cheapest flow of panels[i:]
+    # DP from the back: dp[i] = (cost, j) — the cheapest flow of panels[i:].  The
+    # per-page cost is the tiling score (flex minus verticality/irregularity
+    # reward) plus a DENSITY term pulling the page toward its target size.
     dp: list[tuple | None] = [None] * (n + 1)
-    dp[n] = (0.0, None, None)
+    dp[n] = (0.0, None)
     for i in range(n - 1, -1, -1):
         best = None
         for j in range(i + lo, min(n, i + hi) + 1):
             if dp[j] is None:
                 continue
-            page = _best_page(tuple(shapes[i:j]), tuple(locks[i:j]))
+            feel = _agg_feel(panels[i:j])
+            page = _best_page(tuple(shapes[i:j]), tuple(locks[i:j]), feel)
             if page is None:
                 continue
-            flex, pieces = page
-            cost = flex + _SIZE_NUDGE * abs((j - i) - _TARGET_PAGE) + dp[j][0]
+            score = page[0]
+            target = min(hi, max(lo, _TARGET_PAGE + feel["density"] * 5))
+            dens_w = _SIZE_NUDGE + abs(feel["density"]) * _W_DENSITY
+            cost = score + dens_w * abs((j - i) - target) + dp[j][0]
             if best is None or cost < best[0]:
-                best = (cost, j, pieces)
+                best = (cost, j)
         dp[i] = best
 
     if dp[0] is None:
@@ -145,14 +222,25 @@ def paginate(panels: list[dict]) -> list[dict]:
             f"(4–15) can absorb.  Unlock a panel, change a locked shape, or move a "
             f"panel to the next scene.", frontier if frontier < n else None)
 
-    pages = []
+    # the DP fixed the page BREAKS; now walk them FORWARD to choose each page's
+    # tiling — so the VARIETY knob can steer a page away from repeating the one
+    # before it (order isn't known until the breaks are)
+    spans = []
     i = 0
     while i < n:
-        _cost, j, pieces = dp[i]
-        idx = list(range(i, j))
-        page_shapes = [PIECE_PANEL[(w, h)] for (_x, _y, w, h) in pieces]
-        flex = sum(1 for k, gi in enumerate(idx)
-                   if not locks[gi] and page_shapes[k] != shapes[gi])
-        pages.append({"indices": idx, "pieces": list(pieces), "flex": flex})
+        _cost, j = dp[i]
+        spans.append((i, j))
         i = j
+
+    pages = []
+    prev_sig = None
+    for (i, j) in spans:
+        feel = _agg_feel(panels[i:j])
+        _score, _flex0, pieces = _best_page(tuple(shapes[i:j]), tuple(locks[i:j]),
+                                            feel, avoid_sig=prev_sig)
+        page_shapes = [PIECE_PANEL[(w, h)] for (_x, _y, w, h) in pieces]
+        flex = sum(1 for k, gi in enumerate(range(i, j))
+                   if not locks[gi] and page_shapes[k] != shapes[gi])
+        pages.append({"indices": list(range(i, j)), "pieces": list(pieces), "flex": flex})
+        prev_sig = _sig(page_shapes)
     return pages
