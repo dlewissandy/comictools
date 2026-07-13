@@ -215,6 +215,48 @@ def view_scene(state: APPState):
                     header_size = 2
                 )
 
+        # THE SCENE'S LAYOUT FEEL: override the book's page-flow dials just for
+        # this scene (a frantic chase dense and irregular, a quiet beat roomy and
+        # calm), or inherit the book.
+        with cpanel(12):
+            from schema import LayoutFeel
+            _overriding = scene.layout_feel is not None
+            with ui.row().classes('w-full items-center').style('gap: 10px;'):
+                header("Layout feel", 2)
+                ui.label("— override the book's page-flow just for this scene") \
+                    .classes('text-xs text-gray-500')
+                ui.space()
+
+                def _toggle_override(e):
+                    scene.layout_feel = LayoutFeel() if e.value else None
+                    _save_scene()
+                    state.refresh_details()
+                ui.switch("override the book", value=_overriding,
+                          on_change=_toggle_override).props('dense')
+            if _overriding:
+                lf = scene.layout_feel
+
+                def knob(name, left, right):
+                    with ui.row().classes('w-full items-center flex-nowrap').style('gap: 8px;'):
+                        ui.label(left).classes('text-xs text-gray-500') \
+                            .style('width: 96px; text-align: right;')
+                        sl = ui.slider(min=-1, max=1, step=0.1, value=getattr(lf, name)) \
+                            .props('label-always snap').classes('col')
+
+                        def _set(e, name=name):
+                            if scene.layout_feel is None:
+                                scene.layout_feel = LayoutFeel()
+                            setattr(scene.layout_feel, name, round(float(e.args), 2))
+                            _save_scene()
+                        sl.on('change', _set)
+                        ui.label(right).classes('text-xs text-gray-500').style('width: 96px;')
+                knob('density', 'few big', 'many small')
+                knob('verticality', 'wide', 'tall')
+                knob('irregularity', 'grid', 'dynamic')
+                knob('variety', 'calm', 'restless')
+                ui.label('the reader and print reflow to this feel when you open the book') \
+                    .classes('text-xs text-gray-500 q-mt-xs q-px-sm')
+
         # Production details (collapsed): the prose that doesn't need to be
         # visible at all times.
         with ccell(12):
