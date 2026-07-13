@@ -569,23 +569,33 @@ if (!window._roughDragInit) {
   // FILE DROPS: the app owns them.  A drop ON an upload box is handed
   // straight to that box's hidden input (Quasar's own dnd path never fires
   // here); a missed drop is swallowed so the browser never navigates away.
+  // find the uploader for a drop: the closest one, OR one nested inside the
+  // card the drop landed on (a caption overlay steals `closest`, so we look
+  // INSIDE the card too — every 'drop image to create' card now catches it)
+  const uploaderFor = (target) => {
+    if (!target || !target.closest) return null;
+    let zone = target.closest('.q-uploader');
+    if (zone) return zone;
+    const host = target.closest('.q-card, .mosaic-card, .create-drop');
+    return host ? host.querySelector('.q-uploader') : null;
+  };
   document.addEventListener('dragover', (e) => {
     const t = e.dataTransfer && e.dataTransfer.types;
     if (!(t && Array.prototype.includes.call(t, 'Files'))) return;
     e.preventDefault();
     document.querySelectorAll('.drop-ready').forEach(z => z.classList.remove('drop-ready'));
-    const zone = e.target.closest && e.target.closest('.q-uploader');
+    const zone = uploaderFor(e.target);
     if (zone) zone.classList.add('drop-ready');
   });
   document.addEventListener('dragleave', (e) => {
-    const zone = e.target.closest && e.target.closest('.q-uploader');
+    const zone = uploaderFor(e.target);
     if (zone) zone.classList.remove('drop-ready');
   });
   document.addEventListener('drop', (e) => {
     if (!(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length)) return;
     e.preventDefault();
     document.querySelectorAll('.drop-ready').forEach(z => z.classList.remove('drop-ready'));
-    const zone = e.target.closest && e.target.closest('.q-uploader');
+    const zone = uploaderFor(e.target);
     if (!zone) return;
     const input = zone.querySelector('input[type=file]');
     if (!input) return;
