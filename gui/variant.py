@@ -168,16 +168,69 @@ def view_character_variant(state:APPState):
                          for pid in (variant.prop_ids or [])],
                         _remove_prop, icon='category', visit=_visit_prop)
 
-        with view_attributes(state,caption="Description", attributes=[
-                Attribute(caption ="General Description", get_value= lambda: variant.description),
-                Attribute(caption="Race", get_value=lambda: variant.race),
-                Attribute(caption="Gender", get_value=lambda: variant.gender),
-                Attribute(caption="Age", get_value=lambda: variant.age),
-                Attribute(caption="Height", get_value=lambda: variant.height),
-                Attribute(caption="Physical Appearance", get_value=lambda: variant.appearance),
-                Attribute(caption="Attire", get_value=lambda: variant.attire),
-                Attribute(caption="Behavior", get_value=lambda: variant.behavior),
-            ], individual_icons=True, header_size=2, expanded=True):
+        # A LOOK OWNS ONLY WHAT DISTINGUISHES IT: the character's IDENTITY
+        # (race, build, face, bearing) belongs to the base look and is
+        # INHERITED here — shown read-only, collapsed, with a door to edit
+        # it where it lives.  The base look itself owns the identity, so it
+        # keeps every field editable.
+        _all_looks = storage.read_all_objects(
+            CharacterVariant, {"series_id": series_id, "character_id": character_id})
+        _nm = (variant.name or "").strip().lower()
+        is_base = (variant_id == "base" or _nm == "base" or _nm.endswith(" base")
+                   or len(_all_looks) <= 1)   # a sole look IS the identity
+
+        if not is_base:
+            base_v = next((v for v in _all_looks
+                if v.variant_id == "base" or (v.name or "").strip().lower() in ("base",)
+                or (v.name or "").strip().lower().endswith(" base")), None)
+
+            def _visit_base(bv=base_v):
+                if bv is None:
+                    post_user_message(state, f"Create a base look for {character.name} "
+                                             f"(the identity every look inherits).")
+                    return
+                from gui.selection import SelectionItem as _SI, SelectedKind as _SK
+                state.change_selection(new=[*state.selection[:-1],
+                    _SI(name=bv.name or 'base', id=bv.variant_id, kind=_SK.VARIANT)])
+
+            _identity = [("Race", variant.race), ("Gender", variant.gender),
+                         ("Age", variant.age), ("Height", variant.height),
+                         ("Physical Appearance", variant.appearance),
+                         ("Behavior", variant.behavior)]
+            with ui.expansion(value=False).classes('w-full section-flat') as _idexp:
+                with _idexp.add_slot('header'):
+                    with ui.row().classes('items-center').style('gap: 8px;'):
+                        ui.label(f"Identity — from {character.name}'s base look") \
+                            .classes('caption-box caption-box-sm')
+                        ui.chip('edit on the base look', icon='badge') \
+                            .props('dense outline clickable size=sm') \
+                            .tooltip("Race, build, face and bearing belong to the "
+                                     "character — change them once, on the base look") \
+                            .on('click.stop', lambda _: _visit_base())
+                for cap, val in _identity:
+                    with ui.row().classes('w-full items-baseline').style('gap: 8px;'):
+                        ui.label(cap).classes('comic-label-sm').style('min-width: 150px;')
+                        ui.label(str(val or '—')).classes('text-sm')
+
+        _look_attrs = [Attribute(caption="What sets this look apart",
+                                 get_value=lambda: variant.description)]
+        if not variant.outfit_id:
+            # a dressed look wears its OUTFIT's description; only an
+            # outfit-less look edits attire directly here
+            _look_attrs.append(Attribute(caption="Attire", get_value=lambda: variant.attire))
+        if is_base:
+            _look_attrs = [Attribute(caption="General Description", get_value=lambda: variant.description),
+                           Attribute(caption="Race", get_value=lambda: variant.race),
+                           Attribute(caption="Gender", get_value=lambda: variant.gender),
+                           Attribute(caption="Age", get_value=lambda: variant.age),
+                           Attribute(caption="Height", get_value=lambda: variant.height),
+                           Attribute(caption="Physical Appearance", get_value=lambda: variant.appearance),
+                           Attribute(caption="Attire", get_value=lambda: variant.attire),
+                           Attribute(caption="Behavior", get_value=lambda: variant.behavior)]
+
+        with view_attributes(state, caption=("The identity" if is_base else "This look"),
+                             attributes=_look_attrs,
+                             individual_icons=True, header_size=2, expanded=True):
             with ui.row().classes('w-full flex-nowrap'):
                 header("Reference Sheets", 2).classes('ml-4')
                 ui.space()
