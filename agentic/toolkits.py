@@ -44,6 +44,8 @@ from agentic.tools import (
     select_publisher,
     select_series,
     select_comic_style,
+    select_issue,
+    select_character,
 
     update_character_description,
     update_cover_description,
@@ -394,6 +396,8 @@ TOOLKITS: dict[str,list[Tool]] = {
 
     ],
     "series": [
+        select_issue,
+        select_character,
         # Create
         create_character,
         derive_character,

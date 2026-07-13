@@ -100,3 +100,61 @@ def select_comic_style(wrapper: RunContextWrapper[APPState], style_id: str) -> s
     # same conversation the UI keys
     state.change_selection(new=style_ancestry(storage, style_id))
     return f"Selected comic style: {style.name}"
+
+
+@function_tool
+def select_issue(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+    """
+    Open an issue — the book lands on the table.  This is a precursor for
+    working on its scenes, panels and covers.
+
+    Args:
+        series_id: The series the issue belongs to.
+        issue_id: The issue to open.
+
+    Returns:
+        A status message indicating the result of the selection.
+    """
+    from schema import Issue
+    state: APPState = wrapper.context
+    from gui.routes import series_ancestry, _storage_holding
+    from storage import registry as _reg
+    st = _storage_holding(state.storage, Series, {"series_id": series_id},
+                          house_of=_reg.house_of_series, key=series_id)
+    issue = st.read_object(Issue, {"series_id": series_id, "issue_id": issue_id})
+    if issue is None:
+        return (f"Issue '{issue_id}' not found in series '{series_id}'.  "
+                f"Maybe list the series' issues first?")
+    state.change_selection(new=[*series_ancestry(state.storage, series_id),
+                                SelectionItem(id=issue.issue_id, name=issue.name,
+                                              kind=SelectedKind.ISSUE)])
+    return f"Opened the issue: {issue.name}"
+
+
+@function_tool
+def select_character(wrapper: RunContextWrapper[APPState], series_id: str, character_id: str) -> str:
+    """
+    Open a character's own room.  This is a precursor for working on their
+    looks, wardrobe and reference sheets.
+
+    Args:
+        series_id: The series the character belongs to.
+        character_id: The character to open.
+
+    Returns:
+        A status message indicating the result of the selection.
+    """
+    from schema import CharacterModel
+    state: APPState = wrapper.context
+    from gui.routes import series_ancestry, _storage_holding
+    from storage import registry as _reg
+    st = _storage_holding(state.storage, Series, {"series_id": series_id},
+                          house_of=_reg.house_of_series, key=series_id)
+    ch = st.read_object(CharacterModel, {"series_id": series_id, "character_id": character_id})
+    if ch is None:
+        return (f"Character '{character_id}' not found in series '{series_id}'.  "
+                f"Maybe read the series bible first?")
+    state.change_selection(new=[*series_ancestry(state.storage, series_id),
+                                SelectionItem(id=ch.character_id, name=ch.name,
+                                              kind=SelectedKind.CHARACTER)])
+    return f"Opened the character: {ch.name}"

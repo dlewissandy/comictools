@@ -63,3 +63,18 @@ def test_deep_link_crumbs_speak_names(storage):
         ["series", WL, "issue", "witchlight-carnival", "scene", sc.scene_id])
     assert sel is not None
     assert sel[-1].name == sc.name, "the crumb wears the scene's NAME, not its id"
+
+
+def test_select_issue_and_character_walk_the_one_trail(storage):
+    from agentic.tools.navigation import select_issue, select_character
+    state = _Stub(storage)
+    out = str(_invoke(select_issue, state, series_id=WL, issue_id="witchlight-carnival"))
+    assert "Opened the issue" in out
+    assert [i.kind.value for i in state.trail] == \
+        ["all-publishers", "publisher", "series", "issue"]
+    assert state.trail[-1].name and state.trail[-1].name != "witchlight-carnival"
+
+    out = str(_invoke(select_character, state, series_id=WL, character_id="ezra"))
+    assert "Opened the character: Ezra" in out
+    assert [i.kind.value for i in state.trail] == \
+        ["all-publishers", "publisher", "series", "character"]

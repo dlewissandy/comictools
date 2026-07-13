@@ -97,7 +97,7 @@ from .normalization import (
 from .navigation import (
     select_publisher,
     select_series,
-    select_comic_style,
+    select_comic_style, select_issue, select_character,
 )
 
 from .imaging import (
