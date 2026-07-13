@@ -576,19 +576,24 @@ def breadcrumb_selector(state: APPState):
     selection = state.selection
     if selection == []:
         raise ValueError("Selection cannot be empty.  Please select an item first.")
-    primary_selection = ui.dropdown_button(selection[0].name.title(), auto_close=True)
+    # A SPLIT CONTROL, never a trap: the label walks to the root room, the
+    # arrow ONLY opens the menu — every root room is listed, current marked
+    primary_selection = ui.dropdown_button(selection[0].name.title(),
+                                           split=True, auto_close=True)
+    rooms = (("Publishers", SelectedKind.ALL_PUBLISHERS),
+             ("Series", SelectedKind.ALL_SERIES),
+             ("Styles", SelectedKind.ALL_STYLES),
+             ("Library", SelectedKind.LIBRARY))
     with primary_selection:
-        all_publishers = ui.item("Publishers")
-        all_styles = ui.item("Styles")
+        for label, kind in rooms:
+            here = selection[0].kind == kind
+            item = ui.item(("✓ " if here else "") + label)
+            if not here:
+                item.on_click(lambda _, k=kind, l=label: state.change_selection(
+                    new=[SelectionItem(kind=k, name=l, id=None)]))
 
-    
     new_sel = [selection[0]]
-    publishers_sel = [SelectionItem(kind=SelectedKind.ALL_PUBLISHERS, name="Publishers", id=None)]
-    styles_sel = [SelectionItem(kind=SelectedKind.ALL_STYLES, name="Styles", id=None)]
-
-    primary_selection.on("click", lambda _, new_sel=new_sel: state.change_selection( new=new_sel))
-    all_publishers.on_click( lambda _, new_sel=publishers_sel: state.change_selection( new=new_sel))
-    all_styles.on_click( lambda _, new_sel=styles_sel: state.change_selection( new=new_sel))
+    primary_selection.on("click", lambda _, new_sel=new_sel: state.change_selection(new=new_sel))
     return primary_selection
 
 

@@ -87,6 +87,22 @@ def _named(storage: GenericStorage, kind: SelectedKind, id: str, cls, pk: dict, 
     return SelectionItem(name=name, id=id, kind=kind)
 
 
+def series_ancestry(storage: GenericStorage, sid: str) -> list[SelectionItem]:
+    """THE ONE TRAIL: every door to a series walks Publishers → house →
+    series — a reload, a palette jump and the breadcrumbs all agree."""
+    from schema import Series, Publisher
+    sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
+    try:
+        series_obj = storage.read_object(cls=Series, primary_key={"series_id": sid})
+        if series_obj is not None and series_obj.publisher_id:
+            sel.append(_named(storage, SelectedKind.PUBLISHER, series_obj.publisher_id,
+                              Publisher, {"publisher_id": series_obj.publisher_id}))
+    except Exception as e:
+        logger.debug(f"routes: publisher resolution for {sid} skipped: {e}")
+    sel.append(_named(storage, SelectedKind.SERIES, sid, Series, {"series_id": sid}))
+    return sel
+
+
 def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[SelectionItem] | None:
     """
     Parse URL path segments into a selection.  Returns None for paths that do
@@ -124,16 +140,7 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
         return None
 
     sid = parts[1]
-    # Navigation runs Publishers -> Series: root the chain at the publisher.
-    sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
-    try:
-        series_obj = storage.read_object(cls=Series, primary_key={"series_id": sid})
-        if series_obj is not None and series_obj.publisher_id:
-            sel.append(_named(storage, SelectedKind.PUBLISHER, series_obj.publisher_id,
-                              Publisher, {"publisher_id": series_obj.publisher_id}))
-    except Exception as e:
-        logger.debug(f"routes: publisher resolution for {sid} skipped: {e}")
-    sel.append(_named(storage, SelectedKind.SERIES, sid, Series, {"series_id": sid}))
+    sel = series_ancestry(storage, sid)
     rest = parts[2:]
     if not rest:
         return sel

@@ -21,17 +21,31 @@ K = SelectedKind
 def _index(storage):
     """Build the searchable index: (icon, label, sublabel, selection)."""
     entries = []
-    root = [S(name="Series", id=None, kind=K.ALL_SERIES)]
+    # THE ROOT ROOMS themselves are jumpable
+    for icon, label, kind in (("🏢", "Publishers", K.ALL_PUBLISHERS),
+                              ("📚", "Series", K.ALL_SERIES),
+                              ("🎨", "Styles", K.ALL_STYLES),
+                              ("🗄️", "Library", K.LIBRARY)):
+        entries.append((icon, label, "room", [S(name=label, id=None, kind=kind)]))
+    from gui.routes import series_ancestry
     for series in storage.read_all_objects(Series, order_by="name"):
         sid = series.series_id
-        s_sel = root + [S(name=series.name, id=sid, kind=K.SERIES)]
+        # THE ONE TRAIL: the palette walks the same ancestry a reload does
+        s_sel = series_ancestry(storage, sid)
         entries.append(("📚", series.name, "series", s_sel))
         for issue in storage.read_all_objects(Issue, {"series_id": sid}):
             i_sel = s_sel + [S(name=issue.name, id=issue.issue_id, kind=K.ISSUE)]
             entries.append(("📖", issue.name, f"issue · {series.name}", i_sel))
             for scene in storage.read_all_objects(SceneModel, {"series_id": sid, "issue_id": issue.issue_id}):
-                entries.append(("🎬", scene.name, f"scene · {issue.name}",
+                entries.append(("🎞️", scene.name, f"scene · {issue.name}",
                                 i_sel + [S(name=scene.name, id=scene.scene_id, kind=K.SCENE)]))
+            from schema import Cover, Insert
+            for cv in storage.read_all_objects(Cover, {"series_id": sid, "issue_id": issue.issue_id}):
+                entries.append(("🖼️", f"{cv.location.value} cover", f"cover · {issue.name}",
+                                i_sel + [S(name=f"{cv.location.value} cover", id=cv.cover_id, kind=K.COVER)]))
+            for ins in storage.read_all_objects(Insert, {"series_id": sid, "issue_id": issue.issue_id}):
+                entries.append(("📮", ins.name, f"{ins.kind} · {issue.name}",
+                                i_sel + [S(name=ins.name, id=ins.insert_id, kind=K.INSERT)]))
         for c in storage.read_all_objects(CharacterModel, {"series_id": sid}):
             c_sel = s_sel + [S(name=c.name, id=c.character_id, kind=K.CHARACTER)]
             entries.append(("🎭", c.name, f"character · {series.name}", c_sel))
