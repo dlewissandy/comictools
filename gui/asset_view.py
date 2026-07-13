@@ -123,15 +123,46 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
             with exp.add_slot('header'):
                 new_item_messager(state, "Reference Art", render_hint)
             rendered = {sid: img for sid, img in (asset.images or {}).items() if img and os.path.exists(img)}
-            if not rendered:
-                ui.markdown(f"No reference art yet — ask me to render this {kind_label} in a comic style.")
-            else:
-                with ruled_page() as packer:
-                    for style_id, img in rendered.items():
-                        with packer.place_cell([(4, 4)], fudge=False):
-                            with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'):
-                                ui.label(style_id.replace('-', ' ').title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
-                                ui.image(source=img).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+
+            def ink_in_style(st):
+                # ONE CLICK, like the setting room's ghost cards — the
+                # render goes to the drawing board and lands here
+                from helpers.render_queue import enqueue_renders
+                ui.notify(f"Inking {asset.name.title()} in {st.name.title()} — "
+                          f"the reference lands here when it's done.", type='info')
+                if kind_label == 'prop':
+                    from agentic.tools.imaging import render_prop_reference_body
+                    job = (lambda sid=st.style_id:
+                           render_prop_reference_body(state, series_id, asset.prop_id, sid))
+                else:
+                    from types import SimpleNamespace
+                    from agentic.tools.imaging import _generate_outfit_reference_sync
+                    job = (lambda sid=st.style_id:
+                           _generate_outfit_reference_sync(SimpleNamespace(context=state),
+                                                           series_id, asset.outfit_id, sid))
+                enqueue_renders(state, [(
+                    f"{kind_label} reference — {asset.name} in {st.name}", job,
+                )], role='the Prop Maker' if kind_label == 'prop' else 'the Costume Designer')
+
+            from schema import ComicStyle
+            all_styles = storage.read_all_objects(ComicStyle, order_by="name")
+            unrendered_styles = [st for st in all_styles if st.style_id not in rendered]
+            with ruled_page() as packer:
+                for style_id, img in rendered.items():
+                    with packer.place_cell([(4, 4)], fudge=False):
+                        with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'):
+                            ui.label(style_id.replace('-', ' ').title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                            ui.image(source=img).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                # GHOST CARDS: every style this {kind} isn't inked in yet —
+                # visible, one click away, never a chat errand
+                for st in unrendered_styles:
+                    with packer.place_cell([(4, 4)], fudge=True):
+                        with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative cursor-pointer') \
+                                .style('opacity: .65; border-style: dashed;') as ghost:
+                            ui.label(st.name.title()).classes('text-sm font-medium')
+                            ui.label(f'not inked in this style yet — click to ink it') \
+                                .classes('text-xs text-gray-500')
+                        ghost.on('click', lambda _, st=st: ink_in_style(st))
 
         with ui.expansion(value=True).classes('w-full section-flat') as exp:
             with exp.add_slot('header'):

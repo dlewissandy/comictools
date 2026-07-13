@@ -190,9 +190,22 @@ def view_scene(state: APPState):
                 [(f"{c.character_id}/{c.variant_id}", _cast_label(c))
                  for c in (scene.cast or [])],
                 _remove_cast, icon='theater_comedy', visit=_visit_character)
+            def _visit_prop(key):
+                from schema import PropAsset
+                asset = next((a for a in storage.read_all_objects(
+                    PropAsset, {"series_id": series_id})
+                    if (a.name or "").strip().lower() == key.strip().lower()), None)
+                if asset is None:
+                    ui.notify(f"'{key}' lives only in this scene — it has no room of its own "
+                              f"(extract it into a prop asset to reuse it).", type='info')
+                    return
+                from gui.selection import SelectedKind
+                state.change_selection(new=[*_series_base(),
+                    SelectionItem(name=asset.name, id=asset.prop_id,
+                                  kind=SelectedKind.PROP)])
             removable_chips_inline(state,
                 [(p.name, p.name) for p in (scene.props or [])],
-                _remove_prop, icon='category')
+                _remove_prop, icon='category', visit=_visit_prop)
 
         with cpanel(12):
             markdown_field_editor(

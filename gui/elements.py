@@ -835,7 +835,8 @@ def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], N
 
 
 def removable_chips(state: APPState, caption: str, items: list[tuple[str, str]],
-                    remover: Callable, icon: str = "sell"):
+                    remover: Callable, icon: str = "sell",
+                    visit: Callable | None = None):
     """
     Attached assets as chips with an ✕: the obvious way to take an asset back
     OFF the thing it was added to.  Removal is direct — it severs the link,
@@ -865,9 +866,13 @@ def removable_chips(state: APPState, caption: str, items: list[tuple[str, str]],
                 except Exception:
                     pass
                 state.refresh_details()
-            ui.chip(label, removable=True, icon=icon).props('dense outline') \
-                .tooltip(f'✕ removes {label} from {caption.lower()}') \
+            chip = ui.chip(label, removable=True, icon=icon) \
+                .props('dense outline' + (' clickable' if visit else '')) \
+                .tooltip(f'{label} — click to visit · ✕ removes it from {caption.lower()}'
+                         if visit else f'✕ removes {label} from {caption.lower()}') \
                 .on('remove', lambda _, k=key: _remove(k))
+            if visit:
+                chip.on('click', lambda _, k=key: visit(k))
 
 
 def removable_chips_inline(state: APPState, items: list[tuple[str, str]],

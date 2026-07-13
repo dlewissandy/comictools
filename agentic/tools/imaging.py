@@ -295,7 +295,7 @@ def _compose_table_rough(storage, board, scene) -> str | None:
     return out
 
 
-def _table_layout_brief(board) -> str:
+def _table_layout_brief(board, storage=None) -> str:
     """The author's light-table blocking as prompt lines — figure positions,
     depths, mirroring, and element OMIT/placement notes.  A board is anything
     composed on the light table: a panel or a cover."""
@@ -305,17 +305,34 @@ def _table_layout_brief(board) -> str:
         return f"{round(float(v))}%"
 
     lines = []
+    from schema import CharacterModel as _CM
+    _names = {}
+    try:
+        if storage is None:
+            from storage import registry as _reg
+            slug = _reg.house_of_series(board.series_id)
+            storage = _reg.storage_for(slug) if slug else None
+        if storage is not None:
+            _names = {c.character_id: c.name for c in
+                      storage.read_all_objects(_CM, {"series_id": board.series_id})}
+    except Exception:
+        pass
+
+    def _who(cid):
+        # a raw id reads as gibberish and can get lettered into the art
+        return _names.get(cid) or cid.replace('-', ' ')
+
     for ref in (board.character_references or []):
         b = blk.get(f"{ref.character_id}/{ref.variant_id}") or {}
         if not b:
             continue
         if not b.get('on', 1):
             # the author lifted this acetate off the table — honor that
-            lines.append(f"* OMIT {ref.character_id} from this image entirely")
+            lines.append(f"* OMIT {_who(ref.character_id)} from this image entirely")
             continue
         h = float(b.get('h', 60))
         depth = "in the near foreground, large" if h >= 88 else ("far in the background, small" if h <= 45 else "in the mid-ground")
-        lines.append(f"* {ref.character_id} stands at {_pct(b.get('x', 50))} from left, {depth}"
+        lines.append(f"* {_who(ref.character_id)} stands at {_pct(b.get('x', 50))} from left, {depth}"
                      + (f", raised {_pct(b['y'])} above the frame bottom" if float(b.get('y', 0)) > 5 else "")
                      + ("; only partly in frame, rising from below the bottom edge" if float(b.get('y', 0)) < -5 else "")
                      + ("; MIRRORED left-to-right versus their reference sheet" if b.get('flip') else "")
@@ -478,7 +495,7 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
                              "exact lettering.\n")
 
     # honor whatever the author arranged on the cover's light table
-    table_layout = _table_layout_brief(cover)
+    table_layout = _table_layout_brief(cover, storage)
 
     prompt = f"""
     Create a comic book {location_name} cover.   The image should be have a {cover.aspect.value} orientation/aspect ratio.
@@ -2086,6 +2103,31 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
             missing.append(f"styled image of '{ref.character_id}' ({ref.variant_id}) in style '{scene.style_id}' (create_styled_image_for_character_variant)")
         cast_info += format_character_variant(char_names[ref.character_id], variant, 2) + "\n"
 
+    # 2b) THE PROPS RIDE THE RENDER: the scene's props (and the setting's
+    # standing props) go into the prompt by NAME and DESCRIPTION, and any
+    # style-keyed reference art the author paid for rides along — a prop
+    # laid on the table must never vanish from the finished panel
+    props_info = ""
+    _prop_lines = []
+    _seen_props = set()
+    from schema import PropAsset as _PropAsset
+    _assets = {a.name.strip().lower(): a for a in storage.read_all_objects(
+        _PropAsset, {"series_id": series_id})}
+    for _p in list(getattr(scene, "props", None) or []) + list(getattr(setting, "props", None) or []):
+        _key = (_p.name or "").strip().lower()
+        if not _key or _key in _seen_props:
+            continue
+        _seen_props.add(_key)
+        _prop_lines.append(f"* **{_p.name}**: {_p.description}")
+        _asset = _assets.get(_key)
+        _art = (_asset.images or {}).get(scene.style_id) if _asset else None
+        if _art and os.path.exists(_art):
+            reference_images.append(_art)
+        elif _asset is not None:
+            missing.append(f"reference art for prop '{_p.name}' in style "
+                           f"'{scene.style_id}' (generate_prop_reference)")
+    props_info = chr(10).join(_prop_lines)
+
     # 3) Panel-specific uploaded reference images.
     reference_images.extend(storage.list_uploads(obj=panel))
 
@@ -2121,7 +2163,7 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
     script = "\n".join(script_lines)
 
     # The author's figure blocking from the light table.
-    table_layout = _table_layout_brief(panel)
+    table_layout = _table_layout_brief(panel, storage)
 
     setting_line = ""
     if setting is not None:
@@ -2161,6 +2203,8 @@ must look; keep them strictly on-model."""
 
 # Characters in panel
 {cast_info if cast_info else "* (no characters in panel)"}
+
+{f"# Props in scene (draw them as their reference art shows){chr(10)}{props_info}" if props_info else ""}
 
 {f"# Layout — the author BLOCKED this on the light table; honor positions and depths{chr(10)}{table_layout}{chr(10)}" if table_layout else ""}
 # Lettering (render these balloons/boxes per the style's bubble styles;
@@ -3369,7 +3413,7 @@ def generate_insert_art_body(state, series_id: str, issue_id: str, insert_id: st
     # insert's light table, composite them and hand them to the artist first
     rough_guidance = ""
     rough_ref = _compose_table_rough(storage, insert, None)
-    table_layout = _table_layout_brief(insert)
+    table_layout = _table_layout_brief(insert, storage)
     if rough_ref:
         rough_guidance = ("The FIRST reference image is the author's ROUGH of this page — the exact "
                           "composition assembled on the light table.   Treat it as the pencils: keep "

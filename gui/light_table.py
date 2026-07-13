@@ -1143,11 +1143,23 @@ def lay_prop_acetate(state, board, prop_asset, style_id: str | None = None) -> b
         from helpers.render_queue import enqueue_renders
         sid = style_id or 'vintage-four-color'
         table_receipt(state, f"🖌 **{prop_asset.name}** has no reference art yet — inking it "
-                             f"in {sid}; lay it once it lands")
+                             f"in {sid}; it lands on the table by itself")
+
+        def _lay_when_landed(_result, _b=board, _pa=prop_asset, _sid=sid):
+            # the paid render LANDS where the author asked — the acetate
+            # lays itself instead of demanding a second click
+            try:
+                fresh = state.storage.read_object(type(_pa), {"series_id": _pa.series_id,
+                                                              "prop_id": _pa.prop_id})
+                if fresh is not None:
+                    lay_prop_acetate(state, _b, fresh, _sid)
+            except Exception as ex:
+                logger.debug(f"auto-lay after prop self-heal skipped: {ex}")
         enqueue_renders(state, [(
             f"prop reference — {prop_asset.name} in {sid}",
             lambda: render_prop_reference_body(state, prop_asset.series_id,
                                                prop_asset.prop_id, sid),
+            _lay_when_landed,
         )], role='the Prop Maker')
         return False
     fresh_board(state.storage, board)
@@ -3003,7 +3015,11 @@ def light_table(state: APPState, panel, scene, setting,
                                     # the art itself lands as an acetate
                                     lay_prop_acetate(state, panel, pa, getattr(scene, 'style_id', None))
                                 else:
+                                    # the prop joins the scene's record (the
+                                    # render prompt reads it) AND its art
+                                    # lands as a blockable acetate
                                     lay_prop_on_table(state, scene, pa)
+                                    lay_prop_acetate(state, panel, pa, getattr(scene, 'style_id', None))
                             card.on('click', lambda _, pa=pa: lay(pa))
 
                     # CONJURE A NEW PROP from a prompt, right on the board —

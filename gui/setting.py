@@ -73,9 +73,69 @@ def view_setting(state: APPState):
             storage.update_object(data=setting)
 
         with ui.column().classes('w-full q-px-sm').style('gap: 2px;'):
-            removable_chips(state, "Props",
-                [(p.name, p.name) for p in (setting.props or [])],
-                _remove_prop, icon='category')
+            def _visit_prop(key):
+                from schema import PropAsset
+                asset = next((a for a in storage.read_all_objects(
+                    PropAsset, {"series_id": series_id})
+                    if (a.name or "").strip().lower() == key.strip().lower()), None)
+                if asset is None:
+                    ui.notify(f"'{key}' dresses only this set — it has no room of its own.",
+                              type='info')
+                    return
+                from gui.selection import SelectionItem, SelectedKind
+                idx = next((i for i, s in enumerate(state.selection)
+                            if s.kind.value == 'series'), None)
+                base = state.selection[:idx + 1] if idx is not None else state.selection
+                state.change_selection(new=[*base,
+                    SelectionItem(name=asset.name, id=asset.prop_id,
+                                  kind=SelectedKind.PROP)])
+            with ui.row().classes('items-center').style('gap: 6px;'):
+                removable_chips(state, "Props",
+                    [(p.name, p.name) for p in (setting.props or [])],
+                    _remove_prop, icon='category', visit=_visit_prop)
+
+                def add_prop_dialog(_=None):
+                    # DRESS THE SET IN PLACE: pick a prop asset, one click
+                    from schema import PropAsset, Prop
+                    have = {(p.name or '').strip().lower() for p in (setting.props or [])}
+                    assets = [a for a in storage.read_all_objects(
+                        PropAsset, {"series_id": series_id}, order_by="name")
+                        if (a.name or '').strip().lower() not in have]
+                    with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                            .style('min-width: 460px; max-width: 700px;'):
+                        ui.label('Dress the set').classes('caption-box caption-box-sm')
+                        if not assets:
+                            ui.label('Every prop asset already dresses this set — '
+                                     'ask the coauthor to create a new one.') \
+                                .classes('text-sm q-mt-sm')
+                        with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
+                            for a in assets:
+                                img = next((i for i in (a.images or {}).values()
+                                            if i and os.path.exists(i)), None)
+                                with ui.card().classes('soft-card p-1 cursor-pointer') \
+                                        .style('width: 130px;') as card:
+                                    if img:
+                                        ui.image(source=img).style('height: 70px;').props('fit=contain')
+                                    ui.label(a.name.title()).classes('text-xs text-center w-full')
+
+                                def choose(a=a):
+                                    setting.props = [*(setting.props or []),
+                                                     Prop(name=a.name, description=a.description)]
+                                    storage.update_object(data=setting)
+                                    dlg.close()
+                                    from gui.light_table import table_receipt
+                                    table_receipt(state, f"🎗 **{a.name}** now dresses **{setting.name}** — "
+                                                         f"masters re-inked from here will include it")
+                                    state.refresh_details()
+                                card.on('click', lambda _, a=a: choose(a))
+                        ui.button('A brand-new prop instead…', icon='add') \
+                            .props('flat dense no-caps').classes('q-mt-sm') \
+                            .on('click', lambda _: (dlg.close(),
+                                post_user_message(state, 'I would like to create a new prop for this setting.')))
+                    dlg.open()
+                ui.button(icon='add').props('flat round dense size=sm') \
+                    .tooltip('Dress the set with a prop — one click') \
+                    .on('click', add_prop_dialog)
 
         # SET HERE: every scene that takes place in this setting — so the
         # author can see what an edit touches before making it
