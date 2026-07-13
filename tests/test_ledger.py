@@ -132,3 +132,33 @@ def test_the_ledger_sees_script_drift(storage):
     by = {l.key: l for l in led.lines}
     assert 'drift' in by and not by['drift'].ok
     assert "changed after its breakdown" in by['drift'].text
+
+
+def test_character_card_prefers_the_base_look_by_any_base_name(storage):
+    """The character card shows the BASE look — even when the base is named
+    '<Character> Base' with a UUID id, never an arbitrary costume."""
+    import os
+    from schema import CharacterModel, CharacterVariant
+    S = "wonders-of-the-witchlight"
+    storage.create_object(CharacterModel(character_id="vera", series_id=S,
+        name="Vera", description="a PI"), overwrite=True)
+
+    def _mk(vid, name):
+        v = CharacterVariant(variant_id=vid, series_id=S, character_id="vera",
+            name=name, description="d", race="human", gender="f", age="40s",
+            height="avg", attire="a", behavior="b", appearance="ap", images={})
+        storage.create_object(v, overwrite=True)
+        d = os.path.join(str(storage.base_path), "series", S, "characters", "vera",
+                         "variants", vid, "images", "vintage-four-color")
+        os.makedirs(d, exist_ok=True)
+        from PIL import Image
+        art = os.path.join(d, "sheet.jpg")
+        Image.new("RGB", (80, 53), (10, 20, 30)).save(art)
+        v.images = {"vintage-four-color": art}
+        storage.update_object(v)
+        return art
+
+    costume = _mk("zzz-costume", "Ballgown")   # sorts last by id
+    base_art = _mk("aaa-uuid", "Vera Base")    # a '… base' name, non-'base' id
+    pick = storage.find_character_image(series_id=S, character_id="vera")
+    assert pick == base_art, "the card wears the base look, not the costume"

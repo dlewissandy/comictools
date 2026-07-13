@@ -504,17 +504,22 @@ class LocalStorage(GenericStorage):
         """
         logger.trace("character.image_filepath() called")
         # THE BASE LOOK IS THE IDENTITY: the portrait prefers the base
-        # variant (by id, then by name) before falling back to any look —
-        # a character card must never silently wear a costume
+        # variant before any composed look — a character card must never
+        # silently wear a costume.  A base is 'base', a '… base' name, or
+        # (failing those) the character's sole look.
         variants = self.read_all_objects(cls=CharacterVariant, primary_key={"series_id": series_id, "character_id": character_id})
-        variants.sort(key=lambda v: (v.variant_id != "base",
-                                     (v.name or "").strip().lower() != "base"))
-        while len(variants) > 0:
-            variant = variants.pop(0)
+
+        def _is_base(v):
+            nm = (v.name or "").strip().lower()
+            return (v.variant_id == "base" or nm == "base" or nm.endswith(" base")
+                    or len(variants) == 1)
+
+        # a base with an image wins; then any base; then any look with art
+        variants.sort(key=lambda v: (not _is_base(v), v.variant_id))
+        for variant in variants:
             filepath = self.find_variant_image(series_id=series_id, character_id=character_id, variant_id=variant.variant_id)
             if filepath is not None:
                 return filepath
-        # If no image is found, return None
         return None
     
 
