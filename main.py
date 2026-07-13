@@ -1158,6 +1158,8 @@ def read_issue_page(series_id: str, issue_id: str):
         .reader-sheet { height: 100%; aspect-ratio: 6.625 / 10.1875; background: #fff;
                         position: relative; flex-shrink: 0;
                         box-shadow: 0 14px 44px rgba(0,0,0,.6), 0 2px 8px rgba(0,0,0,.4); }
+        /* THE PHONE READS ONE PAGE AT A TIME: width-driven, never clipped */
+        .reader-stage--single .reader-sheet { height: auto; width: min(96vw, calc((100vh - 124px) * 0.6503)); }
         .reader-sheet .q-img { position: absolute; inset: 0; width: 100%; height: 100%; }
         .reader-sheet--verso { border-radius: 4px 1px 1px 4px;
                                box-shadow: -10px 12px 40px rgba(0,0,0,.55), inset -14px 0 18px -14px rgba(0,0,0,.5); }
@@ -1180,30 +1182,44 @@ def read_issue_page(series_id: str, issue_id: str):
         .reader-dl:hover { background: #fff; }
     """)
     ui.query('body').classes('reading-room')
+    if issue is None:
+        ui.markdown(f"Issue `{issue_id}` not found.").style('color: #e8e2d8;')
+        return
+    sheets, missing = reader_sheets(storage, series_id, issue_id)
+    _labels_js = json.dumps([l for l, _p in sheets])
     ui.add_body_html("""<script>
     window.readerSpread = 0;
+    window.readerLabels = """ + _labels_js + """;
+    // narrow viewport = ONE page per turn, width-driven — never clipped
+    window.readerSingle = () => window.innerWidth < window.innerHeight * 0.95;
     window.showSpread = function (k) {
       const sheets = [...document.querySelectorAll('.reader-sheet')];
       if (!sheets.length) return;
       const n = sheets.length;
-      const maxK = Math.ceil((n - 1) / 2);
+      const single = window.readerSingle();
+      const stage = document.querySelector('.reader-stage');
+      if (stage) stage.classList.toggle('reader-stage--single', single);
+      const maxK = single ? n - 1 : Math.ceil((n - 1) / 2);
       k = Math.max(0, Math.min(maxK, k));
       window.readerSpread = k;
-      // spread 0 = the cover alone on the recto; spread k = sheets 2k-1 | 2k
-      const visible = k === 0 ? [0] : [2 * k - 1, 2 * k].filter(i => i < n);
+      // spreads: 0 = the cover alone on the recto; k = sheets 2k-1 | 2k
+      const visible = single ? [k] : (k === 0 ? [0] : [2 * k - 1, 2 * k].filter(i => i < n));
       sheets.forEach((s, i) => {
         s.style.display = visible.includes(i) ? '' : 'none';
         s.classList.remove('reader-sheet--verso', 'reader-sheet--recto');
       });
-      if (k === 0) { sheets[0].classList.add('reader-sheet--recto'); }
+      if (single || k === 0) { sheets[visible[0]].classList.add('reader-sheet--recto'); }
       else {
         sheets[visible[0]].classList.add('reader-sheet--verso');
         if (visible[1] !== undefined) sheets[visible[1]].classList.add('reader-sheet--recto');
       }
+      // the counter QUOTES the page — folio, insert, cover — never a
+      // sheet count that contradicts the number printed on the paper
       const counter = document.querySelector('.reader-counter');
-      if (counter) counter.textContent = k === 0 ? 'the cover' :
-        (visible.length === 2 ? `pages ${visible[0] + 1}–${visible[1] + 1} of ${n}`
-                              : `page ${visible[0] + 1} of ${n}`);
+      if (counter) {
+        const names = visible.map(i => (window.readerLabels || [])[i] || `sheet ${i + 1}`);
+        counter.textContent = names.join('  ·  ');
+      }
       const lt = document.querySelector('.reader-thumb--left');
       const rt = document.querySelector('.reader-thumb--right');
       if (lt) lt.style.visibility = k === 0 ? 'hidden' : 'visible';
@@ -1215,12 +1231,27 @@ def read_issue_page(series_id: str, issue_id: str):
       const fwd = (e.key === 'ArrowRight' || e.key === 'PageDown');
       window.showSpread(window.readerSpread + (fwd ? 1 : -1));
     });
-    window.addEventListener('load', () => setTimeout(() => window.showSpread(0), 60));
+    // SWIPE turns the page on touch screens
+    let _tx = null;
+    document.addEventListener('touchstart', (e) => { _tx = e.touches[0].clientX; }, {passive: true});
+    document.addEventListener('touchend', (e) => {
+      if (_tx === null) return;
+      const dx = e.changedTouches[0].clientX - _tx;
+      _tx = null;
+      if (Math.abs(dx) > 40) window.showSpread(window.readerSpread + (dx < 0 ? 1 : -1));
+    }, {passive: true});
+    // NO BOOT RACE: the first spread shows the moment the sheets MOUNT
+    // (the websocket can land them after window.load on a slow open)
+    const _boot = () => {
+      if (document.querySelector('.reader-sheet')) { window.showSpread(0); return true; }
+      return false;
+    };
+    if (!_boot()) {
+      const mo = new MutationObserver(() => { if (_boot()) mo.disconnect(); });
+      mo.observe(document.body, {childList: true, subtree: true});
+    }
+    window.addEventListener('resize', () => window.showSpread(window.readerSpread));
     </script>""")
-    if issue is None:
-        ui.markdown(f"Issue `{issue_id}` not found.").style('color: #e8e2d8;')
-        return
-    sheets, missing = reader_sheets(storage, series_id, issue_id)
     with ui.row().classes('w-full items-center flex-nowrap').style(
             'padding: 14px 20px 0; gap: 14px; position: relative; z-index: 25;'):
         ui.label(f"{issue.name}").classes('text-2xl font-bold').style('color: #e8e2d8;')
