@@ -827,7 +827,27 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     ui.on('clipboard_image', lambda e: handle_clipboard_image(state, e.args))
 
     def _board_tick():
-        n = len(getattr(state, '_render_pending', None) or [])
+        # the chip reads the ON-DISK docket, so every window sees the work
+        # in flight — not just the one that started it
+        try:
+            import time as _time
+            from helpers.render_queue import QUEUE_DIR
+            # count only living slips (younger than the orphan guard) so a
+            # dead run's leftovers never make the chip lie forever
+            n = 0
+            if os.path.isdir(QUEUE_DIR):
+                import json as _json
+                for f in os.listdir(QUEUE_DIR):
+                    if not f.endswith('.json'):
+                        continue
+                    try:
+                        slip = _json.load(open(os.path.join(QUEUE_DIR, f)))
+                        if _time.time() - slip.get('queued_at', 0) < 900:
+                            n += 1
+                    except (OSError, ValueError):
+                        pass
+        except OSError:
+            n = len(getattr(state, '_render_pending', None) or [])
         if n:
             board_label.set_text(f"{n} on the drawing board")
         board_chip.style(f"display: {'flex' if n else 'none'}; gap: 6px;")

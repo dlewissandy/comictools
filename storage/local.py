@@ -1,5 +1,6 @@
 import os
 import json
+import threading
 import shutil
 from uuid import uuid4
 from loguru import logger
@@ -25,6 +26,11 @@ from storage.filepath import (
     )
 
 
+
+
+# one writer at a time in-process; unique tmp names so cross-thread and
+# cross-process writers can never tear each other's files
+_WRITE_LOCK = threading.Lock()
 
 
 class LocalStorage(GenericStorage):
@@ -93,12 +99,14 @@ class LocalStorage(GenericStorage):
         # ATOMIC WRITE: the JSON lands whole or not at all — a crash
         # mid-write must never truncate the author's work
         logger.debug(f"Writing object {data.__class__.__name__} to file {filepath}")
-        tmp = filepath + '.tmp'
-        with open(tmp, 'w') as f:
-            f.write(data.model_dump_json(indent=2))
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, filepath)
+        from uuid import uuid4 as _uuid4
+        tmp = f"{filepath}.{_uuid4().hex[:8]}.tmp"
+        with _WRITE_LOCK:
+            with open(tmp, 'w') as f:
+                f.write(data.model_dump_json(indent=2))
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, filepath)
 
         # sync the parent folder
         fs_dir = os.open(parent_path, os.O_DIRECTORY)
@@ -239,12 +247,14 @@ class LocalStorage(GenericStorage):
         
         # ATOMIC WRITE: tmp + fsync + rename — the update lands whole or
         # the old file survives untouched
-        tmp = filepath + '.tmp'
-        with open(tmp, 'w') as f:
-            f.write(json.dumps(data.model_dump(), indent=2))
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, filepath)
+        from uuid import uuid4 as _uuid4
+        tmp = f"{filepath}.{_uuid4().hex[:8]}.tmp"
+        with _WRITE_LOCK:
+            with open(tmp, 'w') as f:
+                f.write(json.dumps(data.model_dump(), indent=2))
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, filepath)
 
         # sync the parent folder
         parent_path = os.path.dirname(filepath)

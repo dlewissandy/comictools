@@ -22,7 +22,8 @@ load_dotenv(os.path.join(REPO, ".env"))
 
 # Route the app at a temp data dir + temp state file BEFORE importing main.
 _tmp = tempfile.mkdtemp()
-shutil.copytree(os.path.join(REPO, "data"), os.path.join(_tmp, "data"))
+from tests.conftest import fixture_source as _fixture_source
+shutil.copytree(_fixture_source(), os.path.join(_tmp, "data"))
 
 import gui.state as gui_state
 gui_state.STATE_FILEPATH = os.path.join(_tmp, "state.json")

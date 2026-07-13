@@ -1,0 +1,84 @@
+{
+  "phase": "intent",
+  "state": "WITHDRAWN",
+  "actor": "bridge",
+  "history": [
+    {
+      "state": "IDEA",
+      "action": "propose",
+      "actor": "human",
+      "timestamp": "2026-04-08T01:16:11.991968+00:00"
+    },
+    {
+      "state": "PROPOSAL",
+      "action": "assert",
+      "actor": "human",
+      "timestamp": "2026-04-08T01:18:19.864872+00:00"
+    },
+    {
+      "state": "INTENT_ASSERT",
+      "action": "approve",
+      "actor": "intent_team",
+      "timestamp": "2026-04-08T01:20:00.054862+00:00"
+    },
+    {
+      "state": "INTENT",
+      "action": "plan",
+      "actor": "human",
+      "timestamp": "2026-04-08T01:20:00.058072+00:00"
+    },
+    {
+      "state": "DRAFT",
+      "action": "assert",
+      "actor": "planning_team",
+      "timestamp": "2026-04-08T01:22:34.196391+00:00"
+    },
+    {
+      "state": "PLAN_ASSERT",
+      "action": "refine-intent",
+      "actor": "planning_team",
+      "timestamp": "2026-04-08T01:24:29.865235+00:00"
+    },
+    {
+      "state": "INTENT_RESPONSE",
+      "action": "synthesize",
+      "actor": "human",
+      "timestamp": "2026-04-08T01:26:58.604943+00:00"
+    },
+    {
+      "state": "PROPOSAL",
+      "action": "assert",
+      "actor": "intent_team",
+      "timestamp": "2026-04-08T01:27:30.345666+00:00"
+    },
+    {
+      "state": "INTENT_ASSERT",
+      "action": "correct",
+      "actor": "intent_team",
+      "timestamp": "2026-04-08T01:34:37.559683+00:00"
+    },
+    {
+      "state": "INTENT_RESPONSE",
+      "action": "synthesize",
+      "actor": "human",
+      "timestamp": "2026-04-08T01:39:12.085500+00:00"
+    },
+    {
+      "state": "PROPOSAL",
+      "action": "assert",
+      "actor": "intent_team",
+      "timestamp": "2026-04-08T01:39:29.724790+00:00"
+    },
+    {
+      "state": "WITHDRAWN",
+      "action": "withdraw",
+      "actor": "bridge",
+      "timestamp": "2026-04-13T22:53:05.858353+00:00"
+    }
+  ],
+  "backtrack_count": 1,
+  "task_id": "20260407-181611",
+  "parent_id": "",
+  "team_id": "",
+  "depth": 0
+}

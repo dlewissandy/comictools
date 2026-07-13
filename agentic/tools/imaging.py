@@ -1,3 +1,4 @@
+import asyncio
 import os
 import json
 import tempfile
@@ -96,7 +97,25 @@ def generate_object_image(
     
 
 @function_tool
-def generate_publisher_logo_reference_image(
+async def generate_publisher_logo_reference_image(
+    wrapper: RunContextWrapper[APPState],
+    publisher_id: str
+) -> str:
+    """
+    Generate a reference image of the logo for the given publisher.
+
+    Args:
+        wrapper: The RunContextWrapper containing the storage context.
+        publisher_id: The ID of the publisher for which to generate the logo.
+
+    Returns:
+        A locator for the generated image.
+    """
+
+    return await asyncio.to_thread(_generate_publisher_logo_reference_image_sync, wrapper, publisher_id)
+
+
+def _generate_publisher_logo_reference_image_sync(
     wrapper: RunContextWrapper[APPState],
     publisher_id: str
 ) -> str:
@@ -181,7 +200,29 @@ def delete_publisher_logo_reference_image(
     return f"Logo image for {publisher.name} deleted successfully."
 
 @function_tool
-def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str, cover_id: str, text_layout_instructions: Optional[str] = None, takes: int = 1) -> str:
+async def generate_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str, cover_id: str, text_layout_instructions: Optional[str] = None, takes: int = 1) -> str:
+    """
+    Generate a cover image for the specified comic book issue.
+
+    Args:
+        series_id (str): The ID of the comic book series.
+        issue_id (str): The ID of the comic book issue.
+        cover_id (str): The unique identifier for the cover to render.
+        text_layout_instructions (str, optional): Custom instructions for how the text
+            elements (title, subtitle, price, issue number, date, credits) should be
+            placed and styled on the cover.   If omitted, a standard comic layout is
+            used (title across the top, subtitle below, credits at the bottom).
+        takes (int): How many takes to render (1-4).  More takes = a contact sheet
+            in the cover's image grid for the user to choose from (each costs money).
+
+    Returns:
+        A string indicating the status of the rendering operation.
+    """
+
+    return await asyncio.to_thread(_generate_cover_image_sync, wrapper, series_id, issue_id, cover_id, text_layout_instructions, takes)
+
+
+def _generate_cover_image_sync(wrapper: RunContextWrapper, series_id: str, issue_id: str, cover_id: str, text_layout_instructions: Optional[str] = None, takes: int = 1) -> str:
     """
     Generate a cover image for the specified comic book issue.
 
@@ -545,7 +586,15 @@ def delete_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str
 
 
 @function_tool
-def create_character_style_example_image(
+async def create_character_style_example_image(
+    wrapper: RunContextWrapper[APPState],
+    style_id: str
+) -> str:
+
+    return await asyncio.to_thread(_create_character_style_example_image_sync, wrapper, style_id)
+
+
+def _create_character_style_example_image_sync(
     wrapper: RunContextWrapper[APPState],
     style_id: str
 ) -> str:
@@ -718,7 +767,31 @@ def create_styled_image_body(state, series_id: str, character_id: str,
 
 
 @function_tool
-def create_styled_image_for_character_variant(
+async def create_styled_image_for_character_variant(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    character_id: str,
+    variant_id: str,
+    style_id: str,
+) -> str:
+    """
+    Create a styled image for a character variant.   This image can be used as a reference image to help artists
+    faithfully represent the character in the comic book.
+
+    Args:
+        series_id: The ID of the comic book series.
+        character_id: The ID of the character.
+        variant_id: The ID of the character variant.
+        style_id: The ID of the comic style to use for the image.
+
+    Returns:
+        A locator for the generated image.
+    """
+
+    return await asyncio.to_thread(_create_styled_image_for_character_variant_sync, wrapper, series_id, character_id, variant_id, style_id)
+
+
+def _create_styled_image_for_character_variant_sync(
     wrapper: RunContextWrapper[APPState],
     series_id: str,
     character_id: str,
@@ -741,7 +814,21 @@ def create_styled_image_for_character_variant(
     return create_styled_image_body(wrapper.context, series_id, character_id, variant_id, style_id)
 
 @function_tool
-def create_art_style_example_image(
+async def create_art_style_example_image(
+    wrapper: RunContextWrapper[APPState],
+    style_id: str
+) -> str:
+    """
+    Create an example of an art style as an image.
+    
+    Returns:
+        A message indicating the result of the operation.
+    """
+
+    return await asyncio.to_thread(_create_art_style_example_image_sync, wrapper, style_id)
+
+
+def _create_art_style_example_image_sync(
     wrapper: RunContextWrapper[APPState],
     style_id: str
 ) -> str:
@@ -804,7 +891,26 @@ def create_art_style_example_image(
 
 
 @function_tool
-def create_dialog_style_example_image(
+async def create_dialog_style_example_image(
+    wrapper: RunContextWrapper[APPState],
+    style_id: str,
+    dialog_type: DialogType
+) -> str:
+    """
+    Generate an example image of a dialog style (chat, whisper, shout, thought, sound-effect, narration)
+
+    Args:
+        style_id: The ID of the comic style.
+        dialog_type: The type of dialog (chat, whisper, shout, thought, sound-effect, narration).
+
+    Returns:
+        A message indicating the result of the operation.
+    """
+
+    return await asyncio.to_thread(_create_dialog_style_example_image_sync, wrapper, style_id, dialog_type)
+
+
+def _create_dialog_style_example_image_sync(
     wrapper: RunContextWrapper[APPState],
     style_id: str,
     dialog_type: DialogType
@@ -1065,14 +1171,19 @@ def _choices_manifest_path(image_locator: str, session_id: str) -> str:
 
 
 def _write_choices_manifest(image_locator: str, session_id: str, choices: list[str]) -> None:
+    import time as _time
+    from uuid import uuid4 as _uuid4
     path = _choices_manifest_path(image_locator, session_id)
     payload = {
         "image": image_locator,
         "choices": choices,
         "session_id": session_id,
+        "written_at": _time.time(),
     }
-    with open(path, "w") as f:
+    tmp = f"{path}.{_uuid4().hex[:6]}.tmp"
+    with open(tmp, "w") as f:
         json.dump(payload, f, indent=2)
+    os.replace(tmp, path)
 
 
 def _is_intent_only(text: str, mode: str) -> bool:
@@ -1389,6 +1500,33 @@ def _update_parent_selection(
     return None
 
 
+def _choices_epilogue(state, image_locator: str, session_id: str, mode: str):
+    """The on-loop epilogue for a queued heal: when the takes land, the
+    editor state points at them and the choices sheet opens itself —
+    UI work stays on the event loop, paint work stays off it."""
+    def after(choices):
+        here = state.selection[-1] if state.selection else None
+        still_here = (getattr(state, 'image_editor_image', None) == image_locator
+                      and here is not None
+                      and here.kind.value in ('image-editor', 'image-editor-choices'))
+        if not still_here:
+            # the author moved on — the manifest waits; the editor's
+            # recovery door offers the takes back whenever they return
+            return
+        state.image_editor_choices = choices
+        state.image_editor_choice_selected = choices[0] if choices else None
+        state.image_editor_original_image = image_locator
+        state.image_editor_image = image_locator
+        state.image_editor_session_id = session_id
+        state.image_editor_mode = mode
+        new_sel = [s for s in state.selection
+                   if s.kind.value != 'image-editor-choices']
+        new_sel.append(SelectionItem(name="Choices", id=f"{session_id}|{image_locator}",
+                                     kind=SelectedKind.IMAGE_EDITOR_CHOICES))
+        state.change_selection(new=new_sel)
+    return after
+
+
 @function_tool
 def inpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str) -> str:
     """
@@ -1413,44 +1551,53 @@ def inpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str)
     if not os.path.exists(image_locator):
         return f"Image not found: {image_locator}"
 
-    mask_path = None
+    # NOTHING BLOCKS THE BRUSH: the mask is cut here (fast), the paint job
+    # goes on the drawing board, and the choices sheet opens on the loop
+    # when the four takes land — the studio never freezes
+    from uuid import uuid4 as _uuid4
+    session_id = _uuid4().hex[:8]          # per-HEAL, never shared
+    state.image_editor_session_id = session_id
+    if selection:
+        mask_path, (w, h) = _create_inpaint_mask(image_locator, selection)
+    else:
+        mask_path, (w, h) = _create_full_mask(image_locator)
     try:
-        session_id = _ensure_session_id(state)
-        if selection:
-            mask_path, (w, h) = _create_inpaint_mask(image_locator, selection)
-        else:
-            mask_path, (w, h) = _create_full_mask(image_locator)
         size = _choose_output_size(w, h)
         refs = _collect_reference_images(state, instruction)
-        images = invoke_edit_image_api(
-            prompt=instruction,
-            reference_images=_merge_reference_images(image_locator, refs),
-            mask=mask_path,
-            size=size,
-            quality=IMAGE_QUALITY.HIGH,
-            n=4,
-        )
-        if isinstance(images, bytes):
-            images = [images]
-        choices = [_save_image_bytes(img, image_locator, prefix=f"choice-{session_id}") for img in images]
-    finally:
+    except Exception:
         if mask_path and os.path.exists(mask_path):
             os.remove(mask_path)
+        raise
 
-    if not choices:
-        return "No images were generated. Try again."
+    def job():
+        try:
+            images = invoke_edit_image_api(
+                prompt=instruction,
+                reference_images=_merge_reference_images(image_locator, refs),
+                mask=mask_path,
+                size=size,
+                quality=IMAGE_QUALITY.HIGH,
+                n=4,
+            )
+        finally:
+            if mask_path and os.path.exists(mask_path):
+                os.remove(mask_path)
+        if isinstance(images, bytes):
+            images = [images]
+        choices = [_save_image_bytes(img, image_locator, prefix=f"choice-{session_id}")
+                   for img in images]
+        if not choices:
+            raise RuntimeError("no images came back — try again")
+        _write_choices_manifest(image_locator, session_id, choices)
+        return choices
 
-    _write_choices_manifest(image_locator, session_id, choices)
-    state.image_editor_choices = choices
-    state.image_editor_choice_selected = choices[0] if choices else None
-    state.image_editor_original_image = image_locator
-    state.image_editor_image = image_locator
-    state.image_editor_mode = "inpaint"
-
-    new_sel = [s for s in state.selection]
-    new_sel.append(SelectionItem(name="Choices", id=f"{session_id}|{image_locator}", kind=SelectedKind.IMAGE_EDITOR_CHOICES))
-    state.change_selection(new=new_sel)
-    return "Generated 4 options. Pick one to apply, or cancel."
+    _open_choices_after = _choices_epilogue(state, image_locator, session_id, mode="inpaint")
+    from helpers.render_queue import enqueue_renders
+    enqueue_renders(state, [(f"healing {os.path.basename(image_locator)} — four takes",
+                             job, _open_choices_after)], role='the Inker')
+    return ("The heal is on the drawing board — four takes land here shortly, "
+            "and the choices sheet opens by itself. Nothing is applied until "
+            "one is picked.")
 
 
 @function_tool
@@ -1476,45 +1623,53 @@ def outpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str
     if not os.path.exists(image_locator):
         return f"Image not found: {image_locator}"
 
+    # NOTHING BLOCKS THE BRUSH: assets prepared here (fast), the paint job
+    # goes on the drawing board, the choices sheet opens when takes land
     padding = {"top": 256, "bottom": 256, "left": 256, "right": 256}
-    base_path = None
-    mask_path = None
+    from uuid import uuid4 as _uuid4
+    session_id = _uuid4().hex[:8]          # per-HEAL, never shared
+    state.image_editor_session_id = session_id
+    base_path, mask_path, (w, h) = _prepare_outpaint_assets(image_locator, padding)
     try:
-        session_id = _ensure_session_id(state)
-        base_path, mask_path, (w, h) = _prepare_outpaint_assets(image_locator, padding)
         size = _choose_output_size(w, h)
         refs = _collect_reference_images(state, instruction)
-        images = invoke_edit_image_api(
-            prompt=instruction,
-            reference_images=_merge_reference_images(base_path, refs),
-            mask=mask_path,
-            size=size,
-            quality=IMAGE_QUALITY.HIGH,
-            n=4,
-        )
+    except Exception:
+        for _pth in (base_path, mask_path):
+            if _pth and os.path.exists(_pth):
+                os.remove(_pth)
+        raise
+
+    def job():
+        try:
+            images = invoke_edit_image_api(
+                prompt=instruction,
+                reference_images=_merge_reference_images(base_path, refs),
+                mask=mask_path,
+                size=size,
+                quality=IMAGE_QUALITY.HIGH,
+                n=4,
+            )
+        finally:
+            for path in [base_path, mask_path]:
+                if path and os.path.exists(path):
+                    os.remove(path)
         if isinstance(images, bytes):
             images = [images]
-        choices = [_save_image_bytes(img, image_locator, prefix=f"choice-{session_id}") for img in images]
-    finally:
-        for path in [base_path, mask_path]:
-            if path and os.path.exists(path):
-                os.remove(path)
+        choices = [_save_image_bytes(img, image_locator, prefix=f"choice-{session_id}")
+                   for img in images]
+        if not choices:
+            raise RuntimeError("no images came back — try again")
+        _write_choices_manifest(image_locator, session_id, choices)
+        return choices
 
-    if not choices:
-        return "No images were generated. Try again."
+    _open_choices_after = _choices_epilogue(state, image_locator, session_id, mode="outpaint")
+    from helpers.render_queue import enqueue_renders
+    enqueue_renders(state, [(f"extending {os.path.basename(image_locator)} — four takes",
+                             job, _open_choices_after)], role='the Inker')
+    return ("The extension is on the drawing board — four takes land here "
+            "shortly, and the choices sheet opens by itself. Nothing is "
+            "applied until one is picked.")
 
-    _write_choices_manifest(image_locator, session_id, choices)
-    state.image_editor_choices = choices
-    state.image_editor_choice_selected = choices[0] if choices else None
-    state.image_editor_original_image = image_locator
-    state.image_editor_image = image_locator
-    state.image_editor_mode = "outpaint"
-
-    new_sel = [s for s in state.selection]
-    new_sel.append(SelectionItem(name="Choices", id=f"{session_id}|{image_locator}", kind=SelectedKind.IMAGE_EDITOR_CHOICES))
-    state.change_selection(new=new_sel)
-    return "Generated 4 options. Pick one to apply, or cancel."
-    
 
 
 # -------------------------------------------------------------------------
@@ -1576,7 +1731,32 @@ an acetate overlay to be composited onto cover art.
 
 
 @function_tool
-def generate_series_title_art(
+async def generate_series_title_art(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    style_id: str,
+    notes: Optional[str] = None,
+) -> str:
+    """
+    Render THE TITLE ART for a series: the series title hand-lettered as a comic
+    masthead (logo/wordmark) in the given style, on a transparent background.
+    Stored on the series keyed by style.   Covers hold their title lettering to
+    this reference, and art-only covers can wear it as a composited overlay.
+
+    Args:
+        series_id: The ID of the series whose title to letter.
+        style_id: The comic style to letter the masthead in.
+        notes: The author's lettering direction, e.g. 'drippy horror letters',
+            'chrome sci-fi', 'circus poster woodtype'.  Optional.
+
+    Returns:
+        A status message with the locator of the rendered title art.
+    """
+
+    return await asyncio.to_thread(_generate_series_title_art_sync, wrapper, series_id, style_id, notes)
+
+
+def _generate_series_title_art_sync(
     wrapper: RunContextWrapper[APPState],
     series_id: str,
     style_id: str,
@@ -1667,7 +1847,38 @@ panels composed on top of this background match the rest of the issue.
 
 
 @function_tool
-def generate_setting_background(
+async def generate_setting_background(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    setting_id: str,
+    style_id: str,
+    aspect: Optional[str] = None,
+) -> str:
+    """
+    Render the master background for a setting in a given comic style: the empty
+    setting, dressed with its props, with NO characters.   The master background is
+    stored on the setting keyed by style and is reused as the shared background for
+    every panel that takes place there — ink the setting once, reuse it across pages.
+
+    If reference images have been uploaded for the setting, they are used to
+    steer the rendering for real-world or previously-established looks.
+
+    Args:
+        series_id: The ID of the series the setting belongs to.
+        setting_id: The ID of the setting to render.
+        style_id: The comic style to render the master background in.
+
+        aspect: The aspect of the board the master is for — 'landscape', 'portrait'
+            or 'square'.  Match the panel/cover it will sit behind; defaults to landscape.
+
+    Returns:
+        A status message with the locator of the rendered master background.
+    """
+
+    return await asyncio.to_thread(_generate_setting_background_sync, wrapper, series_id, setting_id, style_id, aspect)
+
+
+def _generate_setting_background_sync(
     wrapper: RunContextWrapper[APPState],
     series_id: str,
     setting_id: str,
@@ -1705,7 +1916,43 @@ def render_panel_impl(state: APPState, series_id: str, issue_id: str, scene_id: 
 
 
 @function_tool
-def generate_panel_image(
+async def generate_panel_image(
+    wrapper: RunContextWrapper[APPState],
+    series_id: str,
+    issue_id: str,
+    scene_id: str,
+    panel_id: str,
+    takes: int = 1,
+) -> str:
+    """
+    Render the artwork for a panel by compositing its reference objects: the
+    scene's master background is reused as the panel's setting, the cast's styled
+    reference sheets keep the characters on-model, and the panel's own uploaded
+    reference images (if any) steer the composition.   Dialogue balloons and
+    narration boxes are lettered per the style's bubble styles.
+
+    Prerequisites for best consistency (the tool degrades gracefully without them):
+    * the scene has a setting whose master background has been rendered in the
+      scene's style (generate_setting_background),
+    * each character in the panel has a styled image for the scene's style
+      (create_styled_image_for_character_variant).
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        scene_id: The ID of the scene the panel belongs to.
+        panel_id: The ID of the panel to render.
+        takes: How many takes to render (1-4).  More takes = a contact sheet in
+            the panel's image grid for the user to choose from (each costs money).
+
+    Returns:
+        A status message with the locator of the rendered panel image.
+    """
+
+    return await asyncio.to_thread(_generate_panel_image_sync, wrapper, series_id, issue_id, scene_id, panel_id, takes)
+
+
+def _generate_panel_image_sync(
     wrapper: RunContextWrapper[APPState],
     series_id: str,
     issue_id: str,
@@ -1901,7 +2148,25 @@ must look; keep them strictly on-model."""
 
 
 @function_tool
-def export_issue_pdf(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+async def export_issue_pdf(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+    """
+    Bind the issue into a PDF book: covers full-bleed, interior panels laid down
+    each page in reading order.   Reports any unrendered panels or covers so they
+    can be generated first — a complete issue is one where nothing is missing.
+
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the issue to export.
+
+    Returns:
+        A status message with the PDF locator, the page count, and anything
+        still missing from a complete issue.
+    """
+
+    return await asyncio.to_thread(_export_issue_pdf_sync, wrapper, series_id, issue_id)
+
+
+def _export_issue_pdf_sync(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
     """
     Bind the issue into a PDF book: covers full-bleed, interior panels laid down
     each page in reading order.   Reports any unrendered panels or covers so they
@@ -1959,7 +2224,25 @@ def _refresh_machine_layout(storage, series_id: str, issue_id: str) -> None:
 
 
 @function_tool
-def export_issue_cbz(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+async def export_issue_cbz(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+    """
+    Bind the issue into a CBZ comic book archive — the format comic reader
+    apps open natively.   Same sheets as the PDF: covers, indicia, designed
+    pages with folios.
+
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the issue to export.
+
+    Returns:
+        A status message with a download link, the page count, and anything
+        still missing from a complete issue.
+    """
+
+    return await asyncio.to_thread(_export_issue_cbz_sync, wrapper, series_id, issue_id)
+
+
+def _export_issue_cbz_sync(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
     """
     Bind the issue into a CBZ comic book archive — the format comic reader
     apps open natively.   Same sheets as the PDF: covers, indicia, designed
@@ -2106,7 +2389,28 @@ def layout_issue_pages(wrapper: RunContextWrapper[APPState], series_id: str, iss
 
 
 @function_tool
-def stitch_issue_pages(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+async def stitch_issue_pages(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+    """
+    STITCH THE BOOK: lay every scene's panels, in reading order, onto pages
+    automatically — the studio's banding algorithm on the printed page's
+    6x10 unit grid (portrait panels lead tall bands beside stacked landscape
+    panels; pairs share rows; a lone wide panel becomes a splash).   Replaces
+    any existing page layout (the old one is snapshotted).   Use this for a
+    complete first layout in one step; layout_issue_pages remains the tool
+    for hand-designed page grids.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+
+    Returns:
+        A status message summarizing the stitched book.
+    """
+
+    return await asyncio.to_thread(_stitch_issue_pages_sync, wrapper, series_id, issue_id)
+
+
+def _stitch_issue_pages_sync(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
     """
     STITCH THE BOOK: lay every scene's panels, in reading order, onto pages
     automatically — the studio's banding algorithm on the printed page's
@@ -2190,7 +2494,22 @@ def render_prop_reference_body(state, series_id: str, prop_id: str, style_id: st
 
 
 @function_tool
-def generate_prop_reference(wrapper: RunContextWrapper[APPState], series_id: str, prop_id: str, style_id: str) -> str:
+async def generate_prop_reference(wrapper: RunContextWrapper[APPState], series_id: str, prop_id: str, style_id: str) -> str:
+    """
+    Render a prop's reference art in a comic style: the prop alone on a neutral
+    background, from a clear three-quarter view.   Stored on the prop keyed by
+    style; composited into settings, variant sheets, and panels that use it.
+
+    Args:
+        series_id: The series that owns the prop.
+        prop_id: The prop to render.
+        style_id: The comic style to render in.
+    """
+
+    return await asyncio.to_thread(_generate_prop_reference_sync, wrapper, series_id, prop_id, style_id)
+
+
+def _generate_prop_reference_sync(wrapper: RunContextWrapper[APPState], series_id: str, prop_id: str, style_id: str) -> str:
     """
     Render a prop's reference art in a comic style: the prop alone on a neutral
     background, from a clear three-quarter view.   Stored on the prop keyed by
@@ -2210,7 +2529,22 @@ def generate_prop_reference(wrapper: RunContextWrapper[APPState], series_id: str
 
 
 @function_tool
-def generate_outfit_reference(wrapper: RunContextWrapper[APPState], series_id: str, outfit_id: str, style_id: str) -> str:
+async def generate_outfit_reference(wrapper: RunContextWrapper[APPState], series_id: str, outfit_id: str, style_id: str) -> str:
+    """
+    Render an outfit's reference art in a comic style: the attire presented on
+    a neutral display form (no face, no identity), front and back.   Stored on
+    the outfit keyed by style; composited into variant reference sheets.
+
+    Args:
+        series_id: The series that owns the outfit.
+        outfit_id: The outfit to render.
+        style_id: The comic style to render in.
+    """
+
+    return await asyncio.to_thread(_generate_outfit_reference_sync, wrapper, series_id, outfit_id, style_id)
+
+
+def _generate_outfit_reference_sync(wrapper: RunContextWrapper[APPState], series_id: str, outfit_id: str, style_id: str) -> str:
     """
     Render an outfit's reference art in a comic style: the attire presented on
     a neutral display form (no face, no identity), front and back.   Stored on
@@ -2378,7 +2712,34 @@ This is a cut-out acetate to be layered over a background."""
 
 
 @function_tool
-def generate_figure_acetate(wrapper: RunContextWrapper, series_id: str, issue_id: str,
+async def generate_figure_acetate(wrapper: RunContextWrapper, series_id: str, issue_id: str,
+                            scene_id: str, panel_id: str, character_id: str, variant_id: str,
+                            pose_direction: Optional[str] = None) -> str:
+    """
+    Render a POSED FIGURE ACETATE for one character in one panel: a full-body,
+    transparent-background cut-out of the character posed for this panel's
+    moment, scaled for layering over the setting's master background on the
+    light table.   Use after casting a character into the panel, or to re-pose
+    a figure when the beat/blocking changes.
+
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the issue.
+        scene_id: The ID of the scene the panel belongs to.
+        panel_id: The ID of the panel.
+        character_id: The character to pose.
+        variant_id: The variant (wardrobe) they wear.
+        pose_direction: Optional explicit description of the pose/expression/action,
+            e.g. from the user; followed exactly when given.
+
+    Returns:
+        A status message with the acetate's locator.
+    """
+
+    return await asyncio.to_thread(_generate_figure_acetate_sync, wrapper, series_id, issue_id, scene_id, panel_id, character_id, variant_id, pose_direction)
+
+
+def _generate_figure_acetate_sync(wrapper: RunContextWrapper, series_id: str, issue_id: str,
                             scene_id: str, panel_id: str, character_id: str, variant_id: str,
                             pose_direction: Optional[str] = None) -> str:
     """
@@ -2861,7 +3222,35 @@ else must remain PIXEL-IDENTICAL — same composition, same style, same colors."
 
 
 @function_tool
-def split_layer(wrapper: RunContextWrapper, series_id: str, issue_id: str,
+async def split_layer(wrapper: RunContextWrapper, series_id: str, issue_id: str,
+                scene_id: str, panel_id: str, layer: str,
+                elements: Optional[list[str]] = None) -> str:
+    """
+    SPLIT one of a panel's layers into its constituent elements.   A vision
+    pass recognizes the entities on the layer (props, wardrobe, furniture,
+    signage...) and their bounds; each is lifted onto its own transparent
+    acetate placed where it was recognized, and the layer's base is repainted
+    with them removed — revealing what was beneath (splitting a character
+    lifts their props/garments off, revealing the character underneath).
+
+    Args:
+        series_id: The ID of the comic series.
+        issue_id: The ID of the issue.
+        scene_id: The ID of the scene the panel belongs to.
+        panel_id: The ID of the panel.
+        layer: 'background', a figure key 'character_id/variant_id', or an
+            'element/<slug>' key.
+        elements: Optional list of entity names to lift; when omitted, the
+            vision pass decides (at most 6, most prominent first).
+
+    Returns:
+        A status message listing the lifted acetates and the repainted base.
+    """
+
+    return await asyncio.to_thread(_split_layer_sync, wrapper, series_id, issue_id, scene_id, panel_id, layer, elements)
+
+
+def _split_layer_sync(wrapper: RunContextWrapper, series_id: str, issue_id: str,
                 scene_id: str, panel_id: str, layer: str,
                 elements: Optional[list[str]] = None) -> str:
     """
@@ -2964,7 +3353,26 @@ frame, no white margin.{chr(10) + format_comic_style(style, include_bubble_style
 
 
 @function_tool
-def generate_insert_art(wrapper: RunContextWrapper[APPState], series_id: str,
+async def generate_insert_art(wrapper: RunContextWrapper[APPState], series_id: str,
+                        issue_id: str, insert_id: str) -> str:
+    """
+    Render a full-page insert's art — a poster, ad, pin-up, mailbag or title
+    page, full-bleed in the issue's style, drawn from the insert's
+    description.
+
+    Args:
+        series_id: The ID of the series.
+        issue_id: The ID of the issue.
+        insert_id: The ID of the insert to render.
+
+    Returns:
+        A status message with the locator of the rendered art.
+    """
+
+    return await asyncio.to_thread(_generate_insert_art_sync, wrapper, series_id, issue_id, insert_id)
+
+
+def _generate_insert_art_sync(wrapper: RunContextWrapper[APPState], series_id: str,
                         issue_id: str, insert_id: str) -> str:
     """
     Render a full-page insert's art — a poster, ad, pin-up, mailbag or title
@@ -3033,7 +3441,31 @@ exemplar, not a scene.{(chr(10) + "THE AUTHOR'S DIRECTION: " + notes) if notes e
 
 
 @function_tool
-def generate_character_exemplar(wrapper: RunContextWrapper[APPState], series_id: str,
+async def generate_character_exemplar(wrapper: RunContextWrapper[APPState], series_id: str,
+                                character_id: str, variant_id: str,
+                                notes: Optional[str] = None) -> str:
+    """
+    Sculpt THE EXEMPLAR: one definitive three-quarter portrait of a character
+    variant, saved into the variant's uploads where it anchors every styled
+    reference sheet that follows.   Iterate here FIRST — cheaper and faster
+    than re-rendering multi-angle sheets — until the author says 'that's
+    them', then ink the sheets.
+
+    Args:
+        series_id: The ID of the series.
+        character_id: The character.
+        variant_id: The variant (look) to sculpt.
+        notes: The author's direction for this attempt ('rounder face',
+            'older eyes', 'less armor').  Optional.
+
+    Returns:
+        A status message with the exemplar's locator.
+    """
+
+    return await asyncio.to_thread(_generate_character_exemplar_sync, wrapper, series_id, character_id, variant_id, notes)
+
+
+def _generate_character_exemplar_sync(wrapper: RunContextWrapper[APPState], series_id: str,
                                 character_id: str, variant_id: str,
                                 notes: Optional[str] = None) -> str:
     """

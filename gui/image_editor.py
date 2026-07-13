@@ -48,10 +48,56 @@ def view_image_editor(state: APPState):
             ui.markdown(f"Image not found: `{image_locator}`").style("color: red;")
         return
 
+    if getattr(state, 'image_editor_image', None) != image_locator:
+        # a NEW image on the bench gets a fresh session (compare BEFORE
+        # assigning — the old order made this check dead code)
+        state.image_editor_session_id = uuid4().hex[:8]
     state.image_editor_image = image_locator
 
-    if state.image_editor_image != image_locator:
-        state.image_editor_session_id = uuid4().hex[:8]
+    # THE RECOVERY DOOR: takes from an earlier heal that were never claimed
+    # (a crash, a reload) wait in their manifest — offer them back instead
+    # of letting paid work rot invisibly beside the image
+    def _unclaimed_manifests():
+        import json as _json
+        out = []
+        folder = os.path.dirname(image_locator)
+        try:
+            for f in os.listdir(folder):
+                if not (f.startswith('.choices-') and f.endswith('.json')):
+                    continue
+                try:
+                    payload = _json.load(open(os.path.join(folder, f)))
+                except Exception:
+                    continue
+                if payload.get('image') != image_locator:
+                    continue
+                alive = [c for c in payload.get('choices', []) if os.path.exists(c)]
+                if alive:
+                    out.append((payload.get('written_at', 0),
+                                payload.get('session_id'), alive))
+        except OSError:
+            pass
+        out.sort()          # oldest first; [-1] is the newest heal
+        return out
+
+    unclaimed = _unclaimed_manifests()
+    if unclaimed:
+        _at, session_id, takes = unclaimed[-1]
+        with details:
+            def _reopen(sid=session_id, tk=takes):
+                state.image_editor_choices = tk
+                state.image_editor_choice_selected = tk[0]
+                state.image_editor_original_image = image_locator
+                from gui.selection import SelectionItem as _SI, SelectedKind as _SK
+                state.change_selection(new=[*state.selection, _SI(
+                    name="Choices", id=f"{sid}|{image_locator}",
+                    kind=_SK.IMAGE_EDITOR_CHOICES)])
+            ui.chip(f"{len(takes)} unclaimed take{'s' if len(takes) != 1 else ''} "
+                    f"from an earlier heal — open the choices sheet",
+                    icon='inventory').props('outline clickable') \
+                .tooltip('Paid work from a heal that was never picked — nothing is lost') \
+                .on('click', lambda _: _reopen())
+
     image_url = _image_path_to_url(image_locator)
     cache_buster = uuid4().hex[:8]
     image_url = f"{image_url}{'&' if '?' in image_url else '?'}v={cache_buster}"

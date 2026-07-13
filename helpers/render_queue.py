@@ -40,18 +40,26 @@ def _slip_burn(path: str) -> None:
         pass
 
 
-def orphaned_slips() -> list[str]:
+def orphaned_slips(older_than_seconds: float = 900) -> list[str]:
     """Labels of renders that were on the drawing board when the studio
-    last went down — call at startup and TELL the author."""
+    last went down — call at startup and TELL the author.
+
+    Only slips OLDER than the guard are burned: a second studio instance
+    (a verification run, a second window's server) must never eat the live
+    instance's work-in-flight.  A render longer than the guard is dead."""
     if not os.path.isdir(QUEUE_DIR):
         return []
     labels = []
+    now = time.time()
     for name in sorted(os.listdir(QUEUE_DIR)):
         path = os.path.join(QUEUE_DIR, name)
         try:
-            labels.append(json.load(open(path)).get("label", name))
+            payload = json.load(open(path))
         except (OSError, json.JSONDecodeError):
-            pass
+            continue
+        if now - payload.get("queued_at", 0) < older_than_seconds:
+            continue   # young: likely alive in another instance — leave it
+        labels.append(payload.get("label", name))
         _slip_burn(path)
     return labels
 
@@ -63,14 +71,20 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
     Args:
         state: the APPState (used for chat receipts + details refresh; both are
             best-effort so headless callers work too).
-        jobs: list of (label, job) where job is a synchronous callable that
-            performs one render and returns a status string.
+        jobs: list of (label, job) or (label, job, after) where job is a
+            synchronous callable that performs one render and returns a
+            status string, and `after(result)` (optional) runs back on the
+            event loop after success — the place for UI epilogues.
         role: the studio staff name that announces completions.
 
     Returns:
         The asyncio.Task (also stored on state._render_task for tests/inspection).
     """
     from nicegui import ui
+
+    # jobs may be (label, job) or (label, job, after) — normalize FIRST so
+    # every downstream unpack sees three fields
+    jobs = [(j[0], j[1], j[2] if len(j) > 2 else None) for j in jobs]
 
     # the header's drawing-board chip watches this list
     pending = getattr(state, '_render_pending', None)
@@ -80,8 +94,8 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
             state._render_pending = pending
         except Exception:
             pass
-    pending.extend(label for label, _ in jobs)
-    slips = {label: _slip_write(label) for label, _ in jobs}
+    pending.extend(label for label, _j, _a in jobs)
+    slips = {label: _slip_write(label) for label, _j, _a in jobs}
 
     def _announce(text: str, image: str | None = None):
         try:
@@ -102,11 +116,16 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
 
     async def run():
         done, failed = 0, 0
-        for i, (label, job) in enumerate(jobs, start=1):
+        for i, (label, job, after) in enumerate(jobs, start=1):
             _announce(f"⏳ **{label}** — on the drawing board… ({i}/{len(jobs)})")
             try:
                 result = await asyncio.to_thread(job)
                 done += 1
+                if after is not None:
+                    try:
+                        after(result)
+                    except Exception as ex:
+                        logger.warning(f"render-queue epilogue for '{label}' failed: {ex}")
                 try:
                     state._quota_warned = False   # ink flows again
                 except Exception:
@@ -132,7 +151,7 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                                   f"The rest of this batch is set aside; ask me to "
                                   f"re-run it once the account is topped up.")
                     failed += len(jobs) - i
-                    for skipped_label, _ in jobs[i:]:
+                    for skipped_label, _j, _a in jobs[i:]:
                         try:
                             pending.remove(skipped_label)
                         except ValueError:

@@ -11,11 +11,25 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
 
+def fixture_source() -> str:
+    """The test fixture is the DND NERDS house — pinned by slug, NOT the
+    open ./data symlink, so the author switching houses mid-session never
+    strands the suite in the wrong repo."""
+    try:
+        from storage import registry
+        for pub in registry.registered():
+            if pub["slug"] == "dnd-nerds-comics":
+                return pub["path"]
+    except Exception:
+        pass
+    return os.path.join(REPO, "data")
+
+
 @pytest.fixture()
 def tmp_data():
     """A disposable copy of the data directory; yields its path."""
     tmp = tempfile.mkdtemp()
-    shutil.copytree(os.path.join(REPO, "data"), os.path.join(tmp, "data"))
+    shutil.copytree(fixture_source(), os.path.join(tmp, "data"))
     yield os.path.join(tmp, "data")
     shutil.rmtree(tmp, ignore_errors=True)
 

@@ -93,17 +93,29 @@ SPEND_LEDGER = os.path.join("data", ".spend.json")
 EST_COST = {"low": 0.02, "medium": 0.07, "high": 0.19}
 
 
-def record_spend(quality: str) -> None:
+_SPEND_LOCK = None
+
+
+def record_spend(quality: str, images: int = 1) -> None:
     import json as _json
     import time as _time
+    import threading as _threading
+    global _SPEND_LOCK
+    if _SPEND_LOCK is None:
+        _SPEND_LOCK = _threading.Lock()
     try:
+      with _SPEND_LOCK:
         ledger = {}
         if os.path.exists(SPEND_LEDGER):
-            ledger = _json.load(open(SPEND_LEDGER))
+            try:
+                ledger = _json.load(open(SPEND_LEDGER))
+            except (ValueError, OSError):
+                ledger = {}   # a torn ledger heals instead of killing the meter
         day = _time.strftime("%Y-%m-%d")
         ledger.setdefault(day, {})
-        ledger[day][quality] = ledger[day].get(quality, 0) + 1
-        tmp = SPEND_LEDGER + ".tmp"
+        ledger[day][quality] = ledger[day].get(quality, 0) + max(1, int(images))
+        from uuid import uuid4 as _uuid4
+        tmp = f"{SPEND_LEDGER}.{_uuid4().hex[:6]}.tmp"
         with open(tmp, "w") as f:
             _json.dump(ledger, f, indent=1)
         os.replace(tmp, SPEND_LEDGER)
@@ -163,7 +175,7 @@ def invoke_generate_image_api(
             moderation="low",
             quality= quality.name.lower(),
         )
-        record_spend(quality.name.lower())
+        record_spend(quality.name.lower(), images=n)
         if n == 1:
             return decode_image_response(response)
         return decode_image_responses(response)
@@ -223,7 +235,7 @@ def invoke_edit_image_api(
     except Exception as e:
         logger.error(f"Error invoking OpenAI image edit API: {e}")
         _reraise_plain(e)
-    record_spend(quality.name.lower())
+    record_spend(quality.name.lower(), images=n)
 
     if n == 1:
         return decode_image_response(response)
