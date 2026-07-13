@@ -817,7 +817,7 @@ def view_issue(state: APPState):
                 # way text reflows across lines — turning, resizing, or moving
                 # a panel carries neighbors onto the next or previous page.
                 # Bare scenes and inserts hold their place as full pages.
-                from helpers.stitcher import pack_bands, paginate, justify, AR
+                from helpers.stitcher import flow_run, AR
                 segments, run = [], []
 
                 def flush():
@@ -828,8 +828,11 @@ def view_issue(state: APPState):
                 for sc in scenes_all:
                     panels = panels_by_scene[sc.scene_id]
                     if panels:
+                        # (key, AR float, size, aspect NAME, locked) — flow_run reads [3:]
                         run += [((sc.scene_id, p.panel_id), AR.get(p.aspect.value, 1.5),
-                                 getattr(p, 'size', None) or '1x') for p in panels]
+                                 getattr(p, 'size', None) or '1x',
+                                 p.aspect.value, bool(getattr(p, 'shape_locked', False)))
+                                for p in panels]
                     else:
                         flush()
                         segments.append(('manuscript', sc))
@@ -912,10 +915,10 @@ def view_issue(state: APPState):
                                            max(10.0, max(c.y + c.h for c in part.cells)),
                                            pinned_pm=part)
                                 continue
-                            band_pages = paginate(pack_bands(part))
-                            for pi, pb in enumerate(band_pages):
-                                cells = justify(pb, is_last=(pi == len(band_pages) - 1))
-                                grid_h = max(10.0, max(y + h for _k, _x, y, _w, h in cells))
+                            # THE ONE FLOW: exact-fill (band fallback) — the same
+                            # helper the print binder uses, so screen and book agree
+                            run_pages, _note = flow_run(part)
+                            for cells, grid_h in run_pages:
                                 flow_sheet(cells, grid_h)
                     elif kind == 'slips':
                         # bare scenes hold their place but don't PRINT —

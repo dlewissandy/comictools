@@ -58,15 +58,18 @@ class GenericStorage(ABC):
         pass
 
     @abstractmethod
-    def delete_object(self, cls: BaseModel, primary_key: dict[str,str]) -> Optional[BaseModel]:
+    def delete_object(self, cls: BaseModel, primary_key: dict[str,str],
+                      soft: bool = True) -> Optional[BaseModel]:
         """
         Delete an object from a file.   If it existed, then return the object so
         that it could be used for further processing (e.g. logging, undoing, unlinking, etc).
 
         Args:
-            filepath (str): The path to the file containing the object.
-            delete_folder (bool): Whether to delete the folder containing the object. Defaults to True.
             cls (BaseModel): The class of the object to be deleted.
+            primary_key: The object's primary key.
+            soft: True routes the delete through the wastebasket (recoverable).
+                False HARD-removes it — for DERIVED data (layout pages) that must
+                never bury a real delete's undo behind trash churn.
         """
         pass
 

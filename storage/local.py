@@ -300,28 +300,38 @@ class LocalStorage(GenericStorage):
         os.fsync(fs_dir)
         os.close(fs_dir)
 
-    def delete_object(self, cls: BaseModel, primary_key: dict[str,str]) -> Optional[BaseModel]:
+    def delete_object(self, cls: BaseModel, primary_key: dict[str,str],
+                      soft: bool = True) -> Optional[BaseModel]:
         """
         Delete an object from a file.   If it existed, then return the object so
         that it could be used for further processing (e.g. logging, undoing, unlinking, etc).
 
         Args:
-            filepath (str): The path to the file containing the object.
-            delete_folder (bool): Whether to delete the folder containing the object. Defaults to True.
             cls (BaseModel): The class of the object to be deleted.
+            primary_key: The object's primary key.
+            soft: True routes the delete through the wastebasket (recoverable).
+                False HARD-removes it — for DERIVED data (layout pages) that must
+                never bury a real delete's undo behind trash churn.
         """
-        
+
         logger.trace(f"Deleting {cls.__name__} with primary key: {primary_key}")
         instance = self.read_object(cls=cls, primary_key=primary_key)
         logger.debug(f"Instance to delete: {instance}")
         if instance is None:
             logger.debug(f"File {cls.__name__} does not exist. Cannot delete.")
             return None
-        
+
         filepath = obj_to_filepath(instance, base_path=self.base_path)
-        logger.debug(f"Soft-deleting {os.path.dirname(filepath)}")
-        from storage.trash import soft_delete
-        soft_delete(str(self.base_path), os.path.dirname(filepath), note=cls.__name__)
+        if soft:
+            logger.debug(f"Soft-deleting {os.path.dirname(filepath)}")
+            from storage.trash import soft_delete
+            soft_delete(str(self.base_path), os.path.dirname(filepath), note=cls.__name__)
+        else:
+            # DERIVED DATA: hard-remove so re-flowed layout pages never churn the
+            # wastebasket and bury a real delete's undo
+            import shutil
+            logger.debug(f"Hard-deleting {os.path.dirname(filepath)}")
+            shutil.rmtree(os.path.dirname(filepath), ignore_errors=True)
 
         # sync the grandparent folder
         grandparent_path = os.path.dirname(os.path.dirname(filepath))

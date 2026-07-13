@@ -29,6 +29,18 @@ from schema import Page, PanelCell, PanelRef
 
 PAGE_UNITS_W, PAGE_UNITS_H = 6.0, 10.0
 AR = {"landscape": 1.5, "portrait": 2 / 3, "square": 1.0}
+
+# THE ADVISORY NOTE: when the exact-fill auto-flow can't tile a run and falls
+# back to the band flow, the reason is stashed here (keyed by issue) so the
+# reading view can show a non-blocking banner.  Transient by design — it is
+# recomputed on every stitch, and a clean flow clears it.
+_LAYOUT_NOTES: dict[tuple, str] = {}
+
+
+def layout_note(series_id: str, issue_id: str) -> str | None:
+    """The latest 'couldn't make an exact-fill layout' reason for this issue,
+    or None when the whole book flowed exactly."""
+    return _LAYOUT_NOTES.get((series_id, issue_id))
 GAP_MAX = 0.5   # slack becomes gutters between bands, up to this much each
 
 
@@ -235,6 +247,49 @@ def flow_with_pins(seg: list[tuple], pins: list[Page],
     return out
 
 
+def flow_run(part: list) -> tuple[list[tuple[list, float]], str | None]:
+    """Flow ONE un-pinned run of panels into pages — the ONE way both the print
+    binder and the reading view lay them out, so screen and book never drift.
+
+    `part` items are (key, aspect-ratio float, size, aspect NAME, locked).
+    Returns (pages, note): pages is [(cells, grid_h)] with cells [(key, x, y, w, h)]
+    in 6x10 page units; note is the fallback reason (band flow) or None (exact-fill).
+
+    EXACT-FILL first — the beat-shapes drive it, locked panels keep their shape,
+    the rest flex to gapless pages, and the solver picks the breaks.  When a run
+    can't tile (too few panels, a lock dead-end) it falls back to the band flow so
+    the book still binds; the note says why."""
+    from helpers.pagination import LayoutImpossible, paginate as exact_paginate
+    try:
+        flow = exact_paginate([{"aspect": it[3], "size": it[2], "locked": it[4]}
+                               for it in part])
+    except LayoutImpossible as ex:
+        out = []
+        band_pages = paginate(pack_bands(part))
+        for pi, pb in enumerate(band_pages):
+            cells = justify(pb, is_last=(pi == len(band_pages) - 1))
+            grid_h = max(10.0, max((y + h for _k, _x, y, _w, h in cells), default=10.0))
+            out.append((cells, grid_h))
+        return out, str(ex)
+    out = []
+    for ep in flow:
+        keys = [part[i][0] for i in ep["indices"]]
+        cells = [(k, float(x), float(y), float(w), float(h))
+                 for k, (x, y, w, h) in zip(keys, ep["pieces"])]
+        out.append((cells, PAGE_UNITS_H))   # exact-fill fills the full 6x10 page
+    return out, None
+
+
+def _rows_from_cells(cells: list) -> list:
+    """Group a page's cells into tier rows (same y), each in reading order."""
+    rows_map: dict = {}
+    for k, x, y, _w, _h in cells:
+        rows_map.setdefault(round(float(y), 3), []).append((k, x))
+    return [[PanelRef(scene_id=k[0], panel_id=k[1])
+             for k, _x in sorted(v, key=lambda t: t[1])]
+            for _y, v in sorted(rows_map.items())]
+
+
 def stitch_pages(storage, series_id: str, issue_id: str) -> list[Page]:
     """Pack EVERY scene's panels, in reading order, onto pages.  The flow
     breaks exactly where the open book breaks it — at a bare scene holding
@@ -249,8 +304,12 @@ def stitch_pages(storage, series_id: str, issue_id: str) -> list[Page]:
     segments, run = [], []
     for scene, panels in _reading_order(storage, series_id, issue_id):
         if panels:
+            # (key, aspect-ratio float [band flow], size, aspect NAME + locked
+            # [exact-fill flow]) — pack_bands reads [:3], the solver reads [3:]
             run += [((p.scene_id, p.panel_id), AR.get(p.aspect.value, 1.5),
-                     getattr(p, 'size', None) or '1x') for p in panels]
+                     getattr(p, 'size', None) or '1x',
+                     p.aspect.value, bool(getattr(p, 'shape_locked', False)))
+                    for p in panels]
         if (not panels or scene.scene_number in anchors) and run:
             segments.append(run)
             run = []
@@ -258,6 +317,8 @@ def stitch_pages(storage, series_id: str, issue_id: str) -> list[Page]:
         segments.append(run)
     if not segments:
         return []
+
+    _LAYOUT_NOTES.pop((series_id, issue_id), None)   # a fresh stitch, a fresh note
 
     pins = alive_pins(storage, series_id, issue_id)
     pages, n, emitted = [], 0, set()
@@ -271,18 +332,20 @@ def stitch_pages(storage, series_id: str, issue_id: str) -> list[Page]:
                     page_id=f"page-{n}", issue_id=issue_id, series_id=series_id,
                     page_number=n, rows=part.rows, cells=part.cells, pinned=True))
                 continue
-            band_pages = paginate(pack_bands(part))
-            for pi, pb in enumerate(band_pages):
+
+            # THE ONE FLOW: exact-fill when it tiles, band flow as fallback —
+            # the SAME helper the reading view calls, so screen and book agree
+            run_pages, note = flow_run(part)
+            if note:
+                _LAYOUT_NOTES[(series_id, issue_id)] = note
+            for cells, _grid_h in run_pages:
                 n += 1
-                cells_abs = justify(pb, is_last=(pi == len(band_pages) - 1))
                 pages.append(Page(
                     page_id=f"page-{n}", issue_id=issue_id, series_id=series_id,
-                    page_number=n,
-                    rows=[[PanelRef(scene_id=k[0], panel_id=k[1]) for k, *_ in b["cells"]]
-                          for b in pb],
+                    page_number=n, rows=_rows_from_cells(cells),
                     cells=[PanelCell(scene_id=k[0], panel_id=k[1], x=round(x, 3), y=round(y, 3),
                                      w=round(w, 3), h=round(h, 3))
-                           for k, x, y, w, h in cells_abs]))
+                           for k, x, y, w, h in cells]))
     return pages
 
 
@@ -305,7 +368,7 @@ def apply_stitch(storage, series_id: str, issue_id: str) -> tuple[list[Page], li
         except OSError as ex:
             logger.warning(f"layout snapshot skipped: {ex}")
     for old in old_pages:
-        storage.delete_object(cls=Page, primary_key=old.primary_key)
+        storage.delete_object(cls=Page, primary_key=old.primary_key, soft=False)
     for page in new_pages:
         storage.create_object(data=page, overwrite=True)
     return new_pages, old_pages
@@ -335,7 +398,7 @@ def remember_stitch(storage, series_id: str, issue_id: str) -> None:
     fresh_ids = {p.page_id for p in fresh}
     for old in stored:
         if old.page_id not in fresh_ids:
-            storage.delete_object(cls=Page, primary_key=old.primary_key)
+            storage.delete_object(cls=Page, primary_key=old.primary_key, soft=False)
     logger.info(f"remembered the stitched layout for {issue_id} ({len(fresh)} pages)")
 
 

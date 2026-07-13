@@ -54,14 +54,17 @@ def test_bind_appends_rendered_leftovers_instead_of_dropping(storage, tmp_path):
     p.image = art
     storage.update_object(p)
 
-    n_layout_pages = len(storage.read_all_objects(Page, {"series_id": WL, "issue_id": CARN}))
     out = str(tmp_path / "book.pdf")
     page_count, missing = bind_issue_pdf(storage, WL, CARN, out)
     assert os.path.exists(out)
     # ONE BOOK EVERYWHERE: composing now re-stitches a drifted machine
     # layout FIRST, so the leftover lands ON a page — placed, not merely
-    # rescued onto an overflow sheet, and never silently dropped
-    assert page_count >= n_layout_pages + 3
+    # rescued onto an overflow sheet, and never silently dropped.  Exact-fill
+    # packs denser, so assert against the FRESH interior count plus covers,
+    # not the stale stored page count.
+    from helpers.stitcher import stitch_pages
+    interior = len(stitch_pages(storage, WL, CARN))
+    assert page_count >= interior + 2
     assert not any("on NO page" in m for m in missing), \
         "the drift heals at the composition door"
     from helpers.binder import page_coverage

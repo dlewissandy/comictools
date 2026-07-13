@@ -18,6 +18,7 @@ class Panel(BaseModel):
     description: str = Field(..., description="A detailed visual description of the image in the panel.   This should describe the image in sufficient detail so that different artists could from this information alone reproduce the same image.   This should include the setting, foreground, background, characters, props, scenery and any other elements in the panel.")
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to square")
     size: str = Field(default="1x", description="How big the panel prints, as a multiplier: '1x' or '2x' for landscape and portrait, '1x'/'2x'/'3x' for square.  A 2x panel commands its own band instead of pairing.  Default to '1x'.")
+    shape_locked: bool = Field(default=False, description="When True, the auto-flow layout MUST honor this panel's exact aspect+size (the beat pinned it); when False, the flow may flex the panel's shape to complete a gapless page.  Default False.")
 
     @field_validator("size", mode="before")
     @classmethod
