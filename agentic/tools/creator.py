@@ -152,10 +152,13 @@ def create_publisher(wrapper: RunContextWrapper[APPState], name: str, descriptio
                 "name before founding.  Ask the author what the house is called "
                 "(or point them at the + on the publishers wall, which also "
                 "lets them pick where the repo lives).")
-    if _registry.registered():
-        # EVERY HOUSE ITS OWN REPO: founding a publisher founds a git repo
-        # (at ~/git/<slug>-comics by default) carrying the studio's default
-        # styles; the wall's + offers a folder picker for other locations
+    _storage = wrapper.context.storage
+    if str(getattr(_storage, "base_path", "")) == _registry.DATA_DIR:
+        # EVERY HOUSE ITS OWN REPO: on the mount rack, founding a publisher
+        # founds a git repo (at ~/git/<slug>-comics by default) carrying the
+        # studio's default styles — ESPECIALLY on an empty registry, where a
+        # bare record would be invisible the moment a real house appears.
+        # (A fixture/repo-rooted storage still gets a plain record below.)
         import os as _os
         import re as _re
         slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "new-house"
@@ -163,7 +166,10 @@ def create_publisher(wrapper: RunContextWrapper[APPState], name: str, descriptio
         if _os.path.exists(target):
             return (f"A folder already exists at {target} — use the + on the "
                     f"publishers wall to pick where the house should live.")
-        _registry.found_house(normalize_name(name), target)
+        try:
+            _registry.found_house(normalize_name(name), target)
+        except Exception as ex:
+            return (f"Could not found the house: {ex}")
         if description:
             from storage.local import LocalStorage as _LS
             pubs = _LS(base_path=target).read_all_objects(Publisher)

@@ -1,0 +1,70 @@
+{
+ "style_id": "conte-crayon",
+ "name": "Conte Crayon",
+ "description": "Conte crayon is a unique artistic medium characterized by a blend of clay, graphite, and pigments, shaped into a stick form. Artists favor it for its versatility, allowing for both fine lines and broad strokes that express a wide range of emotions and textures. The medium has a rich, deep color quality, commonly used for sketching and life drawing, making it ideal for portraits and figure studies.\n\nTo replicate the conte crayon style, begin with a smooth, sturdy paper that can hold the medium's pigments effectively. The four typical colors to use are sanguine, bistre, black, and white. Sanguine provides a warm, reddish-brown tone, often used for flesh tones. Bistre offers a dark brown for deep shadows, while black is employed for bold outlines and high contrast. White can be used to create highlights, providing a stark contrast against darker shades and helping to bring your artwork to life.\n\nStart by sketching the basic outlines of your subject lightly, utilizing the excavated edges of the conte stick to create smooth lines. Gradually layer your colors, allowing the organic nature of the medium to dictate the transition between light and shadow. For shading, employ cross-hatching and gentle smudging techniques to blend the colors effectively. This interaction between smooth and textured areas is vital for achieving the vibrant, organic feel typical of conte crayon artwork.\n\nAdd highlights using lighter shades of sanguine or white to emphasize specific areas, enhancing dimensionality. Embrace quick, expressive strokes to capture dynamic movement or emotional intensity, as these imperfections lend character to the work. By leveraging the inherent qualities of conte crayon along with layered application, artists can create impactful pieces that resonate with a lively, organic essence.",
+ "art_style": {
+  "line_styles": "No inked lines, only soft, flowing lines created with conte crayon.  Lines are often broken or sketchy to enhance the organic feel.",
+  "inking_tools": "Conte crayon, with occasional use of graphite for depth and shading.",
+  "shading_style": "Soft, crosshatched shading that builds texture and depth, complemented by areas of flat color to enhance contrast.",
+  "color_palette": "Black, white, sanguine (redish-brown) and Bistre (dark brown).  Toothy paper texture to enhance the organic feel",
+  "spot_colors": "colored paper in matte pastel colors can be used as background.",
+  "registration": "Loose registration to allow for a natural, hand-drawn look without strict alignment.",
+  "lettering_style": "Handwritten font style that mimics natural writing, varying in size and weight to match the tone of dialogue."
+ },
+ "character_style": {
+  "head_to_body_ratio": "1:6 for a whimsical, exaggerated appearance.",
+  "limb_proportions": "Proportions are slightly exaggerated with long, thin limbs to enhance expressiveness.",
+  "anatomy_detail": "Stylized anatomy with minimal muscular detail, focusing instead on gesture and movement.",
+  "eye_style": "Large, expressive eyes with simple circular shapes to convey emotion.",
+  "nose_style": "Simple, understated lines for noses, often just a small curve or dot.",
+  "mouth_style": "Wide, expressive mouths that can shift to convey a range of emotions with minimal lines.",
+  "expression_exaggeration": "High exaggeration for facial expressions to enhance comedic or dramatic effect.",
+  "silhouette_clarity": "High clarity with strong outlines to ensure characters stand out against backgrounds.",
+  "silhouette_shape_language": "Organic curves and fluid shapes that match the whimsical nature of the style.",
+  "detail_complexity": "Moderate detail focused on facial expressions and key features, with simpler body shapes.",
+  "texture_accents": "Subtle textures added with crayon strokes to suggest fabric and surfaces.",
+  "motion_line_style": "Soft, swirling lines to indicate movement and action, enhancing the dynamic feel.",
+  "expression_line_style": "Minimal use of emotional accent lines, focusing on facial expressions instead.",
+  "signature_motifs": "Curvy, whimsical elements that reflect the playful nature of the style.",
+  "recurring_flourishes": "Scribble-like accents around action or emotional moments, adding to the playful aesthetic."
+ },
+ "bubble_styles": {
+  "chat": {
+   "shape": "Rounded rectangles with soft edges, reflecting the organic nature of the art style.",
+   "border": "Thin, hand-drawn outline that complements the sketchy aesthetic.",
+   "fill_color": "Light cream or pastel background to contrast with the text.",
+   "font": "Handwritten font that mimics the flow of speech."
+  },
+  "whisper": {
+   "shape": "Slightly smaller rounded rectangles with a wavy edge for a gentle effect.",
+   "border": "Fainter line, maintaining the hand-drawn feel.",
+   "fill_color": "Very light gray for subtlety.",
+   "font": "Faint, smaller handwritten font."
+  },
+  "shout": {
+   "shape": "Jagged, comic-style bursts to emphasize loudness.",
+   "border": "Thicker, bold outline to indicate intensity.",
+   "fill_color": "Bright yellow or red to grab attention.",
+   "font": "Bold, capitalized handwritten font."
+  },
+  "thought": {
+   "shape": "Cloud-like shapes with a wispy tail.",
+   "border": "Soft, thin outline that merges with the fill color.",
+   "fill_color": "Pale blue or light gray for a dreamy effect.",
+   "font": "Handwritten font that mimics the flow of speech."
+  },
+  "sound_effect": {
+   "shape": "Dynamic, explosive shapes (e.g., 'BANG', 'WHOOSH').",
+   "border": "Thick, bold outline for emphasis.",
+   "fill_color": "Bright colors like red or orange to convey energy.",
+   "font": "Bold, stylized font that captures the sound's essence."
+  },
+  "narration": {
+   "shape": "Simple rectangles with softer corners. Anchored to top or bottom of frame. No protrusions or tail",
+   "border": "plain",
+   "fill_color": "light gray",
+   "font": "Arial, 12pt"
+  }
+ },
+ "image": {}
+}

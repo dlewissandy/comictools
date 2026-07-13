@@ -102,6 +102,15 @@ def found_house_dialog(state: APPState):
                 chosen['dir'] = d.rstrip('/')
                 chosen['existing'] = registry.looks_like_house(chosen['dir'])
                 _describe()
+            elif d.strip():
+                # a path that doesn't exist yet is where the house WILL
+                # live — take it, say so, and create it at founding
+                chosen['dir'] = d.rstrip('/')
+                chosen['existing'] = False
+                chosen['create'] = True
+                _describe()
+                status.set_text(f"{chosen['dir']} doesn't exist yet — "
+                                f"it will be created when you found the house.")
         manual.on('change', lambda _: manual_changed())
         name.on('change', lambda _: _describe())
 
@@ -127,7 +136,9 @@ def found_house_dialog(state: APPState):
                     ui.notify('Give the house a name.', type='warning')
                     return
                 import re
-                target = d if not os.listdir(d) else os.path.join(
+                # a not-yet-existing folder founds directly there (created
+                # by the founding); an occupied one gets a child repo
+                target = d if (not os.path.isdir(d) or not os.listdir(d)) else os.path.join(
                     d, re.sub(r'[^a-z0-9]+', '-', nm.lower()).strip('-') + '-comics')
                 try:
                     slug = registry.found_house(nm, target)

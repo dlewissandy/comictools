@@ -170,3 +170,49 @@ def test_cross_house_style_edits_stay_home(sandbox):
     bare = [SelectionItem(name="Test", id="test-style", kind=SelectedKind.STYLE)]
     assert house_for_selection(bare) in ("alpha-comics", "beta-comics"), \
         "a bare style id still finds a holder (first mounted hit)"
+
+
+def test_founding_falls_back_to_the_app_bundle(sandbox, tmp_path, monkeypatch):
+    """A FRESH MACHINE: no ~/.comic-studio template, no sister house — the
+    app's own bundled template dresses the first house, never styleless."""
+    tmp, _tpl = sandbox
+    monkeypatch.setattr(registry, "HOUSE_TEMPLATE", str(tmp_path / "no-such-template"))
+    target = tmp / "first-house-comics"
+    registry.mount_all()
+    slug = registry.found_house("First House", str(target))
+    assert slug
+    styles = list((target / "styles").glob("*/style.json"))
+    assert styles, "the bundled template dressed the house"
+    import json as _json
+    d = _json.load(open(styles[0]))
+    assert d.get("image") in ({}, None), "no dangling art paths in a fresh house"
+    assert (target / "prompts").is_dir(), "prompts ride along"
+
+
+def test_founding_refuses_loudly_without_any_styles_source(sandbox, tmp_path, monkeypatch):
+    tmp, _tpl = sandbox
+    monkeypatch.setattr(registry, "HOUSE_TEMPLATE", str(tmp_path / "no-such-template"))
+    # blind the app bundle too by pointing __file__-derived path away
+    real = os.path.isdir
+    def fake_isdir(p):
+        if os.path.join("templates", "house") in str(p):
+            return False
+        return real(p)
+    monkeypatch.setattr(os.path, "isdir", fake_isdir)
+    with pytest.raises(RuntimeError, match="cannot found a house without its styles"):
+        registry.found_house("Styleless House", str(tmp / "styleless-comics"))
+
+
+def test_founding_survives_a_missing_git_identity(sandbox, tmp_path, monkeypatch):
+    """A first-time author has no user.name/user.email — the founding commit
+    falls back to a studio identity instead of failing raw."""
+    tmp, tpl = sandbox
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "empty-gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", str(tmp_path / "empty-gitconfig2"))
+    target = tmp / "anon-house-comics"
+    registry.mount_all()
+    slug = registry.found_house("Anon House", str(target), template_dir=tpl)
+    assert slug
+    log = subprocess.run(["git", "log", "--oneline"], cwd=target,
+                         capture_output=True, text=True)
+    assert "FOUNDING THE HOUSE" in log.stdout, "the founding commit landed"

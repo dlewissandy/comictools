@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 import os
 
+from loguru import logger
+
 REGISTRY_PATH = os.path.expanduser(os.path.join("~", ".comic-studio", "publishers.json"))
 DATA_DIR = "data"
 
@@ -233,18 +235,27 @@ def found_house(name: str, target_dir: str, template_dir: str | None = None) -> 
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "new-house"
     os.makedirs(os.path.join(target_dir, "series"), exist_ok=True)
     template_dir = template_dir or HOUSE_TEMPLATE
+    # the app ships a template of its own (style definitions, prompts,
+    # references) so a FRESH machine's first house is never styleless
+    bundled = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "templates", "house")
     for sub in ("styles", "prompts", "references"):
-        src = os.path.join(template_dir, sub)
         dst = os.path.join(target_dir, sub)
-        if os.path.isdir(src) and not os.path.isdir(dst):
-            shutil.copytree(src, dst)
-        elif not os.path.isdir(dst):
-            # no template on this machine: a sister house lends its copies
-            houses = registered()
-            fallback = (os.path.join(os.path.realpath(os.path.expanduser(houses[0]["path"])), sub)
-                        if houses else None)
-            if fallback and os.path.isdir(fallback):
-                shutil.copytree(fallback, dst)
+        if os.path.isdir(dst):
+            continue
+        houses = registered()
+        sister = (os.path.join(os.path.realpath(os.path.expanduser(houses[0]["path"])), sub)
+                  if houses else None)
+        for src in (os.path.join(template_dir, sub), sister, os.path.join(bundled, sub)):
+            if src and os.path.isdir(src):
+                shutil.copytree(src, dst)
+                break
+    if not os.path.isdir(os.path.join(target_dir, "styles")):
+        # REFUSE LOUDLY: the receipt promises 'the studio's default styles' —
+        # founding a styleless house would make every first render a lie
+        raise RuntimeError(
+            "No styles source found (machine template, sister house, or app "
+            "bundle) — cannot found a house without its styles.")
     LocalStorage(base_path=target_dir).create_object(
         Publisher(publisher_id=slug, name=name, description=None, logo=None))
     with open(os.path.join(target_dir, ".gitignore"), "w") as f:
@@ -252,8 +263,21 @@ def found_house(name: str, target_dir: str, template_dir: str | None = None) -> 
     if not os.path.isdir(os.path.join(target_dir, ".git")):
         subprocess.run(["git", "init", "-b", "main", "-q"], cwd=target_dir, check=True)
         subprocess.run(["git", "add", "-A"], cwd=target_dir, check=True)
-        subprocess.run(["git", "commit", "-q", "-m",
-                        f"FOUNDING THE HOUSE: {name} — the studio's default styles, "
-                        f"prompts and references, ready for its first series"],
-                       cwd=target_dir, check=True)
+        # a first-time author may have no git identity — the founding
+        # commit must not fail raw (and the house registers regardless;
+        # the commit can always be made later)
+        ident = []
+        probe = subprocess.run(["git", "config", "user.name"], cwd=target_dir,
+                               capture_output=True, text=True)
+        if not (probe.stdout or "").strip():
+            ident = ["-c", "user.name=Comic Studio",
+                     "-c", "user.email=studio@comic-studio.local"]
+        try:
+            subprocess.run(["git", *ident, "commit", "-q", "-m",
+                            f"FOUNDING THE HOUSE: {name} — the studio's default styles, "
+                            f"prompts and references, ready for its first series"],
+                           cwd=target_dir, check=True)
+        except subprocess.CalledProcessError as ex:
+            logger.warning(f"founding commit deferred ({ex}) — the house still registers; "
+                           f"commit when git is configured")
     return register(target_dir)

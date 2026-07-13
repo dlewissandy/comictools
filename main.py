@@ -647,6 +647,14 @@ def init_layout(logger):
         with ui.column().classes('w-full').style('gap: 2px;'):
             suggestions_row = ui.row().classes('w-full').style('gap: 6px; min-height: 0;')
             input_row = ui.row().classes('w-full flex-nowrap items-center')
+    if not os.getenv('OPENAI_API_KEY'):
+        # VOLUNTEER THE TRUTH before the first message can fail in jargon
+        with ui.row().classes('w-full items-center q-px-md q-py-xs').style(
+                'background: rgba(243, 193, 75, .15); border-top: 1px solid rgba(243, 193, 75, .5); gap: 8px;'):
+            ui.icon('key').classes('text-amber-8')
+            ui.label("The studio needs its OpenAI key before the coauthors can speak or draw — "
+                     "put OPENAI_API_KEY=sk-… in a .env file beside the app and restart.") \
+                .classes('text-sm')
     with input_row:
         placeholder = "message"
         # A MANUSCRIPT-SIZED MOUTH: the Editor invites pasting a whole
