@@ -78,7 +78,40 @@ def view_publisher(state: APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(publisher.name.title(), 0)
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current publisher."),size=1)
+            def retire_house(_=None):
+                # deleting a publisher UN-REGISTERS its repo — the disk is
+                # never touched; the house can always rejoin the rack
+                from storage import registry
+                # viewing a publisher means its house is the open one
+                house = next((h for h in registry.registered()
+                              if h['slug'] == registry.open_slug()), None)
+                if house is None:
+                    post_user_message(state, "I would like to delete the current publisher.")
+                    return
+                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 440px;'):
+                    ui.label('RETIRE THIS HOUSE?').classes('caption-box caption-box-sm')
+                    ui.label(f"{publisher.name} leaves the rack.  Its repository stays "
+                             f"untouched on disk at {house['path']} — nothing is deleted, "
+                             f"and it can rejoin any time.").classes('text-sm q-mt-sm')
+                    with ui.row().classes('w-full justify-end q-mt-sm').style('gap: 8px;'):
+                        ui.button('Keep it').props('flat dense no-caps').on('click', lambda _: dlg.close())
+
+                        def go():
+                            if registry.unregister(house['slug']):
+                                dlg.close()
+                                ui.notify(f"{publisher.name} retired — the repo stays at "
+                                          f"{house['path']}.", type='info')
+                                from gui.selection import SelectionItem, SelectedKind
+                                state.change_selection(new=[SelectionItem(
+                                    name='Publishers', id=None, kind=SelectedKind.ALL_PUBLISHERS)])
+                            else:
+                                ui.notify('The studio must always stand somewhere — '
+                                          'open another house before retiring this one.',
+                                          type='warning')
+                        ui.button('Retire the house', icon='logout').props('unelevated dense no-caps') \
+                            .on('click', lambda _: go())
+                dlg.open()
+            crud_button(kind=CrudButtonKind.DELETE, action=retire_house, size=1)
 
 
         # Below that we have a full width row for editing the publisher's description

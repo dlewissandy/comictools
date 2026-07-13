@@ -62,6 +62,20 @@ def delete_publisher(wrapper: RunContextWrapper[APPState], publisher_id: str) ->
     Returns:
         A status message indicating the result of the deletion.
     """
+    from storage import registry as _registry
+    if _registry.registered():
+        # EVERY HOUSE ITS OWN REPO: deleting a publisher RETIRES its repo
+        # from the rack — the disk is never touched
+        from storage.local import LocalStorage as _LS
+        for h in _registry.registered():
+            recs = _LS(base_path=h["path"]).read_all_objects(Publisher)
+            if any(r.publisher_id == publisher_id for r in recs):
+                if _registry.unregister(h["slug"]):
+                    return (f"Retired the house — its repository stays untouched at "
+                            f"{h['path']} and can rejoin the rack any time.")
+                return ("The studio must always stand somewhere — open another "
+                        "house before retiring this one.")
+        return f"No registered house matches '{publisher_id}'."
     pk = {"publisher_id": publisher_id}
 
     return deleter(wrapper=wrapper, cls=Publisher, primary_key=pk)

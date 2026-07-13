@@ -119,9 +119,19 @@ async def test_conversations_persist_per_object(user: User, api_alive) -> None:
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
 async def test_asset_catalog_drawer(user: User) -> None:
-    """The Assets button summons the visual catalog on any view."""
+    """The Assets button lives where the drawer can act — the open book and
+    the benches — and stays hidden everywhere else."""
     main.LocalStorage = _TmpStorage
     json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    hidden = [e for e in user.client.elements.values()
+              if e.__class__.__name__ == "Button" and getattr(e, "text", "") == "Assets"]
+    assert hidden and not hidden[0].visible, "no drawer door on the lobby"
+
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
     user.find("Assets").click()
@@ -233,7 +243,8 @@ async def test_drawer_scopes_to_current_series(user: User) -> None:
     """Inside a series the catalog defaults to that series; the switch widens it."""
     main.LocalStorage = _TmpStorage
     json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
-                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"}],
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
     user.find("Assets").click()

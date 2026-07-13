@@ -145,6 +145,28 @@ def create_publisher(wrapper: RunContextWrapper[APPState], name: str, descriptio
     Returns:
         The created Publisher object or an error message if the publisher already exists.
     """
+    from storage import registry as _registry
+    if _registry.registered():
+        # EVERY HOUSE ITS OWN REPO: founding a publisher founds a git repo
+        # (at ~/git/<slug>-comics by default) carrying the studio's default
+        # styles; the wall's + offers a folder picker for other locations
+        import os as _os
+        import re as _re
+        slug = _re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "new-house"
+        target = _os.path.expanduser(_os.path.join("~", "git", f"{slug}-comics"))
+        if _os.path.exists(target):
+            return (f"A folder already exists at {target} — use the + on the "
+                    f"publishers wall to pick where the house should live.")
+        _registry.found_house(normalize_name(name), target)
+        if description:
+            from storage.local import LocalStorage as _LS
+            pubs = _LS(base_path=target).read_all_objects(Publisher)
+            if pubs:
+                pubs[0].description = description
+                _LS(base_path=target).update_object(pubs[0])
+        wrapper.context.is_dirty = True
+        return (f"Founded the house '{normalize_name(name)}' as its own repository at "
+                f"{target}, with the studio's default styles copied in.")
 
     return creator(
         wrapper=wrapper,

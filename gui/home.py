@@ -59,9 +59,123 @@ def house_logo(pub: Publisher):
     return img
 
 
+async def choose_folder() -> str | None:
+    """A real file-system dialog on the studio's own machine (the app is
+    local-first — server and author share the desk).  None on cancel or
+    when no native dialog is available."""
+    import asyncio
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            'osascript', '-e',
+            'POSIX path of (choose folder with prompt '
+            '"Where does the publishing house live (or get founded)?")',
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        out, _err = await proc.communicate()
+        if proc.returncode != 0:
+            return None
+        return out.decode().strip().rstrip('/')
+    except (OSError, FileNotFoundError):
+        return None
+
+
+def found_house_dialog(state: APPState):
+    """FOUND (or ADOPT) A HOUSE: pick a folder on disk.  A folder that
+    already has a house's structure joins the rack as it is; anything else
+    gets a fresh repo founded in it with the studio's default styles."""
+    from storage import registry
+    chosen = {'dir': None, 'existing': None}
+    with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px;'):
+        ui.label('A NEW PUBLISHING HOUSE').classes('caption-box caption-box-sm')
+        ui.label('Every house is its own git repository.  Pick where it lives — '
+                 'an existing house joins the rack as it is.') \
+            .classes('text-sm q-mt-sm')
+        name = ui.input('The house’s name', placeholder='e.g. Midnight Owl Press') \
+            .classes('w-full q-mt-sm').props('outlined dense')
+        status = ui.label('No folder chosen yet.').classes('text-xs text-gray-500 q-mt-xs')
+
+        def _describe():
+            d = chosen['dir']
+            if not d:
+                return
+            if chosen['existing']:
+                status.text = (f"{d} already holds “{chosen['existing']}” — "
+                               f"it will join the rack unchanged.")
+            elif os.path.isdir(d) and os.listdir(d):
+                import re
+                slug = re.sub(r'[^a-z0-9]+', '-', (name.value or 'new house').lower()).strip('-')
+                status.text = (f"{d} isn’t empty — the house will be founded in "
+                               f"{os.path.join(d, slug + '-comics')}")
+            else:
+                status.text = f'The house will be founded at {d}'
+
+        async def pick(_=None):
+            d = await choose_folder()
+            if d is None:
+                if chosen['dir'] is None:
+                    status.text = ('No native dialog available — type the folder path here.')
+                    manual.set_visibility(True)
+                return
+            chosen['dir'] = d
+            chosen['existing'] = registry.looks_like_house(d)
+            _describe()
+
+        manual = ui.input('Folder path', placeholder='~/git') \
+            .classes('w-full').props('outlined dense')
+        manual.set_visibility(False)
+
+        def manual_changed():
+            d = os.path.expanduser(manual.value or '')
+            if os.path.isdir(d):
+                chosen['dir'] = d.rstrip('/')
+                chosen['existing'] = registry.looks_like_house(chosen['dir'])
+                _describe()
+        manual.on('change', lambda _: manual_changed())
+        name.on('change', lambda _: _describe())
+
+        with ui.row().classes('w-full items-center q-mt-sm').style('gap: 8px;'):
+            ui.button('Choose a folder…', icon='folder_open').props('outline dense no-caps') \
+                .on('click', pick)
+            ui.space()
+
+            def go():
+                d = chosen['dir']
+                if not d:
+                    ui.notify('Pick a folder first.', type='warning')
+                    return
+                if chosen['existing']:
+                    slug = registry.register(d)
+                    registry.set_open(slug)
+                    dlg.close()
+                    ui.notify(f"“{chosen['existing']}” joined the rack — its house is open.",
+                              type='positive')
+                    state.refresh_details()
+                    return
+                nm = (name.value or '').strip()
+                if not nm:
+                    ui.notify('Give the house a name.', type='warning')
+                    return
+                import re
+                target = d if not os.listdir(d) else os.path.join(
+                    d, re.sub(r'[^a-z0-9]+', '-', nm.lower()).strip('-') + '-comics')
+                try:
+                    slug = registry.found_house(nm, target)
+                except Exception as ex:
+                    ui.notify(f'Could not found the house: {ex}', type='warning')
+                    return
+                registry.set_open(slug)
+                dlg.close()
+                from gui.light_table import table_receipt
+                table_receipt(state, f"\U0001F3DB founded **{nm}** at `{target}` — "
+                                     f"a fresh repository with the studio's default styles",
+                              bench='the publishers wall')
+                state.refresh_details()
+            ui.button('Found the house', icon='gavel').props('unelevated dense no-caps') \
+                .on('click', lambda _: go())
+    dlg.open()
+
+
 def view_all_publishers(state: APPState):
     from gui.elements import PagePacker, caption_action, CrudButtonKind as _CK
-    from gui.messaging import post_user_message
     storage: GenericStorage = state.storage
     with state.details:
         packer = PagePacker(12)
@@ -74,7 +188,7 @@ def view_all_publishers(state: APPState):
                 aspect_ratio="1/1",
                 packer=packer, variants=[(2, 2)],
                 overlap_caption=lambda: caption_action("Publishers", _CK.CREATE,
-                    lambda _: post_user_message(state, "I would like to create a new comic book publisher."), 3))
+                    lambda _: found_house_dialog(state), 3))
             packer.finalize()
         
 def _last_bench(storage):
