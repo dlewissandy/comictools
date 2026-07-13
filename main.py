@@ -1041,6 +1041,8 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     # views file it as a reference on what you're working on
     from gui.light_table import handle_clipboard_image
     ui.on('clipboard_image', lambda e: handle_clipboard_image(state, e.args))
+    from gui.create_asset import handle_asset_drop
+    ui.on('asset_drop', lambda e: handle_asset_drop(state, e.args))
 
     def _board_tick():
         # the chip reads the ON-DISK docket, so every window sees the work

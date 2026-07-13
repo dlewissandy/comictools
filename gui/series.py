@@ -190,13 +190,10 @@ def view_series(state: APPState):
                 overlap_caption=_create_cap("Characters", "character")
                 ):
                 pass
-        uploader_card(
-            state=state,
-            on_upload=lambda e: upload_and_ask(e, "I would like to create a new character"),
-            packer=packer,
-            label='Drop image to create a character',
-            overlap_caption=None if characters else _create_cap("Characters", "character")
-        )
+        from gui.create_asset import create_drop_card
+        create_drop_card(state, series.series_id, "character",
+            'Drop an image to create a character', packer=packer,
+            overlap_caption=None if characters else _create_cap("Characters", "character"))
 
         # A cardwall for viewing and adding the recurring settings of the series.
         def setting_image(loc: Setting):
@@ -215,13 +212,9 @@ def view_series(state: APPState):
                 packer=packer, variants=[(3, 2), (6, 4)],
                 overlap_caption=_create_cap("Settings", "setting")
                 ).style('margin-top: 0px; margin-bottom: 0px')
-        uploader_card(
-            state=state,
-            on_upload=lambda e: upload_and_ask(e, "I would like to create a new setting"),
-            packer=packer,
-            label='Drop image to create a setting',
-            overlap_caption=None if settings else _create_cap("Settings", "setting")
-        )
+        create_drop_card(state, series.series_id, "setting",
+            'Drop an image to create a setting', packer=packer,
+            overlap_caption=None if settings else _create_cap("Settings", "setting"))
 
         # Props and wardrobe: the reusable stuff panels are dressed with.
         def asset_image(a):
@@ -239,13 +232,9 @@ def view_series(state: APPState):
                 packer=packer, variants=[(3, 2)],
                 overlap_caption=_create_cap("Props", "prop")
                 )
-        uploader_card(
-            state=state,
-            on_upload=lambda e: upload_and_ask(e, "I would like to create a new prop"),
-            packer=packer,
-            label='Drop image to create a prop',
-            overlap_caption=None if props else _create_cap("Props", "prop")
-        )
+        create_drop_card(state, series.series_id, "prop",
+            'Drop an image to create a prop', packer=packer,
+            overlap_caption=None if props else _create_cap("Props", "prop"))
 
         outfits = storage.read_all_objects(Outfit, primary_key={"series_id": series.series_id}, order_by="name")
         if outfits:
@@ -259,13 +248,9 @@ def view_series(state: APPState):
                 packer=packer, variants=[(3, 2)],
                 overlap_caption=_create_cap("Wardrobe", "outfit")
                 )
-        uploader_card(
-            state=state,
-            on_upload=lambda e: upload_and_ask(e, "I would like to create a new outfit"),
-            packer=packer,
-            label='Drop image to create an outfit',
-            overlap_caption=None if outfits else _create_cap("Wardrobe", "outfit")
-        )
+        create_drop_card(state, series.series_id, "outfit",
+            'Drop an image to create wardrobe', packer=packer,
+            overlap_caption=None if outfits else _create_cap("Wardrobe", "outfit"))
         packer.finalize()
         mosaic.__exit__(None, None, None)
         page.__exit__(None, None, None)

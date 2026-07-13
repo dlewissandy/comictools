@@ -74,14 +74,16 @@ def create_asset_dialog(state: APPState, series_id: str, kind: str):
     storage = state.storage
 
     def _save_upload(e: UploadEventArguments) -> str | None:
-        """Land a dropped/browsed image in the series uploads; return its path."""
+        """Land a dropped/browsed image in the series' HOUSE uploads; return its path."""
         if not (e.type or "").startswith("image/"):
             ui.notify("That isn't an image.", type="warning")
             return None
         from schema import Series
-        series = storage.read_object(Series, {"series_id": series_id})
-        updir = os.path.join(series.path() if series else os.path.join("data", "series", series_id),
-                             "uploads")
+        from gui.routes import _storage_holding
+        from storage import registry as _reg
+        st = _storage_holding(storage, Series, {"series_id": series_id},
+                              house_of=_reg.house_of_series, key=series_id)
+        updir = os.path.join(str(st.base_path), "series", series_id, "uploads")
         os.makedirs(updir, exist_ok=True)
         safe = f"{uuid4().hex[:8]}-{os.path.basename(e.name or 'dropped.png')}"
         path = os.path.join(updir, safe)
@@ -328,3 +330,95 @@ def compose_look_dialog(state: APPState, series_id: str, character_id: str):
             ui.button("Compose the look", icon="checkroom").props("unelevated no-caps") \
                 .on("click", lambda _: go())
     dlg.open()
+
+
+# ---------------------------------------------------------------------------
+# ROBUST DROP-TO-CREATE: the q-uploader overlay never delivered files (no
+# click, no drop).  These cards read the dropped/browsed image with a
+# FileReader and emit a NiceGUI event — the same proven path the clipboard
+# paste uses — so a drop ALWAYS lands.
+# ---------------------------------------------------------------------------
+def create_drop_card(state: APPState, series_id: str, kind: str, label: str,
+                     character_id: str = None, packer=None, variants=None,
+                     overlap_caption=None):
+    """A create card that reliably accepts a dropped/browsed image.  `kind`
+    is character/setting/prop/outfit, or 'look' on a character page."""
+    import contextlib
+    from gui.elements import TAILWIND_CARD
+    cell = (packer.place_cell(variants or [(3, 2)], fudge=True, max_w=6)
+            if packer is not None else contextlib.nullcontext())
+    with cell:
+        card = ui.card().classes(TAILWIND_CARD + ' relative create-drop-zone cursor-pointer')
+        if packer is not None:
+            card.classes('mosaic-card')
+        card.classes('overflow-visible' if overlap_caption is not None else 'overflow-hidden')
+        # the data the JS emits back with the file
+        card._props['data-kind'] = kind
+        card._props['data-series'] = series_id
+        if character_id:
+            card._props['data-character'] = character_id
+        with card:
+            if overlap_caption is not None:
+                with ui.element('div').classes('panel-caption').style('z-index: 20;'):
+                    overlap_caption()
+            # a hidden native input for click-to-browse (FileReader path)
+            ui.html(f'<input type="file" accept="image/*" class="create-drop-input" '
+                    f'style="display:none">')
+            with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
+                ui.label(label).classes('text-lg text-gray-600 text-center') \
+                    .style('padding: 0 12px; pointer-events: none;')
+    return card
+
+
+def handle_asset_drop(state: APPState, args: dict):
+    """A file was dropped/browsed on a create card — save it and start the
+    create-from-image flow for its kind.  Runs on the server via ui.on."""
+    import base64
+    from uuid import uuid4
+    from loguru import logger
+    try:
+        data_url = args.get("data") or ""
+        if "," not in data_url:
+            return
+        kind = args.get("kind")
+        series_id = args.get("series")
+        character_id = args.get("character") or None
+        raw = base64.b64decode(data_url.split(",", 1)[1])
+
+        # RESOLVE THE HOUSE: under mount-all, the series lives in a house —
+        # the root storage doesn't see it.  Save into the house that holds it.
+        from schema import Series
+        from gui.routes import _storage_holding
+        from storage import registry as _reg
+        st = _storage_holding(state.storage, Series, {"series_id": series_id},
+                              house_of=_reg.house_of_series, key=series_id)
+        updir = os.path.join(str(st.base_path), "series", series_id, "uploads")
+        os.makedirs(updir, exist_ok=True)
+        name = args.get("name") or "dropped.png"
+        path = os.path.join(updir, f"{uuid4().hex[:8]}-{os.path.basename(name)}")
+        with open(path, "wb") as f:
+            f.write(raw)
+
+        stem = os.path.splitext(os.path.basename(name))[0].replace("-", " ").replace("_", " ").title()
+        try:
+            ui.notify(f"Image received — starting a new "
+                      f"{kind if kind != 'look' else 'look'} from it.", type="positive")
+        except Exception:
+            pass
+
+        if kind == "look" and character_id:
+            ch = st.read_object(_asset_class("character"),
+                                {"series_id": series_id, "character_id": character_id})
+            post_user_message(state,
+                f"Drop-to-dress: create a WARDROBE (outfit) from this image with "
+                f"create_outfit_from_image (the image is its exemplar — do NOT render anything), "
+                f"then compose a new look for {ch.name if ch else character_id} wearing that outfit "
+                f"on the base, named after the wardrobe.  Don't ink the look yet.  Image: {path}")
+        else:
+            _create_from_image(state, kind, stem or f"New {kind}", path, "")
+    except Exception as ex:
+        logger.exception(f"asset drop failed: {ex}")
+        try:
+            ui.notify(f"Couldn't start that from the image: {ex}", type="negative")
+        except Exception:
+            pass

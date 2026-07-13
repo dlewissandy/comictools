@@ -147,9 +147,12 @@ def view_character(state:APPState):
                     overlap_caption=lambda: caption_action("Looks", _CK.CREATE,
                         lambda _: _compose_look(), 3)
                     )
-                # Drop an image here to create a new look from it
-                uploader_card(state, on_upload=on_upload, packer=packer,
-                              label='Drop a wardrobe image — dress the base in a new look')
+                # Drop a wardrobe image — the image is the exemplar, a new
+                # look is composed on the base (robust FileReader path)
+                from gui.create_asset import create_drop_card
+                create_drop_card(state, series_id, "look",
+                    'Drop a wardrobe image — dress the base in a new look',
+                    character_id=character_id, packer=packer)
         
         
             

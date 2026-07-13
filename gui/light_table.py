@@ -622,6 +622,49 @@ if (!window._roughDragInit) {
     }
   });
 
+  // ROBUST DROP-TO-CREATE: a create card (.create-drop-zone) reads its
+  // dropped/browsed image with a FileReader and EMITS it — the proven path
+  // the clipboard paste uses — because the q-uploader overlay never
+  // delivered files (no click, no drop) in this app.
+  const emitAssetDrop = (zone, file) => {
+    if (!file || !(file.type||'').startsWith('image/')) return;
+    const r = new FileReader();
+    r.onload = () => emitEvent('asset_drop', {
+      kind: zone.dataset.kind, series: zone.dataset.series,
+      character: zone.dataset.character || '', name: file.name, data: r.result});
+    r.readAsDataURL(file);
+  };
+  document.addEventListener('dragover', (e) => {
+    const zone = e.target.closest && e.target.closest('.create-drop-zone');
+    if (zone && e.dataTransfer) { e.preventDefault(); zone.classList.add('drop-ready'); }
+  });
+  document.addEventListener('dragleave', (e) => {
+    const zone = e.target.closest && e.target.closest('.create-drop-zone');
+    if (zone) zone.classList.remove('drop-ready');
+  });
+  document.addEventListener('drop', (e) => {
+    const zone = e.target.closest && e.target.closest('.create-drop-zone');
+    if (!zone) return;
+    zone.classList.remove('drop-ready');
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    e.preventDefault();
+    emitAssetDrop(zone, f);
+  }, true);
+  document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('.caption-btn, .create-caption-btn, button')) return;
+    const zone = e.target.closest && e.target.closest('.create-drop-zone');
+    if (zone) { const inp = zone.querySelector('.create-drop-input'); if (inp) inp.click(); }
+  });
+  document.addEventListener('change', (e) => {
+    const inp = e.target;
+    if (inp && inp.classList && inp.classList.contains('create-drop-input') && inp.files && inp.files[0]) {
+      const zone = inp.closest('.create-drop-zone');
+      if (zone) emitAssetDrop(zone, inp.files[0]);
+      inp.value = '';
+    }
+  });
+
   // double-click a balloon or caption: edit the words IN PLACE
   document.addEventListener('dblclick', (e) => {
     const fig = e.target.closest('.rough-drag');
