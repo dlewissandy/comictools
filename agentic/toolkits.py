@@ -66,7 +66,7 @@ from agentic.tools import (
     create_character_style_example_image
 )
 from agentic.tools.creator import create_variant, create_variant_from_image, create_setting, create_scene_panels
-from agentic.tools.creator import create_story, create_insert, derive_character
+from agentic.tools.creator import create_story, create_insert, derive_character, mark_breakdown_current
 from agentic.tools.reader import read_setting, read_all_settings
 from agentic.tools.reader import read_all_stories, read_all_inserts
 from agentic.tools.reader import read_board_table
@@ -235,6 +235,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_cover_image
     ],
     "issue": [
+        mark_breakdown_current,
         # every verb the persona and the book's chips speak
         derive_character,
         create_character,

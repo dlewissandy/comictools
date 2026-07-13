@@ -677,7 +677,7 @@ def init_layout(logger):
 
         # THE STOP DOOR: visible only while a turn runs — one click ends it
         stop_button = ui.button(icon='stop_circle', color='negative') \
-            .props('flat round').tooltip('Stop this turn — receipts stay, nothing more happens')
+            .props('flat round').tooltip('Stop this turn — receipts stay; a render already on the wire may still land')
         stop_button.set_visibility(False)
 
     return (
@@ -1104,7 +1104,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
             mic_button.icon = 'mic'
     mic_button.on('click', _listen)
     stop_mic_button.on('click', lambda _: stop_listening())
-    def _speak_last_reply(_=None):
+    async def _speak_last_reply(_=None):
         # READ THE REPLY: the last thing the coauthor said — never the
         # author's own (usually empty) draft
         import re as _re
@@ -1113,7 +1113,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                 text = _re.sub(r'<[^>]+>', ' ', msg.get('text_html') or '')
                 text = _re.sub(r'[#*_`>]', '', text).strip()
                 if text:
-                    speak(text[:1200])
+                    await speak(text[:1200])
                     return
         ui.notify('Nothing to read yet — the coauthor hasn\'t spoken.', type='info')
     speak_button.on('click', _speak_last_reply)
@@ -1293,7 +1293,18 @@ def read_issue_page(series_id: str, issue_id: str):
       const mo = new MutationObserver(() => { if (_boot()) mo.disconnect(); });
       mo.observe(document.body, {childList: true, subtree: true});
     }
-    window.addEventListener('resize', () => window.showSpread(window.readerSpread));
+    window.readerWasSingle = null;
+    window.addEventListener('resize', () => {
+      // keep the PAGE, not the raw index — spread k holds sheets 2k-1|2k
+      const single = window.readerSingle();
+      let k = window.readerSpread;
+      if (window.readerWasSingle !== null && single !== window.readerWasSingle) {
+        k = single ? (k === 0 ? 0 : 2 * k - 1)          // spread -> its verso sheet
+                   : (k === 0 ? 0 : Math.ceil(k / 2));  // sheet -> its spread
+      }
+      window.readerWasSingle = single;
+      window.showSpread(k);
+    });
     // THE COUNTER IS A DOOR: click it, pick any sheet, land there
     document.addEventListener('click', (e) => {
       const counter = e.target.closest('.reader-counter');
@@ -1324,12 +1335,26 @@ def read_issue_page(series_id: str, issue_id: str):
         # take the book with you: the bound exports, one click each
         exports_dir = os.path.join(str(storage.base_path), 'series', series_id, 'issues', issue_id, 'exports')
         import glob as _glob
+        from helpers.binder import book_signature as _bsig
+        _cur = None
         for ext, label in (('pdf', '⤓ PDF'), ('cbz', '⤓ CBZ')):
             found = sorted(_glob.glob(os.path.join(exports_dir, f'*.{ext}')),
                            key=os.path.getmtime, reverse=True)
             if found:
+                _stale, _unknown = False, False
+                try:
+                    _meta = json.load(open(found[0] + '.meta.json'))
+                    if _cur is None:
+                        _cur = _bsig(storage, series_id, issue_id)
+                    _stale = _meta.get('sig') != _cur
+                except Exception:
+                    _unknown = True
+                _lab = label + (' · stale' if _stale else (' · old bind' if _unknown else ''))
+                _tip = ('bound before your latest changes — bind again for the current book'
+                        if _stale else ('bound before tonight\'s bookkeeping — bind again to be sure'
+                                        if _unknown else 'this is the current book'))
                 ui.html(f'<a class="reader-dl" href="/{found[0].replace(os.sep, "/")}" '
-                        f'download>{label}</a>')
+                        f'title="{_tip}" download>{_lab}</a>')
         ui.space()
         if missing:
             # the reading room quotes THE PRODUCTION LEDGER — the same
@@ -1376,6 +1401,13 @@ def series_page(tail: str):
 # matches in registration order).
 @ui.page('/{path:path}')
 def lost_page(path: str):
+    # only ADDRESS-SHAPED paths get the friendly front door; asset probes,
+    # crawlers and stale file links get a real 404 (a bad export href must
+    # fail visibly, not open a lobby in a new tab)
+    first = (path.split('/', 1)[0] or '').lower()
+    if first not in ('series', 'publishers', 'library', 'styles') or '.' in path.rsplit('/', 1)[-1]:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"/{path} is not a studio address")
     _page_from_path(path)
 
 

@@ -550,6 +550,9 @@ def reader_sheets(storage: GenericStorage, series_id: str, issue_id: str
     exact math that binds the PDF, cached on disk by content signature so
     repeat visits open instantly.  Returns ([(label, path)], missing).
     """
+    # heal drift FIRST so the signature describes the book that will
+    # actually compose — a pre-stitch sig would miss the cache every visit
+    refresh_machine_layout(storage, series_id, issue_id)
     sig = book_signature(storage, series_id, issue_id)
     out_dir = os.path.join(str(storage.base_path), "series", series_id, "issues", issue_id,
                            "exports", "sheets")

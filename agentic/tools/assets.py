@@ -184,25 +184,34 @@ def update_outfit_description(wrapper: RunContextWrapper[APPState], series_id: s
     from agentic.tools.updater import update_attribute
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
+    _before = storage.read_object(Outfit, {"series_id": series_id, "outfit_id": outfit_id})
+    _old_desc = (_before.description if _before is not None else None)
     result = update_attribute(wrapper, Outfit, {"series_id": series_id, "outfit_id": outfit_id}, "description", description)
 
     # RE-DRESS THE WEARERS: composed looks freeze attire=outfit.description
-    # at compose time — an outfit edit must reach them or the render prompt
-    # carries both the stale attire AND the fresh outfit text
-    wearers = []
+    # at compose time — but a look whose attire the author HAND-TUNED (a
+    # torn sleeve, mud stains) is theirs: report it, never bulldoze it
+    wearers, divergent = [], []
     for ch in storage.read_all_objects(CharacterModel, {"series_id": series_id}):
         for v in storage.read_all_objects(CharacterVariant,
                 {"series_id": series_id, "character_id": ch.character_id}):
             if getattr(v, "outfit_id", None) == outfit_id:
-                v.attire = description
-                storage.update_object(data=v)
-                wearers.append(f"{ch.name}'s '{v.name or v.variant_id}'")
+                label = f"{ch.name}'s '{v.name or v.variant_id}'"
+                if (v.attire or "").strip() in ("", (_old_desc or "").strip()):
+                    v.attire = description
+                    storage.update_object(data=v)
+                    wearers.append(label)
+                else:
+                    divergent.append(label)
     outfit = storage.read_object(Outfit, {"series_id": series_id, "outfit_id": outfit_id})
     stale_art = sorted((outfit.images or {}).keys()) if outfit is not None else []
     if wearers:
         result += (f"  Re-dressed the look{'s' if len(wearers) != 1 else ''} wearing it: "
                    f"{', '.join(wearers)} — their reference sheets are now STALE "
                    f"(re-ink with create_styled_image_for_character_variant).")
+    if divergent:
+        result += (f"  NOT touched (hand-tuned attire): {', '.join(divergent)} — "
+                   f"swap_variant_outfit re-syncs one if the author wants the new base.")
     if stale_art:
         result += (f"  The outfit's own reference art in style{'s' if len(stale_art) != 1 else ''} "
                    f"{', '.join(stale_art)} is stale too (generate_outfit_reference).")

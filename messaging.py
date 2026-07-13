@@ -278,6 +278,14 @@ def stop_turn(state: APPState) -> bool:
         stream.cancel()
     except Exception as ex:
         logger.debug(f"stop: cancel raised {ex}")
+    try:
+        # cancel() kills the producer WITHOUT enqueueing the completion
+        # sentinel — the consumer would park on an empty queue forever.
+        # Wake it so the turn actually ends.
+        from agents._run_impl import QueueCompleteSentinel
+        stream._event_queue.put_nowait(QueueCompleteSentinel())
+    except Exception as ex:
+        logger.debug(f"stop: sentinel wake skipped ({ex})")
     return True
 
 
@@ -391,9 +399,21 @@ async def send(state: APPState):
         _stop_btn.set_visibility(True)
     try:
         responses = await handle_agent_events(state, messages, response_markdown, divider)
-        if responses:
+        if getattr(state, '_stop_requested', False):
+            # a cancelled stream usually ends CLEANLY — the stop note must
+            # not depend on an exception, and never overwrite streamed text
+            stop_note = ("\n\n🛑 *Stopped at your word — the receipts above are "
+                         "what happened before the stop.  A render already on "
+                         "the wire may still land on the board.*")
+            response_markdown.set_content((response_markdown.content or '') + stop_note)
+            _done = getattr(state, '_turn_receipts', None) or []
+            _memo = ("Stopped by the author mid-turn." +
+                     (("  What was done before the stop:\n" +
+                       "\n".join(f"- {r}" for r in _done[:40])) if _done else ""))
+            threads[tkey] = messages + [{"role": "assistant", "content": _memo}]
+        elif responses:
             threads[tkey] = responses   # the thread survives to the next turn
-        if not (response_markdown.content or '').strip():
+        if not getattr(state, '_stop_requested', False) and not (response_markdown.content or '').strip():
             response_markdown.set_content(
                 "*(That finished without words — the receipts above are what "
                 "actually happened.  Say **go on** if there's more to do.)*")
@@ -401,7 +421,8 @@ async def send(state: APPState):
         from agents.exceptions import MaxTurnsExceeded
         if getattr(state, '_stop_requested', False):
             note = ("🛑 Stopped at your word — the receipts above are what "
-                    "happened before the stop; nothing else was done.")
+                    "happened before the stop.  A render already on the wire "
+                    "may still land on the board.")
         elif isinstance(ex, MaxTurnsExceeded):
             note = ("I ran out of steam mid-way — the receipts above are what "
                     "actually happened; nothing beyond them was done.  Say "
@@ -437,8 +458,15 @@ async def send(state: APPState):
             _now_home = state.conversation_key(state.selection)
             if _now_home != _reply_home and (response_markdown.content or '').strip():
                 conv = state.conversations.setdefault(_reply_home, [])
+                # the walk-away archive kept the PARTIAL reply — replace it
+                # rather than stacking a duplicate under it
+                _final = response_markdown.content
+                while conv and not conv[-1].get('sent') \
+                        and conv[-1].get('name') == _reply_name \
+                        and _final.startswith((conv[-1].get('text_html') or '')[:120]):
+                    conv.pop()
                 conv.append({'name': _reply_name,
-                             'text_html': response_markdown.content,
+                             'text_html': _final,
                              'sent': False})
         except Exception as _ex:
             logger.debug(f"re-homing the reply skipped: {_ex}")

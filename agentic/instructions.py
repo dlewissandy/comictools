@@ -62,7 +62,9 @@ PERSONAS = {
         mint a fresh breakdown beside them — read the existing scenes, present the
         DELTA (which scenes change, appear, or retire), and only after approval
         update in place / delete the retired ones.  A doubled book is the one
-        unforgivable outcome.
+        unforgivable outcome.  When the breakdown (or re-break) is COMPLETE and
+        approved, call mark_breakdown_current as the LAST step — it clears the
+        ledger's drift line; never call it mid-way.
 
 
         0. DEVELOP THIN MATERIAL FIRST.  If a story is too thin to break into

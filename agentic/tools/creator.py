@@ -872,17 +872,6 @@ def create_scene_body(state: APPState,
 
 
     state.is_dirty = True
-    # the breakdown STAMPS the script it broke — the ledger flags drift
-    # the moment the script changes after its scenes were minted
-    try:
-        import hashlib as _hl
-        _txt = (issue.story or '') + '|' + '|'.join(
-            (st.text or '') for st in storage.read_all_objects(
-                Story, {'series_id': series_id, 'issue_id': issue_id}))
-        issue.broken_script_sha = _hl.sha1(_txt.encode()).hexdigest()
-        storage.update_object(data=issue)
-    except Exception:
-        pass
     note = ("  CAST PROBLEMS: " + "; ".join(cast_problems)) if cast_problems else ""
     # speak the id THE STORAGE actually gave it — storage may reassign a
     # UUID on create, and every follow-up tool call needs the real one
@@ -1064,6 +1053,33 @@ def create_scene_panels(wrapper: RunContextWrapper[APPState],
     problems_note = ("  PROBLEMS: " + "; ".join(sorted(set(_cast_problems)))) if _cast_problems else ""
     return (f"Created {len(created)} panels for scene '{scene.name}': "
             + ", ".join(f"{n} (id: {pid})" for n, pid in created) + problems_note)
+
+
+@function_tool
+def mark_breakdown_current(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str) -> str:
+    """
+    Declare the (re-)breakdown COMPLETE: every scene now reflects the current
+    script.  Call this as the LAST step of a breakdown or re-break — it stamps
+    the script's hash so the ledger can flag drift if the script changes
+    afterward.  Never call it mid-way: a premature stamp silences real drift.
+
+    Args:
+        series_id: The series the issue belongs to.
+        issue_id: The issue whose breakdown is now current.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    import hashlib as _hl
+    issue = storage.read_object(Issue, {"series_id": series_id, "issue_id": issue_id})
+    if issue is None:
+        return f"Issue '{issue_id}' not found."
+    _txt = (issue.story or '') + '|' + '|'.join(
+        (st.text or '') for st in storage.read_all_objects(
+            Story, {"series_id": series_id, "issue_id": issue_id}))
+    issue.broken_script_sha = _hl.sha1(_txt.encode()).hexdigest()
+    storage.update_object(data=issue)
+    state.is_dirty = True
+    return "Breakdown marked current — the ledger will flag drift if the script changes from here."
 
 
 @function_tool

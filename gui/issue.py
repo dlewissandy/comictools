@@ -971,7 +971,7 @@ def view_issue(state: APPState):
                             if not found:
                                 continue
                             path = found[0]
-                            stale, bound_at = False, None
+                            stale, bound_at, unknown = False, None, False
                             try:
                                 meta = _json.load(open(path + '.meta.json'))
                                 bound_at = meta.get('bound_at')
@@ -979,14 +979,16 @@ def view_issue(state: APPState):
                                     _cur_sig = book_signature(storage, series_id, issue_id)
                                 stale = meta.get('sig') != _cur_sig
                             except Exception:
-                                pass
-                            when = (_time.strftime('%b %-d, %H:%M', _time.localtime(bound_at))
+                                unknown = True   # a bind without papers can't claim currency
+                            when = (_time.strftime('%b %d, %H:%M', _time.localtime(bound_at)).replace(' 0', ' ')
                                     if bound_at else 'an earlier bind')
-                            chip = ui.chip(label + (' · stale' if stale else ''),
+                            chip = ui.chip(label + (' · stale' if stale else (' · old bind' if unknown else '')),
                                            icon='download').props('dense outline clickable')
                             chip.tooltip(f"bound {when}" + (
                                 " — BEFORE your latest changes; bind again for the current book"
-                                if stale else " — this is the current book"))
+                                if stale else (
+                                " — bound before tonight's bookkeeping; bind again to be sure"
+                                if unknown else " — this is the current book")))
                             chip.on('click', lambda _, u='/' + path.replace(os.sep, '/'):
                                     ui.run_javascript(f"window.open('{u}', '_blank');"))
                         ui.chip('bind it', icon='menu_book').props('dense outline clickable') \

@@ -812,6 +812,25 @@ def update_scene_name(wrapper: RunContextWrapper[APPState], series_id: str, issu
     return update_attribute(wrapper=wrapper, cls=SceneModel, primary_key=pk, attribute="name", value=name)
 
 
+
+def _restamp_breakdown(storage, series_id: str, issue_id: str) -> None:
+    """The re-break's closing signature: scene edits/deletes re-stamp the
+    script hash so the ledger's drift line clears when the scenes catch up."""
+    try:
+        import hashlib as _hl
+        from schema import Issue, Story
+        issue = storage.read_object(Issue, {"series_id": series_id, "issue_id": issue_id})
+        if issue is None or not getattr(issue, 'broken_script_sha', None):
+            return
+        _txt = (issue.story or '') + '|' + '|'.join(
+            (st.text or '') for st in storage.read_all_objects(
+                Story, {"series_id": series_id, "issue_id": issue_id}))
+        issue.broken_script_sha = _hl.sha1(_txt.encode()).hexdigest()
+        storage.update_object(data=issue)
+    except Exception:
+        pass
+
+
 @function_tool
 def update_scene_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, scene_id: str, story: str) -> str:
     """
@@ -1200,7 +1219,9 @@ def update_setting_props(wrapper: RunContextWrapper[APPState],
     state.is_dirty = True
     stale = ", ".join(setting.images.keys()) if setting.images else None
     if setting.images:
+        # PERSIST the flag we're about to claim — the badge must light
         setting.images_stale = sorted(set((setting.images_stale or []) + list(setting.images.keys())))
+        storage.update_object(data=setting)
     note = f"  Background masters for style(s) {stale} are now stale and should be re-inked." if stale else ""
     return f"Props of setting '{setting.name}' set to: " + ", ".join(p.name for p in props) + note
 

@@ -124,7 +124,7 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                 note = str(result)
                 # TOOL BODIES SPEAK ERRORS AS SENTENCES, not exceptions —
                 # an error-shaped note must never be announced as done
-                if re.search(r"^(cannot|no |nothing to|unknown |missing )|not found|failed",
+                if re.search(r"^(cannot|no |nothing to|unknown |missing |not found|failed)",
                              note[:120], re.I):
                     failed += 1
                     _announce(f"⚠️ **{label}** — didn't make it: {note} ({i}/{len(jobs)})")
@@ -173,10 +173,12 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                     pending.remove(label)
                 except ValueError:
                     pass
-            try:
-                state.refresh_details()
-            except Exception as e:
-                logger.debug(f"render-queue refresh skipped: {e}")
+                # the room repaints after EVERY outcome — an error-shaped
+                # note must not leave stale art on screen
+                try:
+                    state.refresh_details()
+                except Exception as e:
+                    logger.debug(f"render-queue refresh skipped: {e}")
         summary = f"That's the batch: {done} rendered" + (f", {failed} failed" if failed else "") + "."
         _announce(f"🖼️ {summary}")
 

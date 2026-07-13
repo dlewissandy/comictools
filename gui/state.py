@@ -279,9 +279,15 @@ class APPState:
             elif name not in ["Tool Call", "Tool Output"] and parent_container != history:
                 parent_container = history
 
-            # add the message to the history
+            # add the message to the history — receipts restore as the
+            # quiet lines they were live, never a wall of avatar bubbles
             with parent_container:
-                comic_chat_message(name=name, sent=sent, text=text_html, text_html=True).classes('w-full')
+                if name == 'the receipts':
+                    md = ui.html(text_html).classes('w-full text-sm q-px-md')
+                    md._props['name'] = 'the receipts'
+                    md._props['sent'] = False
+                else:
+                    comic_chat_message(name=name, sent=sent, text=text_html, text_html=True).classes('w-full')
 
         # scroll to the bottom of the history
         history.scroll_to(percent=1)
