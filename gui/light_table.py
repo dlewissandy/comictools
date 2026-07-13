@@ -1144,6 +1144,47 @@ def pose_figure_bg(state, board, character_id: str, variant_id: str,
     )], role="the Penciller")
 
 
+def element_pending_key(board, key: str) -> str:
+    return f"{board.id}/{key}"
+
+
+def pose_element_bg(state, board, key: str, pose_direction: str | None = None,
+                    name: str | None = None, style_id: str | None = None):
+    """Queue a posed-acetate re-render for a prop/element on this board — the
+    prop twin of pose_figure_bg.  One pose per element at a time: the row shows a
+    spinner and a second click is refused while it's on the drawing board."""
+    from agentic.tools.imaging import pose_element_acetate_body
+    from helpers.render_queue import enqueue_renders
+    pending = getattr(state, '_poses_pending', None)
+    if pending is None:
+        pending = set()
+        try:
+            state._poses_pending = pending
+        except Exception:
+            pass
+    pkey = element_pending_key(board, key)
+    disp = name or (key.split('/', 1)[1].replace('-', ' ') if key.startswith('element/') else key)
+    if pkey in pending:
+        ui.notify(f"{disp} is already on the drawing board — "
+                  f"the pose lands when it's ready.", type='warning')
+        return
+    pending.add(pkey)
+    kw = ({"cover_id": board.cover_id} if is_cover(board)
+          else {"insert_id": board.insert_id} if is_insert(board)
+          else {"scene_id": board.scene_id, "panel_id": board.panel_id})
+
+    def job():
+        try:
+            return pose_element_acetate_body(
+                state, board.series_id, board.issue_id, key=key,
+                pose_direction=pose_direction, style_id=style_id, **kw)
+        finally:
+            pending.discard(pkey)
+    enqueue_renders(state, [(
+        f"posing {disp} for {board_label(board)}", job,
+    )], role="the Penciller")
+
+
 def lay_figure_on_table(state, panel, character_id: str, variant_id: str,
                         name: str | None = None):
     fresh_board(state.storage, panel)
@@ -1907,6 +1948,29 @@ def light_table(state: APPState, panel, scene, setting,
                 ui.button('Pose', icon='accessibility_new').props('unelevated dense').on('click', lambda _: go())
         dlg.open()
 
+    def pose_element(key: str, name: str, pose_direction: str | None = None):
+        _style = getattr(scene, 'style_id', None) if scene is not None \
+            else getattr(panel, 'style_id', None)
+        pose_element_bg(state, panel, key, pose_direction, name=name, style_id=_style)
+        # rebuild so the element row shows its posing… spinner right away
+        state.refresh_details()
+
+    def pose_element_dialog(key: str, name: str):
+        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 460px;'):
+            ui.label(f"Pose {name.title()}").classes('caption-box caption-box-sm')
+            direction = ui.textarea(
+                placeholder='Describe the orientation or state — e.g. “drawn and raised”, '
+                '“open on the lectern”, “seen 3/4 from below”, “lit and glowing”…') \
+                .classes('w-full').props('outlined autofocus')
+            with ui.row().classes('w-full justify-end').style('gap: 8px;'):
+                def go():
+                    text = (direction.value or '').strip()
+                    dlg.close()
+                    pose_element(key, name, text or None)
+                ui.button('Pose', icon='3d_rotation').props('unelevated dense') \
+                    .on('click', lambda _: go())
+        dlg.open()
+
     # ---- one acetate row on the table -----------------------------------
     def eye(layer: dict):
         btn = ui.button(icon='visibility' if layer["on"] else 'visibility_off') \
@@ -2350,6 +2414,19 @@ def light_table(state: APPState, panel, scene, setting,
                             .classes('row-tool') \
                             .tooltip('Who is this?  Link this cut-out to a cast member') \
                             .on('click', lambda _, k=f["key"], n=f["name"]: identify_element(k, n))
+
+                        # POSE THIS PROP: re-render the object in a new
+                        # orientation or state — the prop twin of posing a figure
+                        _el_posing = element_pending_key(panel, f["key"]) in \
+                            (getattr(state, '_poses_pending', None) or set())
+                        if _el_posing:
+                            ui.spinner('dots', size='1.2em', color='primary') \
+                                .tooltip("On the drawing board — the acetate lands here when it's ready")
+                        else:
+                            ui.button(icon='3d_rotation').props('flat round dense size=xs') \
+                                .classes('row-tool') \
+                                .tooltip('Pose this prop — re-render it in a new orientation or state') \
+                                .on('click', lambda _, k=f["key"], n=f["name"]: pose_element_dialog(k, n))
 
                         def heal_element(path=f["img"], nm=f["name"]):
                             from gui.selection import SelectionItem, SelectedKind
@@ -3053,10 +3130,25 @@ def light_table(state: APPState, panel, scene, setting,
                             if not cover_mode and pa.name in already:
                                 continue
                             img = next((i for i in (pa.images or {}).values() if i and os.path.exists(i)), None)
-                            with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 130px;') as card:
+                            with ui.card().classes('soft-card p-1 cursor-pointer relative').style('width: 130px;') as card:
                                 if img:
                                     ui.image(source=img).style('height: 70px;').props('fit=contain')
                                 ui.label(pa.name.title()).classes('text-xs text-center w-full')
+
+                                # STRIKE A JUNK PROP right from the shop —
+                                # recoverable from the wastebasket, no trip inside
+                                async def _strike_prop(pa=pa):
+                                    from gui.strike import strike
+                                    from agentic.tools.assets import delete_prop
+                                    dlg.close()
+                                    await strike(state, delete_prop,
+                                                 {"series_id": series_id, "prop_id": pa.prop_id},
+                                                 f"the '{pa.name}' prop")
+                                ui.button(icon='delete_outline').props('flat round dense size=xs') \
+                                    .classes('absolute top-0 right-0 z-10') \
+                                    .style('background: rgba(255,255,255,.72);') \
+                                    .tooltip(f"Strike '{pa.name}' — it waits in the wastebasket") \
+                                    .on('click.stop', _strike_prop)
 
                             def lay(pa=pa):
                                 dlg.close()

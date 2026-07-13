@@ -3052,6 +3052,91 @@ This is a cut-out acetate to be layered over a background."""
             + (f"\n{style_fallback}" if style_fallback else ""))
 
 
+def pose_element_acetate_body(state, series_id: str, issue_id: str, key: str,
+                              pose_direction: str | None = None,
+                              scene_id: str | None = None, panel_id: str | None = None,
+                              cover_id: str | None = None, insert_id: str | None = None,
+                              style_id: str | None = None) -> str:
+    """POSE A PROP: re-render an element cut-out (a prop, an object) in a new
+    orientation or state as a transparent acetate — the prop twin of posing a
+    figure.  Sources from the linked prop asset's on-model reference art when the
+    element names one (so a re-pose never drifts off a prior pose), else from the
+    element's current image.
+
+    Blocking is fast and cheap: like a figure pose, this is a throwaway spatial
+    guide the final ink redraws, so it rooms in at LOW."""
+    from helpers.generator import invoke_edit_image_api
+    from storage.filepath import obj_to_imagepath
+    from agentic.tools.normalization import normalize_id
+    storage: GenericStorage = state.storage
+
+    if cover_id:
+        board = storage.read_object(cls=Cover, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
+    elif insert_id:
+        from schema import Insert as _Insert
+        board = storage.read_object(cls=_Insert, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "insert_id": insert_id})
+    else:
+        board = storage.read_object(cls=Panel, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
+    if board is None:
+        return "Board not found for posing the element."
+
+    name = (key.split('/', 1)[1].replace('-', ' ') if key.startswith('element/') else key)
+    current = (board.figure_images or {}).get(key)
+
+    # THE ON-MODEL SOURCE: a prop asset whose slug matches this element, so a
+    # re-pose always renders from the clean reference art, never off a prior
+    # (possibly drifted) pose.  Fall back to the element's current image.
+    source = None
+    if key.startswith('element/'):
+        import re as _re
+        slug = _re.sub(r'-\d+$', '', key.split('/', 1)[1])
+        from schema import PropAsset as _PA
+        for pa in storage.read_all_objects(_PA, {"series_id": series_id}):
+            if normalize_id(pa.name) == slug:
+                art = (pa.images or {}).get(style_id) if style_id else None
+                art = art or next((i for i in (pa.images or {}).values()
+                                   if i and os.path.exists(i)), None)
+                if art and os.path.exists(art):
+                    source = art
+                break
+    if not (source and os.path.exists(source)):
+        source = current if (current and os.path.exists(current)) else None
+    if not (source and os.path.exists(source)):
+        return f"No art to pose for '{name}' yet — lay the prop's reference first."
+
+    orient = (pose_direction or "").strip() or "shown at a natural three-quarter angle"
+    prompt = f"""The attached image shows {name}.
+Draw THIS exact object — identical design, identical materials, identical
+colors, identical wear and detailing as the reference — in ONE new orientation.
+
+ORIENTATION / STATE (follow exactly): {orient}
+
+Render the SINGLE object only, on a COMPLETELY TRANSPARENT background.  No
+scenery, no ground, no cast shadow, no frame, no text — just the object, posed
+as directed.  This is a cut-out acetate to be layered over a background."""
+    image_bytes = invoke_edit_image_api(
+        prompt, reference_images=[source], size="1024x1024",
+        quality=IMAGE_QUALITY.LOW, background="transparent", input_fidelity="high")
+
+    from uuid import uuid4
+    images_dir = obj_to_imagepath(obj=board, base_path=storage.base_path)
+    figures_dir = os.path.join(os.path.dirname(images_dir), "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    slug2 = (key.split('/', 1)[1] if key.startswith('element/') else 'element')
+    filepath = os.path.join(figures_dir, f"element--{slug2}--{uuid4().hex[:8]}.png")
+    with open(filepath, "wb") as f:
+        f.write(image_bytes)
+
+    fresh = storage.read_object(cls=type(board), primary_key=board.primary_key) or board
+    fresh.figure_images[key] = filepath
+    storage.update_object(data=fresh)
+    state.is_dirty = True
+    return f"Posed element acetate for {name}: {filepath}"
+
+
 @function_tool
 async def generate_figure_acetate(wrapper: RunContextWrapper, series_id: str, issue_id: str,
                             scene_id: str, panel_id: str, character_id: str, variant_id: str,

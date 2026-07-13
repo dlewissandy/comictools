@@ -234,8 +234,26 @@ def view_series(state: APPState):
         def asset_image(a):
             return next((img for img in (a.images or {}).values() if img and os.path.exists(img)), None)
 
+        def _strike_asset_overlay(deleter_tool, key_name):
+            # ONE-CLICK REVERSIBLE STRIKE riding each asset card — the same
+            # wastebasket-backed delete the detail page uses, but right here in
+            # the roster so a junk prop/outfit never needs a trip inside.
+            def overlay(asset):
+                from gui.strike import strike
+                _id = getattr(asset, key_name)
+                ui.button(icon='delete_outline').props('flat round dense size=xs') \
+                    .classes('absolute top-0 right-0 z-10') \
+                    .style('background: rgba(255,255,255,.72);') \
+                    .tooltip(f"Strike '{asset.name}' — it waits in the wastebasket") \
+                    .on('click.stop', lambda _, a=asset: strike(
+                        state, deleter_tool,
+                        {"series_id": series.series_id, key_name: getattr(a, key_name)},
+                        f"the '{a.name}' {'prop' if key_name == 'prop_id' else 'outfit'}"))
+            return overlay
+
         props = storage.read_all_objects(PropAsset, primary_key={"series_id": series.series_id}, order_by="name")
         if props:
+            from agentic.tools.assets import delete_prop
             view_all_instances(
                 state=state,
                 get_instances=lambda: props,
@@ -244,7 +262,8 @@ def view_series(state: APPState):
                 aspect_ratio="3/2",
                 get_name=lambda _, x: x.name,
                 packer=packer, variants=[(3, 2)],
-                overlap_caption=_create_cap("Props", "prop")
+                overlap_caption=_create_cap("Props", "prop"),
+                card_overlay=_strike_asset_overlay(delete_prop, "prop_id"),
                 )
         create_drop_card(state, series.series_id, "prop",
             'Drop an image to create a prop', packer=packer,
@@ -252,6 +271,7 @@ def view_series(state: APPState):
 
         outfits = storage.read_all_objects(Outfit, primary_key={"series_id": series.series_id}, order_by="name")
         if outfits:
+            from agentic.tools.assets import delete_outfit
             view_all_instances(
                 state=state,
                 get_instances=lambda: outfits,
@@ -260,7 +280,8 @@ def view_series(state: APPState):
                 aspect_ratio="3/2",
                 get_name=lambda _, x: x.name,
                 packer=packer, variants=[(3, 2)],
-                overlap_caption=_create_cap("Wardrobe", "outfit")
+                overlap_caption=_create_cap("Wardrobe", "outfit"),
+                card_overlay=_strike_asset_overlay(delete_outfit, "outfit_id"),
                 )
         create_drop_card(state, series.series_id, "outfit",
             'Drop an image to create wardrobe', packer=packer,
