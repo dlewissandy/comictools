@@ -184,6 +184,15 @@ def view_setting(state: APPState):
             from schema import ComicStyle
             rendered = {style_id: img for style_id, img in (setting.images or {}).items() if img and os.path.exists(img)}
 
+            # which orientations each style already has, so a card can offer to
+            # RENDER the missing ones (a portrait master for a landscape set)
+            from helpers.masters import split_key as _split_key
+            _ALL_ORIENTS = ['landscape', 'portrait', 'square']
+            _orients_by_base: dict = {}
+            for _k in rendered:
+                _b, _o = _split_key(_k)
+                _orients_by_base.setdefault(_b, set()).add(_o)
+
             def ink_in_style(st, orientation='landscape'):
                 from agentic.tools.imaging import generate_setting_background_body
                 from helpers.render_queue import enqueue_renders
@@ -234,6 +243,23 @@ def view_setting(state: APPState):
                                         .tooltip('Re-ink this master from scratch — same style, same orientation') \
                                         .on('click.stop', lambda _, st=styles_by_id[_base], o=_orient:
                                             ink_in_style(st, o))
+                                    # REGENERATE IN ANOTHER ASPECT: render this
+                                    # style's master in an orientation it lacks
+                                    _missing = [o for o in _ALL_ORIENTS
+                                                if o not in _orients_by_base.get(_base, set())]
+                                    if _missing:
+                                        _asp_btn = ui.button(icon='aspect_ratio') \
+                                            .props('flat round dense size=xs') \
+                                            .classes('bg-white/70 dark:bg-black/50')
+                                        _asp_btn.on('click.stop', lambda *_a: None)
+                                        _asp_btn.tooltip('Render this master in another aspect ratio')
+                                        with _asp_btn:
+                                            with ui.menu().props('auto-close'):
+                                                for _o in _missing:
+                                                    ui.menu_item(
+                                                        f'Ink a {_o} master',
+                                                        on_click=lambda *_a, st=styles_by_id[_base], o=_o:
+                                                        ink_in_style(st, o)).props('dense')
                 # ONE COMPARATOR CARD instead of a wall of ghosts: every
                 # style the setting isn't inked in yet, one chip each
                 from helpers.masters import split_key as _sk
