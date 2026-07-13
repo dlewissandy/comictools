@@ -140,3 +140,77 @@ def test_justify_breathes_without_stretching():
         assert abs(w / h - L) < 0.05, "justify must never stretch a panel"
         assert -1e-6 <= x and x + w <= PAGE_UNITS_W + 1e-6
         assert -1e-6 <= y and y + h <= PAGE_UNITS_H + 1e-6
+
+
+def test_pinned_page_holds_its_exact_shape(storage):
+    """THE PINNED PAGE: a picked swatch layout is written verbatim, survives
+    a re-stitch untouched, and releases back into the flow on unpin."""
+    from helpers.stitcher import (pin_page_layout, unpin_page, remember_stitch,
+                                  alive_pins, stitch_pages)
+    from helpers.tilings import swatches_for
+    from schema import Page, Panel, SceneModel
+
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    remember_stitch(storage, WL, CARN)
+    pages = storage.read_all_objects(Page, {"series_id": WL, "issue_id": CARN},
+                                     order_by="page_number")
+    page = next(p for p in pages if len(p.cells) >= 4)
+    n = len(page.cells)
+    swatches = swatches_for(n)
+    assert swatches, f"no exact fill for {n} panels — pick another fixture page"
+    tiling = swatches[0]["pieces"]
+
+    ordered = sorted(page.cells, key=lambda c: (c.y, c.x))
+    panels = [storage.read_object(Panel, {"series_id": WL, "issue_id": CARN,
+                                          "scene_id": c.scene_id, "panel_id": c.panel_id})
+              for c in ordered]
+    pin_page_layout(storage, WL, CARN, panels, tiling)
+
+    pins = alive_pins(storage, WL, CARN)
+    assert len(pins) == 1
+    got = sorted(((c.x, c.y, c.w, c.h) for c in pins[0].cells))
+    want = sorted((float(x), float(y), float(w), float(h)) for x, y, w, h in tiling)
+    assert got == want, "the swatch's pieces are the page's cells, verbatim"
+
+    # a re-stitch flows AROUND the pin, never through it
+    remember_stitch(storage, WL, CARN)
+    pins2 = alive_pins(storage, WL, CARN)
+    assert len(pins2) == 1
+    assert sorted(((c.x, c.y, c.w, c.h) for c in pins2[0].cells)) == want
+    # every panel appears exactly once across the whole book
+    fresh = stitch_pages(storage, WL, CARN)
+    seen = [c.panel_id for p in fresh for c in p.cells]
+    assert len(seen) == len(set(seen)), "no panel is stitched twice around a pin"
+
+    # release: the pin dissolves and the page rejoins the flow
+    unpin_page(storage, pins2[0])
+    assert alive_pins(storage, WL, CARN) == []
+
+
+def test_striking_a_pinned_panel_dissolves_the_pin(storage):
+    """A pin whose panel was struck has lost its exact fill — it dissolves
+    instead of printing a hole."""
+    from helpers.stitcher import pin_page_layout, remember_stitch, alive_pins
+    from helpers.tilings import swatches_for
+    from schema import Page, Panel
+
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    remember_stitch(storage, WL, CARN)
+    pages = storage.read_all_objects(Page, {"series_id": WL, "issue_id": CARN},
+                                     order_by="page_number")
+    page = next(p for p in pages if len(p.cells) >= 4)
+    ordered = sorted(page.cells, key=lambda c: (c.y, c.x))
+    panels = [storage.read_object(Panel, {"series_id": WL, "issue_id": CARN,
+                                          "scene_id": c.scene_id, "panel_id": c.panel_id})
+              for c in ordered]
+    tiling = swatches_for(len(panels))[0]["pieces"]
+    pin_page_layout(storage, WL, CARN, panels, tiling)
+    assert len(alive_pins(storage, WL, CARN)) == 1
+
+    victim = panels[0]
+    storage.delete_object(Panel, {"series_id": WL, "issue_id": CARN,
+                                  "scene_id": victim.scene_id, "panel_id": victim.panel_id})
+    assert alive_pins(storage, WL, CARN) == [], "a broken fill holds no pin"
+    remember_stitch(storage, WL, CARN)
+    for p in storage.read_all_objects(Page, {"series_id": WL, "issue_id": CARN}):
+        assert not getattr(p, 'pinned', False)

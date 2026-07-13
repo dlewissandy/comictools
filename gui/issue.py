@@ -170,8 +170,12 @@ def view_issue(state: APPState):
         from helpers.stitcher import repack_page
         for pm in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id}):
             if pm.cells and any(r.panel_id == panel_id for row in pm.rows for r in row):
+                was_pinned = getattr(pm, 'pinned', False)
                 repack_page(storage, pm)
                 storage.update_object(pm)
+                if was_pinned:
+                    # reshaping a panel breaks the exact fill — say so
+                    receipt("📌 the reshape released this page's pin — the swatch no longer fit")
 
     def cycle_aspect(scene_id, panel_id):
         p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
@@ -661,16 +665,14 @@ def view_issue(state: APPState):
                          f"book reflows.").classes('text-sm q-mt-sm')
 
             def apply(tiling):
-                for p, (x, y, w, h) in zip(panels, tiling['pieces']):
-                    aspect, size = PIECE_PANEL[(w, h)]
-                    fresh = storage.read_object(Panel, p.primary_key)
-                    if fresh is None:
-                        continue
-                    fresh.aspect = FrameLayout(aspect)
-                    fresh.size = size
-                    storage.update_object(fresh)
+                # THE PINNED PAGE: the picked swatch is written VERBATIM as
+                # the page's cells and pinned — the stitcher reflows the
+                # rest of the book around it, never through it
+                from helpers.stitcher import pin_page_layout
+                pin_page_layout(storage, series_id, issue_id, panels, tiling['pieces'])
                 dlg.close()
-                receipt(f"📐 shaped {n} panels to a swatch-book layout — the book reflowed")
+                receipt(f"📌 pinned this page to a swatch layout — {n} panels hold "
+                        f"exactly these shapes; the book flows around them")
 
             with ui.row().classes('q-mt-sm').style('gap: 10px; flex-wrap: wrap; '
                                                    'max-height: 60vh; overflow-y: auto;'):
@@ -851,29 +853,56 @@ def view_issue(state: APPState):
                 first_tiles = {ps[0].panel_id: sc for sc in scenes_all
                                for ps in [panels_by_scene[sc.scene_id]] if ps}
                 folio = 0
+                from helpers.stitcher import alive_pins, flow_with_pins
+                pins = alive_pins(storage, series_id, issue_id)
+                pins_emitted = set()
+
+                def release_pin(pm):
+                    from helpers.stitcher import unpin_page
+                    unpin_page(storage, pm)
+                    receipt("📌 released the pin — the page rejoins the flow")
+
+                def flow_sheet(cells, grid_h, pinned_pm=None):
+                    nonlocal folio
+                    folio += 1
+                    with ui.element('div').classes('book-page') as sheet:
+                        for key, x, y, w, h in cells:
+                            tile(key[0], key[1], x, y, w, h, grid_h,
+                                 cap_scene=first_tiles.get(key[1]))
+                        ui.label(str(folio)).classes('page-folio')
+                        ordered = [k[1] for k, x, y, _w, _h in sorted(
+                            ((k, x, y, w2, h2) for k, x, y, w2, h2 in cells),
+                            key=lambda c: (c[2], c[1]))]
+                        with ui.row().classes('page-tools items-center'):
+                            if pinned_pm is not None:
+                                # THE PIN, visible and releasable right here
+                                ui.button(icon='push_pin') \
+                                    .props('flat round dense size=xs') \
+                                    .tooltip('This page holds its swatch layout — '
+                                             'click to release the pin and let it reflow') \
+                                    .on('click.stop', lambda _, pm=pinned_pm: release_pin(pm))
+                            ui.button(icon='dashboard_customize') \
+                                .props('flat round dense size=xs') \
+                                .tooltip('The swatch book — exact-fill layouts for this page') \
+                                .on('click.stop', lambda _, o=ordered: open_layout_dialog(o))
+                    sheet._props['data-banchor'] = f'flow-{folio}'
+
                 for kind, seg in segments:
                     if kind == 'flow':
-                        band_pages = paginate(pack_bands(seg))
-                        for pi, pb in enumerate(band_pages):
-                            folio += 1
-                            cells = justify(pb, is_last=(pi == len(band_pages) - 1))
-                            grid_h = max(10.0, max(y + h for _k, _x, y, _w, h in cells))
-                            with ui.element('div').classes('book-page') as sheet:
-                                for key, x, y, w, h in cells:
-                                    tile(key[0], key[1], x, y, w, h, grid_h,
-                                         cap_scene=first_tiles.get(key[1]))
-                                ui.label(str(folio)).classes('page-folio')
-                                # THE SWATCH BOOK DOOR: exact-fill layouts
-                                # for this page's panels, one hover away
-                                ordered = [k[1] for k, x, y, _w, _h in sorted(
-                                    ((k, x, y, w2, h2) for k, x, y, w2, h2 in cells),
-                                    key=lambda c: (c[2], c[1]))]
-                                with ui.row().classes('page-tools items-center'):
-                                    ui.button(icon='dashboard_customize') \
-                                        .props('flat round dense size=xs') \
-                                        .tooltip('The swatch book — exact-fill layouts for this page') \
-                                        .on('click.stop', lambda _, o=ordered: open_layout_dialog(o))
-                            sheet._props['data-banchor'] = f'flow-{folio}'
+                        # PINNED PAGES hold their exact cells; the rest of
+                        # the run flows around them — screen and print agree
+                        for pkind, part in flow_with_pins(seg, pins, pins_emitted):
+                            if pkind == 'pinned':
+                                flow_sheet([((c.scene_id, c.panel_id), c.x, c.y, c.w, c.h)
+                                            for c in part.cells],
+                                           max(10.0, max(c.y + c.h for c in part.cells)),
+                                           pinned_pm=part)
+                                continue
+                            band_pages = paginate(pack_bands(part))
+                            for pi, pb in enumerate(band_pages):
+                                cells = justify(pb, is_last=(pi == len(band_pages) - 1))
+                                grid_h = max(10.0, max(y + h for _k, _x, y, _w, h in cells))
+                                flow_sheet(cells, grid_h)
                     elif kind == 'slips':
                         # bare scenes hold their place but don't PRINT —
                         # no folio, so screen and book agree on page numbers

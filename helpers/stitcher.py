@@ -192,6 +192,49 @@ def justify(page_bands: list[dict], is_last: bool) -> list[tuple]:
     return cells
 
 
+def alive_pins(storage, series_id: str, issue_id: str) -> list[Page]:
+    """Stored PINNED pages whose every panel still exists — their cells are
+    law.  A pin whose panel was struck has lost its exact fill and
+    dissolves (the caller persists the unpin)."""
+    from schema import Panel
+    pins = []
+    for pm in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id},
+                                       order_by="page_number"):
+        if not getattr(pm, 'pinned', False) or not pm.cells:
+            continue
+        if all(storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
+                                           "scene_id": c.scene_id, "panel_id": c.panel_id})
+               is not None for c in pm.cells):
+            pins.append(pm)
+    return pins
+
+
+def flow_with_pins(seg: list[tuple], pins: list[Page],
+                   emitted: set | None = None) -> list[tuple]:
+    """Split one reading-order run around the pinned pages living in it:
+    [('flow', subrun) | ('pinned', Page)] in order.  A pinned page emits at
+    its first panel's place in the flow; its other panels lift out.  Pass
+    ONE `emitted` set across segments so a pin straddling a manuscript
+    break still emits exactly once."""
+    page_of = {(c.scene_id, c.panel_id): pm for pm in pins for c in pm.cells}
+    out, run = [], []
+    emitted = set() if emitted is None else emitted
+    for item in seg:
+        pm = page_of.get(item[0])
+        if pm is None:
+            run.append(item)
+            continue
+        if pm.page_id not in emitted:
+            emitted.add(pm.page_id)
+            if run:
+                out.append(('flow', run))
+                run = []
+            out.append(('pinned', pm))
+    if run:
+        out.append(('flow', run))
+    return out
+
+
 def stitch_pages(storage, series_id: str, issue_id: str) -> list[Page]:
     """Pack EVERY scene's panels, in reading order, onto pages.  The flow
     breaks exactly where the open book breaks it — at a bare scene holding
@@ -216,20 +259,30 @@ def stitch_pages(storage, series_id: str, issue_id: str) -> list[Page]:
     if not segments:
         return []
 
-    pages, n = [], 0
+    pins = alive_pins(storage, series_id, issue_id)
+    pages, n, emitted = [], 0, set()
     for seg in segments:
-        band_pages = paginate(pack_bands(seg))
-        for pi, pb in enumerate(band_pages):
-            n += 1
-            cells_abs = justify(pb, is_last=(pi == len(band_pages) - 1))
-            pages.append(Page(
-                page_id=f"page-{n}", issue_id=issue_id, series_id=series_id,
-                page_number=n,
-                rows=[[PanelRef(scene_id=k[0], panel_id=k[1]) for k, *_ in b["cells"]]
-                      for b in pb],
-                cells=[PanelCell(scene_id=k[0], panel_id=k[1], x=round(x, 3), y=round(y, 3),
-                                 w=round(w, 3), h=round(h, 3))
-                       for k, x, y, w, h in cells_abs]))
+        for kind, part in flow_with_pins(seg, pins, emitted):
+            if kind == 'pinned':
+                # THE PINNED PAGE: its cells pass through verbatim — only
+                # the folio is the stitcher's to assign
+                n += 1
+                pages.append(Page(
+                    page_id=f"page-{n}", issue_id=issue_id, series_id=series_id,
+                    page_number=n, rows=part.rows, cells=part.cells, pinned=True))
+                continue
+            band_pages = paginate(pack_bands(part))
+            for pi, pb in enumerate(band_pages):
+                n += 1
+                cells_abs = justify(pb, is_last=(pi == len(band_pages) - 1))
+                pages.append(Page(
+                    page_id=f"page-{n}", issue_id=issue_id, series_id=series_id,
+                    page_number=n,
+                    rows=[[PanelRef(scene_id=k[0], panel_id=k[1]) for k, *_ in b["cells"]]
+                          for b in pb],
+                    cells=[PanelCell(scene_id=k[0], panel_id=k[1], x=round(x, 3), y=round(y, 3),
+                                     w=round(w, 3), h=round(h, 3))
+                           for k, x, y, w, h in cells_abs]))
     return pages
 
 
@@ -269,7 +322,8 @@ def remember_stitch(storage, series_id: str, issue_id: str) -> None:
     fresh = stitch_pages(storage, series_id, issue_id)
 
     def sig(pages):
-        return [(p.page_number, [(c.panel_id, c.x, c.y, c.w, c.h) for c in p.cells])
+        return [(p.page_number, getattr(p, 'pinned', False),
+                 [(c.panel_id, c.x, c.y, c.w, c.h) for c in p.cells])
                 for p in pages]
     if sig(fresh) == sig(stored):
         return
@@ -285,10 +339,63 @@ def remember_stitch(storage, series_id: str, issue_id: str) -> None:
     logger.info(f"remembered the stitched layout for {issue_id} ({len(fresh)} pages)")
 
 
+def pin_page_layout(storage, series_id: str, issue_id: str,
+                    ordered_panels: list, pieces: list[tuple]) -> Page:
+    """PIN A SWATCH: the picked exact-fill layout becomes a PINNED page —
+    the panels take the pieces' aspect and size (so their art renders to
+    shape) and the page's cells are the tiling itself, verbatim.  Returns
+    the pinned page after the book has been re-remembered around it."""
+    from helpers.tilings import PIECE_PANEL
+    from schema import Panel, PanelRef, PanelCell, FrameLayout
+    cells, rows, row, last_y = [], [], [], None
+    for p, (x, y, w, h) in zip(ordered_panels, pieces):
+        aspect, size = PIECE_PANEL[(w, h)]
+        fresh = storage.read_object(Panel, p.primary_key)
+        if fresh is not None:
+            fresh.aspect = FrameLayout(aspect)
+            fresh.size = size
+            storage.update_object(fresh)
+        cells.append(PanelCell(scene_id=p.scene_id, panel_id=p.panel_id,
+                               x=float(x), y=float(y), w=float(w), h=float(h)))
+        ref = PanelRef(scene_id=p.scene_id, panel_id=p.panel_id)
+        if last_y is None or y == last_y:
+            row.append(ref)
+        else:
+            rows.append(row)
+            row = [ref]
+        last_y = y
+    if row:
+        rows.append(row)
+    # a panel wears ONE pin: any older pinned page claiming these panels
+    # dissolves — two pages must never both hold the same panel
+    keys = {(c.scene_id, c.panel_id) for c in cells}
+    for old_pm in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id}):
+        if getattr(old_pm, 'pinned', False) and                 any((c.scene_id, c.panel_id) in keys for c in old_pm.cells):
+            old_pm.pinned = False
+            storage.create_object(data=old_pm, overwrite=True)
+    page = Page(page_id=f"page-pin-{cells[0].panel_id[:8]}", issue_id=issue_id,
+                series_id=series_id, page_number=0, rows=rows, cells=cells, pinned=True)
+    storage.create_object(data=page, overwrite=True)
+    remember_stitch(storage, series_id, issue_id)   # folios settle around the pin
+    return page
+
+
+def unpin_page(storage, pm: Page) -> None:
+    """RELEASE THE PIN: the page rejoins the flow and the book re-stitches."""
+    pm.pinned = False
+    storage.create_object(data=pm, overwrite=True)
+    remember_stitch(storage, pm.series_id, pm.issue_id)
+
+
 def repack_page(storage, pm: Page) -> Page:
     """Re-stitch ONE page after an edit: its rows' flat sequence runs back
     through the band packer (no page break — a crowded page composes scaled).
-    Rows become the new band grouping; cells the new geometry."""
+    Rows become the new band grouping; cells the new geometry.
+
+    A PINNED page dissolves its pin here: repacking re-derives the very
+    geometry the pin froze, so the swatch no longer holds."""
+    if getattr(pm, 'pinned', False):
+        pm.pinned = False
     from schema import Panel
     items = []
     for row in pm.rows:

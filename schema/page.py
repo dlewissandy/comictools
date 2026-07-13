@@ -37,6 +37,7 @@ class Page(BaseModel):
     page_number: int = Field(..., description="The page number in reading order, 1-based.")
     rows: list[list[PanelRef]] = Field(default_factory=list, description="The page grid: a list of rows, each row a list of 1-3 panels placed left to right.")
     cells: list[PanelCell] = Field(default_factory=list, description="Exact unit-grid boxes (6 wide x 10 tall) for each placed panel.  Authoritative when non-empty; kept in sync with rows by the stitcher.")
+    pinned: bool = Field(False, description="A PINNED page holds its exact cells — a picked swatch layout the stitcher must never reflow.  Default to False.")
 
     @property
     def primary_key(self) -> dict[str, str]:
