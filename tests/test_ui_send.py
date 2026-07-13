@@ -942,3 +942,15 @@ def test_agent_memory_keys_like_the_chat():
     deeper = sel + [S(name="Healing", id="x.png", kind=K.IMAGE_EDITOR)]
     state2 = SimpleNamespace(conversation_key=lambda s: "/series/wl")
     assert _thread_key(state2, deeper) == _thread_key(state, sel)
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_no_route_shadows_niceguis_image_serving(user: User) -> None:
+    """NiceGUI registers its image routes (/_nicegui/auto/static/…)
+    DYNAMICALLY after startup — an import-time catch-all page shadows them
+    and 404s EVERY image in the studio.  No page route may own '/{path'."""
+    from nicegui import app as _app
+    catchalls = [r.path for r in _app.routes
+                 if getattr(r, 'path', '').startswith('/{')]
+    assert not catchalls, f"catch-all routes shadow dynamic image routes: {catchalls}"

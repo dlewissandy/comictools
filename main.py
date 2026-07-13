@@ -1396,19 +1396,10 @@ def series_page(tail: str):
 # The studio restarts deliberately, not whenever a file changes.
 # COMIC_STUDIO_PORT lets a second instance verify new code against the same
 # data without dropping the author's live session.
-# A MISTYPED ADDRESS GETS THE FRONT DOOR, told plainly — never a bare
-# JSON wall.  Registered LAST so every real route above wins (FastAPI
-# matches in registration order).
-@ui.page('/{path:path}')
-def lost_page(path: str):
-    # only ADDRESS-SHAPED paths get the friendly front door; asset probes,
-    # crawlers and stale file links get a real 404 (a bad export href must
-    # fail visibly, not open a lobby in a new tab)
-    first = (path.split('/', 1)[0] or '').lower()
-    if first not in ('series', 'publishers', 'library', 'styles') or '.' in path.rsplit('/', 1)[-1]:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail=f"/{path} is not a studio address")
-    _page_from_path(path)
+# NO catch-all route: NiceGUI registers its image routes
+# (/_nicegui/auto/static/…) DYNAMICALLY after startup, so any import-time
+# catch-all shadows them and 404s every image on every page.  Dead tails on
+# real routes still get the honest front-door notice via _page_from_path.
 
 
 ui.run(reload=False, port=int(os.environ.get('COMIC_STUDIO_PORT', '8080')))
