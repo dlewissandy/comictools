@@ -669,9 +669,16 @@ def _create_character_style_example_image_sync(
 
 
 def create_styled_image_body(state, series_id: str, character_id: str,
-                             variant_id: str, style_id: str) -> str:
+                             variant_id: str, style_id: str,
+                             peer_anchor_ids: list = None) -> str:
     """Render a variant's styled reference sheet in one style — callable
-    directly from the GUI (background job) or via the tool."""
+    directly from the GUI (background job) or via the tool.
+
+    peer_anchor_ids: character ids whose base sheets DEFINE the hand this
+    render must match (the 'artist').  When given, those anchor the cast's
+    shared hand instead of an arbitrary pair — this is how 'ink the cast in
+    one hand' holds everyone to one lead, and the hook a future named
+    ARTIST plugs into."""
     class _W:  # minimal wrapper shim for generate_object_image
         context = state
     wrapper = _W()
@@ -851,12 +858,18 @@ def create_styled_image_body(state, series_id: str, character_id: str,
     # so a new character is drawn by the same artist as the established cast
     # — not a fresh interpretation of the style prose.  Labeled hard as
     # DIFFERENT PEOPLE so their faces and builds never bleed in.
+    # when an ANCHOR set is named (an 'artist', or the lead of a one-hand
+    # pass), those characters define the hand; otherwise any two inked
+    # castmates do
+    _others = storage.read_all_objects(CharacterModel, {"series_id": series_id})
+    if peer_anchor_ids:
+        _rank = {cid: i for i, cid in enumerate(peer_anchor_ids)}
+        _others = sorted((o for o in _others if o.character_id in _rank),
+                         key=lambda o: _rank[o.character_id])
     peers = []
-    for other in storage.read_all_objects(CharacterModel, {"series_id": series_id}):
+    for other in _others:
         if other.character_id == character_id:
             continue
-        peer_img = storage.find_character_image(series_id=series_id,
-                                                character_id=other.character_id)
         # only a peer whose sheet is in THIS style anchors the shared hand
         ov = next((v for v in storage.read_all_objects(CharacterVariant,
                    {"series_id": series_id, "character_id": other.character_id})
@@ -912,6 +925,85 @@ def create_styled_image_body(state, series_id: str, character_id: str,
     if missing:
         note = "  NOTE: rendered without: " + "; ".join(missing) + ".  Generate those references and re-render for better consistency."
     return f"Styled image created successfully with locator: {locator}.{note}"
+
+
+@function_tool
+def ink_cast_in_one_hand(wrapper: RunContextWrapper[APPState], series_id: str,
+                         style_id: str, lead_character_id: Optional[str] = None) -> str:
+    """
+    Redraw EVERY character's base reference sheet in one style so the whole
+    cast is drawn by a single artist's hand.  A lead character (whose current
+    sheet defines the hand) is inked first; the rest are held to it.  Runs in
+    the background; each sheet posts a receipt as it lands.
+
+    Args:
+        series_id: The series whose cast to unify.
+        style_id: The comic style to draw the whole cast in.
+        lead_character_id: The character whose sheet sets the hand (optional).
+    """
+    from helpers.render_queue import enqueue_renders
+    state: APPState = wrapper.context
+    jobs = ink_cast_in_one_hand_body(state, series_id, style_id, lead_character_id)
+    if not jobs:
+        return "No character base looks to redraw yet — create the cast first."
+    enqueue_renders(state, jobs, role="the Character Designer")
+    return (f"Redrawing {len(jobs)} character sheets in one hand"
+            + (f" led by {lead_character_id}" if lead_character_id else "")
+            + " — they land as they finish.")
+
+
+def ink_cast_in_one_hand_body(state, series_id: str, style_id: str,
+                              lead_character_id: str = None) -> list:
+    """Re-ink every character's BASE look in one style so the whole cast is
+    drawn by a single hand.  Returns [(label, job)] render jobs to enqueue.
+
+    A LEAD (an 'artist') whose sheet defines the hand is inked/kept first;
+    every other character is then re-inked HELD TO THE LEAD.  With no lead,
+    the cast is inked in order, each held to those already done (a chain).
+    """
+    from schema import CharacterModel as _CM, CharacterVariant as _CV
+
+    def _base_id(cid):
+        looks = state.storage.read_all_objects(_CV, {"series_id": series_id, "character_id": cid})
+        base = next((v for v in looks if v.variant_id == "base"
+                     or (v.name or "").strip().lower() == "base"
+                     or (v.name or "").strip().lower().endswith(" base")), None)
+        if base is None and looks:
+            base = looks[0]
+        return base.variant_id if base else None
+
+    chars = state.storage.read_all_objects(_CM, {"series_id": series_id})
+    order = [c for c in chars if c.character_id != lead_character_id]
+    jobs = []
+    if lead_character_id:
+        lead = next((c for c in chars if c.character_id == lead_character_id), None)
+        lead_base = _base_id(lead_character_id)
+        if lead is not None and lead_base:
+            # the lead is inked FIRST (if it isn't already the hand) — every
+            # other character is then held to it
+            jobs.append((f"the lead — {lead.name} (defines the hand)",
+                         lambda cid=lead_character_id, vid=lead_base:
+                         create_styled_image_body(state, series_id, cid, vid, style_id)))
+        for c in order:
+            vid = _base_id(c.character_id)
+            if vid:
+                jobs.append((f"{c.name} — redrawn in {lead.name if lead else 'the'} hand",
+                             lambda cid=c.character_id, vid=vid:
+                             create_styled_image_body(state, series_id, cid, vid, style_id,
+                                                      peer_anchor_ids=[lead_character_id])))
+    else:
+        done = []
+        for c in chars:
+            vid = _base_id(c.character_id)
+            if not vid:
+                continue
+            anchors = list(done)
+            jobs.append((f"{c.name} — in the cast's shared hand",
+                         lambda cid=c.character_id, vid=vid, a=anchors:
+                         create_styled_image_body(state, series_id, cid, vid, style_id,
+                                                  peer_anchor_ids=a or None)))
+            done.append(c.character_id)
+    return jobs
 
 
 @function_tool

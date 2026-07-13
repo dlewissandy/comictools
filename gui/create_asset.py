@@ -447,3 +447,59 @@ def handle_asset_drop(state: APPState, args: dict):
             ui.notify(f"Couldn't start that from the image: {ex}", type="negative")
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# ONE HAND FOR THE CAST: re-ink every character in a chosen style so they're
+# drawn by a single artist.  The seed of a future named-"artist" feature.
+# ---------------------------------------------------------------------------
+def ink_cast_dialog(state: APPState, series_id: str):
+    """Pick a style (and optional lead) and re-ink the whole cast in one hand."""
+    from schema import ComicStyle, CharacterModel
+    storage = state.storage
+    styles = storage.read_all_objects(ComicStyle, order_by="name")
+    chars = sorted(storage.read_all_objects(CharacterModel, {"series_id": series_id}),
+                   key=lambda c: (c.name or "").lower())
+
+    with ui.dialog() as dlg, ui.card().classes("soft-card") \
+            .style("min-width: 520px; max-width: 720px;"):
+        ui.label("Redraw the cast in one hand").classes("caption-box caption-box-sm")
+        ui.markdown("Re-ink every character's reference sheet in one style so the "
+                    "whole cast looks drawn by a single artist.  Pick the **lead** "
+                    "whose current sheet sets the hand — everyone else is redrawn to "
+                    "match it.").classes("text-sm")
+
+        if not styles:
+            ui.label("No styles yet.").classes("text-sm q-mt-sm")
+        style_sel = ui.select({s.style_id: s.name.title() for s in styles},
+                              label="Style", value=(styles[0].style_id if styles else None)) \
+            .props("outlined dense").classes("w-full q-mt-sm")
+        lead_opts = {"": "— no lead: match the cast as a chain —",
+                     **{c.character_id: c.name for c in chars}}
+        lead_sel = ui.select(lead_opts, label="Lead (defines the hand)", value="") \
+            .props("outlined dense").classes("w-full q-mt-sm")
+        ui.label(f"{len(chars)} character{'s' if len(chars) != 1 else ''} in the cast — "
+                 f"each is a paid render.").classes("text-xs text-gray-500")
+
+        def go():
+            sid = style_sel.value
+            if not sid:
+                ui.notify("Pick a style.", type="warning")
+                return
+            from agentic.tools.imaging import ink_cast_in_one_hand_body
+            from helpers.render_queue import enqueue_renders
+            jobs = ink_cast_in_one_hand_body(state, series_id, sid, lead_sel.value or None)
+            if not jobs:
+                ui.notify("No character base looks to redraw yet.", type="warning")
+                return
+            dlg.close()
+            ui.notify(f"Redrawing {len(jobs)} sheets in one hand — they land as they finish.",
+                      type="info")
+            enqueue_renders(state, jobs, role="the Character Designer")
+
+        with ui.row().classes("w-full justify-end q-mt-md").style("gap: 8px;"):
+            ui.button("Cancel", icon="close").props("flat no-caps") \
+                .on("click", lambda _: dlg.close())
+            ui.button("Redraw the cast", icon="brush").props("unelevated no-caps") \
+                .on("click", lambda _: go())
+    dlg.open()

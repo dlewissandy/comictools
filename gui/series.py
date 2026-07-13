@@ -57,6 +57,9 @@ def view_series(state: APPState):
         from gui.constants import TAILWIND_CARD
         def _cap(text, msg):
             return lambda: caption_action(text, _CK.CREATE, lambda _, m=msg: post_user_message(state, m), 3)
+        def _ink_cast():
+            from gui.create_asset import ink_cast_dialog
+            ink_cast_dialog(state, series.series_id)
         def _create_cap(text, asset_kind):
             # THE CREATE DOOR: three paths (describe / from an image / copy),
             # the same for every reusable asset
@@ -178,6 +181,17 @@ def view_series(state: APPState):
 
         # A cardwall for viewing and adding characters to the comic series.
         characters = storage.read_all_objects(CharacterModel, primary_key={"series_id": series.series_id})
+        if len(characters) > 1:
+            # ONE HAND FOR THE CAST: redraw every character in a single style
+            # so they don't look drawn by different artists
+            with packer.place_cell([(12, 1)], fudge=False):
+                with ui.row().classes('w-full items-center').style('gap: 8px;'):
+                    ui.label('Cast').classes('comic-label-sm')
+                    ui.button('Redraw the cast in one hand', icon='brush') \
+                        .props('flat dense no-caps') \
+                        .tooltip('Re-ink every character in one style so the whole '
+                                 'cast is drawn by a single artist') \
+                        .on('click', lambda _: _ink_cast())
         if characters:
             with view_all_instances(
                 state=state, 
