@@ -675,12 +675,18 @@ def init_layout(logger):
         stop_speak_button = ui.button(icon='volume_off').props('flat round').tooltip('Mute')
         send_button = ui.button('Send', icon='send').props('rounded unelevated').classes('q-ml-sm')
 
+        # THE STOP DOOR: visible only while a turn runs — one click ends it
+        stop_button = ui.button(icon='stop_circle', color='negative') \
+            .props('flat round').tooltip('Stop this turn — receipts stay, nothing more happens')
+        stop_button.set_visibility(False)
+
     return (
         breadcrumbs,
         details,
         history,
         user_input,
         send_button,
+        stop_button,
         suggestions_row,
         attach_upload,
         darkswitch,
@@ -710,6 +716,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         history,
         user_input,
         send_button,
+        stop_button,
         suggestions_row,
         attach_upload,
         darkswitch,
@@ -1076,6 +1083,11 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                   js_handler='(e) => { if (!e.shiftKey) { e.preventDefault(); emit(); } }',
                   handler=lambda _: send(state=state))
     send_button.on('click', lambda _:send(state=state))
+    state.stop_button = stop_button
+    from messaging import stop_turn
+    stop_button.on('click', lambda _: (stop_turn(state)
+                                       and ui.notify('Stopping — receipts stay, nothing more happens.',
+                                                     type='warning')))
 
     from gui.messaging import attach_reference
     attach_upload.on_upload(lambda e: attach_reference(state, e))

@@ -119,6 +119,10 @@ async def handle_tool_call_event(state: APPState, event: RunItemStreamEvent, div
     raw_item = event.item.raw_item
     line, quiet = _receipt_for(raw_item.name, raw_item.arguments)
     logger.debug(f"tool call: {raw_item.name}({raw_item.arguments})")
+    try:
+        getattr(state, '_turn_receipts', []).append(f"called {raw_item.name}({str(raw_item.arguments)[:160]})")
+    except Exception:
+        pass
     lbl = getattr(state, '_working_label', None)
     if lbl is not None:
         try:
@@ -126,8 +130,9 @@ async def handle_tool_call_event(state: APPState, event: RunItemStreamEvent, div
             phrase = next((ph for v, ph in _LIFE_SIGNS if raw_item.name.startswith(v)),
                           raw_item.name.replace('_', ' ') + '…')
             lbl.set_text(phrase)
-            # tool truth outranks decoration: pin it for a few beats
-            state._working_pin_until = _time.monotonic() + 6.0
+            # tool truth outranks decoration: hold the floor until the
+            # tool actually answers (a render can run minutes)
+            state._working_pin_until = float('inf')
         except Exception:
             pass
     container = thoughts_container(divider) if quiet else divider
@@ -143,6 +148,12 @@ async def handle_tool_output_event(state: APPState, event: RunItemStreamEvent, d
     work instead of waiting for the end of the turn.
     """
     output = str(event.item.output)
+    import time as _time
+    state._working_pin_until = _time.monotonic() + 1.0   # the floor opens again
+    try:
+        getattr(state, '_turn_receipts', []).append(f"→ {output[:200]}")
+    except Exception:
+        pass
     logger.debug(f"tool output: {output[:200]}")
     is_short_sentence = len(output) < 300 and not output.lstrip().startswith(("{", "[", "<"))
     if is_short_sentence and not output.startswith("An error"):
@@ -180,6 +191,7 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
     if agent is None:
         raise ValueError(f"Agent not found for kind: {kind}")
     stream = Runner.run_streamed(agent, input=messages, context=state, max_turns=40)
+    state._live_stream = stream          # the STOP door holds this handle
     streamed_events = stream.stream_events()
     async for event in streamed_events:
         # --- RAW TEXT TOKENS ---
@@ -228,6 +240,23 @@ def _trim_thread(items: list, max_items: int = 80) -> list:
     return items
 
 
+def stop_turn(state: APPState) -> bool:
+    """THE STOP DOOR: cancel the running turn.  The receipts stay; the
+    turn closes with an honest note; render money stops burning."""
+    stream = getattr(state, '_live_stream', None)
+    if stream is None:
+        return False
+    state._stop_requested = True
+    try:
+        stream.cancel()
+    except Exception as ex:
+        logger.debug(f"stop: cancel raised {ex}")
+    return True
+
+
+_STOP_WORDS = {"stop", "stop!", "stop it", "cancel", "cancel that", "halt", "abort"}
+
+
 async def send(state: APPState):
     # THE SEND LOCK: Enter used to slip past the disabled button and start a
     # second agent run over the first — one conversation turn at a time.
@@ -236,6 +265,11 @@ async def send(state: APPState):
         # a turn is running: QUEUE the words instead of bouncing them —
         # GUI verbs and eager authors both land right after this reply
         queued = (state.user_input.value or '').strip()
+        if queued.lower() in _STOP_WORDS:
+            state.user_input.value = ''
+            if stop_turn(state):
+                ui.notify("Stopping this turn now.", type='warning')
+            return
         if queued:
             q = getattr(state, '_send_queue', None)
             if q is None:
@@ -320,6 +354,14 @@ async def send(state: APPState):
     # and NEVER end a turn with a silent empty balloon: exhaustion and
     # failure speak plainly and offer a way to resume
     state._working_label = working
+    state._turn_receipts = []
+    state._stop_requested = False
+    _reply_home = state.conversation_key(state.selection)
+    from gui.coauthor import coauthor_name as _cn
+    _reply_name = _cn(state.selection)
+    _stop_btn = getattr(state, 'stop_button', None)
+    if _stop_btn is not None:
+        _stop_btn.set_visibility(True)
     try:
         responses = await handle_agent_events(state, messages, response_markdown, divider)
         if responses:
@@ -330,7 +372,10 @@ async def send(state: APPState):
                 "actually happened.  Say **go on** if there's more to do.)*")
     except Exception as ex:
         from agents.exceptions import MaxTurnsExceeded
-        if isinstance(ex, MaxTurnsExceeded):
+        if getattr(state, '_stop_requested', False):
+            note = ("🛑 Stopped at your word — the receipts above are what "
+                    "happened before the stop; nothing else was done.")
+        elif isinstance(ex, MaxTurnsExceeded):
             note = ("I ran out of steam mid-way — the receipts above are what "
                     "actually happened; nothing beyond them was done.  Say "
                     "**go on** and I'll pick up where I left off.")
@@ -339,10 +384,19 @@ async def send(state: APPState):
             note = (f"That turn failed — {str(ex)[:200]}.  "
                     f"Say **try again** and I'll take another run at it.")
         response_markdown.set_content(note)
-        # the thread remembers the truth so "go on" resumes with context
-        threads[tkey] = messages + [{"role": "assistant", "content": note}]
+        # the thread remembers the truth so "go on" resumes with REAL
+        # context: the receipts of every tool the failed run executed —
+        # not an amnesiac note that redoes (and re-bills) the work
+        _done = getattr(state, '_turn_receipts', None) or []
+        _memo = note + (("\n\nWhat was already done this turn:\n"
+                         + "\n".join(f"- {r}" for r in _done[:40])) if _done else "")
+        threads[tkey] = messages + [{"role": "assistant", "content": _memo}]
     finally:
         state._working_label = None
+        state._live_stream = None
+        state._working_pin_until = 0
+        if _stop_btn is not None:
+            _stop_btn.set_visibility(False)
         # Now that we are done, clean up the ui and re-enable the send button
         # even if the agent run raised, so the user is never left stuck.
         ticker.cancel()
@@ -350,13 +404,36 @@ async def send(state: APPState):
         send_button.enable()
         state._sending = False
 
+        # A REPLY IS NEVER SWALLOWED: if the author walked to another room
+        # mid-turn, the finished words land in the OLD room's stored thread
+        try:
+            _now_home = state.conversation_key(state.selection)
+            if _now_home != _reply_home and (response_markdown.content or '').strip():
+                conv = state.conversations.setdefault(_reply_home, [])
+                conv.append({'name': _reply_name,
+                             'text_html': response_markdown.content,
+                             'sent': False})
+        except Exception as _ex:
+            logger.debug(f"re-homing the reply skipped: {_ex}")
+
     state.write()
     if state.is_dirty:
         state.refresh_details()
 
-    # anything queued mid-turn goes right away
+    # anything queued mid-turn goes right away — WITHOUT clobbering a
+    # draft the author is typing (their words wait in the box; the queued
+    # message rides through directly)
     q = getattr(state, '_send_queue', None)
     if q:
+        draft = (state.user_input.value or '')
         state.user_input.value = q.pop(0)
-        asyncio.create_task(send(state))
+        task = asyncio.create_task(send(state))
+        if draft.strip():
+            def _restore_draft(_t, d=draft):
+                try:
+                    if not (state.user_input.value or '').strip():
+                        state.user_input.value = d
+                except Exception:
+                    pass
+            task.add_done_callback(_restore_draft)
         state.is_dirty = False

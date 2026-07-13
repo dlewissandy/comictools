@@ -908,3 +908,21 @@ async def test_library_shelves_show_wardrobe_and_props(user: User) -> None:
     props = storage.read_all_objects(PropAsset, {"series_id": WL})
     if props:
         await user.should_see(props[0].name)
+
+
+def test_the_stop_door_cancels_the_stream():
+    """stop_turn holds the live stream's handle and cancels it — the one
+    door out of a runaway 40-turn spend."""
+    from types import SimpleNamespace
+    from messaging import stop_turn, _STOP_WORDS
+    calls = []
+    state = SimpleNamespace(_live_stream=SimpleNamespace(cancel=lambda: calls.append("cancel")),
+                            _stop_requested=False)
+    assert stop_turn(state) is True
+    assert calls == ["cancel"] and state._stop_requested
+    # no live turn -> nothing to stop, honestly
+    assert stop_turn(SimpleNamespace(_live_stream=None)) is False
+    # the words an author will actually type
+    for w in ("stop", "Stop", "cancel", "STOP IT"):
+        assert w.lower() in _STOP_WORDS or w.lower() in _STOP_WORDS
+    assert "stop" in _STOP_WORDS and "cancel" in _STOP_WORDS
