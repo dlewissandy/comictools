@@ -51,7 +51,11 @@ def test_binder_composes_designed_pages(storage, tmp_data, unrendered_panel):
             series_id=WL, issue_id=CARN, pages=[[[TENT_PANEL]], [[TENT_PANEL, other]]])
     layout = layout_pages(storage, WL, CARN)
     assert len(layout) == 2
-    assert layout[1][1][0][1] is None, "unrendered panel resolves to a placeholder"
+    # the unrendered panel resolves to its TRUEST FACE: a rough when the
+    # table holds one, else a placeholder that NAMES the missing panel
+    path, label = layout[1][1][0][1]
+    assert path is None or "ROUGH" in label
+    assert "panel" in label or "ROUGH" in label, "the placeholder names what belongs here"
 
     out = os.path.join(tmp_data, "series", WL, "issues", CARN, "exports", "paged.pdf")
     count, _missing = bind_issue_pdf(storage, WL, CARN, out)

@@ -107,3 +107,15 @@ def test_insert_letter_blocks_become_letters(storage):
     # a switched-off block stays off the print
     ins.figure_blocking["letterblock/0"] = {"on": 0}
     assert len(collect_letters(ins)) == 1
+
+
+def test_a_posters_brief_never_prints_as_letters(storage):
+    """Only the MAILBAG's description holds letters — a poster's description
+    is a render brief, and production notes must never reach the page."""
+    from helpers.compositor import collect_letters
+    from schema import Insert
+    inserts = storage.read_all_objects(Insert, primary_key={"series_id": WL, "issue_id": CARN})
+    ins = inserts[0]
+    ins.kind = "poster"
+    ins.description = "HEADER: big carnival wordmark\n\nMasthead: issue #1 blurb"
+    assert collect_letters(ins) == []

@@ -189,12 +189,13 @@ async def test_palette_and_chip_removal(user: User) -> None:
     await user.open("/")
     # attached assets render as chips
     await user.should_see("Fortune Teller Tent")
-    await user.should_see("ezra")
+    # the cast chip wears the character's NAME, not the raw id
+    await user.should_see("Ezra")
 
     # remove Ezra from the cast via the chip's ✕
     from nicegui import ui as _ui
     chips = [e for e in user.client.elements.values()
-             if e.__class__.__name__ == "Chip" and "ezra" in str(getattr(e, "text", ""))]
+             if e.__class__.__name__ == "Chip" and "ezra" in str(getattr(e, "text", "")).lower()]
     assert chips, "cast chip exists"
     chips[0]._handle_event({"handler_id": None}) if False else None
     # fire the 'remove' event through the element's registered handler
@@ -466,3 +467,94 @@ async def test_lobby_resume_card_and_scene_door(user: User) -> None:
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
     await user.should_see("read them in the book")
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_cast_chip_is_a_door_to_the_character(user: User) -> None:
+    """The cast chip's BODY walks to the character's room; firing ✕ detaches
+    without walking anywhere — one chip, two honest verbs."""
+    main.LocalStorage = _TmpStorage
+    # the removal test upstream may have detached Ezra from the shared tmp
+    # copy — seat him again so the door has a chip to hang on
+    from schema import SceneModel, CharacterRef
+    storage = _TmpStorage()
+    sc_pk = {"series_id": "wonders-of-the-witchlight", "issue_id": "witchlight-carnival",
+             "scene_id": "b3cc50eb-5a57-463c-ba10-927d941c9779"}
+    sc = storage.read_object(SceneModel, sc_pk)
+    if not any(c.character_id == "ezra" for c in (sc.cast or [])):
+        sc.cast = [*(sc.cast or []), CharacterRef(series_id="wonders-of-the-witchlight", character_id="ezra", variant_id="base")]
+        storage.update_object(sc)
+    json.dump({"selection": [
+        {"name": "Series", "id": None, "kind": "all-series"},
+        {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+        {"name": "C", "id": "witchlight-carnival", "kind": "issue"},
+        {"name": "T", "id": "b3cc50eb-5a57-463c-ba10-927d941c9779", "kind": "scene"}],
+        "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("Ezra")
+
+    chips = [e for e in user.client.elements.values()
+             if e.__class__.__name__ == "Chip" and "ezra" in str(getattr(e, "text", "")).lower()]
+    assert chips, "cast chip exists"
+    for ev in chips[0]._event_listeners.values():
+        if ev.type == "click":
+            chips[0]._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+    # the character room opened — provable from the page itself: the
+    # scene's production strip is gone and the character's name heads the room
+    await user.should_see("Ezra")
+    texts = " ".join(str(getattr(e, "text", "")) for e in user.client.elements.values())
+    assert "Production" not in texts, "left the scene — this is the character's own room"
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_spend_label_opens_the_days_receipts(user: User, tmp_path, monkeypatch) -> None:
+    """Clicking the ink meter opens the day's receipts: per-quality counts,
+    estimated dollars, and the honesty line."""
+    import time as _time
+    import helpers.generator as gen
+    ledger_file = tmp_path / "spend.json"
+    json.dump({_time.strftime("%Y-%m-%d"): {"high": 2, "low": 1}}, open(ledger_file, "w"))
+    monkeypatch.setattr(gen, "SPEND_LEDGER", str(ledger_file))
+
+    main.LocalStorage = _TmpStorage
+    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("🎨 3")
+
+    labels = [e for e in user.client.elements.values()
+              if e.__class__.__name__ == "Label" and "🎨" in str(getattr(e, "text", ""))]
+    assert labels, "the ink meter is on the header"
+    for ev in labels[0]._event_listeners.values():
+        if ev.type == "click":
+            labels[0]._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+    await user.should_see("receipts")
+    await user.should_see("2 at high quality")
+    await user.should_see("Estimates at published image rates")
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_a_posters_bench_lays_no_letter_acetates(user: User) -> None:
+    """The board twin of the mailbag rule: a poster's description is a render
+    BRIEF — unlocking its bench must lay ZERO letter acetates."""
+    main.LocalStorage = _TmpStorage
+    from schema import Insert
+    storage = _TmpStorage()
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    ins = storage.read_all_objects(Insert, primary_key={"series_id": WL, "issue_id": CARN})[0]
+    ins.image = None
+    ins.kind = "poster"          # tmp copy only
+    storage.update_object(ins)
+    json.dump({"selection": [{"name": "S", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": WL, "kind": "series"},
+                             {"name": "C", "id": CARN, "kind": "issue"},
+                             {"name": "M", "id": ins.insert_id, "kind": "insert"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("Letters To Mud")
+    blocks = [e for e in user.client.elements.values()
+              if 'rough-letterblock' in str(getattr(e, "_classes", []))]
+    assert blocks == [], "a poster's brief never rides the table as letters"

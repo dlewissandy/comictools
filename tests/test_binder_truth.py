@@ -67,5 +67,31 @@ def test_bind_appends_rendered_leftovers_instead_of_dropping(storage, tmp_path):
 def test_compose_page_survives_empty_rows(storage):
     # an empty row is a layout bug, not a ZeroDivisionError
     front, panels, _b, _m = collect_issue(storage, WL, CARN)
-    img = _compose_page([[], [panels[0]]])
+    img = _compose_page([[], [(panels[0], "panel 1 — the tent")]])
     assert img.size[0] > 0
+
+
+def test_only_the_mailbag_typesets_its_description(storage, tmp_data, monkeypatch):
+    """A poster's description is a render BRIEF — production notes must never
+    typeset onto a bound page.  The mailbag's description IS the page."""
+    from helpers import binder
+    from schema import Insert
+    ins = storage.read_all_objects(Insert, {"series_id": WL, "issue_id": CARN})[0]
+    ins.image = None
+    ins.description = "HEADER: big carnival wordmark\n\nMasthead: issue #1 blurb"
+    out = os.path.join(tmp_data, "series", WL, "issues", CARN, "exports", "gate.pdf")
+
+    typeset = []
+    real = binder._insert_text_sheet
+    monkeypatch.setattr(binder, "_insert_text_sheet",
+                        lambda i: typeset.append(i.kind) or real(i))
+
+    ins.kind = "poster"
+    storage.update_object(ins)
+    binder.bind_issue_pdf(storage, WL, CARN, out)
+    assert typeset == [], "a poster's brief never typesets onto a page"
+
+    ins.kind = "mailbag"
+    storage.update_object(ins)
+    binder.bind_issue_pdf(storage, WL, CARN, out)
+    assert typeset == ["mailbag"], "the mailbag's letters still print typeset"

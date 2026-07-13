@@ -755,7 +755,47 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         with ui.row().classes('items-center no-wrap').style('gap: 6px; display: none;') as board_chip:
             ui.spinner('dots', size='1.4em', color='primary')
             board_label = ui.label('').classes('text-xs')
-        board_chip.tooltip('The studio is at work — receipts land in the chat as pieces finish')
+        board_chip.tooltip('The studio is at work — click for the docket')
+        board_chip.classes('cursor-pointer')
+
+        def open_docket():
+            # THE DOCKET: what's on the drawing board right now, oldest first
+            import json as _json
+            import time as _time
+            from helpers.render_queue import QUEUE_DIR
+            slips = []
+            if os.path.isdir(QUEUE_DIR):
+                for f in os.listdir(QUEUE_DIR):
+                    if not f.endswith('.json'):
+                        continue
+                    try:
+                        slip = _json.load(open(os.path.join(QUEUE_DIR, f)))
+                        age = _time.time() - slip.get('queued_at', 0)
+                        if age < 900:
+                            slips.append((age, slip.get('label', f)))
+                    except (OSError, ValueError):
+                        pass
+            slips.sort(reverse=True)
+            with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                    .style('min-width: 460px; max-width: 640px;'):
+                ui.label('On the drawing board').classes('caption-box caption-box-sm')
+                if not slips:
+                    ui.label('Nothing on the board — the last piece just came off.') \
+                        .classes('text-sm q-mt-sm')
+                for age, label in slips:
+                    with ui.row().classes('w-full items-center q-mt-sm') \
+                            .style('gap: 8px; flex-wrap: nowrap;'):
+                        ui.spinner('dots', size='1.2em', color='primary')
+                        ui.label(label).classes('text-sm').style(
+                            'overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
+                        ui.space()
+                        m, sec = int(age // 60), int(age % 60)
+                        ui.label(f"{m}m {sec}s" if m else f"{sec}s").classes(
+                            'text-xs text-gray-500').style('flex-shrink: 0;')
+                ui.label('Receipts land in the chat as each piece finishes.') \
+                    .classes('text-xs text-gray-500 q-mt-md')
+            dlg.open()
+        board_chip.on('click', lambda _: open_docket())
 
         # THE WASTEBASKET: deletes are moves, and here's where they went —
         # open it, see what was struck and when, bring anything back
@@ -848,9 +888,52 @@ def build_page(selection_override: list[SelectionItem] | None = None):
 
         # THE SPEND METER: renders cost real money — the header tells the
         # truth quietly (today's count and a rough dollar estimate)
-        spend_label = ui.label('').classes('text-xs text-gray-500') \
-            .tooltip("Today's renders and a rough cost estimate — every image "
-                     "the studio inked since midnight")
+        spend_label = ui.label('').classes('text-xs text-gray-500 cursor-pointer') \
+            .tooltip("Today's renders and a rough cost estimate — click for "
+                     "the day's receipts")
+
+        def open_receipts():
+            # THE RECEIPTS: the meter's small print — what the studio inked,
+            # at what quality, day by day.  Estimates, and it says so.
+            import json as _json
+            import time as _time
+            from helpers.generator import SPEND_LEDGER, EST_COST
+            ledger = {}
+            try:
+                if os.path.exists(SPEND_LEDGER):
+                    ledger = _json.load(open(SPEND_LEDGER))
+            except (ValueError, OSError):
+                ledger = {}
+            with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                    .style('min-width: 420px; max-width: 560px;'):
+                ui.label("The day's receipts").classes('caption-box caption-box-sm')
+                days = sorted(ledger, reverse=True)[:7]
+                today = _time.strftime("%Y-%m-%d")
+                if not days:
+                    ui.label('Nothing inked yet — the first render starts the bill.') \
+                        .classes('text-sm q-mt-sm')
+                for d in days:
+                    counts = ledger.get(d, {})
+                    n = sum(counts.values())
+                    cost = sum(EST_COST.get(q, 0.1) * c for q, c in counts.items())
+                    with ui.row().classes('w-full items-center q-mt-sm').style('gap: 8px;'):
+                        ui.label('Today' if d == today else d).classes('text-sm text-bold')
+                        ui.space()
+                        ui.label(f"{n} piece{'s' if n != 1 else ''} · ~${cost:.2f}") \
+                            .classes('text-sm')
+                    for q in ('high', 'medium', 'low'):
+                        if counts.get(q):
+                            with ui.row().classes('w-full items-center').style(
+                                    'gap: 8px; padding-left: 12px;'):
+                                ui.label(f"{counts[q]} at {q} quality").classes(
+                                    'text-xs text-gray-500')
+                                ui.space()
+                                ui.label(f"~${EST_COST.get(q, 0.1) * counts[q]:.2f}") \
+                                    .classes('text-xs text-gray-500')
+                ui.label('Estimates at published image rates — the invoice is the truth.') \
+                    .classes('text-xs text-gray-500 q-mt-md')
+            dlg.open()
+        spend_label.on('click', lambda _: open_receipts())
 
         def _spend_tick():
             from helpers.generator import spend_today

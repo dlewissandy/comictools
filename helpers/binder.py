@@ -353,9 +353,11 @@ def compose_book(storage: GenericStorage, series_id: str, issue_id: str
                     at = pi + 1
             if ins.image and os.path.exists(ins.image):
                 sheet = _full_bleed(ins.image)
-            elif (ins.description or '').strip():
-                # a written page (the mailbag's letters, ad copy) prints
-                # typeset until it's inked — never a gray hole in the book
+            elif ins.kind == 'mailbag' and (ins.description or '').strip():
+                # only the MAILBAG's description IS the page (letters and
+                # replies) — it prints typeset until it's inked.  Any other
+                # insert's description is a render BRIEF: production notes
+                # that must never reach the page
                 sheet = _insert_text_sheet(ins)
                 missing.append(f"insert '{ins.name}' is not rendered (generate_insert_art)")
             else:
@@ -523,13 +525,27 @@ def layout_pages(storage: GenericStorage, series_id: str, issue_id: str):
     for pm in page_models:
         rows = []
         for row in pm.rows:
-            paths = []
+            cells = []
             for ref in row:
                 panel = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
                                                     "scene_id": ref.scene_id, "panel_id": ref.panel_id})
                 ok = panel and panel.image and os.path.exists(panel.image)
-                paths.append(panel.image if ok else None)
-            rows.append(paths)
+                label = f"panel {panel.panel_number} — {panel.name}" if panel else "missing panel"
+                img = panel.image if ok else None
+                if img is None and panel is not None:
+                    # THE PANEL'S TRUEST FACE, on hand-designed pages too:
+                    # no print yet but a rough on the table — the page shows
+                    # the rough instead of a gray hole
+                    from helpers.rough_face import rough_face
+                    from schema import SceneModel as _Scene
+                    scene = storage.read_object(_Scene, {"series_id": series_id, "issue_id": issue_id,
+                                                         "scene_id": ref.scene_id})
+                    rf = rough_face(storage, panel, scene)
+                    if rf:
+                        img = rf
+                        label = f"ROUGH · {label}"
+                cells.append((img, label))
+            rows.append(cells)
         resolved.append((pm, rows))
     return resolved
 
@@ -600,18 +616,19 @@ def _compose_page_cells(cells: list[tuple]) -> "Image.Image":
     return page
 
 
-def _compose_page(rows: list[list[str | None]]) -> "Image.Image":
+def _compose_page(rows: list[list[tuple[str | None, str | None]]]) -> "Image.Image":
     """
-    Compose one designed page: each row's panels share a height chosen so the
-    row spans the page width; rows are scaled uniformly if they overflow.
-    Unrendered panels appear as light placeholder boxes.
+    Compose one designed page: each row's (image path, label) panels share a
+    height chosen so the row spans the page width; rows are scaled uniformly
+    if they overflow.  An unrendered panel prints as a placeholder box that
+    NAMES what belongs there — a to-do, not a mystery.
     """
     inner_w = PAGE_W - 2 * MARGIN_X
-    prepared: list[tuple[int, list[tuple["Image.Image | None", int]]]] = []
+    prepared: list[tuple[int, list[tuple["Image.Image | None", int, str]]]] = []
     total_h = 0
     for row in rows:
-        imgs, ratios = [], []
-        for path in row:
+        imgs, ratios, labels = [], [], []
+        for path, label in row:
             if path:
                 im = Image.open(path).convert("RGB")
                 imgs.append(im)
@@ -619,11 +636,12 @@ def _compose_page(rows: list[list[str | None]]) -> "Image.Image":
             else:
                 imgs.append(None)
                 ratios.append(1.0)
+            labels.append(label or "")
         if not row or sum(ratios) <= 0:
             continue   # an empty row is a layout bug reported upstream — skip, don't crash
         usable = inner_w - GUTTER * (len(row) - 1)
         row_h = int(usable / sum(ratios))
-        prepared.append((row_h, list(zip(imgs, [int(row_h * r) for r in ratios]))))
+        prepared.append((row_h, list(zip(imgs, [int(row_h * r) for r in ratios], labels))))
         total_h += row_h
     total_h += GUTTER * (len(rows) - 1)
 
@@ -633,13 +651,18 @@ def _compose_page(rows: list[list[str | None]]) -> "Image.Image":
     for row_h, cells in prepared:
         h = int(row_h * scale)
         x = MARGIN_X
-        for im, w0 in cells:
+        for im, w0, label in cells:
             w = int(w0 * scale)
             if im is not None:
                 page.paste(im.resize((w, h), Image.LANCZOS), (x, y))
             else:
                 d = ImageDraw.Draw(page)
                 d.rectangle([x, y, x + w, y + h], outline=(180, 180, 180), width=3, fill=(240, 240, 240))
+                if label:
+                    f = _font(18)
+                    for li, line in enumerate(_wrap(d, label, f, w - 24)[:3]):
+                        _center_text(d, round(x + w / 2),
+                                     round(y + h / 2) - 24 + li * 26, line, f, (150, 146, 138))
             x += w + GUTTER
         y += h + GUTTER
     return page

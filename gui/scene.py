@@ -61,8 +61,30 @@ def view_scene(state: APPState):
     panels_all = storage.read_all_objects(Panel, primary_key={
         "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
     rendered_ct = sum(1 for p in panels_all if p.image and os.path.exists(p.image))
-    from schema import Setting
+    from schema import Setting, CharacterModel
     setting_obj = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": scene.setting_id}) if scene.setting_id else None
+    # the cast wears NAMES, not ids — one read of the series roster
+    chars = {c.character_id: c for c in
+             storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id})}
+
+    def _series_base():
+        idx = next((i for i, s in enumerate(state.selection)
+                    if s.kind.value == 'series'), None)
+        return state.selection[:idx + 1] if idx is not None else state.selection
+
+    def _visit_character(key):
+        cid = key.split('/', 1)[0]
+        ch = chars.get(cid)
+        from gui.selection import SelectedKind
+        state.change_selection(new=[*_series_base(),
+            SelectionItem(name=(ch.name if ch else cid), id=cid,
+                          kind=SelectedKind.CHARACTER)])
+
+    def _visit_setting(_key):
+        from gui.selection import SelectedKind
+        state.change_selection(new=[*_series_base(),
+            SelectionItem(name=setting_obj.name, id=setting_obj.setting_id,
+                          kind=SelectedKind.SETTING)])
 
     def _todo(label: str, fix_message: str):
         """Amber pill: shown ONLY while the step is missing (attached things show as chips)."""
@@ -150,10 +172,13 @@ def view_scene(state: APPState):
 
             if setting_obj:
                 removable_chips_inline(state,
-                    [(setting_obj.setting_id, setting_obj.name)], _remove_setting, icon='location_on')
+                    [(setting_obj.setting_id, setting_obj.name)], _remove_setting,
+                    icon='location_on', visit=_visit_setting)
             removable_chips_inline(state,
-                [(f"{c.character_id}/{c.variant_id}", c.character_id) for c in (scene.cast or [])],
-                _remove_cast, icon='theater_comedy')
+                [(f"{c.character_id}/{c.variant_id}",
+                  (chars[c.character_id].name if c.character_id in chars else c.character_id))
+                 for c in (scene.cast or [])],
+                _remove_cast, icon='theater_comedy', visit=_visit_character)
             removable_chips_inline(state,
                 [(p.name, p.name) for p in (scene.props or [])],
                 _remove_prop, icon='category')

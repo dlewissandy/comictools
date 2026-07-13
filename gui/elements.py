@@ -871,8 +871,11 @@ def removable_chips(state: APPState, caption: str, items: list[tuple[str, str]],
 
 
 def removable_chips_inline(state: APPState, items: list[tuple[str, str]],
-                           remover: Callable, icon: str = "sell"):
-    """removable_chips without caption or placeholder — for compact strips."""
+                           remover: Callable, icon: str = "sell",
+                           visit: Callable | None = None):
+    """removable_chips without caption or placeholder — for compact strips.
+    With `visit`, the chip body is a DOOR to the thing's own room (the ✕
+    still detaches — Quasar stops its click at the button)."""
     for key, label in items:
         def _remove(key=key, label=label):
             try:
@@ -888,9 +891,13 @@ def removable_chips_inline(state: APPState, items: list[tuple[str, str]],
             except Exception:
                 pass
             state.refresh_details()
-        ui.chip(label, removable=True, icon=icon).props('dense outline') \
-            .tooltip(f'✕ detaches {label}') \
+        chip = ui.chip(label, removable=True, icon=icon) \
+            .props('dense outline' + (' clickable' if visit else '')) \
+            .tooltip(f'{label} — click to visit · ✕ detaches' if visit
+                     else f'✕ detaches {label}') \
             .on('remove', lambda _, k=key: _remove(k))
+        if visit:
+            chip.on('click', lambda _, k=key: visit(k))
 
 
 # ---------------------------------------------------------------------------

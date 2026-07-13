@@ -43,8 +43,10 @@ def collect_letters(board) -> list[dict]:
     Letters the author switched off and unwritten placeholders are skipped
     (the guard against printing the table's training wheels)."""
     if not hasattr(board, 'dialogue'):
-        # A TEXT INSERT (the mailbag, an ad): its letter blocks are captions
-        if getattr(board, 'kind', None) and getattr(board, 'description', None):
+        # THE MAILBAG's letter blocks are captions; other inserts keep their
+        # description as a render BRIEF only — production notes must never
+        # print as letters
+        if getattr(board, 'kind', None) == 'mailbag' and getattr(board, 'description', None):
             blk = getattr(board, 'figure_blocking', None) or {}
             blocks = letter_blocks(board.description)
             step = 84 / max(len(blocks), 1)

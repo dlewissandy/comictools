@@ -80,6 +80,20 @@ def issue_ledger(storage, series_id: str, issue_id: str) -> Ledger:
         else 'no script yet — paste a story and it becomes the book',
         count=0 if has_script else 1, detail='stories'))
 
+    # THE UNBROKEN SCRIPT: words with no scenes yet are the book's next
+    # debt — a 1200-word story and zero scenes is NOT one thing before
+    # press, it is the whole book waiting
+    if has_script and not scenes:
+        wc = len(((issue.story if issue else None) or "").split()) + sum(
+            len((st.text or "").split()) for st in stories)
+        lines.append(LedgerLine(
+            key='breakdown', ok=False,
+            text=f"the script ({wc} words) waits to be broken into scenes",
+            count=1,
+            items=["break the script into scenes (the Editor does this from the book)"],
+            anchor=(f'story-{stories[0].story_id}' if stories else 'story-script'),
+            detail='stories'))
+
     # THE SCENES: every scene broken down into panels
     bare = [sc for sc in scenes if not panels_by_scene[sc.scene_id]]
     if scenes:
@@ -144,7 +158,7 @@ def issue_ledger(storage, series_id: str, issue_id: str) -> Ledger:
             text=f"all {len(inserts)} insert{'s' if len(inserts) != 1 else ''} rendered"
             if not unrendered_ins
             else f"{len(unrendered_ins)} insert{'s' if len(unrendered_ins) != 1 else ''} "
-                 f"still typeset — render to print",
+                 f"still to render — stand-in pages print till then",
             count=len(unrendered_ins),
             items=[f"insert '{i.name}' ({i.kind}) is not rendered" for i in unrendered_ins],
             anchor=f'insert-{unrendered_ins[0].insert_id}' if unrendered_ins else None,

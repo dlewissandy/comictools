@@ -1562,7 +1562,9 @@ def light_table(state: APPState, panel, scene, setting,
     # A TEXT INSERT'S LETTERS: the mailbag's letters (blank-line-separated
     # blocks of its description) ride the table as letter-block acetates
     from helpers.compositor import letter_blocks
-    board_blocks = letter_blocks(panel.description) if insert_mode and not locked else []
+    board_blocks = (letter_blocks(panel.description)
+                    if insert_mode and not locked and getattr(panel, 'kind', None) == 'mailbag'
+                    else [])
     has_letters = bool(board_narration or board_dialogue or board_blocks)
     letter_keys = [f'balloon/{i}' for i in range(len(board_dialogue[:4]))]
     for _pos in ('top', 'bottom'):

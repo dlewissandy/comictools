@@ -55,6 +55,9 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                     return ("The ledger is clean — every panel inked and placed.  This issue is ready to bind.",
                             ["Export the issue as a PDF", "Read the issue"])
                 chips = []
+                if 'breakdown' in by and not by['breakdown'].ok:
+                    # the whole book is waiting on the breakdown — offer it first
+                    chips.append("Break the script into scenes")
                 if 'panels' in by and not by['panels'].ok:
                     chips.append(f"Render the {by['panels'].count} missing panels")
                 if 'scenes' in by and not by['scenes'].ok:

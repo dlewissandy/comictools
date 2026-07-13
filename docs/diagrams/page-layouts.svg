@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 470" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <filter id="ds3" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="3" dy="4" stdDeviation="0" flood-color="#17171F" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="960" height="470" rx="18" fill="#FBF6EA" stroke="#17171F" stroke-width="4"/>
+  <text x="480" y="46" text-anchor="middle" font-size="26" font-weight="800" fill="#17171F">THE LAYOUT SWATCH BOOK</text>
+  <text x="480" y="72" text-anchor="middle" font-size="14.5" fill="#6b6659">every way to tile a comic page exactly — pick a rhythm, the panels snap into it</text>
+
+  <!-- LEFT: the 6x10 grid page -->
+  <text x="150" y="112" text-anchor="middle" font-size="13" font-weight="800" fill="#1FA98A">PANELS SNAP TO A 6 × 10 GRID</text>
+  <g filter="url(#ds3)"><rect x="72" y="126" width="156" height="240" rx="6" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/></g>
+  <!-- faint grid -->
+  <g stroke="#c9bfa6" stroke-width="1">
+    <path d="M98 126 v240"/><path d="M124 126 v240"/><path d="M150 126 v240"/><path d="M176 126 v240"/><path d="M202 126 v240"/>
+    <path d="M72 150 h156"/><path d="M72 174 h156"/><path d="M72 198 h156"/><path d="M72 222 h156"/><path d="M72 246 h156"/><path d="M72 270 h156"/><path d="M72 294 h156"/><path d="M72 318 h156"/><path d="M72 342 h156"/>
+  </g>
+  <!-- panels tiling the page -->
+  <g fill="#EAF6F1" stroke="#17171F" stroke-width="3">
+    <rect x="80" y="134" width="140" height="66" rx="3"/>
+    <rect x="80" y="206" width="66" height="66" rx="3"/>
+    <rect x="154" y="206" width="66" height="66" rx="3"/>
+    <rect x="80" y="278" width="140" height="80" rx="3"/>
+  </g>
+
+  <!-- middle arrow -->
+  <path d="M250 246 h34" stroke="#17171F" stroke-width="3" fill="none"/>
+  <path d="M278 240 l8 6 -8 6" stroke="#17171F" stroke-width="3" fill="none"/>
+
+  <!-- RIGHT: swatch thumbnails -->
+  <text x="600" y="112" text-anchor="middle" font-size="13" font-weight="800" fill="#1FA98A">LEAF THROUGH THE SWATCHES</text>
+  <g stroke="#17171F" fill="#FFFDF7">
+    <!-- splash -->
+    <g filter="url(#ds3)"><rect x="320" y="126" width="86" height="130" rx="5" stroke-width="2.5"/></g>
+    <rect x="328" y="134" width="70" height="114" fill="#EAF6F1" stroke-width="2.5"/>
+    <!-- 2-up -->
+    <g filter="url(#ds3)"><rect x="420" y="126" width="86" height="130" rx="5" stroke-width="2.5"/></g>
+    <rect x="428" y="134" width="70" height="54" fill="#EAF6F1" stroke-width="2.5"/>
+    <rect x="428" y="194" width="70" height="54" fill="#EAF6F1" stroke-width="2.5"/>
+    <!-- portrait + 2 (HIGHLIGHT) -->
+    <g filter="url(#ds3)"><rect x="520" y="120" width="90" height="136" rx="5" fill="#FFF3D9" stroke="#E8983A" stroke-width="4"/></g>
+    <rect x="528" y="130" width="34" height="116" fill="#EAF6F1" stroke-width="2.5"/>
+    <rect x="568" y="130" width="34" height="55" fill="#EAF6F1" stroke-width="2.5"/>
+    <rect x="568" y="191" width="34" height="55" fill="#EAF6F1" stroke-width="2.5"/>
+    <!-- 6-up -->
+    <g filter="url(#ds3)"><rect x="624" y="126" width="86" height="130" rx="5" stroke-width="2.5"/></g>
+    <g fill="#EAF6F1" stroke-width="2"><rect x="632" y="134" width="31" height="35"/><rect x="667" y="134" width="31" height="35"/><rect x="632" y="173" width="31" height="35"/><rect x="667" y="173" width="31" height="35"/><rect x="632" y="212" width="31" height="36"/><rect x="667" y="212" width="31" height="36"/></g>
+    <!-- big + row of 3 -->
+    <g filter="url(#ds3)"><rect x="724" y="126" width="86" height="130" rx="5" stroke-width="2.5"/></g>
+    <rect x="732" y="134" width="70" height="66" fill="#EAF6F1" stroke-width="2.5"/>
+    <g fill="#EAF6F1" stroke-width="2"><rect x="732" y="206" width="22" height="42"/><rect x="756" y="206" width="22" height="42"/><rect x="780" y="206" width="22" height="42"/></g>
+    <!-- 9-up -->
+    <g filter="url(#ds3)"><rect x="824" y="126" width="86" height="130" rx="5" stroke-width="2.5"/></g>
+    <g fill="#EAF6F1" stroke-width="1.6"><rect x="832" y="134" width="21" height="36"/><rect x="856" y="134" width="21" height="36"/><rect x="880" y="134" width="22" height="36"/><rect x="832" y="173" width="21" height="36"/><rect x="856" y="173" width="21" height="36"/><rect x="880" y="173" width="22" height="36"/><rect x="832" y="212" width="21" height="36"/><rect x="856" y="212" width="21" height="36"/><rect x="880" y="212" width="22" height="36"/></g>
+  </g>
+  <text x="565" y="278" text-anchor="middle" font-size="11" font-weight="700" fill="#b06d18">hover a page → the swatch book opens</text>
+
+  <!-- 354 badge + captions -->
+  <g filter="url(#ds3)"><rect x="320" y="316" width="270" height="120" rx="14" fill="#1FA98A" stroke="#17171F" stroke-width="3"/></g>
+  <text x="418" y="392" text-anchor="middle" font-size="66" font-weight="800" fill="#fff">354</text>
+  <text x="512" y="370" font-size="15" font-weight="800" fill="#fff">exact-fill</text>
+  <text x="512" y="392" font-size="15" font-weight="800" fill="#fff">page</text>
+  <text x="512" y="414" font-size="15" font-weight="800" fill="#fff">layouts</text>
+
+  <g filter="url(#ds3)"><rect x="620" y="316" width="290" height="120" rx="14" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/></g>
+  <text x="640" y="348" font-size="14" font-weight="800" fill="#17171F">This is where pacing lives.</text>
+  <g font-size="12.5" fill="#17171F">
+    <text x="640" y="374">A splash for the reveal,</text>
+    <text x="640" y="396">a tight grid for the chase,</text>
+    <text x="640" y="418">the pause at the page turn.</text>
+  </g>
+
+  <text x="150" y="392" text-anchor="middle" font-size="12" fill="#17171F" font-weight="700">splash · 2-up · grid —</text>
+  <text x="150" y="412" text-anchor="middle" font-size="12" fill="#17171F" font-weight="700">the book reflows to</text>
+  <text x="150" y="432" text-anchor="middle" font-size="12" fill="#17171F" font-weight="700">show the real thing</text>
+</svg>

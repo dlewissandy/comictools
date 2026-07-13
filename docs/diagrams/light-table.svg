@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 560" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <filter id="ds2" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="3" dy="4" stdDeviation="0" flood-color="#17171F" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="980" height="560" rx="18" fill="#FBF6EA" stroke="#17171F" stroke-width="4"/>
+  <text x="490" y="48" text-anchor="middle" font-size="27" font-weight="800" fill="#17171F">THE LIGHT TABLE</text>
+  <text x="490" y="74" text-anchor="middle" font-size="14.5" fill="#6b6659">a panel is staged from acetate layers — and you see the shot before you spend a cent rendering it</text>
+
+  <!-- layer captions -->
+  <g font-size="12.5" font-weight="800" fill="#17171F" text-anchor="middle">
+    <text x="105" y="128">MASTER BACKGROUND</text>
+    <text x="295" y="128">POSED FIGURES</text>
+    <text x="485" y="128">LETTERS</text>
+    <text x="700" y="128">THE ROUGH</text>
+    <text x="895" y="128">THE TAKE</text>
+  </g>
+
+  <!-- BACKGROUND tile -->
+  <g filter="url(#ds2)">
+    <rect x="30" y="140" width="150" height="150" rx="8" fill="#F2E4C6" stroke="#17171F" stroke-width="3"/>
+  </g>
+  <rect x="52" y="165" width="106" height="82" fill="#D9E7F0" stroke="#17171F" stroke-width="2"/>
+  <g stroke="#17171F" stroke-width="2"><path d="M52 182 h106"/><path d="M52 199 h106"/><path d="M52 216 h106"/><path d="M52 233 h106"/></g>
+  <rect x="52" y="247" width="106" height="20" fill="#B99col" opacity="0"/>
+  <text x="105" y="280" text-anchor="middle" font-size="10.5" fill="#7a7565">painted once, per style</text>
+
+  <!-- POSED FIGURES tile (transparent acetate) -->
+  <g filter="url(#ds2)">
+    <rect x="220" y="140" width="150" height="150" rx="8" fill="#FFFFFF" stroke="#17171F" stroke-width="3" stroke-dasharray="1 0"/>
+  </g>
+  <g opacity="0.14"><rect x="223" y="143" width="72" height="72" fill="#17171F"/><rect x="295" y="215" width="72" height="72" fill="#17171F"/></g>
+  <g fill="#17171F"><circle cx="295" cy="196" r="16"/><path d="M272 288 q23 -74 46 0 z"/></g>
+  <text x="295" y="280" text-anchor="middle" font-size="10.5" fill="#7a7565" font-weight="700">drag · scroll to scale</text>
+
+  <!-- LETTERS tile -->
+  <g filter="url(#ds2)">
+    <rect x="410" y="140" width="150" height="150" rx="8" fill="#FFFFFF" stroke="#17171F" stroke-width="3"/>
+  </g>
+  <g opacity="0.14"><rect x="413" y="143" width="72" height="72" fill="#17171F"/><rect x="485" y="215" width="72" height="72" fill="#17171F"/></g>
+  <g fill="#FFFFFF" stroke="#17171F" stroke-width="2.5">
+    <ellipse cx="470" cy="180" rx="42" ry="24"/>
+    <path d="M452 200 l-6 18 22 -14 z"/>
+  </g>
+  <text x="470" y="185" text-anchor="middle" font-size="11" font-weight="700" fill="#17171F">"Kell."</text>
+  <rect x="430" y="248" width="110" height="26" fill="#F5E27A" stroke="#17171F" stroke-width="2.5"/>
+  <text x="485" y="266" text-anchor="middle" font-size="10.5" font-weight="700" fill="#17171F">2 A.M. AGAIN.</text>
+
+  <!-- plus / equals -->
+  <text x="200" y="225" text-anchor="middle" font-size="34" font-weight="800" fill="#1FA98A">+</text>
+  <text x="390" y="225" text-anchor="middle" font-size="34" font-weight="800" fill="#1FA98A">+</text>
+  <text x="585" y="225" text-anchor="middle" font-size="34" font-weight="800" fill="#1FA98A">=</text>
+
+  <!-- ROUGH -->
+  <g filter="url(#ds2)">
+    <rect x="620" y="140" width="160" height="160" rx="8" fill="#F2E4C6" stroke="#E8983A" stroke-width="4"/>
+  </g>
+  <rect x="640" y="164" width="120" height="90" fill="#D9E7F0" stroke="#17171F" stroke-width="2"/>
+  <g stroke="#17171F" stroke-width="2"><path d="M640 182 h120"/><path d="M640 200 h120"/><path d="M640 218 h120"/><path d="M640 236 h120"/></g>
+  <g fill="#17171F"><circle cx="690" cy="205" r="15"/><path d="M669 275 q21 -66 42 0 z"/></g>
+  <g fill="#FFFFFF" stroke="#17171F" stroke-width="2.5"><ellipse cx="726" cy="180" rx="30" ry="17"/><path d="M712 194 l-5 12 15 -9 z"/></g>
+  <text x="726" y="184" text-anchor="middle" font-size="9" font-weight="700" fill="#17171F">"Kell."</text>
+  <text x="700" y="322" text-anchor="middle" font-size="11" font-weight="700" fill="#b06d18">a live penciller's mock-up</text>
+
+  <!-- INK arrow -->
+  <g filter="url(#ds2)"><rect x="800" y="196" width="52" height="46" rx="10" fill="#17171F"/></g>
+  <text x="826" y="219" text-anchor="middle" font-size="13" font-weight="800" fill="#fff">INK</text>
+  <text x="826" y="235" text-anchor="middle" font-size="9" fill="#F5E27A">it</text>
+  <path d="M783 219 h14 M852 219 h18" stroke="#17171F" stroke-width="3" fill="none"/>
+  <path d="M867 213 l8 6 -8 6" stroke="#17171F" stroke-width="3" fill="none"/>
+
+  <!-- THE TAKE -->
+  <g filter="url(#ds2)">
+    <rect x="820" y="140" width="140" height="160" rx="8" fill="#EBD9AE" stroke="#17171F" stroke-width="3"/>
+  </g>
+  <rect x="838" y="162" width="104" height="96" fill="#95B6CC" stroke="#17171F" stroke-width="2"/>
+  <g stroke="#0e2a3d" stroke-width="2" opacity="0.7"><path d="M838 180 h104"/><path d="M838 198 h104"/><path d="M838 216 h104"/><path d="M838 234 h104"/></g>
+  <g fill="#12303f"><circle cx="880" cy="205" r="15"/><path d="M859 278 q21 -70 42 0 z"/></g>
+  <g fill="#FFFFFF" stroke="#17171F" stroke-width="2"><ellipse cx="915" cy="182" rx="24" ry="14"/></g>
+  <text x="915" y="186" text-anchor="middle" font-size="8.5" font-weight="700" fill="#17171F">"Kell."</text>
+  <text x="890" y="322" text-anchor="middle" font-size="11" font-weight="800" fill="#1FA98A">a rendered take</text>
+
+  <!-- footer hints -->
+  <g font-size="12" font-weight="700" fill="#17171F">
+    <g filter="url(#ds2)"><rect x="60" y="358" width="200" height="150" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="2.5"/></g>
+    <g filter="url(#ds2)"><rect x="300" y="358" width="200" height="150" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="2.5"/></g>
+    <g filter="url(#ds2)"><rect x="540" y="358" width="200" height="150" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="2.5"/></g>
+    <g filter="url(#ds2)"><rect x="780" y="358" width="140" height="150" rx="12" fill="#FFF3D9" stroke="#17171F" stroke-width="2.5"/></g>
+  </g>
+  <g text-anchor="middle">
+    <text x="160" y="388" font-size="14" font-weight="800" fill="#1FA98A">CLICK</text>
+    <text x="160" y="430" font-size="12.5" fill="#17171F">A tile in the</text>
+    <text x="160" y="448" font-size="12.5" fill="#17171F">Assets drawer</text>
+    <text x="160" y="466" font-size="12.5" fill="#17171F">lands on the table</text>
+
+    <text x="400" y="388" font-size="14" font-weight="800" fill="#1FA98A">BLOCK</text>
+    <text x="400" y="430" font-size="12.5" fill="#17171F">Drag to move,</text>
+    <text x="400" y="448" font-size="12.5" fill="#17171F">scroll to scale,</text>
+    <text x="400" y="466" font-size="12.5" fill="#17171F">toggle an eye 👁</text>
+
+    <text x="640" y="388" font-size="14" font-weight="800" fill="#1FA98A">INK</text>
+    <text x="640" y="430" font-size="12.5" fill="#17171F">Your exact</text>
+    <text x="640" y="448" font-size="12.5" fill="#17171F">composition goes</text>
+    <text x="640" y="466" font-size="12.5" fill="#17171F">off to render</text>
+
+    <text x="850" y="388" font-size="14" font-weight="800" fill="#b06d18">TAKES</text>
+    <text x="850" y="430" font-size="12.5" fill="#17171F">Every render</text>
+    <text x="850" y="448" font-size="12.5" fill="#17171F">waits below —</text>
+    <text x="850" y="466" font-size="12.5" fill="#17171F">tap to feature</text>
+  </g>
+  <text x="490" y="536" text-anchor="middle" font-size="12.5" font-style="italic" fill="#6b6659">You don't describe the shot and hope — you stage it, and the render follows your blocking.</text>
+</svg>

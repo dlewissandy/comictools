@@ -73,6 +73,10 @@ def view_issue(state: APPState):
 
     def set_detail(d):
         state._book_detail[issue_id] = d
+        # a dial flip opens the book at its FRONT, not wherever the old
+        # altitude happened to be scrolled — unless a door already chose a
+        # destination (the 'N panels' chip anchors the scene's first panel)
+        state._book_anchor.setdefault(issue_id, 'masthead-top')
         state.refresh_details()
 
     def remember_spot(anchor):
@@ -723,7 +727,8 @@ def view_issue(state: APPState):
 
     with details:
         # ---- the masthead stays put over the table ------------------------
-        with ui.row().classes('book-masthead w-full flex-nowrap items-center').style('gap: 12px;'):
+        with ui.row().classes('book-masthead w-full flex-nowrap items-center').style('gap: 12px;') as _mast:
+            _mast._props['data-banchor'] = 'masthead-top' 
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
             from gui.light_table import style_swatch
             style_swatch(state, issue, shared_with='the whole issue')
@@ -919,8 +924,9 @@ def view_issue(state: APPState):
                         ui.chip('bind it', icon='menu_book').props('dense outline clickable') \
                             .tooltip("I'll bind the book and hand you the download"
                                      if ledger.complete else
-                                     f"I'll bind the book as it stands — {ledger.summary()}, "
-                                     f"so placeholders will print") \
+                                     f"I'll bind the book as it stands — {ledger.summary()}; "
+                                     f"unprinted panels bind as roughs or named boards, "
+                                     f"placeholder lettering stays off the page") \
                             .on('click', lambda _: post_user_message(state, "Export the issue as a PDF."))
                         ui.chip('+ insert', icon='add_photo_alternate').props('dense outline clickable') \
                             .on('click', lambda _: post_user_message(
@@ -951,7 +957,14 @@ def view_issue(state: APPState):
         # you on the page you left.  The spot is spent once used — editing
         # in place must never scroll-jack back to an old position.
         anchor = state._book_anchor.pop(issue_id, None)
-        if anchor:
+        if anchor == 'masthead-top':
+            # the masthead is position:sticky — its rect is already pinned
+            # to the pane's top edge, so scrollIntoView can't find the way
+            # home; walk the bookroom itself back to the front
+            ui.timer(0.4, lambda: ui.run_javascript(
+                "document.querySelectorAll('.bookroom .q-scrollarea__container')"
+                ".forEach(p => p.scrollTop = 0);"), once=True)
+        elif anchor:
             ui.timer(0.4, lambda a=anchor: ui.run_javascript(
                 f"document.querySelector('[data-banchor=\"{a}\"]')"
                 f"?.scrollIntoView({{block: 'center'}});"), once=True)

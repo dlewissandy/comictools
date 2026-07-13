@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <defs>
+    <filter id="ds" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="3" dy="4" stdDeviation="0" flood-color="#17171F" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="960" height="600" rx="18" fill="#FBF6EA" stroke="#17171F" stroke-width="4"/>
+  <text x="480" y="46" text-anchor="middle" font-size="27" font-weight="800" fill="#17171F" letter-spacing="0.5">THE FIRST-COMIC JOURNEY</text>
+  <text x="480" y="72" text-anchor="middle" font-size="14" fill="#6b6659">empty studio → printed book, almost all of it by talking</text>
+
+  <!-- ACT 1 -->
+  <text x="40" y="118" font-size="15" font-weight="800" fill="#1FA98A">① BUILD THE WORLD</text>
+  <g font-size="14.5" font-weight="700" fill="#17171F" text-anchor="middle">
+    <g filter="url(#ds)">
+      <rect x="40" y="130" width="150" height="86" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/>
+      <rect x="242" y="130" width="150" height="86" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/>
+      <rect x="444" y="130" width="150" height="86" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/>
+      <rect x="646" y="130" width="150" height="86" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/>
+    </g>
+    <circle cx="62" cy="152" r="13" fill="#1FA98A"/><text x="62" y="157" fill="#fff" font-size="13" font-weight="800">1</text>
+    <circle cx="264" cy="152" r="13" fill="#1FA98A"/><text x="264" y="157" fill="#fff" font-size="13" font-weight="800">2</text>
+    <circle cx="466" cy="152" r="13" fill="#1FA98A"/><text x="466" y="157" fill="#fff" font-size="13" font-weight="800">3</text>
+    <circle cx="668" cy="152" r="13" fill="#1FA98A"/><text x="668" y="157" fill="#fff" font-size="13" font-weight="800">4</text>
+    <text x="115" y="182">Found your</text><text x="115" y="200">house</text>
+    <text x="317" y="182">Choose a</text><text x="317" y="200">look</text>
+    <text x="519" y="182">Cast a</text><text x="519" y="200">character</text>
+    <text x="721" y="182">Build a</text><text x="721" y="200">set</text>
+  </g>
+  <g stroke="#17171F" stroke-width="3" fill="none">
+    <path d="M196 173 h38"/><path d="M228 167 l8 6 -8 6"/>
+    <path d="M398 173 h38"/><path d="M430 167 l8 6 -8 6"/>
+    <path d="M600 173 h38"/><path d="M632 167 l8 6 -8 6"/>
+  </g>
+  <path d="M880 173 h20 v130 h-20" stroke="#E8983A" stroke-width="3" fill="none"/>
+  <path d="M888 297 l-8 6 8 6" stroke="#E8983A" stroke-width="3" fill="none"/>
+
+  <!-- ACT 2 -->
+  <text x="40" y="270" font-size="15" font-weight="800" fill="#1FA98A">② WRITE &amp; SHOOT</text>
+  <g font-size="14" font-weight="700" fill="#17171F" text-anchor="middle">
+    <g filter="url(#ds)">
+      <rect x="40" y="282" width="150" height="86" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/>
+      <rect x="242" y="282" width="150" height="86" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/>
+      <rect x="444" y="282" width="150" height="86" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/>
+      <rect x="646" y="282" width="150" height="86" rx="12" fill="#FFF3D9" stroke="#17171F" stroke-width="3.5"/>
+    </g>
+    <circle cx="62" cy="304" r="13" fill="#1FA98A"/><text x="62" y="309" fill="#fff" font-size="13" font-weight="800">5</text>
+    <circle cx="264" cy="304" r="13" fill="#1FA98A"/><text x="264" y="309" fill="#fff" font-size="13" font-weight="800">6</text>
+    <circle cx="466" cy="304" r="13" fill="#1FA98A"/><text x="466" y="309" fill="#fff" font-size="13" font-weight="800">7</text>
+    <circle cx="668" cy="304" r="13" fill="#E8983A"/><text x="668" y="309" fill="#fff" font-size="13" font-weight="800">8</text>
+    <text x="115" y="334">Write the</text><text x="115" y="352">script</text>
+    <text x="317" y="334">Break into</text><text x="317" y="352">scenes</text>
+    <text x="519" y="334">Break into</text><text x="519" y="352">beats</text>
+    <text x="721" y="330" font-weight="800">The light</text><text x="721" y="348" font-weight="800">table</text>
+    <text x="721" y="362" font-size="10.5" font-weight="600" fill="#b06d18">stage · pose · ink</text>
+  </g>
+  <g stroke="#17171F" stroke-width="3" fill="none">
+    <path d="M196 325 h38"/><path d="M228 319 l8 6 -8 6"/>
+    <path d="M398 325 h38"/><path d="M430 319 l8 6 -8 6"/>
+    <path d="M600 325 h38"/><path d="M632 319 l8 6 -8 6"/>
+  </g>
+  <path d="M80 368 v20 h-40 v130 h20" stroke="#E8983A" stroke-width="3" fill="none"/>
+  <path d="M54 512 l6 8 6 -8" stroke="#E8983A" stroke-width="3" fill="none"/>
+
+  <!-- ACT 3 -->
+  <text x="40" y="430" font-size="15" font-weight="800" fill="#1FA98A">③ BIND</text>
+  <g font-size="14.5" font-weight="700" fill="#17171F" text-anchor="middle">
+    <g filter="url(#ds)">
+      <rect x="40" y="442" width="150" height="86" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/>
+      <rect x="242" y="442" width="150" height="86" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/>
+      <rect x="444" y="442" width="150" height="86" rx="12" fill="#FFFDF7" stroke="#17171F" stroke-width="3"/>
+    </g>
+    <circle cx="62" cy="464" r="13" fill="#1FA98A"/><text x="62" y="469" fill="#fff" font-size="13" font-weight="800">9</text>
+    <circle cx="264" cy="464" r="13" fill="#1FA98A"/><text x="264" y="469" fill="#fff" font-size="12" font-weight="800">10</text>
+    <circle cx="466" cy="464" r="13" fill="#1FA98A"/><text x="466" y="469" fill="#fff" font-size="12" font-weight="800">11</text>
+    <text x="115" y="490">Render the</text><text x="115" y="508">art</text>
+    <text x="317" y="490">Lay out</text><text x="317" y="508">the pages</text>
+    <text x="519" y="490">Read it.</text><text x="519" y="508">Print it.</text>
+  </g>
+  <g stroke="#17171F" stroke-width="3" fill="none">
+    <path d="M196 485 h38"/><path d="M228 479 l8 6 -8 6"/>
+    <path d="M398 485 h38"/><path d="M430 479 l8 6 -8 6"/>
+  </g>
+  <g transform="translate(646,452)" filter="url(#ds)">
+    <rect x="0" y="0" width="270" height="66" rx="12" fill="#1FA98A" stroke="#17171F" stroke-width="3"/>
+    <text x="135" y="32" text-anchor="middle" font-size="16" font-weight="800" fill="#fff">A FINISHED BOOK</text>
+    <text x="135" y="52" text-anchor="middle" font-size="12.5" font-weight="600" fill="#eafcf6">PDF · CBZ · pushed to GitHub</text>
+  </g>
+</svg>
