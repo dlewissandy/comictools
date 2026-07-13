@@ -26,7 +26,9 @@ load_dotenv()
 # ---------------------------------------------------------
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 # These ensure that the dark and light modes are set consistently for each UI region
-HEADFOOT_STYLING_CLASSES = "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300"
+# THE FRAME WEARS THE INK: chrome is drawn with the same paper-and-ink
+# tokens as the comic — no gray plastic around the book
+HEADFOOT_STYLING_CLASSES = "studio-chrome"
 MIDDLE_STYLING_CLASSES = "text-gray-900 dark:text-gray-300"
 # Default selection to initialize the breadcrumbs
 DEFAULT_SELECTION = [{"kind":"all-publishers", "name":"Publishers", "id":None}]
@@ -80,6 +82,8 @@ def init_layout(logger):
         .q-page, .nicegui-content { background: var(--paper); }
         .q-header { border-bottom: 3px solid var(--ink); }
         .q-footer { border-top: 3px solid var(--ink); }
+        .studio-chrome { background: var(--paper) !important; color: var(--ink) !important; }
+        .studio-chrome .q-btn, .studio-chrome .q-toggle__label { color: var(--ink); }
 
         /* display lettering */
         .comic-title { font-family: 'Bangers', 'Arial Black', Impact, sans-serif;
@@ -617,7 +621,7 @@ def init_layout(logger):
     # w-full, never w-screen: w-screen ignores the vertical scrollbar's
     # 16px and pushes a phantom horizontal scroll onto every page
     middle = ui.row().classes('w-full flex-1 overflow-hidden ' + MIDDLE_STYLING_CLASSES).style('padding-left:12px; padding-right:12px;')
-    footer = ui.footer().classes('bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-300')
+    footer = ui.footer().classes(HEADFOOT_STYLING_CLASSES)
 
     # INITIALIZE EACH OF THE REGIONS
     # Header region has breadcrums for navigation and the dark mode switch
