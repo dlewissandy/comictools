@@ -52,3 +52,22 @@ def test_spend_counts_every_image(tmp_path, monkeypatch):
     n, cost = g.spend_today()
     assert n == 5, "a four-take heal counts four images, not one call"
     assert abs(cost - 5 * g.EST_COST['high']) < 1e-9
+
+
+def test_resolve_cast_names_become_ids(storage):
+    """The Editor sometimes casts by NAME; the records speak in ids — the
+    resolver translates, falls back to an only-variant, and reports (never
+    stores) danglers.  (The Squonk-posed-as-Rugor bug.)"""
+    from agentic.tools.updater import resolve_cast
+    from schema import CharacterRef, CharacterModel, CharacterVariant
+    WL = "wonders-of-the-witchlight"
+    chars = storage.read_all_objects(CharacterModel, primary_key={"series_id": WL})
+    ezra = next(c for c in chars if c.name.strip().lower() == "ezra")
+    variants = storage.read_all_objects(CharacterVariant, primary_key={
+        "series_id": WL, "character_id": ezra.character_id})
+    problems = []
+    cast = [CharacterRef(series_id=WL, character_id="Ezra", variant_id=variants[0].id),
+            CharacterRef(series_id=WL, character_id="nobody-real", variant_id="x")]
+    out = resolve_cast(storage, WL, cast, problems)
+    assert len(out) == 1 and out[0].character_id == ezra.character_id
+    assert problems and "nobody-real" in problems[0]

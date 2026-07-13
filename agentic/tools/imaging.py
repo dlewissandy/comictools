@@ -2668,13 +2668,20 @@ def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id:
         return (f"No reference art for '{character_id}' ({variant_id}) yet — "
                 f"create the variant's reference sheet first.")
 
+    # the prompt speaks the character's NAME — a raw id reads as gibberish
+    # and the model then follows the moment text instead of the sheet
+    _char = storage.read_object(cls=CharacterModel, primary_key={
+        "series_id": series_id, "character_id": character_id})
+    char_name = (_char.name if _char is not None else character_id).replace('-', ' ')
     if pose_direction:
         pose_ask = f"POSE (follow this exactly): {pose_direction}"
     else:
         pose_ask = (f"POSE the figure for this moment: {getattr(panel, 'beat', None) or panel.description}"
                     + (f"  Blocking: {scene.blocking}" if scene is not None and scene.blocking else ""))
+    pose_ask += (f"\n\nIf the moment above mentions OTHER characters, they are context "
+                 f"only — do NOT draw them.  Draw {char_name} and nobody else.")
 
-    prompt = f"""The attached reference sheet shows {character_id.replace('-', ' ')}.
+    prompt = f"""The attached reference sheet shows {char_name}.
 Draw THIS character — identical face, identical costume, identical colors,
 identical proportions, same ink and palette as the sheet — in ONE new pose.
 

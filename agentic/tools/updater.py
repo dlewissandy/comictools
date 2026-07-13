@@ -996,6 +996,45 @@ def update_scene_setting(wrapper: RunContextWrapper[APPState],
     return f"Updated setting for scene '{scene.name}'."
 
 
+
+def resolve_cast(storage, series_id: str, cast, problems: list[str]) -> list:
+    """Resolve character/variant references by id OR display name — the
+    Editor sometimes speaks in names; the records speak in ids.  Members
+    that resolve to nothing are dropped and reported so the agent corrects
+    itself instead of storing dangling references (the Squonk-posed-as-
+    Rugor bug: cast stored under names, every sheet lookup failed)."""
+    from schema import CharacterModel, CharacterVariant
+    chars = storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id})
+    by_id = {c.character_id: c for c in chars}
+    by_name = {(c.name or "").strip().lower(): c for c in chars}
+    out = []
+    for ref in (cast or []):
+        ch = by_id.get(ref.character_id) or by_name.get((ref.character_id or "").strip().lower())
+        if ch is None:
+            problems.append(
+                f"no character '{ref.character_id}' in this series (valid: "
+                + (", ".join(f"{c.name}={c.character_id}" for c in chars) or "none") + ")")
+            continue
+        ref.character_id = ch.character_id
+        variants = storage.read_all_objects(CharacterVariant, primary_key={
+            "series_id": series_id, "character_id": ch.character_id})
+        v_by_id = {v.id: v for v in variants}
+        v_by_name = {(getattr(v, "name", "") or "").strip().lower(): v for v in variants}
+        v = v_by_id.get(ref.variant_id) or v_by_name.get((ref.variant_id or "").strip().lower())
+        if v is None and len(variants) == 1:
+            v = variants[0]
+            problems.append(f"variant '{ref.variant_id}' of {ch.name} not found — "
+                            f"used their only variant '{v.id}'")
+        if v is None:
+            problems.append(
+                f"no variant '{ref.variant_id}' for {ch.name} (valid: "
+                + (", ".join(v2.id for v2 in variants) or "none") + ")")
+            continue
+        ref.variant_id = v.id
+        out.append(ref)
+    return out
+
+
 @function_tool
 def update_scene_cast(wrapper: RunContextWrapper[APPState],
         series_id: str, issue_id: str, scene_id: str,
@@ -1019,10 +1058,13 @@ def update_scene_cast(wrapper: RunContextWrapper[APPState],
     scene: SceneModel = storage.read_object(cls=SceneModel, primary_key=pk)
     if scene is None:
         return f"Scene with ID '{scene_id}' not found."
-    scene.cast = cast
+    problems: list[str] = []
+    scene.cast = resolve_cast(storage, series_id, cast, problems)
     storage.update_object(data=scene)
     state.is_dirty = True
-    return f"Cast of scene '{scene.name}' set to: " + ", ".join(c.name for c in cast)
+    note = ("  PROBLEMS: " + "; ".join(problems)) if problems else ""
+    return (f"Cast of scene '{scene.name}' set to: "
+            + (", ".join(c.name for c in scene.cast) or "nobody") + note)
 
 
 @function_tool
@@ -1184,10 +1226,13 @@ def update_panel_cast(wrapper: RunContextWrapper[APPState],
     panel: Panel = storage.read_object(cls=Panel, primary_key=pk)
     if panel is None:
         return f"Panel with ID '{panel_id}' not found."
-    panel.character_references = cast
+    problems: list[str] = []
+    panel.character_references = resolve_cast(storage, series_id, cast, problems)
     storage.update_object(data=panel)
     state.is_dirty = True
-    return f"Cast in frame for panel '{panel.name}' set to: " + (", ".join(c.name for c in cast) if cast else "nobody")
+    note = ("  PROBLEMS: " + "; ".join(problems)) if problems else ""
+    return (f"Cast in frame for panel '{panel.name}' set to: "
+            + (", ".join(c.name for c in panel.character_references) or "nobody") + note)
 
 
 @function_tool

@@ -812,6 +812,12 @@ def create_scene_body(state: APPState,
         return f"Issue '{issue_id}' not found."
     scenes: list[SceneModel] = storage.read_all_objects(cls=SceneModel, primary_key=pk, order_by="scene_number")
 
+    # cast references resolve by id OR display name and never store
+    # danglers — the sheets must find these characters later
+    from agentic.tools.updater import resolve_cast
+    cast_problems: list[str] = []
+    _resolved_cast = resolve_cast(storage, series_id, cast, cast_problems)
+
     scene = SceneModel(
         scene_id=normalize_id(name),
         issue_id=issue_id,
@@ -827,7 +833,7 @@ def create_scene_body(state: APPState,
         setting_id=setting_id,
         time_of_day=time_of_day,
         mood=mood,
-        cast=cast or [],
+        cast=_resolved_cast,
         props=props or [],
         blocking=blocking,
     )
@@ -843,7 +849,8 @@ def create_scene_body(state: APPState,
 
 
     state.is_dirty = True
-    return f"Scene created successfully for issue {issue.name}."
+    note = ("  CAST PROBLEMS: " + "; ".join(cast_problems)) if cast_problems else ""
+    return f"Scene created successfully for issue {issue.name}.{note}"
 
 
 @function_tool
