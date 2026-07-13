@@ -2847,7 +2847,8 @@ def _stitch_issue_pages_sync(wrapper: RunContextWrapper[APPState], series_id: st
             f"placed in reading order.  The author can rearrange any page from the issue view.")
 
 
-def _render_asset_reference(wrapper, cls, key, series_id, asset_id, style_id, subject_line, guidance):
+def _render_asset_reference(wrapper, cls, key, series_id, asset_id, style_id, subject_line, guidance,
+                            aspect=FrameLayout.SQUARE):
     """Shared renderer: reference art for a prop/outfit in a style, anchored to the style's art example."""
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
@@ -2877,7 +2878,7 @@ using this reference match the rest of the issue.
     locator = generate_object_image(
         wrapper=wrapper, obj=asset, prompt=prompt,
         reference_images=reference_images,
-        aspect_ratio=FrameLayout.SQUARE, image_quality=IMAGE_QUALITY.HIGH,
+        aspect_ratio=aspect, image_quality=IMAGE_QUALITY.HIGH,
         name=f"{asset_id}-{style_id}-reference",
         background="transparent")
     # persist onto a FRESH read — renders take minutes
@@ -2971,10 +2972,12 @@ def _generate_outfit_reference_sync(wrapper: RunContextWrapper[APPState], series
         style_id: The comic style to render in.
     """
     from schema import Outfit
+    # WARDROBE PRINTS LANDSCAPE: a wardrobe turnaround is three angles side by
+    # side, so its reference art is always a 3x2 landscape plate
     return _render_asset_reference(
         wrapper, Outfit, "outfit_id", series_id, outfit_id, style_id,
-        "an outfit (wardrobe)",
-        "Present the attire on a TAILOR'S MANNEQUIN (a neutral gray dress-form — "
+        "an outfit (wardrobe)", aspect=FrameLayout.LANDSCAPE,
+        guidance="Present the attire on a TAILOR'S MANNEQUIN (a neutral gray dress-form — "
         "NO character identity, no face, no hair) as a WARDROBE TURNAROUND: "
         "three angles side by side — front, three-quarter, and back — the same "
         "mannequin and garment at the same scale in each, on a plain neutral "
