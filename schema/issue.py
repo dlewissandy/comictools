@@ -9,6 +9,7 @@ class Issue(BaseModel):
     style_id: str = Field(..., description="The style of the comic book.  Default to 'vintage-four-color'")
     series_id: str = Field(..., description="The identifier for the comic book series.  ")
     story: Optional[str] = Field(..., description="The story of the comic book.  Optional.  Default to None")
+    broken_script_sha: Optional[str] = Field(None, description="Hash of the script text at the last scene breakdown — the ledger flags drift when the script changes afterward.  Default to None.")
     
     issue_number: int = Field(..., description="The issue number.  Optional.  default to 1")
     publication_date: Optional[str] = Field(..., description="The publication date of the issue.  Optional.  Default to None")

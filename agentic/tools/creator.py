@@ -494,7 +494,7 @@ This tool is appropriate when:
 
 * A character takes a meaningful action or reacts with clear emotion
 * The scene changes in setting, time, or energy
-* A visual contrast or beat needs to be captured (e.g., tension → release, zoom-in → zoom-out)
+* A visual contrast or beat needs to be captured (e.g., tension → release, a wide establishing frame → a tight close-up)
 
 Avoid using this tool for:
 * Panels that would duplicate prior visuals with no change
@@ -508,9 +508,11 @@ beat (str): The narrative beat for this panel. Describe the change or action
 in 1-3 sentences. This is the story moment the panel captures.
 
 description (str): A clear visual description of the panel. Describe what
-the reader sees: character positions, motion, facial expressions, and camera
-framing. Think in cinematic or storyboard terms. Do not include narration or
-dialog here.   This description will be used by artists to ink the panel
+the reader sees: figure positions, motion, facial expressions, and the
+panel's framing (establishing, medium, close-up).  Speak comics — panel,
+frame, figure — never film vocabulary (shot, camera, footage).  Do not
+include narration or dialog here.  This description will be used by
+artists to ink the panel
 
 characters: Names of all character variants visibly present in the panel.
 
@@ -571,6 +573,10 @@ purposeful.
 
     # Create the panel
     storage = state.storage
+    # NO DANGLING CAST: names resolve to ids, problems echo back
+    from agentic.tools.updater import resolve_cast
+    _probs: list[str] = []
+    _refs = resolve_cast(storage, series_id, characters or [], _probs)
     new_panel = Panel(
         panel_id=normalize_id(name),
         issue_id=issue_id,
@@ -581,7 +587,7 @@ purposeful.
         description=description,
         aspect=aspect,
         panel_number = panel_number,
-        character_references=characters,
+        character_references=_refs,
         narration=narration,
         dialogue=dialogue,
         image=None,  # Image will be set later if needed
@@ -598,7 +604,9 @@ purposeful.
     
     
     
-    return f"Panel '{new_panel.name}' created successfully in issue '{issue.name}'."
+    return (f"Panel '{new_panel.name}' created successfully in issue '{issue.name}' "
+            f"(panel_id={new_panel.panel_id})."
+            + (("  PROBLEMS: " + "; ".join(_probs)) if _probs else ""))
 
 @function_tool
 def create_issue(wrapper: RunContextWrapper[APPState], series_id: str, title: str,  story: str) -> str:
@@ -864,6 +872,17 @@ def create_scene_body(state: APPState,
 
 
     state.is_dirty = True
+    # the breakdown STAMPS the script it broke — the ledger flags drift
+    # the moment the script changes after its scenes were minted
+    try:
+        import hashlib as _hl
+        _txt = (issue.story or '') + '|' + '|'.join(
+            (st.text or '') for st in storage.read_all_objects(
+                Story, {'series_id': series_id, 'issue_id': issue_id}))
+        issue.broken_script_sha = _hl.sha1(_txt.encode()).hexdigest()
+        storage.update_object(data=issue)
+    except Exception:
+        pass
     note = ("  CAST PROBLEMS: " + "; ".join(cast_problems)) if cast_problems else ""
     # speak the id THE STORAGE actually gave it — storage may reassign a
     # UUID on create, and every follow-up tool call needs the real one
@@ -1010,6 +1029,16 @@ def create_scene_panels(wrapper: RunContextWrapper[APPState],
     existing: list[Panel] = storage.read_all_objects(cls=Panel, primary_key={
         "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}, order_by="panel_number")
 
+    # NO DANGLING CAST AT PANEL SCOPE: names resolve to ids here, the same
+    # gate create_scene runs — a name-keyed ref would silently drop the
+    # character's sheet from the render prompt
+    from agentic.tools.updater import resolve_cast
+    _resolved_specs = []
+    _cast_problems: list[str] = []
+    for _spec in panels:
+        _resolved_specs.append(resolve_cast(storage, series_id,
+                                            _spec.characters or [], _cast_problems))
+
     created = []
     for i, spec in enumerate(panels):
         panel = Panel(
@@ -1022,17 +1051,19 @@ def create_scene_panels(wrapper: RunContextWrapper[APPState],
             beat=spec.beat or spec.description,
             description=spec.description,
             aspect=spec.aspect,
-            character_references=spec.characters,
+            character_references=_resolved_specs[i],
             narration=spec.narration,
             dialogue=spec.dialogue,
             image=None,
             reference_images=[],
         )
         storage.create_object(data=panel)
-        created.append(panel.name)
+        created.append((panel.name, panel.panel_id))
 
     state.is_dirty = True
-    return f"Created {len(created)} panels for scene '{scene.name}': " + ", ".join(created)
+    problems_note = ("  PROBLEMS: " + "; ".join(sorted(set(_cast_problems)))) if _cast_problems else ""
+    return (f"Created {len(created)} panels for scene '{scene.name}': "
+            + ", ".join(f"{n} (id: {pid})" for n, pid in created) + problems_note)
 
 
 @function_tool

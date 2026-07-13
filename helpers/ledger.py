@@ -94,6 +94,21 @@ def issue_ledger(storage, series_id: str, issue_id: str) -> Ledger:
             anchor=(f'story-{stories[0].story_id}' if stories else 'story-script'),
             detail='stories'))
 
+    # SCRIPT DRIFT: the script changed AFTER its breakdown — the scenes
+    # quietly draw the old story until the author re-breaks
+    if scenes and getattr(issue, 'broken_script_sha', None):
+        import hashlib as _hl
+        _txt = ((issue.story if issue else None) or '') + '|' + '|'.join(
+            (st.text or '') for st in stories)
+        if _hl.sha1(_txt.encode()).hexdigest() != issue.broken_script_sha:
+            lines.append(LedgerLine(
+                key='drift', ok=False,
+                text="the script changed after its breakdown — the scenes still draw the old story",
+                count=1,
+                items=["re-break the script (the Editor updates the scenes in place)"],
+                anchor=(f'story-{stories[0].story_id}' if stories else 'story-script'),
+                detail='stories'))
+
     # THE SCENES: every scene broken down into panels
     bare = [sc for sc in scenes if not panels_by_scene[sc.scene_id]]
     if scenes:

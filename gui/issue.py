@@ -456,6 +456,18 @@ def view_issue(state: APPState):
                         .on('click', lambda _, sp=spoken: post_user_message(
                             state, f"{sp.capitalize()} is too thin to break down — "
                                    f"interview me and help me develop it."))
+                elif text and scenes_all:
+                    # RE-BREAKING WITH SCENES ON THE BOOK is a merge, not a
+                    # mint — the naive chip would double the book
+                    ui.chip('re-break: update the scenes', icon='published_with_changes') \
+                        .props('dense outline clickable size=sm') \
+                        .tooltip(f"The book already has {len(scenes_all)} scenes — I'll read them "
+                                 f"first and update in place (or replace, with your approval), "
+                                 f"never mint duplicates") \
+                        .on('click', lambda _, sp=spoken: post_user_message(
+                            state, f"The script changed.  Read the existing scenes first, then "
+                                   f"update {sp}'s breakdown IN PLACE to match — merge or "
+                                   f"replace with my approval, never duplicate scenes."))
                 elif text:
                     ui.chip('break into scenes', icon='view_agenda').props('dense outline clickable size=sm') \
                         .on('click', lambda _, sp=spoken: post_user_message(
@@ -574,7 +586,7 @@ def view_issue(state: APPState):
                         .tooltip('See the panels on the page') \
                         .on('click', lambda _, ps=panels: (remember_spot(f'panel-{ps[0].panel_id}'),
                                                            set_detail('beats')))
-                elif text and wc < 40:
+                elif text and wc < 25:
                     ui.chip('develop it with me', icon='forum').props('dense outline clickable size=sm') \
                         .tooltip("It's thin — I'll interview you and we'll build it out") \
                         .on('click', lambda _, s=sc: post_user_message(
@@ -629,7 +641,7 @@ def view_issue(state: APPState):
                                        lambda v, sid=s.scene_id: save_scene_text(sid, v),
                                        f"Let's work on scene '{s.name}' together — read it "
                                        f"back to me and we'll develop it."))
-                        if text and wc >= 40:
+                        if text and wc >= 25:
                             ui.chip('break it into panels', icon='grid_on') \
                                 .props('dense outline clickable size=sm') \
                                 .on('click', lambda _, s=sc: post_user_message(

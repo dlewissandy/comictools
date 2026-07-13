@@ -111,3 +111,24 @@ def test_breakdown_line_doors_to_the_story_sheet(storage):
     assert 'breakdown' in by and not by['breakdown'].ok
     assert by['breakdown'].anchor == f'story-{st.story_id}'
     assert str(len(st.text.split())) in by['breakdown'].text, "the word count is the debt's size"
+
+
+def test_the_ledger_sees_script_drift(storage):
+    """Edit the script after its breakdown and the ledger says the scenes
+    still draw the old story — drift is never silent."""
+    import hashlib
+    from schema import Issue, Story
+    issue = storage.read_object(Issue, {"series_id": WL, "issue_id": CARN})
+    stories = storage.read_all_objects(Story, {"series_id": WL, "issue_id": CARN})
+    txt = (issue.story or '') + '|' + '|'.join((st.text or '') for st in stories)
+    issue.broken_script_sha = hashlib.sha1(txt.encode()).hexdigest()
+    storage.update_object(data=issue)
+    led = issue_ledger(storage, WL, CARN)
+    assert 'drift' not in {l.key for l in led.lines}, "matching hash — no drift"
+
+    issue.story = (issue.story or '') + "  And then act two changed entirely."
+    storage.update_object(data=issue)
+    led = issue_ledger(storage, WL, CARN)
+    by = {l.key: l for l in led.lines}
+    assert 'drift' in by and not by['drift'].ok
+    assert "changed after its breakdown" in by['drift'].text

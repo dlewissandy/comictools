@@ -235,6 +235,17 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_cover_image
     ],
     "issue": [
+        # every verb the persona and the book's chips speak
+        derive_character,
+        create_character,
+        create_variant,
+        read_all_panels,
+        read_board_table,
+        update_panel_dialogue,
+        update_panel_beat,
+        update_cover_letters,
+        update_scene_story,
+        delete_panel,
         generate_setting_background,
         create_styled_image_for_character_variant,
         # Create

@@ -158,10 +158,10 @@ def update_cover_aspect_ratio(
 @function_tool
 def update_issue_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, story: str) -> str:
     """
-    Update the story of the currently selected comic book issue.   Note, the story should
-    be a summary of the issue's plot, not a full script.   It should be in sufficient detail as
-    to allow the creative team to understand the narrative flow and key events, and to produce
-    the necessary artwork and dialogue.
+    Update the story of the currently selected comic book issue.  STORE THE
+    AUTHOR'S TEXT VERBATIM — never condense, summarize, or rewrite it.  This
+    field IS the script: the book prints it as the manuscript, and the
+    breakdown reads it word for word.
 
     Args:
         series_id (str): The ID of the comic series.

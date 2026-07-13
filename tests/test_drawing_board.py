@@ -195,3 +195,29 @@ def test_error_shaped_results_never_announce_done():
         assert re.search(pat, e[:120], re.I), f"missed error: {e}"
     for ok in successes:
         assert not re.search(pat, ok[:120], re.I), f"false failure: {ok}"
+
+
+def test_panelize_resolves_names_to_ids(storage):
+    """create_scene_panels must never store a name-keyed cast ref — the
+    Squonk dangler at panel scope."""
+    import asyncio, json as _json
+    from types import SimpleNamespace
+    from agentic.tools.creator import create_scene_panels
+    from schema import SceneModel, Panel
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    sc = storage.read_all_objects(SceneModel, {"series_id": WL, "issue_id": CARN})[0]
+    state = SimpleNamespace(storage=storage, is_dirty=False, selection=[])
+    out = str(asyncio.run(create_scene_panels.on_invoke_tool(
+        SimpleNamespace(context=state), _json.dumps({
+            "series_id": WL, "issue_id": CARN, "scene_id": sc.scene_id,
+            "panels": [{"name": "Dangler Test", "beat": "b", "description": "d",
+                        "aspect": "landscape",
+                        "characters": [{"series_id": WL, "character_id": "Ezra",
+                                        "variant_id": "base"}],
+                        "narration": [], "dialogue": []}]}))))
+    assert "Created 1 panels" in out and "(id: " in out, out
+    pnl = next(p for p in storage.read_all_objects(
+        Panel, {"series_id": WL, "issue_id": CARN, "scene_id": sc.scene_id})
+        if p.name == "Dangler Test")
+    assert pnl.character_references and pnl.character_references[0].character_id == "ezra", \
+        "the display name resolved to the roster id"
