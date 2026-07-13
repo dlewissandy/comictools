@@ -91,6 +91,9 @@ def init_layout(logger):
         .caption-box-sm { font-size: .72rem; padding: 0 8px; }
         .caption-flex { display: inline-flex; align-items: center; gap: 4px; }
         .panel-caption { position: absolute; top: -12px; left: -8px; z-index: 6; }
+        /* a card wearing an overlap caption must not CLIP it */
+        .mosaic-card:has(> .panel-caption), .mosaic-card:has(.panel-caption) {
+            overflow: visible; }
         .caption-btn { color: var(--caption-ink) !important; min-height: 0 !important;
                        padding: 0 !important; margin: -2px -4px -2px 2px !important; }
 

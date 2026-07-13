@@ -1170,7 +1170,8 @@ def _choices_manifest_path(image_locator: str, session_id: str) -> str:
     return os.path.join(folder, f".choices-{session_id}.json")
 
 
-def _write_choices_manifest(image_locator: str, session_id: str, choices: list[str]) -> None:
+def _write_choices_manifest(image_locator: str, session_id: str, choices: list[str],
+                            region: dict | None = None, mode: str | None = None) -> None:
     import time as _time
     from uuid import uuid4 as _uuid4
     path = _choices_manifest_path(image_locator, session_id)
@@ -1179,6 +1180,8 @@ def _write_choices_manifest(image_locator: str, session_id: str, choices: list[s
         "choices": choices,
         "session_id": session_id,
         "written_at": _time.time(),
+        "region": region,
+        "mode": mode,
     }
     tmp = f"{path}.{_uuid4().hex[:6]}.tmp"
     with open(tmp, "w") as f:
@@ -1500,11 +1503,27 @@ def _update_parent_selection(
     return None
 
 
+def _has_real_alpha(path: str) -> bool:
+    """True when the image actually uses transparency — an acetate, not a
+    print.  Heals of acetates must come back clear, not on a slab."""
+    try:
+        from PIL import Image
+        img = Image.open(path)
+        if img.mode in ('RGBA', 'LA'):
+            a_min, _ = img.getchannel('A').getextrema()
+            return a_min < 250
+        return 'transparency' in img.info
+    except Exception:
+        return False
+
+
 def _choices_epilogue(state, image_locator: str, session_id: str, mode: str):
     """The on-loop epilogue for a queued heal: when the takes land, the
     editor state points at them and the choices sheet opens itself —
     UI work stays on the event loop, paint work stays off it."""
     def after(choices):
+        if isinstance(choices, tuple):
+            choices = choices[0]
         here = state.selection[-1] if state.selection else None
         still_here = (getattr(state, 'image_editor_image', None) == image_locator
                       and here is not None
@@ -1569,8 +1588,15 @@ def inpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str)
             os.remove(mask_path)
         raise
 
+    is_acetate = _has_real_alpha(image_locator)
+
     def job():
         try:
+            kwargs = {}
+            if is_acetate:
+                # CLEAR ACETATE: the heal keeps the transparency and the
+                # exact pixels outside the patch
+                kwargs = {"background": "transparent", "input_fidelity": "high"}
             images = invoke_edit_image_api(
                 prompt=instruction,
                 reference_images=_merge_reference_images(image_locator, refs),
@@ -1578,6 +1604,7 @@ def inpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str)
                 size=size,
                 quality=IMAGE_QUALITY.HIGH,
                 n=4,
+                **kwargs,
             )
         finally:
             if mask_path and os.path.exists(mask_path):
@@ -1588,7 +1615,12 @@ def inpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str)
                    for img in images]
         if not choices:
             raise RuntimeError("no images came back — try again")
-        _write_choices_manifest(image_locator, session_id, choices)
+        _write_choices_manifest(image_locator, session_id, choices,
+                                region=selection, mode="inpaint")
+        if is_acetate and not any(_has_real_alpha(c) for c in choices):
+            return (choices, "NOTE: the takes came back OPAQUE — applying one "
+                             "restores the acetate's transparency outside the "
+                             "healed patch, but check the result.")
         return choices
 
     _open_choices_after = _choices_epilogue(state, image_locator, session_id, mode="inpaint")
@@ -1659,7 +1691,7 @@ def outpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str
                    for img in images]
         if not choices:
             raise RuntimeError("no images came back — try again")
-        _write_choices_manifest(image_locator, session_id, choices)
+        _write_choices_manifest(image_locator, session_id, choices, mode="outpaint")
         return choices
 
     _open_choices_after = _choices_epilogue(state, image_locator, session_id, mode="outpaint")

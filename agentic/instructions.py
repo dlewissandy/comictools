@@ -314,9 +314,18 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
     if len(selection) == 1:
         # One of the "all_*" is selected.   We can at least provide a list of identifiers
         try:
-            i = ["all_publishers", "all_series", "all_styles"].index(selection[0].kind.value)
+            i = ["all-publishers", "all-series", "all-styles"].index(selection[0].kind.value)
             cls = [Publisher, Series, ComicStyle][i]
-            objects = state.storage.read_all_objects(cls=cls, order_by='name')
+            if cls is Publisher:
+                # EVERY HOUSE ITS OWN REPO: the rack, not just the open house
+                from storage import registry as _registry
+                if _registry.registered():
+                    from gui.home import all_house_publishers
+                    objects = all_house_publishers(state.storage)
+                else:
+                    objects = state.storage.read_all_objects(cls=cls, order_by='name')
+            else:
+                objects = state.storage.read_all_objects(cls=cls, order_by='name')
             kvs = { obj.id: obj.name for obj in objects }
             details = f"# SELECTION DETAILS:\n for more details about a particular {cls.__name__} use the available tools.\n\n{json.dumps(kvs, indent=2)}"
         except ValueError:

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from schema.dialog import Narration, Dialogue, NarrationPosition
 from schema.enums import FrameLayout
 from schema.reference_image import ReferenceImage
@@ -18,6 +18,14 @@ class Panel(BaseModel):
     description: str = Field(..., description="A detailed visual description of the image in the panel.   This should describe the image in sufficient detail so that different artists could from this information alone reproduce the same image.   This should include the setting, foreground, background, characters, props, scenery and any other elements in the panel.")
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel.  landscape, portrait or square.  Default to square")
     size: str = Field(default="1x", description="How big the panel prints, as a multiplier: '1x' or '2x' for landscape and portrait, '1x'/'2x'/'3x' for square.  A 2x panel commands its own band instead of pairing.  Default to '1x'.")
+
+    @field_validator("size", mode="before")
+    @classmethod
+    def _size_never_null(cls, v):
+        # a null/absent size means the default — one poisoned field must
+        # never make the whole panel unreadable
+        return v if v else "1x"
+
     character_references: list[CharacterRef] = Field(..., description="A dictionary mapping the names of the characters that appear in the panel to the visual variant that should be used as reference.   Default to empty dict")
 
     # DIALOGUE AND NARRATION

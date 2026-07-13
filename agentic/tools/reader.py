@@ -138,11 +138,16 @@ def read_one(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], pk: dic
 @function_tool
 def read_all_publishers(wrapper: RunContextWrapper[APPState]) -> list[Publisher]:
     """
-    Get a list of all publishers in the database.
-    
+    Get a list of ALL publishing houses the studio knows — every registered
+    publisher repo, not just the open one.
+
     Returns:
-        A list of publisher names.
+        A list of publishers.
     """
+    from storage import registry
+    if registry.registered():
+        from gui.home import all_house_publishers
+        return all_house_publishers(wrapper.context.storage)
     return read_all(wrapper=wrapper, cls=Publisher, parent_key=None)
 
 @function_tool

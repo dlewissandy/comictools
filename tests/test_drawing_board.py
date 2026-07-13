@@ -134,3 +134,44 @@ def test_swatch_book_matches_the_catalog():
             assert (w, h) in PIECE_PANEL, "every piece speaks panel vocabulary"
     assert len(swatches_for(15)) == 1      # the all-squares page
     assert swatches_for(3) == []           # no exact fill below four panels
+
+
+def test_clear_acetate_apply_keeps_transparency(tmp_path, monkeypatch):
+    """CLEAR ACETATE: applying a heal to a transparent acetate restores the
+    original's alpha outside the healed patch — never an opaque slab."""
+    from types import SimpleNamespace
+    from PIL import Image
+    import json as j
+    import gui.image_editor_choices as ch
+
+    original = str(tmp_path / "acetate.png")
+    chosen = str(tmp_path / "take.png")
+    src = Image.new("RGBA", (100, 100), (0, 0, 0, 0))          # clear sheet
+    for x in range(40, 60):
+        for y in range(40, 60):
+            src.putpixel((x, y), (200, 30, 30, 255))           # a red figure
+    src.save(original)
+    Image.new("RGB", (100, 100), (10, 200, 10)).save(chosen)   # opaque take
+    j.dump({"image": original, "choices": [chosen], "session_id": "s1",
+            "region": {"x": 45, "y": 45, "width": 10, "height": 10}},
+           open(tmp_path / ".choices-s1.json", "w"))
+
+    notifications = []
+    monkeypatch.setattr(ch.ui, "notify", lambda *a, **k: notifications.append(a))
+    state = SimpleNamespace(
+        image_editor_choice_selected=chosen,
+        image_editor_original_image=original,
+        image_editor_image=original,
+        image_editor_session_id="s1",
+        image_editor_choices=[chosen],
+        is_dirty=False,
+        selection=[],
+        change_selection=lambda new: None,
+        history=None, refresh_details=lambda: None)
+    monkeypatch.setattr("gui.light_table.table_receipt", lambda *a, **k: None)
+    ch._apply(state)
+
+    out = Image.open(original).convert("RGBA")
+    assert out.getpixel((5, 5))[3] == 0, "outside the patch stays CLEAR"
+    assert out.getpixel((50, 50))[3] == 255, "inside the patch takes the heal"
+    assert out.getpixel((50, 50))[:3] == (10, 200, 10), "the healed pixels are the take's"

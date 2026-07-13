@@ -70,17 +70,19 @@ def view_series(state: APPState):
             with ui.card().classes(TAILWIND_CARD + ' mosaic-card').style('overflow-y: auto;'):
                 markdown_field_editor(state, "Description", series.description)
 
-        # Publisher logo — a square corner box, like the publisher mark on a cover.
-        with packer.place_cell([(2, 2)], fudge=False):
-            with ui.card().classes(TAILWIND_CARD + ' mosaic-card cursor-pointer') as pub_card:
-                header("Publisher", 4)
-                pub_image = pub.image if pub else None
-                if pub_image and os.path.exists(pub_image):
+        # THE PUBLISHER'S MARK: series BELONG to their house — the mark is
+        # worn, never picked (the whole repo IS the publisher).  Shown only
+        # when the house has a logo; clicking walks up to the house.
+        pub_image = pub.image if pub else None
+        if pub_image and os.path.exists(pub_image):
+            with packer.place_cell([(2, 2)], fudge=False):
+                with ui.card().classes(TAILWIND_CARD + ' mosaic-card cursor-pointer') as pub_card:
+                    header("Publisher", 4)
                     ui.image(source=pub_image)
-                else:
-                    ui.label("Click to select").classes('text-gray-500').style('text-align: center;')
-            pub_sel = state.selection + [SelectionItem(name="Pick Publisher", id=get_id(), kind=SelectedKind.PICK_PUBLISHER)]
-            pub_card.on('click', lambda _, s=pub_sel: state.change_selection(new=s))
+                pub_card.tooltip(f"Published by {pub.name} — open the house")
+                pub_card.on('click', lambda _: state.change_selection(new=[
+                    SelectionItem(name='Publishers', id=None, kind=SelectedKind.ALL_PUBLISHERS),
+                    SelectionItem(name=pub.name, id=pub.publisher_id, kind=SelectedKind.PUBLISHER)]))
 
         # THE TITLE ART: the series masthead, hand-lettered per style — the
         # reference every cover's title lettering is held to.  Ghost cards

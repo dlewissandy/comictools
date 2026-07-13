@@ -125,7 +125,42 @@ def _apply(state: APPState):
                           f".trash--{uuid4().hex[:6]}--{os.path.basename(original)}")
     try:
         shutil.copyfile(original, backup)
-        shutil.copyfile(chosen, original)
+        # CLEAR ACETATE: healing a transparent image must never paste an
+        # opaque card into the layered composite — outside the healed
+        # patch, the ORIGINAL's alpha survives verbatim
+        applied = False
+        try:
+            from PIL import Image
+            src = Image.open(original)
+            if src.mode in ('RGBA', 'LA') or 'transparency' in src.info:
+                src = src.convert('RGBA')
+                a_min, _ = src.getchannel('A').getextrema()
+                if a_min < 250:
+                    new = Image.open(chosen).convert('RGBA').resize(src.size)
+                    region = None
+                    try:
+                        import json as _json
+                        manifest = os.path.join(
+                            os.path.dirname(original),
+                            f".choices-{state.image_editor_session_id}.json")
+                        if os.path.exists(manifest):
+                            region = _json.load(open(manifest)).get('region')
+                    except Exception:
+                        region = None
+                    alpha = src.getchannel('A').copy()
+                    if region and all(k in region for k in ('x', 'y', 'width', 'height')):
+                        # inside the healed patch, the take's own alpha rules
+                        box = (int(region['x']), int(region['y']),
+                               int(region['x'] + region['width']),
+                               int(region['y'] + region['height']))
+                        alpha.paste(new.getchannel('A').crop(box), box)
+                    new.putalpha(alpha)
+                    new.save(original, 'PNG')
+                    applied = True
+        except Exception as ex:
+            logger.warning(f"alpha-preserving apply fell back to plain copy: {ex}")
+        if not applied:
+            shutil.copyfile(chosen, original)
     except Exception as e:
         logger.exception("Failed to overwrite original image")
         ui.notify(f"Failed to apply edit: {e}", type="negative")
