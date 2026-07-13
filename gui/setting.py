@@ -259,6 +259,138 @@ def view_setting(state: APPState):
                                             .tooltip("Render this setting's master background in this style") \
                                             .on('click', lambda _, st=st: ink_in_style(st))
 
+        # SHOTS: reusable named re-frames of the master (a new angle, a new time
+        # of day), pickable by any scene — the setting's equivalent of a
+        # character's base look plus its variant looks.
+        def new_shot_dialog(_=None):
+            from agentic.tools.normalization import normalize_id
+            from schema import SettingShot
+            with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 460px;'):
+                ui.label('A new shot of this set').classes('caption-box caption-box-sm')
+                ui.label('Re-frame the establishing master: name it, aim the camera, '
+                         'set the light.').classes('text-sm q-mt-sm')
+                nm = ui.input(placeholder="Name — e.g. 'gate at night'") \
+                    .props('outlined dense autofocus').classes('w-full q-mt-sm')
+                ang = ui.input(placeholder="Angle / framing — e.g. 'low angle at the gate'") \
+                    .props('outlined dense').classes('w-full')
+                tod = ui.input(placeholder="Time of day / light — e.g. 'night'") \
+                    .props('outlined dense').classes('w-full')
+
+                def make():
+                    name = (nm.value or '').strip()
+                    if not name:
+                        ui.notify('Name the shot first.', type='warning')
+                        return
+                    fresh = storage.read_object(Setting, setting.primary_key) or setting
+                    slug = normalize_id(name)
+                    if any(s.shot_id == slug for s in (fresh.shots or [])):
+                        ui.notify('A shot with that name already exists.', type='warning')
+                        return
+                    fresh.shots = [*(fresh.shots or []), SettingShot(
+                        shot_id=slug, name=name, angle=(ang.value or '').strip(),
+                        time_of_day=(tod.value or '').strip())]
+                    storage.update_object(fresh)
+                    dlg.close()
+                    from gui.light_table import table_receipt
+                    table_receipt(state, f"🎬 added the **{name}** shot of **{setting.name}** — "
+                                         f"ink it in a style below")
+                    state.refresh_details()
+                nm.on('keydown.enter', lambda _: make())
+                with ui.row().classes('w-full justify-end q-mt-sm'):
+                    ui.button('Add the shot', icon='add_a_photo').props('unelevated dense') \
+                        .on('click', lambda _: make())
+            dlg.open()
+
+        def ink_shot_in_style(shot, st, orientation='landscape'):
+            from agentic.tools.imaging import generate_setting_shot_body
+            from helpers.render_queue import enqueue_renders
+            ui.notify(f"Shooting {setting.name.title()} — {shot.name} — in {st.name.title()}…",
+                      type='info')
+            enqueue_renders(state, [(
+                f"{setting.name} · {shot.name} in {st.name} ({orientation})",
+                lambda: generate_setting_shot_body(state, series_id, setting.setting_id,
+                                                   shot.shot_id, st.style_id, orientation),
+            )], role='the Background Artist')
+
+        def strike_shot(shot):
+            fresh = storage.read_object(Setting, setting.primary_key) or setting
+            fresh.shots = [s for s in (fresh.shots or []) if s.shot_id != shot.shot_id]
+            storage.update_object(fresh)
+            from gui.light_table import table_receipt
+            table_receipt(state, f"🗑 struck the **{shot.name}** shot of **{setting.name}**")
+            state.refresh_details()
+
+        from helpers.masters import split_key
+        from gui.elements import ruled_page, HEADER_CLASSES
+        with ui.expansion(value=True).classes('w-full section-flat') as shots_exp:
+            with shots_exp.add_slot('header'):
+                with ui.row().classes('w-full items-center flex-nowrap').style('gap: 8px;'):
+                    header('Shots', 2)
+                    ui.label('— reusable re-frames of the master: a new angle, a new time of day') \
+                        .classes('text-xs text-gray-500')
+                    ui.space()
+                    ui.button('New shot', icon='add_a_photo').props('flat dense no-caps') \
+                        .classes('crud-glyph') \
+                        .tooltip('A new re-frame of this set — a different angle or time of day') \
+                        .on('click.stop', new_shot_dialog)
+            _shots = setting.shots or []
+            if not _shots:
+                ui.label('No shots yet — the master is the only view.  '
+                         'Add a wide, a night, a low angle at the gate…') \
+                    .classes('text-sm text-gray-500 q-px-sm')
+            for _shot in _shots:
+                with ui.row().classes('w-full items-center q-px-sm').style('gap: 8px;'):
+                    ui.label(_shot.name.title()).classes('comic-label-sm')
+                    _bits = " · ".join(x for x in [_shot.angle, _shot.time_of_day] if x)
+                    if _bits:
+                        ui.label(_bits).classes('text-xs text-gray-500')
+                    ui.space()
+                    ui.button(icon='delete_outline').props('flat round dense size=xs') \
+                        .classes('crud-glyph') \
+                        .tooltip(f"Strike the '{_shot.name}' shot") \
+                        .on('click', lambda _, sh=_shot: strike_shot(sh))
+                _shot_rendered = {k: v for k, v in (_shot.images or {}).items()
+                                  if v and os.path.exists(v)}
+                _master_bases = {split_key(k)[0] for k in rendered}
+                with ruled_page() as packer:
+                    for _key, _img in _shot_rendered.items():
+                        _b, _o = split_key(_key)
+                        with packer.place_cell([(4, 8/3), (3, 2), (6, 4)], fudge=False):
+                            with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'):
+                                ui.label(_b.replace('-', ' ').title()
+                                         + (f' · {_o}' if _o != 'landscape' else '')) \
+                                    .classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                                ui.image(source=_img).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
+                                if _b in styles_by_id:
+                                    ui.button(icon='brush').props('flat round dense size=xs') \
+                                        .classes('absolute top-1 right-1 z-10 bg-white/70 dark:bg-black/50') \
+                                        .tooltip('Re-shoot — same style, same orientation') \
+                                        .on('click.stop', lambda _, sh=_shot, st=styles_by_id[_b], o=_o:
+                                            ink_shot_in_style(sh, st, o))
+                    # ghost: a shot is a re-frame OF the master, so it's offered in
+                    # the styles the master itself is inked in but this shot isn't
+                    _done = {split_key(k)[0] for k in _shot_rendered}
+                    _offer = [b for b in _master_bases if b not in _done]
+                    if _offer or not _shot_rendered:
+                        with packer.place_cell([(4, 8/3), (3, 2), (6, 4)], fudge=False):
+                            with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative ghost-card'):
+                                ui.label('NOT YET SHOT').classes('caption-box caption-box-sm') \
+                                    .style('position: absolute; top: 6px; left: 6px; z-index: 6;')
+                                with ui.column().classes('w-full h-full justify-center items-start') \
+                                        .style('gap: 4px; padding: 30px 10px 8px; overflow-y: auto;'):
+                                    if not _master_bases:
+                                        ui.label('Ink the master in a style first — a shot '
+                                                 're-frames the master.') \
+                                            .classes('text-xs text-gray-500')
+                                    for _bb in (_offer or list(_master_bases)):
+                                        _st = styles_by_id.get(_bb)
+                                        if _st is None:
+                                            continue
+                                        ui.chip(f'Shoot it in {_st.name.title()}', icon='photo_camera') \
+                                            .props('dense outline clickable size=sm') \
+                                            .tooltip('Render this shot in this style, re-framed from the master') \
+                                            .on('click', lambda _, sh=_shot, st=_st: ink_shot_in_style(sh, st))
+
         # Reference image uploads (sketches, photos, prior art) steer the rendering.
         with ui.expansion(value=True).classes('w-full section-flat') as expansion:
             with expansion.add_slot('header'):

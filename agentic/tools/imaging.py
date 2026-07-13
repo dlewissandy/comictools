@@ -2129,6 +2129,100 @@ panels composed on top of this background match the rest of the issue.
     return f"Master background for '{setting.name}' rendered in style '{style_id}': {locator}"
 
 
+def generate_setting_shot_body(state, series_id: str, setting_id: str, shot_id: str,
+                               style_id: str, aspect: FrameLayout | str | None = None) -> str:
+    """Render a reusable SHOT of a setting — the establishing master re-framed at
+    the shot's angle and time of day — in one style.  A shot is a durable
+    reference asset (finished panels composite it), so it inks at HIGH like a
+    master, not at the throwaway LOW of a blocking pose.  Callable from the GUI
+    (background job) or a tool."""
+    class _W:
+        context = state
+    wrapper = _W()
+    storage: GenericStorage = state.storage
+    if isinstance(aspect, str):
+        aspect = FrameLayout(aspect)
+    aspect = aspect or FrameLayout.LANDSCAPE
+
+    setting: Setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": setting_id})
+    if setting is None:
+        return f"Setting '{setting_id}' not found in series '{series_id}'."
+    shot = next((s for s in (setting.shots or []) if s.shot_id == shot_id), None)
+    if shot is None:
+        return f"Shot '{shot_id}' not found on setting '{setting.name}'."
+    style: ComicStyle = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
+    if style is None:
+        return f"Style '{style_id}' not found."
+
+    prop_lines = "\n".join(f"* **{p.name}**: {p.description}" for p in setting.props)
+    interior_or_exterior = "an interior" if setting.interior else "an exterior"
+    orient_line = {"landscape": "landscape orientation", "portrait": "portrait orientation",
+                   "square": "square orientation"}[aspect.value]
+
+    # THE MASTER IS THE ANCHOR: re-frame the SAME place, so the shot stays on
+    # the establishing view's architecture, dressing and palette.
+    from helpers.masters import master_for, master_key
+    master_img, _exact = master_for(setting, style_id, aspect)
+    if not (master_img and os.path.exists(master_img)):
+        # no master in this style yet: any master of this setting still anchors
+        # the place; else we fall back to the description alone
+        master_img = next((i for i in (setting.images or {}).values()
+                           if i and os.path.exists(i)), None)
+
+    direction = ", ".join(x for x in [shot.angle.strip(), shot.time_of_day.strip()] if x) \
+        or shot.name
+    anchor_line = ("The attached reference image is this setting's establishing MASTER.  "
+                   "Render the SAME place — identical architecture, identical dressing and "
+                   "props, identical palette — but RE-FRAMED as the shot below.\n\n"
+                   if master_img else "")
+
+    prompt = f"""Render a comic book background — a reusable SHOT of {interior_or_exterior} setting: "{setting.name}".
+
+{anchor_line}This is an EMPTY SETTING: render it fully dressed with its props but with
+absolutely NO characters, people, or creatures.   Compose it in {orient_line} with
+generous negative space where characters can later be placed.
+
+# The shot (re-frame the master as this)
+* Angle / framing: {shot.angle or '(as the master, reconsidered for this shot)'}
+* Time of day / light: {shot.time_of_day or '(as the master)'}
+{f"* Note: {shot.description}" if shot.description else ""}
+
+# Setting
+{setting.description}
+
+# Props
+{prop_lines if prop_lines else "* (no props)"}
+
+{format_comic_style(style, include_bubble_styles=False, include_character_style=False, heading_level=1)}
+"""
+
+    reference_images = ([master_img] if master_img else []) + list(storage.list_uploads(obj=setting))
+
+    locator = generate_object_image(
+        wrapper=wrapper,
+        obj=setting,
+        prompt=prompt,
+        reference_images=reference_images,
+        aspect_ratio=aspect,
+        image_quality=IMAGE_QUALITY.HIGH,
+        name=f"{setting_id}-{shot_id}-{style_id}-shot",
+    )
+
+    # persist onto a FRESH read: the render takes minutes and the author may
+    # have kept working on the setting meanwhile
+    fresh = storage.read_object(cls=Setting, primary_key=setting.primary_key) or setting
+    _mk = master_key(style_id, aspect)
+    fshot = next((s for s in (fresh.shots or []) if s.shot_id == shot_id), None)
+    if fshot is None:
+        return f"Shot '{shot_id}' vanished from '{setting.name}' while rendering."
+    fshot.images[_mk] = locator
+    if _mk in (fshot.images_stale or []):
+        fshot.images_stale = [k for k in fshot.images_stale if k != _mk]
+    storage.update_object(data=fresh)
+    state.is_dirty = True
+    return f"Shot '{shot.name}' of '{setting.name}' rendered in style '{style_id}': {locator}"
+
+
 @function_tool
 async def generate_setting_background(
     wrapper: RunContextWrapper[APPState],
