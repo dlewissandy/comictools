@@ -27,7 +27,8 @@ def append_history(sender: str, content: ui.element, sent: bool = True):
     """
     Append a message to the chat history in the user interface.
     """
-    with ui.chat_message(name=sender, sent=sent).classes('w-full') as message:
+    from gui.avatars import comic_chat_message
+    with comic_chat_message(name=sender, sent=sent).classes('w-full') as message:
         ui.markdown(content)
     return message
 

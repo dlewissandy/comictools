@@ -29,17 +29,49 @@ WRITER_AVATAR = _svg_data_uri(f'''<svg xmlns="http://www.w3.org/2000/svg" viewBo
   </g>
 </svg>''')
 
-ARTIST_AVATAR = _svg_data_uri(f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+def _artist_svg(beret_fill: str) -> str:
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
   <circle cx="24" cy="24" r="21" fill="{_PAPER}" stroke="{_INK}" stroke-width="3"/>
-  <ellipse cx="24" cy="14.5" rx="15" ry="6.5" fill="{_INK}" transform="rotate(-8 24 14.5)"/>
-  <circle cx="28" cy="6.5" r="2.4" fill="{_INK}"/>
+  <ellipse cx="24" cy="14.5" rx="15" ry="6.5" fill="{beret_fill}" stroke="{_INK}" stroke-width="1.6" transform="rotate(-8 24 14.5)"/>
+  <circle cx="28" cy="6.5" r="2.4" fill="{beret_fill}" stroke="{_INK}" stroke-width="1.2"/>
   <path d="M14 26.5 q3.2 -3.4 6.4 0" fill="none" stroke="{_INK}" stroke-width="2.4" stroke-linecap="round"/>
   <path d="M27.6 26.5 q3.2 -3.4 6.4 0" fill="none" stroke="{_INK}" stroke-width="2.4" stroke-linecap="round"/>
   <path d="M18 33 Q24 38 30 33" fill="none" stroke="{_INK}" stroke-width="2.6" stroke-linecap="round"/>
-</svg>''')
+</svg>'''
+
+
+ARTIST_AVATAR = _svg_data_uri(_artist_svg(_INK))
+
+from functools import lru_cache
+
+
+@lru_cache(maxsize=32)
+def _tinted(base_hue: int) -> str:
+    """The staff share one drawn face but each wears their OWN beret —
+    the Editor, the Inker and the Librarian stop being interchangeable."""
+    return _svg_data_uri(_artist_svg(f"hsl({base_hue}, 55%, 38%)"))
+_STAFF_HUES = {
+    "the Editor": 210,            # steady blue
+    "the Art Director": 285,      # violet
+    "the Inker": 20,              # burnt orange
+    "the Librarian": 140,         # green
+    "the Character Designer": 330,
+    "the Background Artist": 175,
+    "the Cover Artist": 45,
+    "the Layout Artist": 250,
+    "the Penciller": 0,
+    "the Production Artist": 100,
+    "the Prop Master": 60,
+}
 
 
 def comic_chat_message(name: str, sent: bool, **kwargs):
-    """A chat message drawn as a comic panel with its speaker's character."""
-    avatar = WRITER_AVATAR if sent else ARTIST_AVATAR
+    """A chat message drawn as a comic panel with its speaker's character —
+    each coworker in their own beret."""
+    if sent:
+        avatar = WRITER_AVATAR
+    elif name in _STAFF_HUES:
+        avatar = _tinted(_STAFF_HUES[name])
+    else:
+        avatar = ARTIST_AVATAR
     return ui.chat_message(name=name, sent=sent, avatar=avatar, **kwargs)

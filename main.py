@@ -1092,9 +1092,31 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     from gui.messaging import attach_reference
     attach_upload.on_upload(lambda e: attach_reference(state, e))
 
-    mic_button.on('click', lambda _: start_listening(user_input))
+    async def _listen(_=None):
+        # the mic shows it's LISTENING — not a dead button until the
+        # transcript pops in
+        mic_button.props('color=negative')
+        mic_button.icon = 'graphic_eq'
+        try:
+            await start_listening(user_input)
+        finally:
+            mic_button.props(remove='color=negative')
+            mic_button.icon = 'mic'
+    mic_button.on('click', _listen)
     stop_mic_button.on('click', lambda _: stop_listening())
-    speak_button.on('click', lambda _: speak(user_input.value))
+    def _speak_last_reply(_=None):
+        # READ THE REPLY: the last thing the coauthor said — never the
+        # author's own (usually empty) draft
+        import re as _re
+        for msg in reversed(state.get_transcript()):
+            if not msg.get('sent') and msg.get('name') not in ('You', 'the receipts', 'Tool Output'):
+                text = _re.sub(r'<[^>]+>', ' ', msg.get('text_html') or '')
+                text = _re.sub(r'[#*_`>]', '', text).strip()
+                if text:
+                    speak(text[:1200])
+                    return
+        ui.notify('Nothing to read yet — the coauthor hasn\'t spoken.', type='info')
+    speak_button.on('click', _speak_last_reply)
     stop_speak_button.on('click', lambda _: cancel_speech())
 
 

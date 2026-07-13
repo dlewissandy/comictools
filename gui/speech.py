@@ -12,7 +12,7 @@ SPEECH_SUPPORT_HTML = """
   window.__speech._recognition = null;
   window.__speech._resolve = null;
   window.__speech._reject = null;
-  window.__speech._inputSelector = '.stt-input input';
+  window.__speech._inputSelector = '.stt-input textarea, .stt-input input';
 
   window.__speech._setInputValue = (value) => {
     const input = document.querySelector(window.__speech._inputSelector);
