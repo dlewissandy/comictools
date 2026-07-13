@@ -25,6 +25,7 @@ from agentic.tools import (
     create_publisher,
     create_comic_series,
     create_style,
+    create_style_from_image,
     create_panel,
     create_character,
     create_issue,
@@ -163,6 +164,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_styles,
 
         create_style,
+        create_style_from_image,
         delete_style,
     ],
     "all-series": [
@@ -353,6 +355,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Create
         create_comic_series,
         create_style,
+        create_style_from_image,
         # Read
         read_publisher,
         read_all_series,

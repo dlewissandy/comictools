@@ -263,6 +263,99 @@ def _create_by_copy(state, kind, source_id, source_name, name, diff):
 
 
 # ---------------------------------------------------------------------------
+# CREATE A STYLE — describe it, or read it off previous art.  Styles are
+# house-level (not series assets), so this is its own small dialog.
+# ---------------------------------------------------------------------------
+def create_style_dialog(state: APPState):
+    """Two paths to a new comic style: describe the look, or drop previous art
+    and let the studio read the style off the picture (keeping the image as the
+    style's art exemplar).  Nothing renders until asked."""
+    import os
+    import tempfile
+    from nicegui.events import UploadEventArguments
+
+    with ui.dialog() as dlg, ui.card().classes("soft-card") \
+            .style("min-width: 560px; max-width: 760px;"):
+        ui.label("New style").classes("caption-box caption-box-sm")
+
+        with ui.tabs().classes("w-full") as tabs:
+            t_img = ui.tab("From art", icon="image")
+            t_desc = ui.tab("Describe it", icon="edit_note")
+
+        with ui.tab_panels(tabs, value=t_img).classes("w-full"):
+
+            # ---- read the style off previous art ------------------------
+            with ui.tab_panel(t_img):
+                dropped = {"path": None}
+                i_name = ui.input("Name").props("outlined dense").classes("w-full")
+                preview = ui.image().classes("q-mt-sm rounded-md") \
+                    .style("max-height: 220px; display: none;")
+
+                def on_up(e: UploadEventArguments):
+                    if not (e.type or "").startswith("image/"):
+                        ui.notify("That isn't an image.", type="warning")
+                        return
+                    ext = os.path.splitext(e.name or "art.png")[1] or ".png"
+                    fd, path = tempfile.mkstemp(prefix="style-art-", suffix=ext)
+                    with os.fdopen(fd, "wb") as f:
+                        f.write(e.content.read())
+                    dropped["path"] = path
+                    preview.set_source(path)
+                    preview.style("max-height: 220px; display: block;")
+                    ui.notify("Art ready — the studio will read the style off it.",
+                              type="positive")
+                ui.upload(on_upload=on_up, auto_upload=True, max_files=1) \
+                    .props('accept="image/*" flat bordered').classes("w-full q-mt-sm create-drop")
+                ui.label("Drop or browse previous art — the studio reads the linework, "
+                         "inking, palette and figure styling off the picture and keeps the "
+                         "image as the style's exemplar.").classes("text-xs text-gray-500")
+
+                def go_image():
+                    name = (i_name.value or "").strip()
+                    if not name:
+                        ui.notify("Give the style a name.", type="warning")
+                        return
+                    if not dropped["path"]:
+                        ui.notify("Drop or browse a piece of art first.", type="warning")
+                        return
+                    post_user_message(state,
+                        f"Create a comic style named '{name}' FROM THIS ART using "
+                        f"create_style_from_image — it reads the art, character and bubble "
+                        f"styles off the picture and KEEPS the image as the style's art "
+                        f"exemplar.  Render nothing else.  Image: {dropped['path']}")
+                    dlg.close()
+                ui.button("Create from art", icon="add_photo_alternate") \
+                    .props("unelevated no-caps").classes("q-mt-md") \
+                    .on("click", lambda _: go_image())
+
+            # ---- describe it from scratch -------------------------------
+            with ui.tab_panel(t_desc):
+                d_name = ui.input("Name").props("outlined dense").classes("w-full")
+                d_desc = ui.textarea("Describe the look").props("outlined autogrow") \
+                    .classes("w-full q-mt-sm")
+                ui.label("Linework, inking, shading, palette, lettering, and how figures "
+                         "and faces are stylized.").classes("text-xs text-gray-500")
+
+                def go_desc():
+                    name = (d_name.value or "").strip()
+                    if not name:
+                        ui.notify("Give the style a name.", type="warning")
+                        return
+                    desc = (d_desc.value or "").strip()
+                    post_user_message(state,
+                        f"Create a new comic book style named '{name}'.  {desc}  "
+                        f"Fill in its art, character and bubble styles; render no examples yet.")
+                    dlg.close()
+                ui.button("Create", icon="add").props("unelevated no-caps") \
+                    .classes("q-mt-md").on("click", lambda _: go_desc())
+
+        with ui.row().classes("w-full justify-end q-mt-sm"):
+            ui.button("Cancel", icon="close").props("flat no-caps") \
+                .on("click", lambda _: dlg.close())
+    dlg.open()
+
+
+# ---------------------------------------------------------------------------
 # THE LOOK COMPOSER: dress the base character in wardrobe and props
 # ---------------------------------------------------------------------------
 def compose_look_dialog(state: APPState, series_id: str, character_id: str):

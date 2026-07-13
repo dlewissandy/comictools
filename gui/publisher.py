@@ -119,6 +119,9 @@ def view_publisher(state: APPState):
 
         # THE STYLE RACK: the house's styles — its OWN copies, edit them to
         # your heart's content.  Nothing outside this repo is ever used.
+        def _new_style():
+            from gui.create_asset import create_style_dialog
+            create_style_dialog(state)
         from schema import ComicStyle
         style_packer = PagePacker(12)
         with ui.element('div').classes('mosaic-host'), ui.element('div').classes('comic-mosaic w-full'):
@@ -135,7 +138,7 @@ def view_publisher(state: APPState):
                     .classes('caption-box caption-box-sm')
                     .style('position: absolute; bottom: 6px; left: 6px; z-index: 6;'),
                 overlap_caption=lambda: caption_action("House Styles", _CK.CREATE,
-                    lambda _: post_user_message(state, "I would like to create a new comic book style."), 3)
+                    lambda _: _new_style(), 3)
             )
             style_packer.finalize()
 

@@ -315,8 +315,85 @@ def create_style(
     state.change_selection(new=style_ancestry(state.storage, style_id))
     return style
 
+
 @function_tool
-def create_variant(wrapper: RunContextWrapper[APPState], 
+def create_style_from_image(wrapper: RunContextWrapper[APPState],
+                            name: str, image_locator: str) -> "ComicStyle | str":
+    """
+    Create a comic STYLE from a piece of previous art: the studio READS the style
+    off the picture — linework, inking, shading, palette, registration, lettering,
+    and how figures and faces are stylized and proportioned — into the style's
+    art_style, character_style and bubble_styles, and KEEPS THE IMAGE as the
+    style's art exemplar.   Nothing else is rendered; a style's example art inks
+    on demand, held to this hand.
+
+    Args:
+        name: The name of the new style.
+        image_locator: The filepath of the uploaded/dropped reference art.
+    """
+    import os
+    from pydantic import BaseModel as _BM
+    from helpers.generator import invoke_generate_api
+    from schema import StyleExample
+
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    if not os.path.isfile(image_locator):
+        return f"Image '{image_locator}' not found.  Upload it first."
+    style_id = name.lower().replace(" ", "-")
+    if storage.read_object(ComicStyle, {"style_id": style_id}) is not None:
+        return f"The name '{name}' is already in use by another style.  Please choose a different name."
+
+    # STRUCTURED VISION: read the whole style off the art in one pass
+    class _StyleFromArt(_BM):
+        description: str
+        art_style: ArtStyle
+        character_style: CharacterStyle
+        bubble_styles: BubbleStyles
+
+    prompt = (
+        "Study this piece of art and describe the comic STYLE it is drawn in — not "
+        "its subject, its STYLE.  Fill EVERY field so another artist could draw brand-new "
+        "scenes in this exact hand: linework and inking, shading, color palette and spot "
+        "colors, registration, lettering; and how figures and faces are stylized — "
+        "proportions, eye/nose/mouth treatment, silhouette, detail, motion and expression "
+        "lines, recurring flourishes.  For the description, 2-4 sentences naming the "
+        "medium, era and what makes it recognizable.")
+    try:
+        got = invoke_generate_api(prompt, image=image_locator, text_format=_StyleFromArt)
+    except Exception as e:
+        logger.warning(f"style extraction from image failed: {e}")
+        return f"Couldn't read a style off that image: {e}"
+
+    style = ComicStyle(name=name, style_id=style_id, description=got.description,
+                       art_style=got.art_style, character_style=got.character_style,
+                       bubble_styles=got.bubble_styles, image=None)
+    final_id = storage.create_object(style)
+
+    # KEEP THE ART as the style's 'art' exemplar — re-filed into the style's own
+    # store the same way a rendered example is, so its locator resolves everywhere
+    try:
+        with open(image_locator, "rb") as f:
+            raw = f.read()
+        example = StyleExample(style_id=final_id, example_type="art",
+                               image_id="art", mime_type="image/png")
+        locator = storage.upload_binary_image(obj=example, data=raw)
+        fresh = storage.read_object(ComicStyle, {"style_id": final_id}) or style
+        fresh.image = {**(fresh.image if isinstance(fresh.image, dict) else {}), "art": locator}
+        storage.update_object(fresh)
+    except Exception as e:
+        logger.warning(f"keeping the style's art exemplar failed: {e}")
+
+    state.is_dirty = True
+    from gui.routes import style_ancestry
+    state.change_selection(new=style_ancestry(storage, final_id))
+    return (f"Created the '{name}' style from the art — the image is its art exemplar, "
+            f"and its art/character/bubble styles were read off the picture.  Nothing else "
+            f"rendered; example art inks on demand.")
+
+
+@function_tool
+def create_variant(wrapper: RunContextWrapper[APPState],
         series_id: str,
         character_id: str,
         name: str,
