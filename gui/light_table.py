@@ -1038,6 +1038,19 @@ def pose_pending_key(board, character_id: str, variant_id: str) -> str:
     return f"{board.id}/{character_id}/{variant_id}"
 
 
+def char_display_name(storage, series_id: str, character_id: str) -> str:
+    """The character's NAME — a raw id must never reach a label."""
+    from schema import CharacterModel
+    try:
+        c = storage.read_object(CharacterModel, {"series_id": series_id,
+                                                 "character_id": character_id})
+        if c is not None and c.name:
+            return c.name
+    except Exception:
+        pass
+    return character_id.replace('-', ' ').title()
+
+
 def pose_figure_bg(state, board, character_id: str, variant_id: str,
                    pose_direction: str | None = None):
     """Queue a posed-acetate render for a figure on this board (panel or
@@ -1054,8 +1067,9 @@ def pose_figure_bg(state, board, character_id: str, variant_id: str,
         except Exception:
             pass
     pkey = pose_pending_key(board, character_id, variant_id)
+    who = char_display_name(state.storage, board.series_id, character_id)
     if pkey in pending:
-        ui.notify(f"{character_id.replace('-', ' ').title()} is already on the drawing board — "
+        ui.notify(f"{who} is already on the drawing board — "
                   f"the pose lands when it's ready.", type='warning')
         return
     pending.add(pkey)
@@ -1072,7 +1086,7 @@ def pose_figure_bg(state, board, character_id: str, variant_id: str,
         finally:
             pending.discard(pkey)
     enqueue_renders(state, [(
-        f"posing {character_id} for {board_label(board)}", job,
+        f"posing {who} for {board_label(board)}", job,
     )], role="the Penciller")
 
 
@@ -1725,7 +1739,8 @@ def light_table(state: APPState, panel, scene, setting,
                                 dx, 72 - (i % 2) * 14, 'balloon', tail='left',
                                 emphasis=d.emphasis.value)
                     if bl is not None:
-                        bl._props['title'] = f"{d.character_id} speaks — double-click to edit, drag to place"
+                        bl._props['title'] = (f"{_char_names.get(d.character_id, d.character_id)} "
+                                              f"speaks — double-click to edit, drag to place")
                 for i, n in enumerate([n for n in board_narration if n.position.value == 'bottom'][:1]):
                     letter(f'caption/bottom/{i}', 'rough-narration', n.text, 2, 4, 'caption')
                 # the mailbag's letters: one draggable block per letter,
@@ -1817,7 +1832,7 @@ def light_table(state: APPState, panel, scene, setting,
         dlg.open()
 
     def pose_dialog(character_id: str, variant_id: str):
-        name = character_id.replace('-', ' ').title()
+        name = _char_names.get(character_id) or character_id.replace('-', ' ').title()
         with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 460px;'):
             ui.label(f"Pose {name}").classes('caption-box caption-box-sm')
             hint = getattr(panel, 'beat', None) or panel.description or ''
@@ -1922,7 +1937,9 @@ def light_table(state: APPState, panel, scene, setting,
                 return {**f["blocking"], **((fresh.figure_blocking or {}).get(f["key"]) or {})}
 
             def fig_name(f):
-                return f"{f['ref'].character_id} ({f['ref'].variant_id})" if f["ref"] else f["name"]
+                if not f["ref"]:
+                    return f["name"]
+                return f"{_char_names.get(f['ref'].character_id, f['ref'].character_id)} ({f['ref'].variant_id})"
 
             parts.append("figures: " + ", ".join(
                 f"{fig_name(f)} at {round(blk(f)['x'])}% from left, "
@@ -2354,7 +2371,7 @@ def light_table(state: APPState, panel, scene, setting,
                     def pick_variant(ref=f["ref"]):
                         # click the acetate to swap which variant they wear
                         from gui.selection import SelectionItem, SelectedKind
-                        itm = SelectionItem(name=ref.character_id,
+                        itm = SelectionItem(name=_char_names.get(ref.character_id, ref.character_id),
                                             id=f"{series_id}/{ref.character_id}/{ref.variant_id}",
                                             kind=SelectedKind.CHARACTER_REFERENCE)
                         state.change_selection(new=[*state.selection, itm])
@@ -2367,6 +2384,17 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.icon('person').classes('text-lg').style('width: 40px; text-align: center;')
                     name_lbl = (_char_names.get(f["ref"].character_id)
                                 or f["ref"].character_id.replace('-', ' ')).title()
+                    # does this look have a sheet inked in THIS board's style?
+                    _board_style = getattr(scene, 'style_id', None) if scene is not None \
+                        else getattr(panel, 'style_id', None)
+                    _sheet_missing = False
+                    if _board_style:
+                        from schema import CharacterVariant as _CV
+                        _v = storage.read_object(_CV, {"series_id": series_id,
+                            "character_id": f["ref"].character_id,
+                            "variant_id": f["ref"].variant_id})
+                        _keyed = (_v.images or {}).get(_board_style) if _v is not None else None
+                        _sheet_missing = _v is not None and not (_keyed and os.path.exists(_keyed))
                     posing = pose_pending_key(panel, f["ref"].character_id, f["ref"].variant_id) \
                         in (getattr(state, '_poses_pending', None) or set())
                     ui.label(name_lbl + (' — posing…' if posing
@@ -2379,6 +2407,20 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.button(icon='accessibility_new').props('flat round dense size=xs') \
                             .tooltip('Pose this figure — describe the pose' if not f["posed"] else 'Re-pose — describe the new pose') \
                             .on('click', lambda _, r=f["ref"]: pose_dialog(r.character_id, r.variant_id))
+                        if _sheet_missing and not locked:
+                            def ink_sheet_here(r=f["ref"], sid=_board_style, nm=name_lbl):
+                                from gui.messaging import post_user_message
+                                post_user_message(state,
+                                    f"Ink {nm}'s reference sheet in the {sid} style "
+                                    f"(create_styled_image_for_character_variant for "
+                                    f"character {r.character_id}, variant {r.variant_id}, "
+                                    f"style {sid}).")
+                            ui.button(icon='brush').props('flat round dense size=xs') \
+                                .classes('row-tool') \
+                                .tooltip(f"No sheet in this board's style yet — poses borrow "
+                                         f"another style's sheet.  Ink {name_lbl}'s sheet in "
+                                         f"this style.") \
+                                .on('click', lambda _, fn=ink_sheet_here: fn())
                     mirror_btn(f)
                     if f["img"]:
                         cutout_btn(f["key"], f["img"], name_lbl)
@@ -2412,7 +2454,8 @@ def light_table(state: APPState, panel, scene, setting,
                                        for c in (p.character_references or [])):
                                 p.character_references = (p.character_references or []) + [ref]
                                 storage.update_object(p)
-                        _receipt(f"✂️ removed **{ref.character_id}** from this panel", undo=undo)
+                        _receipt(f"✂️ removed **{_char_names.get(ref.character_id, ref.character_id)}** "
+                                 f"from this panel", undo=undo)
                         state.refresh_details()
                     ui.button(icon='close').props('flat round dense size=xs') \
                         .mark('uncast').classes('row-tool') \

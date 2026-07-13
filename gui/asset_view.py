@@ -42,25 +42,32 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
         nm = asset.name
         for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}):
             if any(p.name == nm for p in (s.props or [])):
-                used_in.append((f"setting · {s.name}", None))
+                used_in.append((f"setting · {s.name}",
+                                [("setting", s.setting_id, s.name)]))
         for iss in storage.read_all_objects(Issue, primary_key={"series_id": series_id}):
             for sc in storage.read_all_objects(SceneModel, primary_key={
                     "series_id": series_id, "issue_id": iss.issue_id}):
                 if any(p.name == nm for p in (getattr(sc, 'props', None) or [])):
-                    used_in.append((f"{iss.name} · {sc.name}", None))
+                    used_in.append((f"{iss.name} · {sc.name}",
+                                    [("issue", iss.issue_id, iss.name),
+                                     ("scene", sc.scene_id, sc.name)]))
         from schema import CharacterModel
         for ch in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
             for v in storage.read_all_objects(CharacterVariant, primary_key={
                     "series_id": series_id, "character_id": ch.character_id}):
                 if asset_id in (v.prop_ids or []):
-                    used_in.append((f"{ch.name} · {v.name or v.variant_id}", None))
+                    used_in.append((f"{ch.name} · {v.name or v.variant_id}",
+                                    [("character", ch.character_id, ch.name),
+                                     ("variant", v.variant_id, v.name or v.variant_id)]))
     else:   # outfit
         from schema import CharacterModel
         for ch in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
             for v in storage.read_all_objects(CharacterVariant, primary_key={
                     "series_id": series_id, "character_id": ch.character_id}):
                 if getattr(v, 'outfit_id', None) == asset_id:
-                    used_in.append((f"{ch.name} · {v.name or v.variant_id}", None))
+                    used_in.append((f"{ch.name} · {v.name or v.variant_id}",
+                                    [("character", ch.character_id, ch.name),
+                                     ("variant", v.variant_id, v.name or v.variant_id)]))
 
     with details:
         with ui.row().classes('w-full flex-nowrap items-center').style('padding: 0; margin: 0; gap: 8px;'):
@@ -92,8 +99,21 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
             ui.label('Used in').classes('comic-label-sm')
             if not used_in:
                 ui.label(f'nothing points at this {kind_label} yet').classes('text-xs text-gray-500')
-            for label, _nav in used_in[:12]:
-                ui.chip(label, icon='place').props('dense outline')
+            def _visit(nav):
+                # walk the one trail: series base + the referencing thing
+                from gui.selection import SelectionItem as _SI, SelectedKind as _SK
+                idx = next((i for i, it in enumerate(state.selection)
+                            if it.kind.value == 'series'), None)
+                base = state.selection[:idx + 1] if idx is not None else state.selection
+                state.change_selection(new=[*base, *(
+                    _SI(name=nm, id=oid, kind=_SK(kind)) for kind, oid, nm in nav)])
+
+            for label, nav in used_in[:12]:
+                # every reference is a DOOR to the thing that wears it
+                ui.chip(label, icon='place') \
+                    .props('dense outline clickable') \
+                    .tooltip(f'{label} — click to visit') \
+                    .on('click', lambda _, n=nav: _visit(n))
             if len(used_in) > 12:
                 ui.label(f'…and {len(used_in) - 12} more').classes('text-xs text-gray-500')
 

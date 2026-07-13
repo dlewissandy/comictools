@@ -102,6 +102,17 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
             case "variant":
                 return (None, ["Render the reference sheet", "Swap the outfit", "Extract this look's outfit"])
 
+            case "styled-variant":
+                return (None, ["Re-ink this sheet", "Sculpt the exemplar portrait"])
+
+            case "outfit":
+                return (None, ["Render this outfit's reference art",
+                               "Compose a look wearing this outfit"])
+
+            case "prop":
+                return (None, ["Render this prop's reference art",
+                               "Put this prop in a scene"])
+
             case "setting":
                 series_id, setting_id = sel[-2].id, sel[-1].id
                 setting = storage.read_object(Setting, {"series_id": series_id, "setting_id": setting_id})
@@ -170,6 +181,8 @@ ROLE_NAMES = {
     "character": "the Character Designer",
     "variant": "the Character Designer",
     "styled-variant": "the Character Designer",
+    "outfit": "the Character Designer",
+    "prop": "the Prop Master",
     "setting": "the Background Artist",
     "cover": "the Cover Artist",
     "insert": "the Production Artist",

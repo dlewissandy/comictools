@@ -174,9 +174,20 @@ def view_scene(state: APPState):
                 removable_chips_inline(state,
                     [(setting_obj.setting_id, setting_obj.name)], _remove_setting,
                     icon='location_on', visit=_visit_setting)
+            def _cast_label(c):
+                # 'Name · Look' whenever the look isn't the base — two looks
+                # of the same character must never wear identical chips
+                nm = chars[c.character_id].name if c.character_id in chars else c.character_id
+                if (c.variant_id or "base") == "base":
+                    return nm
+                from schema import CharacterVariant
+                v = storage.read_object(CharacterVariant, {
+                    "series_id": series_id, "character_id": c.character_id,
+                    "variant_id": c.variant_id})
+                look = (v.name if v is not None and v.name else c.variant_id)
+                return f"{nm} · {look}"
             removable_chips_inline(state,
-                [(f"{c.character_id}/{c.variant_id}",
-                  (chars[c.character_id].name if c.character_id in chars else c.character_id))
+                [(f"{c.character_id}/{c.variant_id}", _cast_label(c))
                  for c in (scene.cast or [])],
                 _remove_cast, icon='theater_comedy', visit=_visit_character)
             removable_chips_inline(state,

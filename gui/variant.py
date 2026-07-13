@@ -43,18 +43,18 @@ def view_character_variant(state:APPState):
     # If the character is not found, clear the details and show an error message
     if character is None:
         state.clear_details()
-        header("Character Not Found", 2).style('color: red;')
-        message = f"Character with ID {character_id} not found in series {series_id}."
-        header(message,4)
-        logger.error(message)
+        with state.details:
+            header("Character Not Found", 2).style('color: red;')
+            header(f"No character answers to '{character_id}' in this series.", 4)
+        logger.error(f"Character {character_id} not found in series {series_id}.")
         return
-    
+
     if variant is None:
         state.clear_details()
-        header("Variant Not Found", 2).style('color: red;')
-        message = f"Variant with ID {variant_id} not found for character {character_id} in series {series_id}."
-        header(message,4)
-        logger.error(message)
+        with state.details:
+            header("Look Not Found", 2).style('color: red;')
+            header(f"{character.name.title()} has no look answering to '{variant_id}'.", 4)
+        logger.error(f"Variant {variant_id} not found for {character_id} in {series_id}.")
         return
 
     variant: CharacterVariant = variant
@@ -121,13 +121,52 @@ def view_character_variant(state:APPState):
             _save_variant()
 
         if variant.outfit_id or variant.prop_ids:
+            # the wardrobe wears NAMES and every chip is a DOOR to the
+            # asset's own room (the ✕ still detaches it from this look)
+            from schema import Outfit, PropAsset
+            from gui.selection import SelectionItem as _SI, SelectedKind as _SK
+            from gui.elements import removable_chips_inline
+
+            def _series_base():
+                idx = next((i for i, it in enumerate(state.selection)
+                            if it.kind.value == 'series'), None)
+                return state.selection[:idx + 1] if idx is not None else state.selection
+
+            def _asset_name(cls, pk, key, fallback_id):
+                obj = storage.read_object(cls, primary_key=pk)
+                return (getattr(obj, 'name', None) or
+                        fallback_id.replace('-', ' ').title())
+
+            def _visit_outfit(_key):
+                nm = _asset_name(Outfit, {"series_id": series_id,
+                                          "outfit_id": variant.outfit_id},
+                                 None, variant.outfit_id)
+                state.change_selection(new=[*_series_base(), _SI(
+                    name=nm, id=variant.outfit_id, kind=_SK.OUTFIT)])
+
+            def _visit_prop(key):
+                nm = _asset_name(PropAsset, {"series_id": series_id, "prop_id": key},
+                                 None, key)
+                state.change_selection(new=[*_series_base(), _SI(
+                    name=nm, id=key, kind=_SK.PROP)])
+
             with ui.column().classes('w-full q-px-sm').style('gap: 2px;'):
-                removable_chips(state, "Outfit",
-                    [(variant.outfit_id, variant.outfit_id.replace('-', ' ').title())] if variant.outfit_id else [],
-                    _remove_outfit, icon='checkroom')
-                removable_chips(state, "Carried props",
-                    [(p, p.replace('-', ' ').title()) for p in (variant.prop_ids or [])],
-                    _remove_prop, icon='category')
+                with ui.row().classes('items-center').style('gap: 6px;'):
+                    ui.label('Outfit').classes('comic-label-sm')
+                    if variant.outfit_id:
+                        removable_chips_inline(state,
+                            [(variant.outfit_id,
+                              _asset_name(Outfit, {"series_id": series_id,
+                                                   "outfit_id": variant.outfit_id},
+                                          None, variant.outfit_id))],
+                            _remove_outfit, icon='checkroom', visit=_visit_outfit)
+                with ui.row().classes('items-center').style('gap: 6px;'):
+                    ui.label('Carried props').classes('comic-label-sm')
+                    removable_chips_inline(state,
+                        [(pid, _asset_name(PropAsset, {"series_id": series_id, "prop_id": pid},
+                                           None, pid))
+                         for pid in (variant.prop_ids or [])],
+                        _remove_prop, icon='category', visit=_visit_prop)
 
         with view_attributes(state,caption="Description", attributes=[
                 Attribute(caption ="General Description", get_value= lambda: variant.description),
@@ -140,9 +179,9 @@ def view_character_variant(state:APPState):
                 Attribute(caption="Behavior", get_value=lambda: variant.behavior),
             ], individual_icons=True, header_size=2, expanded=True):
             with ui.row().classes('w-full flex-nowrap'):
-                header("Styled Images", 2).classes('ml-4')
+                header("Reference Sheets", 2).classes('ml-4')
                 ui.space()
-                crud_button(kind=CrudButtonKind.CREATE, action=lambda _: post_user_message(state, "I would like a new styled image for the current character variant."))
+                crud_button(kind=CrudButtonKind.CREATE, action=lambda _: post_user_message(state, "I would like a new reference sheet for this look in another style."))
             from gui.elements import ruled_page, HEADER_CLASSES, TAILWIND_CARD, art_tools
             from schema import ComicStyle
 

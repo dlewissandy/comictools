@@ -57,3 +57,21 @@ def test_extract_outfit_retrofits_legacy_variant(storage):
     out2 = _invoke(assets.extract_outfit_from_variant, st,
                    series_id=WL, character_id="brassic", variant_id="gnome-disguise")
     assert "already wears" in str(out2)
+
+
+def test_a_copied_basket_never_restores_into_the_source_tree(tmp_path):
+    """A wastebasket that was copied elsewhere (a fixture, a backup) holds
+    manifests pointing at the ORIGINAL tree — restoring from the copy must
+    refuse to land outside its own base."""
+    import json as _json
+    from storage.trash import restore_last, restore_entry
+    base = tmp_path / "copied"
+    entry = base / ".trash" / "1700000000000-deadbeef"
+    (entry / "payload").mkdir(parents=True)
+    (entry / "payload" / "thing.json").write_text("{}")
+    _json.dump({"original_path": "data/dnd-nerds-comics/series/x/props/y",
+                "deleted_at": 0, "note": "PropAsset", "is_dir": True},
+               open(entry / "manifest.json", "w"))
+    assert restore_last(str(base)) is None
+    assert restore_entry(str(base), "1700000000000-deadbeef") is None
+    assert (entry / "payload" / "thing.json").exists(), "the payload stays put"

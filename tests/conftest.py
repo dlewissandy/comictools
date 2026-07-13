@@ -11,25 +11,53 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
 
+_FIXTURE_SOURCE: str | None = None
+
+
 def fixture_source() -> str:
-    """The test fixture is the DND NERDS house — pinned by slug, NOT the
-    open ./data symlink, so the author switching houses mid-session never
-    strands the suite in the wrong repo."""
-    try:
-        from storage import registry
-        for pub in registry.registered():
-            if pub["slug"] == "dnd-nerds-comics":
-                return pub["path"]
-    except Exception:
-        pass
-    return os.path.join(REPO, "data")
+    """The test fixture is the DND NERDS house — pinned by slug and
+    resolved ONCE at collection time, BEFORE the registry sandbox blinds
+    the rack (data/ itself holds only mounts under mount-all)."""
+    global _FIXTURE_SOURCE
+    if _FIXTURE_SOURCE is None:
+        _FIXTURE_SOURCE = os.path.join(REPO, "data")
+        try:
+            from storage import registry
+            for pub in registry.registered():
+                if pub["slug"] == "dnd-nerds-comics":
+                    _FIXTURE_SOURCE = pub["path"]
+                    break
+        except Exception:
+            pass
+    return _FIXTURE_SOURCE
+
+
+# pin the source now, while the real registry is still visible
+fixture_source()
+
+
+@pytest.fixture(autouse=True)
+def _sandbox_registry(monkeypatch, tmp_path):
+    """NO TEST EVER SEES THE REAL RACK: with the registry blinded, every
+    house-resolution gate (state.storage, house_of_*, mounted_storages,
+    fan-out views, agent tools) falls back to the storage it was handed —
+    a leaked selection into a real series can never strike real data.
+    (fixture_source() above reads the real registry at COLLECTION time to
+    find the repo to COPY — that read-only path is unaffected.)"""
+    from storage import registry
+    monkeypatch.setattr(registry, "REGISTRY_PATH", str(tmp_path / "no-registry.json"))
+    monkeypatch.setattr(registry, "DATA_DIR", str(tmp_path / "no-mounts"))
 
 
 @pytest.fixture()
 def tmp_data():
     """A disposable copy of the data directory; yields its path."""
     tmp = tempfile.mkdtemp()
-    shutil.copytree(fixture_source(), os.path.join(tmp, "data"))
+    # the author's wastebasket is LIVE state, not fixture material — its
+    # manifests hold CWD-relative originals, so a restore from a copied
+    # basket would escape the sandbox into the real tree
+    shutil.copytree(fixture_source(), os.path.join(tmp, "data"),
+                    ignore=shutil.ignore_patterns(".trash"))
     yield os.path.join(tmp, "data")
     shutil.rmtree(tmp, ignore_errors=True)
 

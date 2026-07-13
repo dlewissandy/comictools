@@ -50,6 +50,16 @@ def soft_backup(base_path: str, path: str, note: str = "") -> str:
     return entry
 
 
+def _restores_inside(base_path: str, rel_original: str) -> bool:
+    """A manifest records its original as a CWD-relative path.  A basket
+    that was COPIED elsewhere (a test fixture, a backup) must never restore
+    into the tree it was copied FROM — the landing spot has to sit under
+    THIS basket's own base."""
+    base = os.path.normpath(os.path.abspath(base_path))
+    target = os.path.normpath(os.path.abspath(rel_original))
+    return target == base or target.startswith(base + os.sep)
+
+
 def restore_last(base_path: str) -> str | None:
     """
     Restore the most recent trash entry to its original location.
@@ -59,6 +69,7 @@ def restore_last(base_path: str) -> str | None:
     trash_root = os.path.join(base_path, TRASH_DIR)
     if not os.path.isdir(trash_root):
         return None
+
     entries = sorted(os.listdir(trash_root), reverse=True)
     for name in entries:
         entry = os.path.join(trash_root, name)
@@ -67,6 +78,9 @@ def restore_last(base_path: str) -> str | None:
             continue
         manifest = json.load(open(manifest_path))
         original = manifest["original_path"]
+        if not _restores_inside(base_path, original):
+            logger.warning(f"skipping trash entry for {original}: it would land outside this basket's base")
+            continue
         if os.path.exists(original):
             # this entry was superseded (something lives at its path again —
             # e.g. layout pages rewritten under the same ids) — keep walking
@@ -113,6 +127,9 @@ def restore_entry(base_path: str, entry: str) -> str | None:
         return None
     manifest = json.load(open(manifest_path))
     original = manifest["original_path"]
+    if not _restores_inside(base_path, original):
+        logger.warning(f"cannot restore {original}: it would land outside this basket's base")
+        return None
     if os.path.exists(original):
         logger.warning(f"cannot restore {original}: path exists again")
         return None

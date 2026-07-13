@@ -36,10 +36,10 @@ def view_character(state:APPState):
     # If the character is not found, clear the details and show an error message
     if character is None:
         state.clear_details()
-        header("Character Not Found", 2).style('color: red;')
-        message = f"Character with ID {character_id} not found in series {series_id}."
-        header(message,4)
-        logger.error(message)
+        with state.details:
+            header("Character Not Found", 2).style('color: red;')
+            header(f"No character answers to '{character_id}' in this series.", 4)
+        logger.error(f"Character {character_id} not found in series {series_id}.")
         return
 
     with details:
@@ -54,20 +54,33 @@ def view_character(state:APPState):
                     state, f"Create a new character derived from {character.name} — "
                            f"ask me who they are and what changes."))
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current character."),size=1)
+            # FRICTION ∝ IRREVERSIBILITY: an uncast character strikes in one
+            # click (wastebasket, undo on the receipt); a cast one goes
+            # through the Editor, who knows what unravels
+            from schema import Issue, SceneModel
+            from gui.selection import SelectionItem, SelectedKind
+            appears = []
+            for iss in storage.read_all_objects(Issue, primary_key={"series_id": series_id}):
+                for sc in storage.read_all_objects(SceneModel, primary_key={
+                        "series_id": series_id, "issue_id": iss.issue_id}):
+                    if any(c.character_id == character_id for c in (sc.cast or [])):
+                        appears.append((iss, sc))
+            if appears:
+                crud_button(kind=CrudButtonKind.DELETE, size=1,
+                            action=lambda _: post_user_message(
+                                state, "I would like to delete the current character."))
+            else:
+                from gui.strike import strike
+                from agentic.tools.deleter import delete_character as _del_char
+                crud_button(kind=CrudButtonKind.DELETE, size=1,
+                            action=lambda _: strike(state, _del_char,
+                                {"series_id": series_id, "character_id": character_id},
+                                f"the character '{character.name}'"))
 
         markdown_field_editor(state, "Description", character.description)
 
         # APPEARS IN: every scene casting this character — the character's
         # footprint across the series at a glance (mirrors the setting page)
-        from schema import Issue, SceneModel
-        from gui.selection import SelectionItem, SelectedKind
-        appears = []
-        for iss in storage.read_all_objects(Issue, primary_key={"series_id": series_id}):
-            for sc in storage.read_all_objects(SceneModel, primary_key={
-                    "series_id": series_id, "issue_id": iss.issue_id}):
-                if any(c.character_id == character_id for c in (sc.cast or [])):
-                    appears.append((iss, sc))
         with ui.row().classes('w-full items-center q-px-sm').style('gap: 6px;'):
             ui.label('Appears in').classes('comic-label-sm')
             if not appears:
@@ -87,6 +100,8 @@ def view_character(state:APPState):
                     .props('dense clickable outline') \
                     .tooltip('Open this scene') \
                     .on('click', lambda _, iss=iss, sc=sc: goto(iss, sc))
+            if len(appears) > 12:
+                ui.label(f'…and {len(appears) - 12} more').classes('text-xs text-gray-500')
 
         from gui.elements import caption_action, ruled_page, uploader_card, CrudButtonKind as _CK
         with ui.element('div').classes('w-full q-mt-md'):
@@ -107,7 +122,7 @@ def view_character(state:APPState):
                     kind="variant",
                     aspect_ratio="3:2",
                     packer=packer, variants=[(3, 2), (4, 8/3), (6, 4)],
-                    overlap_caption=lambda: caption_action("Variants", _CK.CREATE,
+                    overlap_caption=lambda: caption_action("Looks", _CK.CREATE,
                         lambda _: post_user_message(state, "I would like to create a new variant for this character."), 3)
                     )
                 # Drop an image here to create a new variant from it
@@ -182,7 +197,11 @@ def view_character_reference(state: APPState):
                                      for k in board.layer_groups[g]]
         storage.update_object(board)
         from gui.light_table import table_receipt
-        table_receipt(state, f"👔 **{character.name}** now wears **{new_vid.replace('-', ' ')}** — "
+        from schema import CharacterVariant as _CV
+        _v = storage.read_object(_CV, {"series_id": series_id,
+                                       "character_id": character_id, "variant_id": new_vid})
+        look = (_v.name if _v is not None and _v.name else new_vid.replace('-', ' '))
+        table_receipt(state, f"👔 **{character.name}** now wears **{look}** — "
                              f"re-pose them if the acetate should show the new look")
         state.is_dirty = True
         back_to_table()

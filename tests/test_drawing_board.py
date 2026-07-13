@@ -176,3 +176,22 @@ def test_clear_acetate_apply_keeps_transparency(tmp_path, monkeypatch):
     assert out.getpixel((5, 5))[3] == 0, "outside the patch stays CLEAR"
     assert out.getpixel((50, 50))[3] == 255, "inside the patch takes the heal"
     assert out.getpixel((50, 50))[:3] == (10, 200, 10), "the healed pixels are the take's"
+
+
+def test_error_shaped_results_never_announce_done():
+    """A tool body that returns 'Prompt file not found.' must be announced
+    as a failure — the author must never be told phantom work is done."""
+    import re
+    pat = r"^(cannot|no |nothing to|unknown |missing )|not found|failed"
+    errors = ["Prompt file not found.", "Cannot generate logo image.  There is no logo description.",
+              "No reference art for 'rugor' in the Watercolor style yet",
+              "Nothing to bind yet: no rendered covers or panels.",
+              "Style with ID vintage not found."]
+    successes = ["Rendered the panel to data/series/x/panel.jpg",
+                 "Bound 24 pages to exports/issue.pdf",
+                 "Generated 4 takes.  NOTE: the marquee was empty",
+                 "Healed the patch on the acetate"]
+    for e in errors:
+        assert re.search(pat, e[:120], re.I), f"missed error: {e}"
+    for ok in successes:
+        assert not re.search(pat, ok[:120], re.I), f"false failure: {ok}"

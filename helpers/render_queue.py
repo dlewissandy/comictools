@@ -121,6 +121,14 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
             _announce(f"⏳ **{label}** — on the drawing board… ({i}/{len(jobs)})")
             try:
                 result = await asyncio.to_thread(job)
+                note = str(result)
+                # TOOL BODIES SPEAK ERRORS AS SENTENCES, not exceptions —
+                # an error-shaped note must never be announced as done
+                if re.search(r"^(cannot|no |nothing to|unknown |missing )|not found|failed",
+                             note[:120], re.I):
+                    failed += 1
+                    _announce(f"⚠️ **{label}** — didn't make it: {note} ({i}/{len(jobs)})")
+                    continue
                 done += 1
                 if after is not None:
                     try:
@@ -131,7 +139,6 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                     state._quota_warned = False   # ink flows again
                 except Exception:
                     pass
-                note = str(result)
                 extra = ""
                 if "NOTE:" in note:
                     extra = "  ⚠️ " + note.split("NOTE:", 1)[1].strip()
