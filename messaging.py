@@ -122,9 +122,12 @@ async def handle_tool_call_event(state: APPState, event: RunItemStreamEvent, div
     lbl = getattr(state, '_working_label', None)
     if lbl is not None:
         try:
+            import time as _time
             phrase = next((ph for v, ph in _LIFE_SIGNS if raw_item.name.startswith(v)),
                           raw_item.name.replace('_', ' ') + '…')
             lbl.set_text(phrase)
+            # tool truth outranks decoration: pin it for a few beats
+            state._working_pin_until = _time.monotonic() + 6.0
         except Exception:
             pass
     container = thoughts_container(divider) if quiet else divider
@@ -303,7 +306,13 @@ async def send(state: APPState):
                 verbs = itertools.cycle(random.sample([
                     'thumbnailing…', 'penciling…', 'inking…', 'coloring…',
                     'lettering…', 'checking the references…', 'flatting…'], 7))
-                ticker = ui.timer(2.4, lambda: working.set_text(next(verbs)))
+                import time as _time
+
+                def _tick():
+                    if _time.monotonic() < getattr(state, '_working_pin_until', 0):
+                        return          # a tool-truth phrase holds the floor
+                    working.set_text(next(verbs))
+                ticker = ui.timer(2.4, _tick)
     
     history.scroll_to(percent=100)
     

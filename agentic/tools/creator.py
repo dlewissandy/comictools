@@ -850,7 +850,10 @@ def create_scene_body(state: APPState,
 
     state.is_dirty = True
     note = ("  CAST PROBLEMS: " + "; ".join(cast_problems)) if cast_problems else ""
-    return f"Scene created successfully for issue {issue.name}.{note}"
+    # speak the id THE STORAGE actually gave it — storage may reassign a
+    # UUID on create, and every follow-up tool call needs the real one
+    return (f"Scene created successfully for issue {issue.name} "
+            f"(scene_id={scene.scene_id}, scene_number={scene.scene_number}).{note}")
 
 
 @function_tool
