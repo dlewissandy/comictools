@@ -170,8 +170,16 @@ def build_asset_drawer(state):
                     .tooltip('Off = show assets from every series in the studio')
             search = ui.input(placeholder='search assets…') \
                 .props('dense outlined clearable').classes('w-full q-px-sm')
+            # chip counts speak the SCOPED truth — a chip must never read
+            # '5' above an empty grid because four live in other series
+            def _scoped_counts():
+                scoped = cur_sid if (scope_switch is not None and scope_switch.value) else None
+                return {k: sum(1 for e in entries if e[0] == k and
+                               (scoped is None or e[3] is None or e[3] == scoped))
+                        for k in KIND_META}
+            _cc = _scoped_counts()
             kind_filter = ui.toggle(
-                {"all": "all", **{k: f"{icon} {counts[k]}" for k, (_, icon) in KIND_META.items()}},
+                {"all": "all", **{k: f"{icon} {_cc[k]}" for k, (_, icon) in KIND_META.items()}},
                 value="all").props('dense no-caps unelevated toggle-color=primary').classes('q-px-sm')
             body = ui.column().classes('w-full q-px-sm').style('gap: 4px;')
 
@@ -282,12 +290,35 @@ def build_asset_drawer(state):
                             for e in matches:
                                 tile(*e)
                     if not shown:
-                        ui.label('nothing matches').classes('text-sm text-gray-500 q-mt-md')
+                        # VOLUNTEER what's hiding them, with the way out
+                        scoped = cur_sid if (scope_switch is not None and scope_switch.value) else None
+                        hidden = [e for e in entries if
+                                  (selected == "all" or e[0] == selected) and
+                                  (not term or term in e[1].lower() or term in e[2].lower())]
+                        if scoped and hidden:
+                            ui.label(f"nothing here in {cur_name} — {len(hidden)} "
+                                     f"match{'es' if len(hidden) != 1 else ''} in other series; "
+                                     f"flip the '{f'only {cur_name}'}' switch to see them") \
+                                .classes('text-sm text-gray-500 q-mt-md')
+                        elif term:
+                            ui.label(f"nothing matches “{term}” — clear the search, "
+                                     f"or ask the coauthor to create it") \
+                                .classes('text-sm text-gray-500 q-mt-md')
+                        else:
+                            ui.label('nothing of this kind in the studio yet — '
+                                     'ask the coauthor to create one') \
+                                .classes('text-sm text-gray-500 q-mt-md')
 
             search.on_value_change(render)
             kind_filter.on_value_change(render)
             if scope_switch is not None:
-                scope_switch.on_value_change(render)
+                def _rescope():
+                    _cc = _scoped_counts()
+                    kind_filter.options = {"all": "all",
+                                           **{k: f"{icon} {_cc[k]}" for k, (_, icon) in KIND_META.items()}}
+                    kind_filter.update()
+                    render()
+                scope_switch.on_value_change(lambda _: _rescope())
             render()
 
     def toggle():

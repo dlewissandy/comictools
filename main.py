@@ -649,7 +649,12 @@ def init_layout(logger):
             input_row = ui.row().classes('w-full flex-nowrap items-center')
     with input_row:
         placeholder = "message"
-        user_input = ui.input(placeholder=placeholder).props('rounded outlined input-class=mx-3 ') \
+        # A MANUSCRIPT-SIZED MOUTH: the Editor invites pasting a whole
+        # story, so the box grows with it — Enter sends, Shift+Enter breaks
+        # a line, and a pasted script keeps its paragraphs
+        user_input = ui.textarea(placeholder=placeholder) \
+            .props('rounded outlined autogrow input-class=mx-3 '
+                   'input-style="max-height: 160px; overflow-y: auto"') \
             .classes('w-full self-center stt-input').style('flex-grow: 1; width: 100vh;') \
             .mark('conversation')
 
@@ -1057,7 +1062,11 @@ def build_page(selection_override: list[SelectionItem] | None = None):
 
     # ENABLE THE EVENT HANDLERS
     darkswitch.bind_value_to(state, "dark_mode")
-    user_input.on('keydown.enter', lambda _ : send(state=state))
+    # Enter sends only when it stands ALONE — Shift+Enter writes a newline
+    # (client-side filter: NiceGUI's modifier list has no 'exact')
+    user_input.on('keydown.enter',
+                  js_handler='(e) => { if (!e.shiftKey) { e.preventDefault(); emit(); } }',
+                  handler=lambda _: send(state=state))
     send_button.on('click', lambda _:send(state=state))
 
     from gui.messaging import attach_reference

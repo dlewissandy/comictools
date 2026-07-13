@@ -113,7 +113,9 @@ def view_issue(state: APPState):
     # colophon and the Editor all quote — computed once per paint
     from helpers.ledger import issue_ledger
     ledger = issue_ledger(storage, series_id, issue_id)
-    export_dir = os.path.join("data", "series", series_id, "issues", issue_id, "exports")
+    # exports land under the HOUSE's own root — the root 'data' sees
+    # nothing under mount-all, and the colophon's download chips must appear
+    export_dir = os.path.join(str(storage.base_path), "series", series_id, "issues", issue_id, "exports")
 
     def open_panel(state, series_id, issue_id, scene_id, panel_id):
         """Walk from the book into a panel's light table."""

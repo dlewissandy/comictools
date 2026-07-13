@@ -106,18 +106,48 @@ def build_palette(state):
         state.user_input.value = term
         await send(state=state)
 
+    def _ranked(term):
+        """exact > prefix > word-boundary > substring, name before sublabel —
+        typing a series' exact name must never rank below a scene that
+        merely mentions it."""
+        entries = state._palette_entries or []
+        if not term:
+            return list(entries)
+
+        def score(e):
+            name, sub = e[1].lower(), e[2].lower()
+            if name == term:
+                return 0
+            if name.startswith(term):
+                return 1
+            if any(w.startswith(term) for w in name.split()):
+                return 2
+            if term in name:
+                return 3
+            if term in sub:
+                return 4
+            return 99
+        scored = [(score(e), i, e) for i, e in enumerate(entries)]
+        return [e for sc, _i, e in sorted(scored, key=lambda t: (t[0], t[1])) if sc < 99]
+
+    hi = {"i": 0}
+
     def render():
         term = (box.value or "").strip().lower()
         results.clear()
-        entries = state._palette_entries or []
         with results:
-            matches = [e for e in entries if not term or term in e[1].lower() or term in e[2].lower()]
-            for icon, label, sublabel, sel in matches[:12]:
+            matches = _ranked(term)[:12]
+            hi["i"] = max(0, min(hi["i"], len(matches) - 1)) if matches else 0
+            for n, (icon, label, sublabel, sel) in enumerate(matches):
+                lit = ' bg-gray-200 dark:bg-gray-800' if n == hi["i"] else ''
                 with ui.row().classes('w-full items-center cursor-pointer rounded-md q-pa-xs '
-                                      'hover:bg-gray-200 dark:hover:bg-gray-800') as row:
+                                      'flex-nowrap hover:bg-gray-200 dark:hover:bg-gray-800'
+                                      + lit) as row:
                     ui.label(icon)
-                    ui.label(label).classes('font-medium text-sm')
-                    ui.label(sublabel).classes('text-xs text-gray-500')
+                    ui.label(label).classes('font-medium text-sm').style(
+                        'white-space: nowrap; overflow: hidden; text-overflow: ellipsis;')
+                    ui.label(sublabel).classes('text-xs text-gray-500').style(
+                        'white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;')
                 row.on('click', lambda _, s=sel: _go(s))
             if term:
                 with ui.row().classes('w-full items-center cursor-pointer rounded-md q-pa-xs '
@@ -127,15 +157,30 @@ def build_palette(state):
                     ui.label(f'Ask the coauthor: “{box.value}”').classes('text-sm italic')
                 ask_row.on('click', lambda _, t=box.value: _ask(t))
 
-    def _first():
+    def _move(delta):
         term = (box.value or "").strip().lower()
-        entries = state._palette_entries or []
-        matches = [e for e in entries if not term or term in e[1].lower() or term in e[2].lower()]
-        if matches:
-            _go(matches[0][3])
+        n = min(len(_ranked(term)), 12)
+        if n:
+            hi["i"] = (hi["i"] + delta) % n
+            render()
 
-    box.on_value_change(render)
-    box.on('keydown.enter', lambda _: _first())
+    async def _enter():
+        term = (box.value or "").strip().lower()
+        matches = _ranked(term)[:12]
+        if matches:
+            _go(matches[hi["i"]][3])
+        elif term:
+            # zero hits: the coauthor fallback works from the keyboard too
+            await _ask(box.value)
+
+    def _on_change():
+        hi["i"] = 0
+        render()
+
+    box.on_value_change(_on_change)
+    box.on('keydown.enter', lambda _: _enter())
+    box.on('keydown.down.prevent', lambda _: _move(1))
+    box.on('keydown.up.prevent', lambda _: _move(-1))
 
     def open_palette():
         try:

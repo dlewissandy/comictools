@@ -135,6 +135,9 @@ from agentic.tools.updater import (
 
 TOOLKITS: dict[str,list[Tool]] = {
     "all-publishers": [
+        # the wall's own chip: 'What series do we publish?'
+        read_all_series,
+        select_series,
         # Create
         create_publisher,
         # Read
