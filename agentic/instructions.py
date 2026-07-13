@@ -82,8 +82,10 @@ PERSONAS = {
            setting (read_all_settings) or create one (create_setting) with a vivid
            description and its props.  Settings recur across scenes and issues —
            never duplicate an existing one under a new name.
-        4. CAST IT.  Check the characters exist (read_all_characters,
-           read_all_variants).  Flag any character or wardrobe variant that is
+        4. CAST IT.  Read the SERIES BIBLE in one call (read_series_bible —
+           it lists every character, variant, setting and style with their
+           exact ids; never spend separate read_all_* calls on this).  Cast
+           with those exact ids.  Flag any character or wardrobe variant that is
            missing and offer to create it before proceeding.  When a new
            character is kin to an existing one (a sibling, a parent, the same
            clan), derive_character inherits the family look — ask what
@@ -289,6 +291,15 @@ SELECTION_INSTRUCTIONS = """
     {wrapper.context.selection}
 """
 
+SPEAK_ONLY_DONE_WORK = """
+        SPEAK ONLY DONE WORK: never describe a change as made unless a tool
+        call in THIS turn actually made it — receipts, ids and files are the
+        proof.  If you run out of turns or a tool fails, say plainly where
+        you stopped and what remains; the author can say 'go on'.  Never
+        invent placeholder names ('New Publisher', 'Untitled') — ask.
+"""
+
+
 def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -> str:
 
     state: APPState = wrapper.context
@@ -350,6 +361,7 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
     instructions = "\n".join([
         dedent(PERSONAS.get(agent.name, "").strip()),
         BOILERPLATE_INSTRUCTIONS,
+        dedent(SPEAK_ONLY_DONE_WORK),
         dedent(SELECTION_INSTRUCTIONS.format(
             wrapper=wrapper
         ).strip()),

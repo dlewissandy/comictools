@@ -415,6 +415,45 @@ def read_setting(wrapper: RunContextWrapper[APPState], series_id: str, setting_i
     pk = {"series_id": series_id, "setting_id": setting_id}
     return read_one(wrapper=wrapper, cls=Setting, pk=pk)
 
+
+@function_tool
+def read_series_bible(wrapper: RunContextWrapper[APPState], series_id: str) -> str:
+    """
+    THE SERIES BIBLE in one read: every character (with its variants),
+    every setting, and every style the series knows — names AND ids,
+    compact.  Use this ONCE instead of separate read_all_characters /
+    read_all_variants / read_all_settings calls when breaking a story
+    into scenes or casting panels: it saves the whole turn budget.
+
+    Args:
+        series_id: The ID of the comic series.
+
+    Returns:
+        A compact text bible: characters with variant ids, settings, styles.
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    from schema import CharacterModel, CharacterVariant, Setting, ComicStyle
+    lines = [f"SERIES BIBLE for {series_id}", "", "CHARACTERS (cast with these exact ids):"]
+    for c in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
+        lines.append(f"* {c.name} — character_id={c.character_id}")
+        for v in storage.read_all_objects(CharacterVariant, primary_key={
+                "series_id": series_id, "character_id": c.character_id}):
+            styles = ", ".join((v.images or {}).keys()) or "no styled sheets yet"
+            lines.append(f"    - variant '{getattr(v, 'name', '') or v.id}' — "
+                         f"variant_id={v.id} (sheets: {styles})")
+    lines.append("")
+    lines.append("SETTINGS (set scenes with these exact ids):")
+    for st in storage.read_all_objects(Setting, primary_key={"series_id": series_id}):
+        masters = ", ".join((st.images or {}).keys()) or "no masters yet"
+        lines.append(f"* {st.name} — setting_id={st.setting_id} (masters: {masters})")
+    lines.append("")
+    lines.append("STYLES:")
+    for sty in storage.read_all_objects(ComicStyle):
+        lines.append(f"* {sty.name} — style_id={sty.style_id}")
+    return "\n".join(lines)
+
+
 @function_tool
 def read_all_settings(wrapper: RunContextWrapper[APPState], series_id: str) -> list[Setting]:
     """

@@ -99,14 +99,34 @@ def _receipt_for(tool_name: str, args_json: str) -> tuple[str, bool]:
     return f"{icon} **{action}**{detail}", quiet
 
 
+_LIFE_SIGNS = [
+    ("read", "reading the records…"), ("list", "reading the records…"),
+    ("create", "putting it on paper…"), ("update", "penciling the change…"),
+    ("delete", "striking it…"), ("generate", "sending it to the drawing board…"),
+    ("render", "sending it to the drawing board…"), ("inpaint", "healing the art…"),
+    ("outpaint", "extending the art…"), ("export", "binding the book…"),
+    ("stitch", "stitching the pages…"), ("select", "walking over…"),
+    ("import", "pulling it from the library…"), ("preflight", "reading the ledger…"),
+]
+
+
 async def handle_tool_call_event(state: APPState, event: RunItemStreamEvent, divider: ui.row):
     """
     The agent called a tool: show a human receipt.  Quiet (read-only) activity
     goes inside the collapsed Thoughts expansion; actions surface as receipts.
+    The working ticker speaks the CURRENT tool, so a long turn shows life.
     """
     raw_item = event.item.raw_item
     line, quiet = _receipt_for(raw_item.name, raw_item.arguments)
     logger.debug(f"tool call: {raw_item.name}({raw_item.arguments})")
+    lbl = getattr(state, '_working_label', None)
+    if lbl is not None:
+        try:
+            phrase = next((ph for v, ph in _LIFE_SIGNS if raw_item.name.startswith(v)),
+                          raw_item.name.replace('_', ' ') + '…')
+            lbl.set_text(phrase)
+        except Exception:
+            pass
     container = thoughts_container(divider) if quiet else divider
     with container:
         ui.markdown(line).classes("w-full text-sm" + ("" if quiet else " q-px-md"))
@@ -156,7 +176,7 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
     logger.debug(f"Handling agent events for kind: {kind}")
     if agent is None:
         raise ValueError(f"Agent not found for kind: {kind}")
-    stream = Runner.run_streamed(agent, input=messages, context=state)
+    stream = Runner.run_streamed(agent, input=messages, context=state, max_turns=40)
     streamed_events = stream.stream_events()
     async for event in streamed_events:
         # --- RAW TEXT TOKENS ---
@@ -210,8 +230,20 @@ async def send(state: APPState):
     # second agent run over the first — one conversation turn at a time.
     # The typed words are never lost; they stay in the box.
     if getattr(state, '_sending', False):
-        ui.notify("One moment — the coauthor is mid-reply.  Your words are "
-                  "still in the box.", type='info')
+        # a turn is running: QUEUE the words instead of bouncing them —
+        # GUI verbs and eager authors both land right after this reply
+        queued = (state.user_input.value or '').strip()
+        if queued:
+            q = getattr(state, '_send_queue', None)
+            if q is None:
+                q = []
+                state._send_queue = q
+            q.append(queued)
+            state.user_input.value = ''
+            ui.notify("Queued — I'll take that up the moment this reply lands.",
+                      type='info')
+        else:
+            ui.notify("One moment — the coauthor is mid-reply.", type='info')
         return
 
     # Dereference state variables
@@ -260,7 +292,8 @@ async def send(state: APPState):
 
     # Initialize the UI elements for the response message handling
         from gui.coauthor import coauthor_name
-        with ui.chat_message(name=coauthor_name(state.selection), sent=False).classes('w-full'):
+        from gui.avatars import comic_chat_message
+        with comic_chat_message(name=coauthor_name(state.selection), sent=False).classes('w-full'):
             with ui.column().classes('w-full'):
                 response_markdown = ui.markdown("").classes('w-full')
                 with ui.row().classes('items-center').style('gap: 8px;') as spinner:
@@ -274,12 +307,33 @@ async def send(state: APPState):
     
     history.scroll_to(percent=100)
     
-    # Stream the responses from the agent, updating the UI as we go
+    # Stream the responses from the agent, updating the UI as we go —
+    # and NEVER end a turn with a silent empty balloon: exhaustion and
+    # failure speak plainly and offer a way to resume
+    state._working_label = working
     try:
         responses = await handle_agent_events(state, messages, response_markdown, divider)
         if responses:
             threads[tkey] = responses   # the thread survives to the next turn
+        if not (response_markdown.content or '').strip():
+            response_markdown.set_content(
+                "*(That finished without words — the receipts above are what "
+                "actually happened.  Say **go on** if there's more to do.)*")
+    except Exception as ex:
+        from agents.exceptions import MaxTurnsExceeded
+        if isinstance(ex, MaxTurnsExceeded):
+            note = ("I ran out of steam mid-way — the receipts above are what "
+                    "actually happened; nothing beyond them was done.  Say "
+                    "**go on** and I'll pick up where I left off.")
+        else:
+            logger.error(f"agent turn failed: {ex}")
+            note = (f"That turn failed — {str(ex)[:200]}.  "
+                    f"Say **try again** and I'll take another run at it.")
+        response_markdown.set_content(note)
+        # the thread remembers the truth so "go on" resumes with context
+        threads[tkey] = messages + [{"role": "assistant", "content": note}]
     finally:
+        state._working_label = None
         # Now that we are done, clean up the ui and re-enable the send button
         # even if the agent run raised, so the user is never left stuck.
         ticker.cancel()
@@ -290,4 +344,10 @@ async def send(state: APPState):
     state.write()
     if state.is_dirty:
         state.refresh_details()
+
+    # anything queued mid-turn goes right away
+    q = getattr(state, '_send_queue', None)
+    if q:
+        state.user_input.value = q.pop(0)
+        asyncio.create_task(send(state))
         state.is_dirty = False

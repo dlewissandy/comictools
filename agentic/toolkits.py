@@ -2,6 +2,7 @@ from agents import Tool
 
 from agentic.tools import (
     read_all_characters,
+    read_series_bible,
     read_all_issues,
     read_all_panels,
     read_all_scenes,
@@ -183,6 +184,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Query Tools
         read_character,
         read_series,
+        read_series_bible,
         read_all_characters,
         read_all_variants,
     
@@ -250,6 +252,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_all_scenes,
         read_setting,
         read_all_settings,
+        read_series_bible,
         read_all_characters,
         read_all_variants,
         read_all_stories,
@@ -295,6 +298,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_scene,
         read_setting,
         read_all_settings,
+        read_series_bible,
         read_all_characters,
         read_all_variants,
         read_all_props,
@@ -355,6 +359,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_style,
         read_setting,
         read_all_settings,
+        read_series_bible,
         read_all_characters,
         read_all_variants,
         # Update
@@ -390,6 +395,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_publisher,
         read_all_publishers,
         read_character,
+        read_series_bible,
         read_all_characters,
         read_issue,
         read_all_issues,
