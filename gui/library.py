@@ -1,7 +1,8 @@
 """
-The studio asset library: every reusable asset — characters and settings —
-across every series, grouped by publisher.  Browsing happens here; acting on
-assets (importing, editing) happens in conversation with the coauthor.
+The studio asset library: every reusable asset — characters, settings,
+wardrobe and props — across every series, grouped by publisher.  Browsing
+happens here; acting on assets (importing, editing) happens in conversation
+with the coauthor.
 """
 import os
 from loguru import logger
@@ -10,7 +11,7 @@ from nicegui import ui
 from gui.elements import header, TAILWIND_CARD, ruled_page, HEADER_CLASSES
 from gui.selection import SelectionItem, SelectedKind
 from gui.state import APPState
-from schema import CharacterModel, Setting, Series, Publisher
+from schema import CharacterModel, Setting, Series, Publisher, Outfit, PropAsset
 from storage.generic import GenericStorage
 
 
@@ -58,7 +59,9 @@ def view_library(state: APPState):
             pub_name = pub.name.title() if pub else "Independent"
             characters = storage.read_all_objects(CharacterModel, {"series_id": series.series_id})
             settings = storage.read_all_objects(Setting, {"series_id": series.series_id})
-            if not characters and not settings:
+            outfits = storage.read_all_objects(Outfit, {"series_id": series.series_id})
+            props = storage.read_all_objects(PropAsset, {"series_id": series.series_id})
+            if not characters and not settings and not outfits and not props:
                 continue
 
             with ui.expansion(value=True).classes('w-full section-flat') as exp:
@@ -78,3 +81,15 @@ def view_library(state: APPState):
                         origin = f" · from {s.origin.series_id}" if s.origin else ""
                         _asset_card(state, packer, s.name, f"setting{origin}", img,
                                     base + [S(name=s.name, id=s.setting_id, kind=SelectedKind.SETTING)])
+                    # THE PROMISED WARDROBE: outfits and props are shelved
+                    # beside the characters who wear and hold them
+                    for o in outfits:
+                        img = next((i for i in (o.images or {}).values() if i and os.path.exists(i)), None)
+                        origin = f" · from {o.origin.series_id}" if o.origin else ""
+                        _asset_card(state, packer, o.name or o.outfit_id, f"outfit{origin}", img,
+                                    base + [S(name=o.name or o.outfit_id, id=o.outfit_id, kind=SelectedKind.OUTFIT)])
+                    for pr in props:
+                        img = next((i for i in (pr.images or {}).values() if i and os.path.exists(i)), None)
+                        origin = f" · from {pr.origin.series_id}" if pr.origin else ""
+                        _asset_card(state, packer, pr.name, f"prop{origin}", img,
+                                    base + [S(name=pr.name, id=pr.prop_id, kind=SelectedKind.PROP)])

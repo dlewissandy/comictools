@@ -242,7 +242,15 @@ def extract_outfit_from_variant(wrapper: RunContextWrapper[APPState],
     if not (variant.attire or "").strip():
         return "This variant has no attire description to extract."
 
-    name = outfit_name or f"{variant.name}"
+    # a nameless look falls back to its id — never an outfit named 'None';
+    # and a name collision auto-suffixes instead of silently clobbering
+    # another character's wardrobe
+    base_name = (outfit_name or variant.name or variant_id).strip()
+    name, nth = base_name, 2
+    while storage.read_object(Outfit, {"series_id": series_id,
+                                       "outfit_id": normalize_id(name)}) is not None:
+        name = f"{base_name} {nth}"
+        nth += 1
     outfit = Outfit(outfit_id=normalize_id(name), series_id=series_id, name=name, description=variant.attire)
     result = creator(wrapper=wrapper, obj=outfit, overwrite=True)
     if isinstance(result, str):

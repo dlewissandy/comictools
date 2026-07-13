@@ -135,8 +135,39 @@ def import_character(wrapper: RunContextWrapper[APPState], source_series_id: str
     if err:
         return err
     state.is_dirty = True
+
+    # THE WARDROBE TRAVELS WITH THE CHARACTER: composed looks reference
+    # outfits and props by id — copy those too, or the looks arrive
+    # pointing at wardrobe that isn't there
+    carried, missing = [], []
+    from schema import CharacterVariant, Outfit, PropAsset
+    variants = state.storage.read_all_objects(
+        CharacterVariant, {"series_id": target_series_id, "character_id": character_id})
+    refs = [("outfit", Outfit, "outfit_id", v.outfit_id)
+            for v in variants if getattr(v, "outfit_id", None)]
+    refs += [("prop", PropAsset, "prop_id", pid)
+             for v in variants for pid in (getattr(v, "prop_ids", None) or [])]
+    seen = set()
+    for kind, cls, key, aid in refs:
+        if aid in seen:
+            continue
+        seen.add(aid)
+        if state.storage.read_object(cls, {"series_id": target_series_id, key: aid}) is not None:
+            continue      # the target already has it (or the import above carried it)
+        err = _import_asset(state.storage, cls, source_series_id, aid, target_series_id, key)
+        if err:
+            missing.append(f"{kind} '{aid}' ({err})")
+        else:
+            carried.append(f"{kind} '{aid}'")
+
+    note = ""
+    if carried:
+        note += f"  Carried the wardrobe too: {', '.join(carried)}."
+    if missing:
+        note += (f"  COULD NOT carry: {', '.join(missing)} — those looks point at "
+                 f"wardrobe the target series doesn't have yet.")
     return (f"Imported character '{character_id}' (with variants and reference sheets) into "
-            f"'{target_series_id}'.  NOTE: if the target series uses styles the character has no "
+            f"'{target_series_id}'.{note}  NOTE: if the target series uses styles the character has no "
             f"reference sheet for, create them (create_styled_image_for_character_variant).")
 
 

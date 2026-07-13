@@ -518,6 +518,8 @@ TOOLKITS["library"] = [
     # Import
     import_character,
     import_setting,
+    import_outfit,
+    import_prop,
 ]
 
 TOOLKITS["prop"] = [

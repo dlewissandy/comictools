@@ -886,3 +886,25 @@ async def test_the_choices_sheet_pins_the_original(user: User) -> None:
     from storage.trash import list_entries
     notes = " ".join(e.get("note", "") for e in list_entries(os.path.join(_tmp, "data")))
     assert "unpicked take" in notes, "the takes wait in the ONE wastebasket"
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_library_shelves_show_wardrobe_and_props(user: User) -> None:
+    """The Librarian promises 'every character, wardrobe and setting' — the
+    shelves must actually show outfits and props, each a door to its home."""
+    main.LocalStorage = _TmpStorage
+    from schema import Outfit, PropAsset
+    storage = _TmpStorage()
+    WL = "wonders-of-the-witchlight"
+    storage.create_object(Outfit(outfit_id="shelf-test-cloak", series_id=WL,
+                                 name="Shelf Test Cloak",
+                                 description="A cloak for the shelf test."), overwrite=True)
+    json.dump({"selection": [{"name": "Library", "id": None, "kind": "library"}],
+               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see("Shelf Test Cloak")
+    # props already in the fixture shelve too
+    props = storage.read_all_objects(PropAsset, {"series_id": WL})
+    if props:
+        await user.should_see(props[0].name)
