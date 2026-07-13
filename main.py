@@ -442,6 +442,12 @@ def init_layout(logger):
         .tile-beat__text { font-size: .6rem; line-height: 1.25; color: #333;
                            display: -webkit-box; -webkit-line-clamp: 6;
                            -webkit-box-orient: vertical; overflow: hidden; }
+        /* a rough face wears a pencil tag — clearly not ink yet */
+        .tile-rough-tag { position: absolute; bottom: 2px; left: 2px; z-index: 6;
+                          background: rgba(249,244,224,.9); color: #6b6455;
+                          border: 1px solid #6b6455; border-radius: 2px;
+                          font-size: .48rem; font-weight: 800; letter-spacing: .08em;
+                          padding: 0 4px; }
         .tile-cap { position: absolute; top: 0; left: 0; z-index: 6; cursor: pointer;
                     background: var(--caption, #f3e5ab); border: 1px solid var(--ink);
                     border-top: none; border-left: none; color: var(--caption-ink, #1c1a17);

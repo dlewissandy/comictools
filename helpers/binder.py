@@ -463,8 +463,14 @@ def book_signature(storage: GenericStorage, series_id: str, issue_id: str) -> st
             + json.dumps([(c.panel_id, c.x, c.y, c.w, c.h) for c in pm.cells]))
     for scene, panels in _reading_order(storage, series_id, issue_id):
         for p in panels:
-            parts.append(f"{scene.scene_id}/{p.panel_id}#{p.panel_number}@{p.aspect.value}="
-                         f"{stamp(p.image) if p.image else 'none'}")
+            if p.image:
+                face = stamp(p.image)
+            else:
+                # an unprinted panel's face is its ROUGH — table changes
+                # must refresh the cached proof
+                from helpers.rough_face import rough_signature
+                face = f"rough:{rough_signature(p, scene) or 'brief'}"
+            parts.append(f"{scene.scene_id}/{p.panel_id}#{p.panel_number}@{p.aspect.value}={face}")
     return hashlib.md5("\n".join(parts).encode()).hexdigest()[:16]
 
 
@@ -537,7 +543,20 @@ def resolve_cells(storage: GenericStorage, series_id: str, issue_id: str, pm) ->
                                             "scene_id": c.scene_id, "panel_id": c.panel_id})
         ok = panel and panel.image and os.path.exists(panel.image)
         label = f"panel {panel.panel_number} — {panel.name}" if panel else "missing panel"
-        specs.append((panel.image if ok else None, c.x, c.y, c.w, c.h, label))
+        img = panel.image if ok else None
+        if img is None and panel is not None:
+            # THE PANEL'S TRUEST FACE: no print yet, but a rough on the
+            # table — the proof shows the rough, stamped as one, instead
+            # of a gray hole
+            from helpers.rough_face import rough_face
+            from schema import SceneModel as _Scene
+            scene = storage.read_object(_Scene, {"series_id": series_id, "issue_id": issue_id,
+                                                 "scene_id": c.scene_id})
+            rf = rough_face(storage, panel, scene)
+            if rf:
+                img = rf
+                label = f"ROUGH · {label}"
+        specs.append((img, c.x, c.y, c.w, c.h, label))
     return specs
 
 

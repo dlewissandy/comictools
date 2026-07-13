@@ -91,6 +91,7 @@ def view_issue(state: APPState):
     inserts_all = storage.read_all_objects(Insert, primary_key={"series_id": series_id, "issue_id": issue_id})
     inserts_all.sort(key=lambda i: (i.after_scene_number, i.insert_id))
 
+    scene_by_id = {sc.scene_id: sc for sc in scenes_all}
     covers_all = storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id})
     cover_at = {}
     for c in covers_all:
@@ -312,10 +313,19 @@ def view_issue(state: APPState):
         t = ui.element('div').classes('tile').style(box)
         t._props['data-banchor'] = f'panel-{panel_id}'
         with t:
+            # THE PANEL'S TRUEST FACE: the selected print if it has one,
+            # else its rough (the composed light table), else its brief
+            rough = None
+            if p is not None and not (p.image and os.path.exists(p.image)):
+                from helpers.rough_face import rough_face
+                rough = rough_face(storage, p, scene_by_id.get(scene_id))
             if p is None:
                 ui.label('missing panel').classes('tile-beat text-xs text-gray-400')
             elif p.image and os.path.exists(p.image):
                 ui.image(source=p.image).props('fit=cover').classes('absolute inset-0 w-full h-full')
+            elif rough:
+                ui.image(source=rough).props('fit=cover').classes('absolute inset-0 w-full h-full')
+                ui.label('ROUGH').classes('tile-rough-tag')
             else:
                 with ui.element('div').classes('tile-beat' + (' tile-beat--capped' if cap_scene else '')):
                     txt = (p.beat or '').strip()

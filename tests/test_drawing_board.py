@@ -71,3 +71,28 @@ def test_resolve_cast_names_become_ids(storage):
     out = resolve_cast(storage, WL, cast, problems)
     assert len(out) == 1 and out[0].character_id == ezra.character_id
     assert problems and "nobody-real" in problems[0]
+
+
+def test_panel_face_is_brief_rough_or_print(storage):
+    """THE PANEL'S TRUEST FACE: nothing on the table -> no rough face (the
+    brief shows); acetates on the table -> a cached rough face; the cache
+    key follows the arrangement."""
+    from helpers.rough_face import rough_face, rough_signature
+    from schema import SceneModel, Panel
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    scenes = {sc.scene_id: sc for sc in storage.read_all_objects(
+        SceneModel, {"series_id": WL, "issue_id": CARN})}
+    panels = [p for sid in scenes for p in storage.read_all_objects(
+        Panel, {"series_id": WL, "issue_id": CARN, "scene_id": sid})]
+    import os
+    dressed = next(p for p in panels
+                   if any(pth and os.path.exists(pth) for pth in (p.figure_images or {}).values()))
+    bare = next((p for p in panels if not (p.figure_images or {})), None)
+
+    sig = rough_signature(dressed, scenes[dressed.scene_id])
+    assert sig, "a dressed table has a rough signature"
+    face = rough_face(storage, dressed, scenes[dressed.scene_id])
+    assert face and os.path.exists(face) and sig in face
+    assert rough_face(storage, dressed, scenes[dressed.scene_id]) == face, "cached"
+    if bare is not None:
+        assert rough_signature(bare, scenes[bare.scene_id]) is None, "a bare table shows the brief"
