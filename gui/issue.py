@@ -946,12 +946,37 @@ def view_issue(state: APPState):
                             line.on('click', lambda _, r=role: post_user_message(
                                 state, f"I would like to edit the {r}."))
                     with ui.row().classes('q-mt-md items-center').style('gap: 6px; flex-wrap: wrap;'):
-                        for fname, label in ((f"{issue_id}.pdf", '⤓ PDF'), (f"{issue_id}.cbz", '⤓ CBZ')):
-                            path = os.path.join(export_dir, fname)
-                            if os.path.exists(path):
-                                ui.chip(label, icon='download').props('dense outline clickable') \
-                                    .on('click', lambda _, u='/' + path.replace(os.sep, '/'):
-                                        ui.run_javascript(f"window.open('{u}', '_blank');"))
+                        # ANY bound file counts, and a stale one SAYS so —
+                        # never hand out yesterday's book unwarned
+                        import glob as _glob
+                        import json as _json
+                        import time as _time
+                        from helpers.binder import book_signature
+                        _cur_sig = None
+                        for ext, label in (('pdf', '⤓ PDF'), ('cbz', '⤓ CBZ')):
+                            found = sorted(_glob.glob(os.path.join(export_dir, f'*.{ext}')),
+                                           key=os.path.getmtime, reverse=True)
+                            if not found:
+                                continue
+                            path = found[0]
+                            stale, bound_at = False, None
+                            try:
+                                meta = _json.load(open(path + '.meta.json'))
+                                bound_at = meta.get('bound_at')
+                                if _cur_sig is None:
+                                    _cur_sig = book_signature(storage, series_id, issue_id)
+                                stale = meta.get('sig') != _cur_sig
+                            except Exception:
+                                pass
+                            when = (_time.strftime('%b %-d, %H:%M', _time.localtime(bound_at))
+                                    if bound_at else 'an earlier bind')
+                            chip = ui.chip(label + (' · stale' if stale else ''),
+                                           icon='download').props('dense outline clickable')
+                            chip.tooltip(f"bound {when}" + (
+                                " — BEFORE your latest changes; bind again for the current book"
+                                if stale else " — this is the current book"))
+                            chip.on('click', lambda _, u='/' + path.replace(os.sep, '/'):
+                                    ui.run_javascript(f"window.open('{u}', '_blank');"))
                         ui.chip('bind it', icon='menu_book').props('dense outline clickable') \
                             .tooltip("I'll bind the book and hand you the download"
                                      if ledger.complete else

@@ -280,6 +280,49 @@ def _flow_pages(image_paths: list[str]) -> list["Image.Image"]:
     return pages
 
 
+def refresh_machine_layout(storage: GenericStorage, series_id: str, issue_id: str) -> None:
+    """Before ANY composition: if the page layout is the stitcher's (or
+    absent) and the book has drifted — loose or dangling panels — re-stitch
+    so the print stop, the reading room and the exports all bind THE SAME
+    BOOK.  Hand-designed layouts (rows without cells) are never touched."""
+    from schema import Page
+    pages = storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id})
+    if pages and not all(p.cells for p in pages):
+        return                       # the author laid these pages by hand
+    _has, _placed, unplaced, dangling = page_coverage(storage, series_id, issue_id)
+    if not pages or unplaced or dangling:
+        from helpers.stitcher import apply_stitch
+        apply_stitch(storage, series_id, issue_id)
+
+
+def export_basename(storage: GenericStorage, series_id: str, issue_id: str) -> str:
+    """The handed-out book carries a NAME: series slug + issue number —
+    never a bare '1.pdf' colliding in a Downloads folder."""
+    from schema import Series, Issue
+    series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
+    issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
+    slug = re.sub(r"[^a-z0-9]+", "-", (series.name if series else series_id).lower()).strip("-")
+    num = getattr(issue, "issue_number", None)
+    try:
+        return f"{slug}-{int(num):02d}"
+    except (TypeError, ValueError):
+        return f"{slug}-{issue_id}"
+
+
+def _write_bind_meta(storage, series_id: str, issue_id: str,
+                     output_path: str, pages: int) -> None:
+    """The bind remembers WHAT it bound: the book's signature and the hour —
+    so a download chip can say when the file predates the latest changes."""
+    import time
+    try:
+        meta = {"sig": book_signature(storage, series_id, issue_id),
+                "bound_at": time.time(), "pages": pages}
+        with open(output_path + ".meta.json", "w") as f:
+            json.dump(meta, f)
+    except Exception as ex:
+        logger.debug(f"bind meta skipped: {ex}")
+
+
 def compose_book(storage: GenericStorage, series_id: str, issue_id: str
                  ) -> tuple[list[tuple[str, "Image.Image"]], list[str]]:
     """
@@ -292,6 +335,7 @@ def compose_book(storage: GenericStorage, series_id: str, issue_id: str
 
     Returns (sheets, missing) where sheets is [(label, PIL.Image)].
     """
+    refresh_machine_layout(storage, series_id, issue_id)
     front, panel_images, back, missing = collect_issue(storage, series_id, issue_id)
     covers: list[Cover] = storage.read_all_objects(Cover, {"series_id": series_id, "issue_id": issue_id})
 
@@ -401,7 +445,10 @@ def bind_issue_pdf(storage: GenericStorage, series_id: str, issue_id: str, outpu
         return 0, missing
     pages = [img for _label, img in sheets]
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    pages[0].save(output_path, "PDF", save_all=True, append_images=pages[1:], resolution=150)
+    # quality=95: the flagship deliverable must never be the softest copy
+    pages[0].save(output_path, "PDF", save_all=True, append_images=pages[1:],
+                  resolution=150, quality=95)
+    _write_bind_meta(storage, series_id, issue_id, output_path, len(pages))
     logger.info(f"Bound issue {issue_id} to {output_path} ({len(pages)} pages)")
     return len(pages), missing
 
@@ -422,6 +469,19 @@ def bind_issue_cbz(storage: GenericStorage, series_id: str, issue_id: str, outpu
             buf = io.BytesIO()
             img.save(buf, "JPEG", quality=92)
             z.writestr(f"{i:03d}-{slug}.jpg", buf.getvalue())
+        # ComicInfo.xml: reader apps show the book's NAME, not a filename
+        from schema import Series as _Series, Issue as _Issue
+        series = storage.read_object(cls=_Series, primary_key={"series_id": series_id})
+        issue = storage.read_object(cls=_Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
+        from xml.sax.saxutils import escape as _esc
+        info = (f"<?xml version='1.0' encoding='utf-8'?>\n<ComicInfo>"
+                f"<Series>{_esc(series.name if series else series_id)}</Series>"
+                f"<Number>{_esc(str(getattr(issue, 'issue_number', '') or ''))}</Number>"
+                f"<Title>{_esc(issue.name if issue else issue_id)}</Title>"
+                f"<PageCount>{len(sheets)}</PageCount>"
+                f"</ComicInfo>")
+        z.writestr("ComicInfo.xml", info)
+    _write_bind_meta(storage, series_id, issue_id, output_path, len(sheets))
     logger.info(f"Bound issue {issue_id} to {output_path} ({len(sheets)} pages)")
     return len(sheets), missing
 
@@ -576,6 +636,18 @@ def resolve_cells(storage: GenericStorage, series_id: str, issue_id: str, pm) ->
     return specs
 
 
+def _stamp_rough(page: "Image.Image", left: float, top: float) -> None:
+    """A small amber corner tag on a rough-sourced panel — the printed page
+    itself says 'unfinished', not just the on-screen ledger."""
+    d = ImageDraw.Draw(page)
+    f = _font(16)
+    l, t, r, b = d.textbbox((0, 0), "ROUGH", font=f)
+    pad = 5
+    d.rectangle([left + 6, top + 6, left + 6 + (r - l) + 2 * pad, top + 6 + (b - t) + 2 * pad],
+                fill=(243, 193, 75, 255), outline=(60, 50, 20), width=2)
+    d.text((left + 6 + pad, top + 6 + pad - t), "ROUGH", font=f, fill=(60, 50, 20))
+
+
 def _compose_page_cells(cells: list[tuple]) -> "Image.Image":
     """
     Compose one STITCHED page: each cell is an exact box on the 6-wide x
@@ -602,6 +674,8 @@ def _compose_page_cells(cells: list[tuple]) -> "Image.Image":
             im = im.resize((max(1, round(im.width * s)), max(1, round(im.height * s))), Image.LANCZOS)
             cx, cy = (im.width - bw) // 2, (im.height - bh) // 2
             page.paste(im.crop((cx, cy, cx + bw, cy + bh)), (round(left), round(top)))
+            if extra and str(extra[0] or "").startswith("ROUGH"):
+                _stamp_rough(page, left, top)
         else:
             draw.rectangle([left, top, left + bw, top + bh],
                            outline=(180, 180, 180), width=3, fill=(240, 240, 240))
@@ -655,6 +729,8 @@ def _compose_page(rows: list[list[tuple[str | None, str | None]]]) -> "Image.Ima
             w = int(w0 * scale)
             if im is not None:
                 page.paste(im.resize((w, h), Image.LANCZOS), (x, y))
+                if str(label or "").startswith("ROUGH"):
+                    _stamp_rough(page, x, y)
             else:
                 d = ImageDraw.Draw(page)
                 d.rectangle([x, y, x + w, y + h], outline=(180, 180, 180), width=3, fill=(240, 240, 240))

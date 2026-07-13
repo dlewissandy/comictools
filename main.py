@@ -1226,10 +1226,12 @@ def read_issue_page(series_id: str, issue_id: str):
         ui.label(f"{issue.name}").classes('text-2xl font-bold').style('color: #e8e2d8;')
         # take the book with you: the bound exports, one click each
         exports_dir = os.path.join(str(storage.base_path), 'series', series_id, 'issues', issue_id, 'exports')
-        for fname, label in ((f"{issue_id}.pdf", '⤓ PDF'), (f"{issue_id}.cbz", '⤓ CBZ')):
-            path = os.path.join(exports_dir, fname)
-            if os.path.exists(path):
-                ui.html(f'<a class="reader-dl" href="/{path.replace(os.sep, "/")}" '
+        import glob as _glob
+        for ext, label in (('pdf', '⤓ PDF'), ('cbz', '⤓ CBZ')):
+            found = sorted(_glob.glob(os.path.join(exports_dir, f'*.{ext}')),
+                           key=os.path.getmtime, reverse=True)
+            if found:
+                ui.html(f'<a class="reader-dl" href="/{found[0].replace(os.sep, "/")}" '
                         f'download>{label}</a>')
         ui.space()
         if missing:

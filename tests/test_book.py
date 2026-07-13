@@ -26,10 +26,13 @@ def test_cbz_holds_every_sheet(storage, tmp_path):
     page_count, _missing = bind_issue_cbz(storage, WL, CARN, out)
     with zipfile.ZipFile(out) as z:
         names = sorted(z.namelist())
-    assert len(names) == page_count
-    assert names[0].startswith("000-front-cover")
+    # every sheet, plus the book's papers (ComicInfo.xml for reader apps)
+    pages = [n for n in names if n != "ComicInfo.xml"]
+    assert "ComicInfo.xml" in names
+    assert len(pages) == page_count
+    assert pages[0].startswith("000-front-cover")
     # zip order IS reading order for comic reader apps
-    assert names == sorted(names)
+    assert pages == sorted(pages)
 
 
 def test_reader_sheets_cache_and_invalidation(storage):

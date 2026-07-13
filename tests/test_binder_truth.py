@@ -58,10 +58,19 @@ def test_bind_appends_rendered_leftovers_instead_of_dropping(storage, tmp_path):
     out = str(tmp_path / "book.pdf")
     page_count, missing = bind_issue_pdf(storage, WL, CARN, out)
     assert os.path.exists(out)
-    # front cover + indicia + designed pages + AT LEAST one overflow page
-    # carrying the rendered leftover — never fewer
+    # ONE BOOK EVERYWHERE: composing now re-stitches a drifted machine
+    # layout FIRST, so the leftover lands ON a page — placed, not merely
+    # rescued onto an overflow sheet, and never silently dropped
     assert page_count >= n_layout_pages + 3
-    assert any("on NO page" in m for m in missing)
+    assert not any("on NO page" in m for m in missing), \
+        "the drift heals at the composition door"
+    from helpers.binder import page_coverage
+    _has, _placed, unplaced, _dang = page_coverage(storage, WL, CARN)
+    assert not unplaced, "every rendered panel sits on a page after the bind"
+    # and the bind left its papers: signature + hour beside the file
+    import json as _json
+    meta = _json.load(open(out + ".meta.json"))
+    assert meta.get("sig") and meta.get("pages") == page_count
 
 
 def test_compose_page_survives_empty_rows(storage):
@@ -95,3 +104,39 @@ def test_only_the_mailbag_typesets_its_description(storage, tmp_data, monkeypatc
     storage.update_object(ins)
     binder.bind_issue_pdf(storage, WL, CARN, out)
     assert typeset == ["mailbag"], "the mailbag's letters still print typeset"
+
+
+def test_the_pdf_binds_at_full_quality(storage, tmp_path):
+    """The flagship deliverable is never the softest copy: pages encode at
+    JPEG q95, not Pillow's silent default 75."""
+    out = str(tmp_path / "quality.pdf")
+    page_count, _m = bind_issue_pdf(storage, WL, CARN, out)
+    assert page_count > 0
+    q75 = str(tmp_path / "q75.pdf")
+    from helpers.binder import compose_book
+    sheets, _ = compose_book(storage, WL, CARN)
+    pages = [img for _l, img in sheets]
+    pages[0].save(q75, "PDF", save_all=True, append_images=pages[1:],
+                  resolution=150, quality=75)
+    assert os.path.getsize(out) > os.path.getsize(q75) * 1.15, \
+        "q95 pages carry visibly more detail than the old default"
+
+
+def test_exports_carry_the_books_name(storage):
+    from helpers.binder import export_basename
+    base = export_basename(storage, WL, CARN)
+    assert base != CARN and "-" in base
+    assert not base.startswith("1."), "never a bare issue number"
+
+
+def test_the_cbz_carries_its_papers(storage, tmp_path):
+    import zipfile as _zf
+    from helpers.binder import bind_issue_cbz
+    out = str(tmp_path / "book.cbz")
+    n, _m = bind_issue_cbz(storage, WL, CARN, out)
+    assert n > 0
+    with _zf.ZipFile(out) as z:
+        names = z.namelist()
+        assert "ComicInfo.xml" in names
+        info = z.read("ComicInfo.xml").decode()
+        assert "<Series>" in info and f"<PageCount>{n}</PageCount>" in info
