@@ -1176,7 +1176,16 @@ def read_issue_page(series_id: str, issue_id: str):
         .reader-thumb--right { right: 0; justify-content: flex-end; padding-right: 14px;
                                background: linear-gradient(to left, rgba(0,0,0,.35), transparent); }
         .reader-counter { position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
-                          color: #8a8378; font-size: 12px; z-index: 20; }
+                          color: #8a8378; font-size: 12px; z-index: 20; cursor: pointer; }
+        .reader-counter:hover { color: #e8e2d8; }
+        .reader-jump { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+                       max-width: 86vw; max-height: 40vh; overflow: auto; display: none;
+                       background: #2c2723; border: 1px solid #4a443c; border-radius: 8px;
+                       padding: 8px; z-index: 30; }
+        .reader-jump button { display: block; width: 100%; text-align: left; border: none;
+                              background: transparent; color: #cfc8bb; font-size: 12px;
+                              padding: 3px 10px; cursor: pointer; border-radius: 4px; }
+        .reader-jump button:hover { background: #443d34; color: #fff; }
         .reader-dl { color: #211d1a; background: #e8e2d8; padding: 5px 14px; border-radius: 16px;
                      font-size: 13px; font-weight: 600; text-decoration: none; }
         .reader-dl:hover { background: #fff; }
@@ -1251,6 +1260,29 @@ def read_issue_page(series_id: str, issue_id: str):
       mo.observe(document.body, {childList: true, subtree: true});
     }
     window.addEventListener('resize', () => window.showSpread(window.readerSpread));
+    // THE COUNTER IS A DOOR: click it, pick any sheet, land there
+    document.addEventListener('click', (e) => {
+      const counter = e.target.closest('.reader-counter');
+      const jump = document.querySelector('.reader-jump');
+      if (!jump) return;
+      if (counter) {
+        if (jump.style.display === 'block') { jump.style.display = 'none'; return; }
+        jump.innerHTML = '';
+        (window.readerLabels || []).forEach((l, i) => {
+          const b = document.createElement('button');
+          b.textContent = l;
+          b.onclick = () => {
+            const single = window.readerSingle();
+            window.showSpread(single ? i : (i === 0 ? 0 : Math.ceil(i / 2)));
+            jump.style.display = 'none';
+          };
+          jump.appendChild(b);
+        });
+        jump.style.display = 'block';
+      } else if (!e.target.closest('.reader-jump')) {
+        jump.style.display = 'none';
+      }
+    });
     </script>""")
     with ui.row().classes('w-full items-center flex-nowrap').style(
             'padding: 14px 20px 0; gap: 14px; position: relative; z-index: 25;'):
@@ -1292,6 +1324,7 @@ def read_issue_page(series_id: str, issue_id: str):
     ui.html('<button class="reader-thumb reader-thumb--right" '
             'onclick="window.showSpread(window.readerSpread + 1)">›</button>')
     ui.html('<div class="reader-counter"></div>')
+    ui.html('<div class="reader-jump"></div>')
 
 
 @ui.page('/series/{tail:path}')

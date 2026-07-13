@@ -268,14 +268,21 @@ def _flow_pages(image_paths: list[str]) -> list["Image.Image"]:
     pages: list[Image.Image] = []
     page, cursor = None, MARGIN_Y
     inner_w = PAGE_W - 2 * MARGIN_X
+    live_h = PAGE_H - 2 * MARGIN_Y
     for path in image_paths:
         img = Image.open(path).convert("RGB")
-        h = int(img.height * inner_w / img.width)
+        w, h = inner_w, int(img.height * inner_w / img.width)
+        if h > live_h:
+            # an over-tall panel SCALES TO FIT, centered — never a silent
+            # bottom-crop off the trim
+            w = int(w * live_h / h)
+            h = live_h
         if page is None or cursor + h > PAGE_H - MARGIN_Y:
             page = Image.new("RGB", (PAGE_W, PAGE_H), "white")
             pages.append(page)
             cursor = MARGIN_Y
-        page.paste(img.resize((inner_w, h), Image.LANCZOS), (MARGIN_X, cursor))
+        page.paste(img.resize((w, h), Image.LANCZOS),
+                   (MARGIN_X + (inner_w - w) // 2, cursor))
         cursor += h + GUTTER
     return pages
 
