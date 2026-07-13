@@ -672,3 +672,65 @@ def test_striking_a_style_walks_home_to_the_house():
     assert moves and [i.kind.value for i in moves[-1]] == ["all-publishers", "publisher"], \
         "the room walks up to the house, not the wall"
     assert storage.read_object(ComicStyle, {"style_id": st.style_id}) is None
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_style_rename_saves_on_the_spot(user: User) -> None:
+    """The rename pencil saves directly: the object persists, the crumb and
+    header wear the new name, and an empty name never touches the style."""
+    main.LocalStorage = _TmpStorage
+    from schema import ComicStyle, Publisher
+    storage = _TmpStorage()
+    st = sorted(storage.read_all_objects(ComicStyle), key=lambda s: s.name)[0]
+    pub = storage.read_all_objects(Publisher)[0]
+    json.dump({"selection": [
+        {"name": "Publishers", "id": None, "kind": "all-publishers"},
+        {"name": pub.name, "id": pub.publisher_id, "kind": "publisher"},
+        {"name": st.name, "id": st.style_id, "kind": "style"}],
+        "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    await user.should_see(st.name.title())
+
+    def click(btn):
+        for ev in btn._event_listeners.values():
+            if ev.type == "click":
+                btn._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+
+    def pencils():
+        return [e for e in user.client.elements.values()
+                if e.__class__.__name__ == "Button"
+                and getattr(e, "props", {}).get("icon") == "edit"]
+
+    # the header's rename pencil is the first edit button in the room
+    click(pencils()[0])
+    await user.should_see("Rename this style")
+
+    def dialog_bits():
+        field = [e for e in user.client.elements.values()
+                 if e.__class__.__name__ == "Input"][-1]
+        save = [e for e in user.client.elements.values()
+                if e.__class__.__name__ == "Button"
+                and "Save" in str(getattr(e, "text", ""))][-1]
+        return field, save
+
+    # the empty-name guard: whitespace never touches the style
+    field, save = dialog_bits()
+    field.set_value("   ")
+    click(save)
+    assert storage.read_object(ComicStyle, {"style_id": st.style_id}).name == st.name
+
+    # a real name saves, re-renders the header, and receipts in the chat
+    field.set_value("Chalk And Ash")
+    click(save)
+    await user.should_see("Chalk And Ash")
+    assert storage.read_object(ComicStyle, {"style_id": st.style_id}).name == "Chalk And Ash"
+    await user.should_see("renamed")            # the 🏷 receipt
+
+    # rename it back so the shared tmp fixture stays stable for later tests
+    click(pencils()[0])
+    await user.should_see("Rename this style")
+    field, save = dialog_bits()
+    field.set_value(st.name)
+    click(save)
+    assert storage.read_object(ComicStyle, {"style_id": st.style_id}).name == st.name
