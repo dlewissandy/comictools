@@ -144,8 +144,10 @@ def view_character_variant(state:APPState):
                             ui.image(source=up).props('fit=contain')
                             from gui.elements import art_tools as _at
                             _at(state, up, heal_name=f"{character.name}'s exemplar")
-                _uc(state=state, on_upload=_on_upload, packer=_packer,
-                    label='Drop an exemplar — a face, a figure, prior art')
+                from gui.create_asset import create_drop_card
+                create_drop_card(state, series_id, "exemplar",
+                    'Drop an exemplar — a face, a figure, prior art',
+                    character_id=character_id, variant_id=variant_id, packer=_packer)
 
         # Composition: what this look is built from — chips with ✕ to detach.
         from gui.elements import removable_chips

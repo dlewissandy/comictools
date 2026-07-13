@@ -345,8 +345,8 @@ def compose_look_dialog(state: APPState, series_id: str, character_id: str):
 # paste uses — so a drop ALWAYS lands.
 # ---------------------------------------------------------------------------
 def create_drop_card(state: APPState, series_id: str, kind: str, label: str,
-                     character_id: str = None, packer=None, variants=None,
-                     overlap_caption=None):
+                     character_id: str = None, variant_id: str = None, packer=None,
+                     variants=None, overlap_caption=None):
     """A create card that reliably accepts a dropped/browsed image.  `kind`
     is character/setting/prop/outfit, or 'look' on a character page."""
     import contextlib
@@ -363,6 +363,8 @@ def create_drop_card(state: APPState, series_id: str, kind: str, label: str,
         card._props['data-series'] = series_id
         if character_id:
             card._props['data-character'] = character_id
+        if variant_id:
+            card._props['data-variant'] = variant_id
         with card:
             if overlap_caption is not None:
                 with ui.element('div').classes('panel-caption').style('z-index: 20;'):
@@ -412,6 +414,23 @@ def handle_asset_drop(state: APPState, args: dict):
         except Exception:
             pass
 
+        if kind == "exemplar" and character_id:
+            variant_id = args.get("variant") or None
+            from schema import CharacterVariant
+            v = st.read_object(CharacterVariant, {"series_id": series_id,
+                "character_id": character_id, "variant_id": variant_id})
+            if v is not None:
+                import io as _io
+                with open(path, "rb") as _f:
+                    st.upload_reference_image(obj=v, name=os.path.basename(path),
+                                              data=_io.BytesIO(_f.read()), mime_type="image/png")
+                state.is_dirty = True
+                try:
+                    ui.notify("Exemplar filed — every sheet is held to it now.", type="positive")
+                    state.refresh_details()
+                except Exception:
+                    pass
+            return
         if kind == "look" and character_id:
             ch = st.read_object(_asset_class("character"),
                                 {"series_id": series_id, "character_id": character_id})

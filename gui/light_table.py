@@ -631,7 +631,8 @@ if (!window._roughDragInit) {
     const r = new FileReader();
     r.onload = () => emitEvent('asset_drop', {
       kind: zone.dataset.kind, series: zone.dataset.series,
-      character: zone.dataset.character || '', name: file.name, data: r.result});
+      character: zone.dataset.character || '', variant: zone.dataset.variant || '',
+      name: file.name, data: r.result});
     r.readAsDataURL(file);
   };
   document.addEventListener('dragover', (e) => {

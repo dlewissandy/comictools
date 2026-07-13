@@ -80,3 +80,28 @@ def test_asset_drop_saves_to_the_house_and_posts_create(storage, monkeypatch, tm
     up = os.path.join(str(storage.base_path), "series", ser.series_id, "uploads")
     assert os.path.isdir(up) and os.listdir(up), "the image landed in the house uploads"
     assert posts and "setting" in posts[0].lower() and "reference image" in posts[0].lower()
+
+
+def test_exemplar_drop_uploads_onto_the_look(storage, tmp_path):
+    """Dropping an exemplar on a look uploads the image straight onto that
+    look (no create) — the sheets are then held to it."""
+    import base64, os
+    from PIL import Image
+    from schema import CharacterModel, CharacterVariant
+
+    class _State:
+        def __init__(self, storage):
+            self.storage = storage
+            self.is_dirty = False
+    WL = "wonders-of-the-witchlight"
+    v = storage.read_object(CharacterVariant, {"series_id": WL, "character_id": "ezra",
+                                               "variant_id": "base"})
+    assert v is not None
+    before = len(storage.list_uploads(obj=v))
+    p = tmp_path / "face.png"; Image.new("RGB", (8, 8), (5, 6, 7)).save(p)
+    b64 = base64.b64encode(p.read_bytes()).decode()
+    ca.handle_asset_drop(_State(storage), {"kind": "exemplar", "series": WL,
+        "character": "ezra", "variant": "base", "name": "face.png",
+        "data": f"data:image/png;base64,{b64}"})
+    after = storage.list_uploads(obj=v)
+    assert len(after) == before + 1, "the exemplar landed on the look"
