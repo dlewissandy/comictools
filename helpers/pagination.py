@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from helpers.tilings import PIECE_PANEL, swatch_book
+from helpers.tilings import PIECE_PANEL, all_tilings
 
 # the six shapes a tiling piece can be — a panel shape outside this set can never
 # be honored by an exact tiling (e.g. a square 3x, which has no piece)
@@ -50,10 +50,12 @@ def norm_shape(aspect, size) -> tuple[str, str]:
 
 @lru_cache(maxsize=1)
 def _tilings_by_count() -> dict[int, list[tuple[tuple, tuple]]]:
-    """count -> [(pieces, piece_shapes)], pieces in reading order."""
+    """count -> [(pieces, piece_shapes)], pieces in reading order.  Uses ALL
+    tilings (mirror/rotation twins included) so the flow has every arrangement
+    to choose from — a mirror is free visual variety."""
     by: dict[int, list] = {}
-    for e in swatch_book():
-        pieces = tuple(e["pieces"])
+    for e in all_tilings():
+        pieces = tuple(tuple(p) for p in e["pieces"])
         shapes = tuple(PIECE_PANEL[(w, h)] for (_x, _y, w, h) in pieces)
         by.setdefault(e["count"], []).append((pieces, shapes))
     return by
@@ -116,9 +118,11 @@ def _irregularity(pieces: tuple) -> float:
     return (var ** 0.5) / m
 
 
-def _sig(piece_shapes: tuple) -> tuple:
-    """A page's 'look' fingerprint — its multiset of shapes, order-independent."""
-    return tuple(sorted(piece_shapes))
+def _sig(pieces: tuple) -> tuple:
+    """A page's 'look' fingerprint — its actual tiling GEOMETRY, so a layout and
+    its mirror/rotation count as DIFFERENT looks.  That lets variety pick a
+    twin to differ from the previous page at zero flex (same shapes, rearranged)."""
+    return tuple(sorted(tuple(p) for p in pieces))
 
 
 def _best_page(shapes: tuple, locks: tuple, feel: dict | None = None,
@@ -147,7 +151,7 @@ def _best_page(shapes: tuple, locks: tuple, feel: dict | None = None,
         score = (flex
                  - feel["verticality"] * _verticality(piece_shapes) * _W_VERT
                  - feel["irregularity"] * _irregularity(pieces) * _W_IRREG)
-        if avoid_sig is not None and feel["variety"] > 0 and _sig(piece_shapes) == avoid_sig:
+        if avoid_sig is not None and feel["variety"] > 0 and _sig(pieces) == avoid_sig:
             score += feel["variety"] * _W_VARIETY
         if best is None or score < best[0]:
             best = (score, flex, pieces)
@@ -242,5 +246,5 @@ def paginate(panels: list[dict]) -> list[dict]:
         flex = sum(1 for k, gi in enumerate(range(i, j))
                    if not locks[gi] and page_shapes[k] != shapes[gi])
         pages.append({"indices": list(range(i, j)), "pieces": list(pieces), "flex": flex})
-        prev_sig = _sig(page_shapes)
+        prev_sig = _sig(pieces)
     return pages

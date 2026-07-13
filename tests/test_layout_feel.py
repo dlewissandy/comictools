@@ -70,6 +70,25 @@ def test_variety_breaks_consecutive_repeats():
     assert plain >= 2 and varied < plain      # identical pages -> broken up
 
 
+def test_transformations_expand_the_pool_and_feed_variety():
+    # the flow uses ALL tilings (mirror/rotation twins), not just the 354
+    # canonical ones the human picker leafs through
+    from helpers.tilings import all_tilings, swatch_book
+    from helpers.pagination import _best_page, _sig
+    assert len(all_tilings()) > len(swatch_book()) * 2   # ~1125 vs 354
+
+    # and variety can reach a DIFFERENT-geometry twin at the SAME flex — free
+    # visual variety, a mirror of the same shapes
+    shapes = (("landscape", "1x"), ("portrait", "1x"), ("square", "1x"),
+              ("landscape", "1x"), ("square", "1x"), ("portrait", "1x"), ("landscape", "1x"))
+    locks = (False,) * len(shapes)
+    feel = {"density": 0, "verticality": 0, "irregularity": 0, "variety": 1.0}
+    best = _best_page(shapes, locks, feel)
+    twin = _best_page(shapes, locks, feel, avoid_sig=_sig(best[2]))
+    assert _sig(twin[2]) != _sig(best[2])       # a different arrangement
+    assert twin[1] == best[1]                    # at no extra flex
+
+
 def test_a_knob_never_overrides_a_lock():
     # a locked landscape-2x panel keeps its 6x4 even under a maxed verticality
     # knob (which otherwise pulls hard toward portrait); 5 panels, since a 6x4

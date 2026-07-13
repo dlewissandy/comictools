@@ -101,7 +101,21 @@ def swatch_book() -> list[dict]:
     return book
 
 
+@lru_cache(maxsize=1)
+def all_tilings() -> list[dict]:
+    """EVERY exact tiling of the page — the full ~1125, including the mirror and
+    rotation TWINS the swatch book folds away.  The canonical 354 are what a
+    human picker leafs through; the flow uses ALL of them, because a mirror of a
+    layout is a distinct, valid page that adds visual variety at zero cost (the
+    same shapes, re-arranged).  Each is {"pieces": [...reading order], "count"}."""
+    book = [{"pieces": sorted(t, key=lambda p: (p[1], p[0])), "count": len(t)}
+            for t in _enumerate_raw()]
+    book.sort(key=lambda e: (e["count"], e["pieces"]))
+    return book
+
+
 def swatches_for(count: int, spread: int = 0) -> list[dict]:
     """Tilings with exactly `count` pieces (± spread when nearby layouts
-    should show too)."""
+    should show too).  From the CANONICAL book — the picker shows one twin per
+    class; the flow (all_tilings) uses them all."""
     return [e for e in swatch_book() if abs(e["count"] - count) <= spread]
