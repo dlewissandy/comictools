@@ -35,17 +35,13 @@ def view_styled_image(
 
 
     if variant is None or style is None:
-        # Missing data, clear the details and show an error message.
         state.clear_details()
-        primary_key = {
-            "series_id": series_id,
-            "character_id": character_id,
-            "variant_id": variant_id,
-            "style_id": style_id
-        }
-        header("Not Found", 2).style('color: red;')
-        message = f"Styled images for {primary_key} not found."
-        logger.error(message)
+        missing = ("that look" if variant is None else f"the {style_id} style")
+        with state.details:
+            header("Sheet Not Found", 2).style('color: red;')
+            header(f"No styled sheet here — {missing} is gone or was struck.", 4)
+        logger.error(f"Styled images missing: series={series_id} character={character_id} "
+                     f"variant={variant_id} style={style_id}")
         return
     
     variant: CharacterVariant = variant
@@ -69,13 +65,20 @@ def view_styled_image(
         )
     
     with state.details:
+        # THE SHEET WEARS ITS NAME: character, look, and the style it's
+        # inked in — no more anonymous grid
+        from gui.elements import header as _header
+        _header(f"{(variant.name or variant_id).title()} — inked in {style.name.title()}", 0)
+        ui.label(f"{variant.name or variant_id} reference sheets held to this style's line and "
+                 f"palette — pick the one every panel should be drawn from.") \
+            .classes('text-sm text-gray-500')
         full_width_image_selector_grid(
             state=state,
             image_kind_name ="reference image",
             get_selection=get_selection,
             set_selection=set_selection,
             get_images=get_images,
-            upload_image=lambda name, data, mime_type: storage.upload_image(StyledVariant(style_id=style_id,series_id=series_id, character_id=character_id, variant_id=variant_id), name=name, data=data, mime_type=mime_type),
+            upload_image=lambda name, data, mime_type: storage.upload_image(StyledVariant(style_id=style_id, series_id=series_id, character_id=character_id, variant_id=variant_id, image_id=""), name=name, data=data, mime_type=mime_type),
             include_render_button=False,
             aspect_ratio="3/2"
         )

@@ -2066,18 +2066,25 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
 
     # 2) The cast's styled reference sheets keep the characters on-model.
     cast_info = ""
+    char_names: dict[str, str] = {}
     for ref in panel.character_references:
         variant: CharacterVariant = storage.read_object(cls=CharacterVariant, primary_key={
             "series_id": series_id, "character_id": ref.character_id, "variant_id": ref.variant_id})
         if variant is None:
             missing.append(f"variant '{ref.variant_id}' of character '{ref.character_id}'")
             continue
+        # the prompt speaks the character's NAME — a raw id reads as
+        # gibberish and can get lettered straight into the art
+        _c = storage.read_object(cls=CharacterModel, primary_key={
+            "series_id": series_id, "character_id": ref.character_id})
+        char_names[ref.character_id] = (_c.name if _c is not None
+                                        else ref.character_id.replace('-', ' '))
         styled = variant.images.get(scene.style_id)
         if styled and os.path.exists(styled):
             reference_images.append(styled)
         else:
             missing.append(f"styled image of '{ref.character_id}' ({ref.variant_id}) in style '{scene.style_id}' (create_styled_image_for_character_variant)")
-        cast_info += format_character_variant(ref.character_id, variant, 2) + "\n"
+        cast_info += format_character_variant(char_names[ref.character_id], variant, 2) + "\n"
 
     # 3) Panel-specific uploaded reference images.
     reference_images.extend(storage.list_uploads(obj=panel))
@@ -2104,7 +2111,7 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
         b = blk.get(f'balloon/{i}') or {}
         if not b.get('on', 1):
             continue
-        line = f"* **{d.character_id}** ({d.emphasis.value}): {d.text}"
+        line = f"* **{char_names.get(d.character_id, d.character_id.replace('-', ' '))}** ({d.emphasis.value}): {d.text}"
         if b:
             line += f"   [balloon at {_pct(b.get('x', 50))} from left, {_pct(b.get('y', 70))} up"
             if b.get('tx') is not None:

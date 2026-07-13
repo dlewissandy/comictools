@@ -89,7 +89,7 @@ from agentic.tools.assets import (
     create_prop, read_all_props, update_prop_description, delete_prop,
     create_outfit, read_all_outfits, update_outfit_description, delete_outfit,
     compose_character_variant, extract_outfit_from_variant, dedupe_props,
-)
+    swap_variant_outfit)
 from agentic.tools.imaging import generate_prop_reference, generate_outfit_reference
 from agentic.tools.imaging import (
     delete_character_style_example,
@@ -176,6 +176,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_series
     ],
     "character": [
+        # the compose flow's own advice names this tool
+        create_styled_image_for_character_variant,
         # Navigation tools
 
         # Create
@@ -228,6 +230,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_cover_image
     ],
     "issue": [
+        generate_setting_background,
+        create_styled_image_for_character_variant,
         # Create
         create_cover,
         create_scene,
@@ -289,6 +293,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_insert,
     ],
     "panel": [
+        create_styled_image_for_character_variant,
         # Create
         create_prop,
         create_setting,
@@ -347,6 +352,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         delete_publisher_logo_reference_image
     ],
     "scene": [
+        create_styled_image_for_character_variant,
         # Create
         create_panel,
         create_scene_panels,
@@ -476,6 +482,10 @@ TOOLKITS: dict[str,list[Tool]] = {
         read_style,
         read_all_styles,
         read_variant,
+        # Wardrobe: the 'Swap the outfit' chip's real tools
+        swap_variant_outfit,
+        compose_character_variant,
+        update_outfit_description,
         # Update
         update_variant_age,
         update_variant_appearance,
@@ -537,6 +547,10 @@ TOOLKITS["outfit"] = [
     delete_outfit,
     generate_outfit_reference,
     read_all_styles,
+    # the outfit room's own chip: 'Compose a look wearing this outfit'
+    compose_character_variant,
+    read_all_characters,
+    read_all_variants,
 ]
 
 TOOLKITS["setting"] = [

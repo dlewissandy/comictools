@@ -173,6 +173,40 @@ def delete_outfit(wrapper: RunContextWrapper[APPState], series_id: str, outfit_i
     return deleter(wrapper=wrapper, cls=Outfit, primary_key={"series_id": series_id, "outfit_id": outfit_id})
 
 
+@function_tool
+def swap_variant_outfit(wrapper: RunContextWrapper[APPState], series_id: str,
+                        character_id: str, variant_id: str, outfit_id: str) -> str:
+    """
+    Swap WHAT A LOOK WEARS: point the variant at a different Outfit asset.
+    Identity stays; the attire re-syncs to the outfit's description; the
+    result names the reference sheets that just went stale.
+
+    Args:
+        series_id: The series the character belongs to.
+        character_id: The character whose look changes wardrobe.
+        variant_id: The look to re-dress.
+        outfit_id: The Outfit asset to wear (create_outfit or import it first).
+    """
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    variant = storage.read_object(CharacterVariant, {"series_id": series_id,
+        "character_id": character_id, "variant_id": variant_id})
+    if variant is None:
+        return f"Variant '{variant_id}' of '{character_id}' not found."
+    outfit = storage.read_object(Outfit, {"series_id": series_id, "outfit_id": outfit_id})
+    if outfit is None:
+        return f"Outfit '{outfit_id}' not found in series '{series_id}' (create_outfit, or import it)."
+    variant.outfit_id = outfit.outfit_id
+    variant.attire = outfit.description
+    storage.update_object(data=variant)
+    state.is_dirty = True
+    stale = sorted((variant.images or {}).keys())
+    note = (f"  The reference sheet{'s' if len(stale) != 1 else ''} in "
+            f"{', '.join(stale)} are now STALE — re-ink with "
+            f"create_styled_image_for_character_variant." if stale else "")
+    return (f"'{variant.name or variant_id}' now wears '{outfit.name}'.{note}")
+
+
 # ------------------------------------------------------- composed variants
 @function_tool
 def compose_character_variant(wrapper: RunContextWrapper[APPState],
@@ -208,8 +242,23 @@ def compose_character_variant(wrapper: RunContextWrapper[APPState],
     storage: GenericStorage = state.storage
 
     base = storage.read_object(CharacterVariant, {"series_id": series_id, "character_id": character_id, "variant_id": base_variant_id})
+    if base is None and base_variant_id == "base":
+        # THE BASE-LOOK CONTRACT HEALS: created looks may carry UUID ids, so
+        # 'base' is a role, not always an id — resolve by name, or the
+        # character's only look
+        candidates = storage.read_all_objects(CharacterVariant,
+            {"series_id": series_id, "character_id": character_id})
+        base = next((v for v in candidates
+                     if (v.name or "").strip().lower() == "base"), None)
+        if base is None and len(candidates) == 1:
+            base = candidates[0]
     if base is None:
-        return f"Base variant '{base_variant_id}' of '{character_id}' not found — create the character's base look first."
+        looks = storage.read_all_objects(CharacterVariant,
+            {"series_id": series_id, "character_id": character_id})
+        have = ", ".join(f"'{v.name or v.variant_id}' (id: {v.variant_id})" for v in looks) or "none"
+        return (f"Base variant '{base_variant_id}' of '{character_id}' not found — "
+                f"the character's looks are: {have}.  Pass one as base_variant_id, "
+                f"or create the base look first.")
     outfit = storage.read_object(Outfit, {"series_id": series_id, "outfit_id": outfit_id})
     if outfit is None:
         return f"Outfit '{outfit_id}' not found in series '{series_id}' (create_outfit, or import it)."
