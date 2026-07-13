@@ -137,10 +137,10 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
 
             case "all-publishers":
                 return ("Welcome to the studio.  Every series lives under its publisher — pick one, or found a new house.",
-                        ["Create a publisher", "What series do we publish?", "Show me the styles"])
+                        ["Create a publisher", "What series do we publish?"])
 
             case "publisher":
-                return (None, ["Create a new series", "Update the description", "Generate the logo"])
+                return (None, ["Create a new series", "Compare the house styles", "Generate the logo"])
     except Exception as e:  # never let the greeter break the page
         logger.debug(f"coauthor opener skipped: {e}")
     return (None, [])

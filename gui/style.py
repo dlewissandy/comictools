@@ -21,6 +21,17 @@ def view_style(state: APPState):
     storage: GenericStorage = state.storage
     style = storage.read_object(cls=ComicStyle, primary_key={"style_id": selection[-1].id}) if selection and selection[-1].id else None
 
+    if style is None and selection and selection[-1].id:
+        # the style may live in ANOTHER house — open it and carry on, the
+        # same silent switch every publisher link makes
+        from gui.home import open_house_holding
+        style = open_house_holding(storage, ComicStyle, {"style_id": selection[-1].id})
+        if style is not None:
+            try:
+                ui.notify(f"Opened the house that holds {style.name}", type='info')
+            except Exception:
+                pass
+
     # Sanity check
     if style is None:
         msg = f"Style with ID {selection[-1].id} not found."
@@ -31,10 +42,49 @@ def view_style(state: APPState):
 
     # Render the information about the style
     with state.details:
-        with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
+        with ui.row().classes('w-full flex-nowrap items-center').style('padding: 0; margin: 0;'):
             header(style.name.title(), 0)
+
+            # RENAME, right where the name is: one field, saved on the spot
+            def rename_dialog(_=None):
+                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 420px;'):
+                    ui.label('Rename this style').classes('caption-box caption-box-sm')
+                    field = ui.input(value=style.name).classes('w-full q-mt-sm') \
+                        .props('outlined dense autofocus')
+
+                    def save():
+                        new_name = (field.value or '').strip()
+                        if not new_name:
+                            ui.notify('A style needs a name.', type='warning')
+                            return
+                        old_name, style.name = style.name, new_name
+                        storage.update_object(style)
+                        dlg.close()
+                        # the coauthor hears about it — a silent rename would
+                        # leave the Art Director speaking the old name
+                        from gui.light_table import table_receipt
+                        table_receipt(state, f"🏷 renamed the **{old_name}** style "
+                                             f"to **{new_name}**")
+                        from gui.selection import SelectionItem
+                        state.change_selection(new=[*state.selection[:-1],
+                            SelectionItem(name=new_name, id=style.style_id,
+                                          kind=state.selection[-1].kind)])
+                    field.on('keydown.enter', lambda _: save())
+                    ui.button('Save', icon='save').props('unelevated dense no-caps') \
+                        .classes('q-mt-sm').on('click', lambda _: save())
+                dlg.open()
+            crud_button(kind=CrudButtonKind.UPDATE, action=rename_dialog, size=1)
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current style."),size=1)
+
+            # STRIKE, not a chat errand: the style goes to the wastebasket
+            # with a way back (the deleter walks the room up to the house
+            # itself — the struck style is the current selection)
+            from gui.strike import strike
+            from agentic.tools.deleter import delete_style as _del_style
+            crud_button(kind=CrudButtonKind.DELETE, size=1,
+                        action=lambda _: strike(state, _del_style,
+                            {"style_id": style.style_id},
+                            f"the style '{style.name}'"))
 
         markdown_field_editor(
             state=state,

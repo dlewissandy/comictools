@@ -64,7 +64,13 @@ def selection_to_url(selection: list[SelectionItem]) -> str | None:
         if item.kind == SelectedKind.SERIES:
             url = f"/series/{quote(str(item.id))}"
         elif item.kind == SelectedKind.STYLE:
-            url = f"/styles/{quote(str(item.id))}"
+            # canonical under the house; any other trail (a stale persisted
+            # selection, a publisher-less repo) falls back to the legacy
+            # alias, which always parses back through the house
+            if url.startswith("/publishers/") and url.count("/") == 2:
+                url = url.rstrip("/") + f"/style/{quote(str(item.id))}"
+            else:
+                url = f"/styles/{quote(str(item.id))}"
         elif item.kind == SelectedKind.PUBLISHER:
             url = f"/publishers/{quote(str(item.id))}"
         elif item.kind in _SEGMENTS:
@@ -103,6 +109,31 @@ def series_ancestry(storage: GenericStorage, sid: str) -> list[SelectionItem]:
     return sel
 
 
+def house_ancestry(storage: GenericStorage) -> list[SelectionItem]:
+    """Publishers → the open house's publisher (the one publisher this repo
+    holds).  The trail every house-owned thing hangs from."""
+    from schema import Publisher
+    sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
+    try:
+        pubs = storage.read_all_objects(Publisher)
+        if pubs:
+            sel.append(SelectionItem(name=pubs[0].name, id=pubs[0].publisher_id,
+                                     kind=SelectedKind.PUBLISHER))
+    except Exception as e:
+        logger.debug(f"routes: open-house publisher resolution skipped: {e}")
+    return sel
+
+
+def style_ancestry(storage: GenericStorage, style_id: str) -> list[SelectionItem]:
+    """THE ONE TRAIL to a style: Publishers → the house → the style.  A
+    house's styles are its OWN copies — they belong to the publisher the
+    way its series do."""
+    from schema import ComicStyle
+    sel = house_ancestry(storage)
+    sel.append(_named(storage, SelectedKind.STYLE, style_id, ComicStyle, {"style_id": style_id}))
+    return sel
+
+
 def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[SelectionItem] | None:
     """
     Parse URL path segments into a selection.  Returns None for paths that do
@@ -118,11 +149,12 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
         return sel
 
     if parts[0] == "styles":
-        sel = [SelectionItem(name="Styles", id=None, kind=SelectedKind.ALL_STYLES)]
+        # THE RETIRED ROOM: styles live in the house now — old links walk
+        # the one trail to the style itself, or to the house's rack
         if len(parts) == 1:
-            return sel
+            return house_ancestry(storage)
         if len(parts) == 2:
-            return sel + [_named(storage, SelectedKind.STYLE, parts[1], ComicStyle, {"style_id": parts[1]})]
+            return style_ancestry(storage, parts[1])
         return None
 
     if parts[0] == "library" and len(parts) == 1:
@@ -132,8 +164,12 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
         sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
         if len(parts) == 1:
             return sel
+        sel.append(_named(storage, SelectedKind.PUBLISHER, parts[1], Publisher, {"publisher_id": parts[1]}))
         if len(parts) == 2:
-            return sel + [_named(storage, SelectedKind.PUBLISHER, parts[1], Publisher, {"publisher_id": parts[1]})]
+            return sel
+        if len(parts) == 4 and parts[2] == "style":
+            sel.append(_named(storage, SelectedKind.STYLE, parts[3], ComicStyle, {"style_id": parts[3]}))
+            return sel
         return None
 
     if parts[0] != "series" or len(parts) < 2:

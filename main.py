@@ -716,6 +716,20 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         suggestions_row = suggestions_row,
      )
 
+    # STYLES MOVED INTO THE HOUSE: threads saved under the retired room's
+    # addresses re-key to the canonical trail so no conversation orphans
+    try:
+        from schema import Publisher as _Pub
+        _pubs = LocalStorage(base_path="data").read_all_objects(_Pub)
+        _pid = _pubs[0].publisher_id if _pubs else None
+        for _old, _new in list(
+                (k, (f"/publishers/{_pid}" if k == "/styles"
+                     else f"/publishers/{_pid}/style/{k.split('/', 2)[2]}"))
+                for k in conversations if _pid and k.startswith("/styles")):
+            conversations.setdefault(_new, conversations.pop(_old))
+    except Exception as e:
+        logger.debug(f"legacy styles-thread migration skipped: {e}")
+
     state.conversations = conversations
     if messages is None:
         # the selection's own thread; fall back to the legacy single history

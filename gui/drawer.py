@@ -69,12 +69,16 @@ def _catalog(storage: GenericStorage):
                    f"e.g. compose a character variant wearing it.  Import it first if needed.",
                    f"/series/{sid}/outfit/{o.outfit_id}")
 
+    from schema import Publisher
+    pubs = storage.read_all_objects(Publisher)
+    house = pubs[0] if pubs else None
     for style in storage.read_all_objects(ComicStyle, order_by="name"):
         img = style.image.get("art") if isinstance(style.image, dict) else None
         img = img if img and os.path.exists(img) else None
-        yield ("style", style.name, "studio-wide", None, style.style_id, img,
+        yield ("style", style.name, (house.name if house else "the house"), None, style.style_id, img,
                f"Use the comic style '{style.name}' (id: {style.style_id}) here.",
-               f"/styles/{style.style_id}")
+               f"/publishers/{house.publisher_id}/style/{style.style_id}" if house
+               else f"/styles/{style.style_id}")
 
 
 def build_asset_drawer(state):
@@ -157,7 +161,7 @@ def build_asset_drawer(state):
             def tile(kind, title, subtitle, sid, aid, img, use_msg, url):
                 # a tile lays its asset straight on the light table when a
                 # board (panel or cover) is open and the asset is from its
-                # series (styles are studio-wide); otherwise it asks the
+                # series (styles are the house's own); otherwise it asks the
                 # coauthor
                 direct = (cur_panel is not None
                           and kind in ("character", "variant", "setting", "prop", "style")

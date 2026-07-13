@@ -21,16 +21,11 @@ The studio is one room, split down the middle.
 - On the **left** is whatever you're working on — right now, the lobby. This side always shows the *thing*: a character, a scene, a page.
 - On the **right** is the **coauthor** — your collaborator. You don't operate this software so much as *talk to it*. There are no "Generate" buttons. You ask, and things happen.
 
-<p align="center">
-  <img src="screenshots/workspace.png" alt="The Comic Studio workspace: structured editing on the left, the AI conversation on the right" />
-</p>
-<p align="center"><em>The whole studio: what you're working on at left, your collaborator at right.</em></p>
-
 Notice that the coauthor speaks first. Every place you go, it opens with a line about where you are and what's worth doing next, and offers a few **chips** — little suggestions you can tap to start. Tap one and it says that thing for you; or just type in the box at the bottom and talk.
 
 A few landmarks you'll use constantly:
 
-- The **breadcrumb** across the top is your trail: *Series › Issue › Scene › Panel*. The very first crumb is a door — tap its arrow to step between the studio's four rooms: **Publishers**, **Series**, **Styles**, and the **Library**.
+- The **breadcrumb** across the top is your trail: *Series › Issue › Scene › Panel*. The very first crumb is a door — tap its arrow to step between the studio's three rooms: **Publishers**, **Series**, and the **Library**.
 - **`Cmd`/`Ctrl-K`** opens the **command palette** — start typing the name of anything in your studio and jump straight to it. Can't find a match? Whatever you typed becomes a question to the coauthor. It's the fastest way to get anywhere.
 - Up in the header sits a **wastebasket** (everything you've deleted, one click from coming back) and a small **spend meter** (today's renders and roughly what they cost — image generation isn't free, and the studio keeps you honest about it).
 
@@ -71,7 +66,7 @@ As you work, commit whenever you'd like a save point: `git add -A && git commit 
 
 ## Step 3 — Choose a look
 
-A comic needs a look before it needs art, so that every panel comes out of the same world. Step through the first-crumb door into **Styles**.
+A comic needs a look before it needs art, so that every panel comes out of the same world. Open your house's page — right under its series hangs the **House Styles** rack. These are *your* copies, living in *your* repo: rename them, retune them, strike the ones you'll never use. Edit them to your heart's content.
 
 Your house came with a few starter styles. Open one and you'll see it's really three styles working together: an **art style** (linework, inking, palette), a **character style** (proportions, the way faces are drawn), and a set of **dialog styles** — six kinds of lettering: normal speech, whisper, shout, thought, sound-effect, and narration.
 
@@ -85,21 +80,12 @@ The coauthor builds it. Then, before you commit, see it:
 
 It renders sample art in that style so you can judge the look with your eyes, not your imagination. Nudge it — *"less green, more rain"* — until it's right. This is the anchor everything else hangs on, so it's worth a minute.
 
-<p align="center">
-  <img src="screenshots/style-vintage.jpg" width="220" alt="A scene in a vintage four-color style" />
-  <img src="screenshots/style-watercolor.jpg" width="220" alt="The same scene in a watercolor style" />
-  <img src="screenshots/style-anime.jpg" width="220" alt="The same scene in a modern anime style" />
-</p>
-<p align="center"><em>One scene, three different styles. Whatever you choose here flows into every panel you'll draw.</em></p>
-
-Part of the style is how it *letters* — six distinct treatments so a whisper never looks like a scream:
+Here's the rack itself. Every tile is the *same scene* rendered a different way, so you're comparing looks, not guessing — tap the **＋** to start a new one, and the Art Director's chips include *"Compare the house styles."*
 
 <p align="center">
-  <img src="screenshots/dialog-chat.jpg" width="220" alt="A chat speech bubble" />
-  <img src="screenshots/dialog-thought.jpg" width="220" alt="A thought bubble" />
-  <img src="screenshots/dialog-shout.jpg" width="220" alt="A shout bubble" />
+  <img src="screenshots/ui-house-styles.png" alt="The House Styles rack: a gallery where each tile is the same hot-air-balloon scene rendered in a different style — Vintage Four Color, Van Gogh, Stained Glass, Concept Sketch, Origami" width="780" />
 </p>
-<p align="center"><em>Dialog styles — normal speech, thought, shout (plus whisper, sound-effect, and narration).</em></p>
+<p align="center"><em>The house's style rack — one scene, many looks. Part of each style is how it <em>letters</em>, too: six bubble treatments (speech, whisper, shout, thought, sound-effect, narration) so a whisper never looks like a scream.</em></p>
 
 ---
 
@@ -117,14 +103,14 @@ Now the important part — the thing that keeps Vera looking like Vera in every 
 
 > **You:** Render her reference sheet.
 
-The studio generates a **model sheet** for that variant in your style — turnarounds and expressions, a single source of truth for how she looks. From here on, whenever Vera appears in a panel, the studio hands her sheet to the renderer as a reference. That's why panel 3 and panel 9 show the same woman.
+The studio generates a **model sheet** for that variant in your style — a single source of truth for how she looks. From here on, whenever Vera appears in a panel, the studio hands her sheet to the renderer as a reference. That's why panel 3 and panel 9 show the same woman.
+
+Here's the **variant's workbench**: the structured fields the studio draws from, with the Character Designer standing by. Her chips do the work — **"Render the reference sheet," "Swap the outfit," "Extract this look's outfit."**
 
 <p align="center">
-  <img src="screenshots/character-vintage.jpg" width="220" alt="A character variant rendered in a vintage style" />
-  <img src="screenshots/character-watercolor.jpg" width="220" alt="The same character variant in a watercolor style" />
-  <img src="screenshots/character-anime.jpg" width="220" alt="The same character variant in an anime style" />
+  <img src="screenshots/ui-variant.png" alt="The variant view for 'Vera Kell (Trenchcoat)': structured fields — general description, race, gender, age, height, physical appearance, attire, behavior — with a rendered figure under Styled Images and the Character Designer's 'Render the reference sheet' chip" width="780" />
 </p>
-<p align="center"><em>The same character variant, held consistent across three styles — turnarounds and expressions. This is what a reference sheet buys you.</em></p>
+<p align="center"><em>A variant's workbench. Describe who they are (or let the coauthor draft it), then tap <strong>Render the reference sheet</strong> — the drawing it produces is what keeps this character consistent in every panel to come.</em></p>
 
 Reusable wardrobe and props work the same way — an **outfit** or a **prop** you build once and dress your cast in — but for a first comic, one character and one variant is plenty. Keep moving.
 
@@ -162,6 +148,11 @@ This is where the comic starts to take shape. Ask the studio to do the first pas
 
 The Editor reads your script and lays out the scenes — each one a beat of the story with a place and a purpose. Open one and you're standing in the studio's **beat board** for that scene. It shows you, at a glance, what the scene still needs:
 
+<p align="center">
+  <img src="screenshots/ui-beat-board.png" alt="The beat board for 'Scene 1: The Office, After Midnight': a Production strip with an amber 'artwork 0/3' pill plus a 'Vera's Office' setting chip and a 'Vera Kell' cast chip, the scene's story, and a '3 panels — read them in the book' link" width="780" />
+</p>
+<p align="center"><em>The beat board. Amber pills are what's still missing — tap "artwork 0/3" to render the panels. Solid chips are what's set: the setting (Vera's Office) and the cast (Vera Kell). The Layout Artist opens with exactly what's left: "3 panels, 3 unrendered."</em></p>
+
 - A **setting** — tap the amber *setting* chip and pick "Vera's office" from the little rack of your sets (or ask for a brand-new one).
 - A **cast** — tap *cast* and tell the coauthor who's in this scene. Vera's chip appears, wearing her name.
 - The **story** of the scene, editable right there.
@@ -181,6 +172,11 @@ The coauthor proposes the beats — a wide establishing shot, a push-in on Vera'
 
 The book *is* your comic — real spreads, lying open on the table, that you read and edit in place. A **detail dial** in the masthead lets you read at three altitudes: **stories**, **scenes**, or **beats**. Right now you're at *beats*, watching your panels flow across the pages. Reorder a beat with `‹ ›`, edit any line with `✏️`, cut one with `✕`. The book reflows as you go.
 
+<p align="center">
+  <img src="screenshots/ui-open-book.png" alt="The open book for Issue 1 'The Rainmaker': the detail dial reads SCRIPT / SCENES / PANELS / PRINT, a '3 things before press' ledger and a READ button sit in the masthead, the noir cover 'The Long Way Down' lies open, and the Editor says the production ledger reads 0 of 3 panels inked" width="900" />
+</p>
+<p align="center"><em>The open book. The detail dial (SCRIPT · SCENES · PANELS · PRINT) sets your altitude; the cover lies open as the first page. The Editor greets you with the production ledger — "0 of 3 panels inked" — and offers to work through it. "3 things before press" counts exactly what stands between you and a bound issue.</em></p>
+
 Tap into a single beat and you arrive at the workbench — the light table.
 
 ---
@@ -192,7 +188,14 @@ This is the heart of the studio, and the part that feels most like magic.
 A panel isn't one wish typed into a box. It's **staged** from parts, like an animator's light table — transparent acetates stacked in comic-craft order: **letters over foreground over figures over background.**
 
 <p align="center">
-  <img src="diagrams/light-table.svg" alt="The light table: a master background plus posed figures plus letters assemble into a live rough, which you ink to render a real take" width="900" />
+  <img src="screenshots/ui-light-table.png" alt="The light table for 'Panel 1: Wide — The Office': the acetate stack lists Letters, the Vera Kell figure, and the Vera's Office background; an 'INK THIS ROUGH' button sits below; at right the assembled rough shows Vera in the neon-lit office with her speech balloon" width="900" />
+</p>
+<p align="center"><em>The real light table. Left, the acetate <strong>stack</strong> — Letters, the Vera Kell figure, the Vera's Office background — each with an eye to toggle. Right, the live <strong>rough</strong> the parts compose into. Below it, the one button the whole table is built for: <strong>INK THIS ROUGH</strong>.</em></p>
+
+And the idea behind it — a panel is a *sum of layers*, and you see the rough before you ever spend a cent rendering it:
+
+<p align="center">
+  <img src="diagrams/light-table.svg" alt="The light table concept: a master background plus posed figures plus letters assemble into a live rough, which you ink to render a real take" width="900" />
 </p>
 
 Here's what's in front of you:
@@ -251,13 +254,10 @@ You made a comic. Go read it.
 
 The studio has a **reading room** — the bound issue held open in your hands, two pages to a spread, the cover alone up front, arrow keys to turn the page. No editing tools, no chat, just your book. And here's the quiet guarantee: what you read is composed with the *exact same math* that binds the print file. **What you read is the book.**
 
-And it opens on its cover — the first thing a reader sees, made the same way everything else was:
-
 <p align="center">
-  <img src="screenshots/cover-witchlight.jpg" width="260" alt="An AI-generated comic cover, Wonders of the Witchlight" />
-  <img src="screenshots/cover-example.png" width="260" alt="An AI-generated comic cover, Joey: Triumphs and Tumbles" />
+  <img src="screenshots/ui-reader.png" alt="The reading room: a dark full-screen stage with the bound noir cover 'The Long Way Down' number 1 held open, a 'reading a proof — 3 things before press' masthead, and a page-turn arrow at the edge" width="900" />
 </p>
-<p align="center"><em>Covers, bound and ready — trade dress, title, and all, composed through conversation.</em></p>
+<p align="center"><em>The reading room. Two pages to a spread, arrow keys to turn — the cover alone up front. Nothing but your book.</em></p>
 
 When you're ready to send it out into the world, export it:
 

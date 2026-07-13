@@ -138,6 +138,28 @@ def view_publisher(state: APPState):
             )
             packer.finalize()
 
+        # THE STYLE RACK: the house's styles — its OWN copies, edit them to
+        # your heart's content.  Nothing outside this repo is ever used.
+        from schema import ComicStyle
+        style_packer = PagePacker(12)
+        with ui.element('div').classes('mosaic-host'), ui.element('div').classes('comic-mosaic w-full'):
+            view_all_instances(
+                state=state,
+                get_instances=lambda: storage.read_all_objects(ComicStyle, order_by="name"),
+                get_image_locator=lambda st: st.image.get('art') if isinstance(st.image, dict) else None,
+                kind="style",
+                aspect_ratio="1/1",
+                packer=style_packer, variants=[(3, 3)],
+                # a style's art is abstract — its NAME must be readable
+                # without hovering
+                card_overlay=lambda st: ui.label(st.name.title())
+                    .classes('caption-box caption-box-sm')
+                    .style('position: absolute; bottom: 6px; left: 6px; z-index: 6;'),
+                overlap_caption=lambda: caption_action("House Styles", _CK.CREATE,
+                    lambda _: post_user_message(state, "I would like to create a new comic book style."), 3)
+            )
+            style_packer.finalize()
+
         # Below that we have a full width row for editing the description of the
         # publisher's logo
         with view_attributes(

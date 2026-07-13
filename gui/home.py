@@ -28,6 +28,22 @@ def view_all_styles(state: APPState):
                     .classes('caption-box caption-box-sm')
                     .style('position: absolute; bottom: 6px; left: 6px; z-index: 6;'))
         
+def open_house_holding(storage, cls, primary_key) -> object | None:
+    """EVERY HOUSE ITS OWN REPO: the thing lives in another house — find it,
+    open that house (the ./data symlink re-points), and return the object
+    re-read through the open storage.  None when no house holds it."""
+    from storage import registry
+    from storage.local import LocalStorage as _LS
+    for h in registry.registered():
+        if h['slug'] == registry.open_slug():
+            continue
+        if _LS(base_path=h['path']).read_object(cls, primary_key=primary_key) is not None:
+            if registry.set_open(h['slug']):
+                return storage.read_object(cls, primary_key=primary_key)
+            break
+    return None
+
+
 def all_house_publishers(storage) -> list[Publisher]:
     """Every publisher on the wall — one per registered house (each house
     is a git repo holding exactly one publisher).  Falls back to the open

@@ -580,9 +580,10 @@ def breadcrumb_selector(state: APPState):
     # arrow ONLY opens the menu — every root room is listed, current marked
     primary_selection = ui.dropdown_button(selection[0].name.title(),
                                            split=True, auto_close=True)
+    # styles live IN the house (each repo edits its own copies), so the
+    # rack is on the publisher's page — no global Styles room
     rooms = (("Publishers", SelectedKind.ALL_PUBLISHERS),
              ("Series", SelectedKind.ALL_SERIES),
-             ("Styles", SelectedKind.ALL_STYLES),
              ("Library", SelectedKind.LIBRARY))
     with primary_selection:
         for label, kind in rooms:

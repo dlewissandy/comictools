@@ -24,7 +24,6 @@ def _index(storage):
     # THE ROOT ROOMS themselves are jumpable
     for icon, label, kind in (("🏢", "Publishers", K.ALL_PUBLISHERS),
                               ("📚", "Series", K.ALL_SERIES),
-                              ("🎨", "Styles", K.ALL_STYLES),
                               ("🗄️", "Library", K.LIBRARY)):
         entries.append((icon, label, "room", [S(name=label, id=None, kind=kind)]))
     from gui.routes import series_ancestry
@@ -61,10 +60,11 @@ def _index(storage):
         for o in storage.read_all_objects(Outfit, {"series_id": sid}):
             entries.append(("🧥", o.name, f"outfit · {series.name}",
                             s_sel + [S(name=o.name, id=o.outfit_id, kind=K.OUTFIT)]))
-    styles_root = [S(name="Styles", id=None, kind=K.ALL_STYLES)]
+    from gui.routes import style_ancestry
     for style in storage.read_all_objects(ComicStyle, order_by="name"):
-        entries.append(("🎨", style.name, "style",
-                        styles_root + [S(name=style.name, id=style.style_id, kind=K.STYLE)]))
+        trail = style_ancestry(storage, style.style_id)
+        house = trail[1].name if len(trail) > 2 else "the house"
+        entries.append(("🎨", style.name, f"style · {house}", trail))
     pubs_root = [S(name="Publishers", id=None, kind=K.ALL_PUBLISHERS)]
     for pub in storage.read_all_objects(Publisher, order_by="name"):
         entries.append(("🏢", pub.name, "publisher",

@@ -139,11 +139,12 @@ async def test_asset_catalog_drawer(user: User) -> None:
     await user.should_see("in the studio")           # header with total count
     await user.should_see("Fortune Teller Tent")     # a setting tile
 
-    # filter by type: styles shows studio-wide styles, hides the props
+    # filter by type: styles shows the house styles, hides the props
     from nicegui import ui as _ui
     kind_toggle = user.find(_ui.toggle).elements.pop()
     kind_toggle.set_value("style")
-    await user.should_see("studio-wide")
+    # styles wear their HOUSE's name — 'studio-wide' is the retired claim
+    await user.should_see("DND NERDS")
     await user.should_not_see("cracked crystal ball")
     # props: drawn from the settings' prop lists
     kind_toggle.set_value("prop")
@@ -558,3 +559,116 @@ async def test_a_posters_bench_lays_no_letter_acetates(user: User) -> None:
     blocks = [e for e in user.client.elements.values()
               if 'rough-letterblock' in str(getattr(e, "_classes", []))]
     assert blocks == [], "a poster's brief never rides the table as letters"
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_styles_live_in_the_house(user: User) -> None:
+    """USER RULING: styles are the house's own copies.  The rack hangs on
+    the publisher's page, each style's trail runs through the house, and
+    the global Styles room is gone from the crumb and the palette."""
+    main.LocalStorage = _TmpStorage
+    from schema import Publisher, ComicStyle
+    storage = _TmpStorage()
+    pub = storage.read_all_objects(Publisher)[0]
+    styles = storage.read_all_objects(ComicStyle)
+    assert styles, "the fixture house owns styles"
+
+    json.dump({"selection": [
+        {"name": "Publishers", "id": None, "kind": "all-publishers"},
+        {"name": pub.name, "id": pub.publisher_id, "kind": "publisher"}],
+        "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
+    await user.open("/")
+    # the rack: every house style hangs on the publisher's page, with a door
+    await user.should_see("House Styles")
+    await user.should_see(styles[0].name.title())
+
+    # the crumb's room menu no longer offers a global Styles room
+    from nicegui import ui as _ui
+    menu_items = [str(getattr(e, "text", "")) for e in user.client.elements.values()
+                  if e.__class__.__name__ == "Item" or "Item" in e.__class__.__name__]
+    assert not any(t.strip("✓ ") == "Styles" for t in menu_items), \
+        "the global Styles room is retired"
+
+
+def test_style_trail_runs_through_the_house():
+    """style_ancestry and both URL grammars agree: Publishers → house → style."""
+    from gui.routes import style_ancestry, selection_from_path, selection_to_url
+    from schema import Publisher, ComicStyle
+    storage = _TmpStorage()
+    pub = storage.read_all_objects(Publisher)[0]
+    st = storage.read_all_objects(ComicStyle)[0]
+
+    trail = style_ancestry(storage, st.style_id)
+    assert [i.kind.value for i in trail] == ["all-publishers", "publisher", "style"]
+    assert trail[1].id == pub.publisher_id and trail[2].name == st.name
+
+    url = selection_to_url(trail)
+    assert url == f"/publishers/{pub.publisher_id}/style/{st.style_id}"
+    assert [i.kind.value for i in selection_from_path(storage, url.strip("/").split("/"))] \
+        == ["all-publishers", "publisher", "style"]
+    # the OLD address still finds the style — through the house
+    legacy = selection_from_path(storage, ["styles", st.style_id])
+    assert [i.kind.value for i in legacy] == ["all-publishers", "publisher", "style"]
+    # and the retired room's address lands on the house itself
+    room = selection_from_path(storage, ["styles"])
+    assert [i.kind.value for i in room] == ["all-publishers", "publisher"]
+
+
+def test_palette_styles_wear_their_house():
+    """The palette lists styles under their publisher — no Styles root room."""
+    from gui.palette import _index
+    storage = _TmpStorage()
+    entries = _index(storage)
+    rooms = [label for _i, label, sub, _s in entries if sub == "room"]
+    assert "Styles" not in rooms
+    style_rows = [(label, sub, sel) for _i, label, sub, sel in entries if sub.startswith("style ·")]
+    assert style_rows, "styles are still jumpable"
+    for _label, _sub, sel in style_rows:
+        assert [i.kind.value for i in sel] == ["all-publishers", "publisher", "style"]
+
+
+def test_non_canonical_style_trails_still_share():
+    """A stale [Styles-room, style] trail or a publisher-less house must
+    serialize to the legacy /styles/<id> alias — an address that always
+    parses back through the house — never an unparseable URL."""
+    from gui.routes import selection_to_url, selection_from_path
+    from gui.selection import SelectionItem as S, SelectedKind as K
+    storage = _TmpStorage()
+    from schema import ComicStyle
+    st = storage.read_all_objects(ComicStyle)[0]
+
+    legacy = [S(name="Styles", id=None, kind=K.ALL_STYLES),
+              S(name=st.name, id=st.style_id, kind=K.STYLE)]
+    url = selection_to_url(legacy)
+    assert url == f"/styles/{st.style_id}"
+    assert selection_from_path(storage, url.strip("/").split("/")) is not None
+
+    homeless = [S(name="Publishers", id=None, kind=K.ALL_PUBLISHERS),
+                S(name=st.name, id=st.style_id, kind=K.STYLE)]
+    url = selection_to_url(homeless)
+    assert url == f"/styles/{st.style_id}", "no publisher hop — fall back to the alias"
+    assert selection_from_path(storage, url.strip("/").split("/")) is not None
+
+
+def test_striking_a_style_walks_home_to_the_house():
+    """The deleter returns the 'Deleted' prefix strike() gates undo on, and
+    walks the selection up to the house itself."""
+    import asyncio as _asyncio
+    from types import SimpleNamespace
+    from agentic.tools.deleter import delete_style
+    from gui.routes import style_ancestry
+    from schema import ComicStyle
+    storage = _TmpStorage()
+    st = storage.read_all_objects(ComicStyle)[0]
+
+    moves = []
+    state = SimpleNamespace(
+        storage=storage, selection=style_ancestry(storage, st.style_id),
+        change_selection=lambda new: moves.append(new))
+    out = str(_asyncio.run(delete_style.on_invoke_tool(
+        SimpleNamespace(context=state), json.dumps({"style_id": st.style_id}))))
+    assert out.startswith("Deleted"), out
+    assert moves and [i.kind.value for i in moves[-1]] == ["all-publishers", "publisher"], \
+        "the room walks up to the house, not the wall"
+    assert storage.read_object(ComicStyle, {"style_id": st.style_id}) is None
