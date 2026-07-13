@@ -11,7 +11,9 @@ from gui.selection import (SelectionItem)
 from messaging import send
 from storage.local import LocalStorage
 from helpers.render_queue import orphaned_slips as _orphaned_slips
-_ORPHAN_SLIPS = _orphaned_slips()
+# listed at import, BURNED only after the report lands in a window —
+# a crash between import and first paint never eats the labels
+_ORPHAN_SLIPS = _orphaned_slips(burn=False)
 load_dotenv()
 
 # ---------------------------------------------------------
@@ -647,9 +649,10 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     """
     Build the studio page.   With no override, the page restores the last
     selection and chat history from the state file (the classic root behavior).
-    With an override (a deep-linked URL), the page opens on that selection with
-    a fresh conversation and does NOT persist over the root window's state —
-    each window carries its own context (see UX_ideas.md).
+    With an override (a deep-linked URL), the page opens on that selection
+    with the OBJECT'S OWN conversation from the shared store; every window
+    persists (conversation writes merge by object key, never clobbering
+    another window's chats).
     """
     # INITIALIZE THE LOGGER
     init_logger()
@@ -673,14 +676,17 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     # READ THE STATE DATA FROM FILE
     state_data = json.load(open(STATE_FILEPATH, 'r')) if os.path.exists(STATE_FILEPATH) else {}
 
-    # SYNC THE APPLICATION STATE WITH THE STORED VALUES
-    conversations = state_data.get('conversations', {}) if selection_override is None else {}
+    # SYNC THE APPLICATION STATE WITH THE STORED VALUES.  Every window
+    # reads the shared conversation store — a deep link opens the OBJECT'S
+    # existing conversation, not a blank one; only the restored selection
+    # is root-window behavior
+    conversations = state_data.get('conversations', {})
     if selection_override is None:
         selection = [SelectionItem(**item) for item in state_data.get('selection', DEFAULT_SELECTION)]
         messages = None  # resolved from the conversation store below
     else:
         selection = selection_override
-        messages = []
+        messages = None  # the object's own thread, same as the root
     dark_value = state_data.get('dark_mode', False)
     darkswitch.value = dark_value
 
@@ -692,7 +698,8 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         send_button = send_button,
         selection = [] ,  # Initially set selection to empty
         storage = LocalStorage(base_path="data"),
-        persist = selection_override is None,
+        persist = True,   # THE STUDIO REMEMBERS from every window —
+                           # writes merge by object, never clobber
         suggestions_row = suggestions_row,
      )
 
@@ -825,6 +832,9 @@ def build_page(selection_override: list[SelectionItem] | None = None):
             state.history.scroll_to(percent=100)
         except Exception as e:
             logger.debug(f"orphan-slip report skipped: {e}")
+        else:
+            # the report landed — now the dead slips can burn
+            _orphaned_slips(burn=True)
     ui.timer(2.5, _report_orphans, once=True)
 
     # PASTE AN IMAGE anywhere: boards offer take/plate/reference; other

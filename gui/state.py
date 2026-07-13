@@ -1,3 +1,5 @@
+import os
+
 from nicegui import ui
 from gui.avatars import comic_chat_message
 from loguru import logger
@@ -517,22 +519,42 @@ class APPState:
 
 
     def write(self):
-        if not getattr(self, "persist", True):
-            logger.debug("Deep-linked window: not persisting state to file")
-            return
+        """THE STUDIO REMEMBERS from EVERY window: conversations are keyed
+        by canonical object URL and MERGED into the state file (never
+        wholesale-overwritten), so a deep-linked window's chats survive
+        right alongside the root's.  Selection and the lights are simply
+        last-writer-wins — a single author's 'where was I' is wherever
+        they last were.  The write is atomic and lock-guarded."""
         logger.debug("Saving state to file")
+        import json
+        import threading
+        lock = getattr(APPState, "_write_lock", None)
+        if lock is None:
+            lock = threading.Lock()
+            APPState._write_lock = lock
 
         conversations = dict(self.conversations)
         conversations[self.conversation_key(self.selection)] = self.get_transcript()
-        state_json = {
-            "selection": [item.model_dump() for item in self.selection],
-            "messages":  self.get_transcript(),   # legacy field
-            "conversations": conversations,
-            "dark_mode": self.dark_mode
-        }
-        with open(STATE_FILEPATH, "w") as f:
-            import json
-            json.dump(state_json, f, indent=2)
+        with lock:
+            on_disk = {}
+            try:
+                with open(STATE_FILEPATH) as f:
+                    on_disk = json.load(f)
+            except (OSError, ValueError):
+                pass
+            merged = dict(on_disk.get("conversations", {}))
+            merged.update(conversations)
+            state_json = {
+                "selection": [item.model_dump() for item in self.selection],
+                "messages":  self.get_transcript(),   # legacy field
+                "conversations": merged,
+                "dark_mode": self.dark_mode,
+            }
+            from uuid import uuid4
+            tmp = f"{STATE_FILEPATH}.{uuid4().hex[:6]}.tmp"
+            with open(tmp, "w") as f:
+                json.dump(state_json, f, indent=2)
+            os.replace(tmp, STATE_FILEPATH)
 
     def init_breadcrumbs(self):
         """

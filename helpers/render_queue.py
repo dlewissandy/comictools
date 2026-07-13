@@ -40,7 +40,7 @@ def _slip_burn(path: str) -> None:
         pass
 
 
-def orphaned_slips(older_than_seconds: float = 900) -> list[str]:
+def orphaned_slips(older_than_seconds: float = 900, burn: bool = True) -> list[str]:
     """Labels of renders that were on the drawing board when the studio
     last went down — call at startup and TELL the author.
 
@@ -60,7 +60,8 @@ def orphaned_slips(older_than_seconds: float = 900) -> list[str]:
         if now - payload.get("queued_at", 0) < older_than_seconds:
             continue   # young: likely alive in another instance — leave it
         labels.append(payload.get("label", name))
-        _slip_burn(path)
+        if burn:
+            _slip_burn(path)
     return labels
 
 

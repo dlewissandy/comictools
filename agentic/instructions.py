@@ -297,6 +297,11 @@ SPEAK_ONLY_DONE_WORK = """
         proof.  If you run out of turns or a tool fails, say plainly where
         you stopped and what remains; the author can say 'go on'.  Never
         invent placeholder names ('New Publisher', 'Untitled') — ask.
+
+        BARE APPROVALS: if the author replies with a bare yes/approve/go
+        ahead and THIS conversation holds no pending proposal from you,
+        ASK what they are approving — never guess and never act on an
+        approval meant for something else.
 """
 
 

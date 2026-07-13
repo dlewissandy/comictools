@@ -96,3 +96,24 @@ def test_panel_face_is_brief_rough_or_print(storage):
     assert rough_face(storage, dressed, scenes[dressed.scene_id]) == face, "cached"
     if bare is not None:
         assert rough_signature(bare, scenes[bare.scene_id]) is None, "a bare table shows the brief"
+
+
+def test_state_write_merges_conversations(tmp_path, monkeypatch):
+    """THE STUDIO REMEMBERS from every window: writes merge conversations
+    by object key — one window can never clobber another's chats."""
+    import json as j
+    import types
+    import gui.state as gs
+    monkeypatch.setattr(gs, 'STATE_FILEPATH', str(tmp_path / 'state.json'))
+    j.dump({"conversations": {"other-window": [{"name": "You", "text_html": "THEIRS"}]},
+            "selection": [], "dark_mode": True}, open(gs.STATE_FILEPATH, 'w'))
+    dummy = types.SimpleNamespace(
+        conversations={"mine": [{"name": "You", "text_html": "MINE"}]},
+        selection=[], dark_mode=False,
+        get_transcript=lambda: [],
+        conversation_key=lambda sel: "home")
+    gs.APPState.write(dummy)
+    data = j.load(open(gs.STATE_FILEPATH))
+    assert data["conversations"]["other-window"][0]["text_html"] == "THEIRS"
+    assert data["conversations"]["mine"][0]["text_html"] == "MINE"
+    assert "home" in data["conversations"]
