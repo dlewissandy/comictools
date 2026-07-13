@@ -303,16 +303,21 @@ def compose_look_dialog(state: APPState, series_id: str, character_id: str):
             chosen_props = list(prop_sel.value) if (prop_sel and prop_sel.value) else []
             outfit_name = outfit_opts.get(outfit_id, "").strip("— ")
             prop_names = [prop_opts[p] for p in chosen_props]
+            # name AND id, so the coauthor composes with no guesswork
             wearing = []
             if outfit_id:
-                wearing.append(f"wearing the '{outfit_name}' outfit")
-            if prop_names:
-                wearing.append("carrying " + ", ".join(f"'{n}'" for n in prop_names))
+                wearing.append(f"wearing the '{outfit_name}' outfit (outfit_id: {outfit_id})")
+            if chosen_props:
+                wearing.append("carrying " + ", ".join(
+                    f"'{prop_opts[p]}' (prop_id: {p})" for p in chosen_props))
             wearing_txt = " ".join(wearing) or "in a new look"
+            props_arg = (f"  Call compose_character_variant with character_id={character_id}, "
+                         f"name='{name}', outfit_id='{outfit_id}', "
+                         f"prop_ids={chosen_props}, then render its reference sheet.")
             post_user_message(state,
                 f"Compose a new look named '{name}' for {character.name if character else character_id}, "
                 f"{wearing_txt}.  Build it from the base look as the reference, dressed in the "
-                f"chosen wardrobe and props, then render its reference sheet in the series style.")
+                f"chosen wardrobe and props, so nothing drifts.{props_arg}")
             dlg.close()
 
         with ui.row().classes("w-full justify-end q-mt-md").style("gap: 8px;"):
