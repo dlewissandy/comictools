@@ -31,6 +31,25 @@ def soft_delete(base_path: str, path: str, note: str = "") -> str:
     return entry
 
 
+def soft_backup(base_path: str, path: str, note: str = "") -> str:
+    """
+    COPY a file into the trash (the original stays in place) — the studio's
+    pre-overwrite insurance.  Returns the trash entry directory.
+    """
+    entry = os.path.join(base_path, TRASH_DIR, f"{int(time.time() * 1000)}-{uuid4().hex[:8]}")
+    os.makedirs(entry, exist_ok=True)
+    payload = os.path.join(entry, "payload")
+    if os.path.isdir(path):
+        shutil.copytree(path, payload)
+    else:
+        shutil.copy2(path, payload)
+    manifest = {"original_path": path, "deleted_at": time.time(), "note": note,
+                "is_dir": os.path.isdir(payload)}
+    json.dump(manifest, open(os.path.join(entry, "manifest.json"), "w"), indent=2)
+    logger.info(f"soft-backed-up {path} -> {entry}")
+    return entry
+
+
 def restore_last(base_path: str) -> str | None:
     """
     Restore the most recent trash entry to its original location.

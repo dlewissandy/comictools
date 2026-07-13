@@ -98,14 +98,13 @@ def creator(wrapper: RunContextWrapper, obj: BaseModel, overwrite: bool=False) -
         # silently erase the prose and image locators of the old one
         try:
             import os
-            import shutil
             from storage.filepath import obj_to_filepath
+            from storage.trash import soft_backup
             fp = obj_to_filepath(existing, base_path=storage.base_path)
             if os.path.exists(fp):
-                bkp = os.path.join(os.path.dirname(fp),
-                                   f".trash--{uuid4().hex[:6]}--{os.path.basename(fp)}")
-                shutil.copyfile(fp, bkp)
-                logger.info(f"pre-overwrite snapshot: {bkp}")
+                nm = getattr(existing, "name", None) or str(pk)
+                soft_backup(str(storage.base_path), fp,
+                            note=f"the {obj.__class__.__name__.lower()} '{nm}' before it was re-created")
         except Exception as e:
             logger.warning(f"pre-overwrite snapshot skipped: {e}")
 

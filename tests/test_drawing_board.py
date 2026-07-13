@@ -167,6 +167,7 @@ def test_clear_acetate_apply_keeps_transparency(tmp_path, monkeypatch):
         is_dirty=False,
         selection=[],
         change_selection=lambda new: None,
+        storage=SimpleNamespace(base_path=str(tmp_path)),
         history=None, refresh_details=lambda: None)
     monkeypatch.setattr("gui.light_table.table_receipt", lambda *a, **k: None)
     ch._apply(state)

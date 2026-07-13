@@ -769,15 +769,38 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                     ui.label('The wastebasket').classes('caption-box caption-box-sm')
                     ui.space()
                     if entries:
+                        old_n = len([e for e in entries
+                                     if (_time.time() - e['deleted_at']) > 30 * 86400])
+
                         def do_purge():
-                            n = purge("data", older_than_days=30)
-                            ui.notify(f"Emptied {n} entr{'y' if n == 1 else 'ies'} older than 30 days.",
-                                      type='info')
-                            dlg.close()
-                        ui.button('Empty 30-day-old entries', icon='delete_forever') \
-                            .props('outline dense size=sm no-caps color=negative') \
-                            .tooltip('The only true delete in the studio — everything younger stays') \
-                            .on('click', lambda _: do_purge())
+                            # THE ONLY TRUE DELETE ASKS FIRST, naming what goes
+                            with ui.dialog() as confirm, ui.card().classes('soft-card') \
+                                    .style('min-width: 420px;'):
+                                ui.label('GONE FOR GOOD?').classes('caption-box caption-box-sm')
+                                ui.label(f"{old_n} entr{'y' if old_n == 1 else 'ies'} older than "
+                                         f"30 days will be deleted permanently — this is the "
+                                         f"studio's only true delete.  Everything younger stays.") \
+                                    .classes('text-sm q-mt-sm')
+                                with ui.row().classes('w-full justify-end q-mt-sm').style('gap: 8px;'):
+                                    ui.button('Keep everything').props('flat dense no-caps') \
+                                        .on('click', lambda _: confirm.close())
+
+                                    def go():
+                                        n = purge("data", older_than_days=30)
+                                        confirm.close()
+                                        ui.notify(f"Emptied {n} entr{'y' if n == 1 else 'ies'} "
+                                                  f"older than 30 days.", type='info')
+                                        dlg.close()
+                                    ui.button('Empty them', icon='delete_forever') \
+                                        .props('unelevated dense no-caps color=negative') \
+                                        .on('click', lambda _: go())
+                            confirm.open()
+                        if old_n:
+                            ui.button(f'Empty {old_n} 30-day-old entr{"y" if old_n == 1 else "ies"}',
+                                      icon='delete_forever') \
+                                .props('outline dense size=sm no-caps color=negative') \
+                                .tooltip('The only true delete in the studio — everything younger stays; it asks first') \
+                                .on('click', lambda _: do_purge())
                 if not entries:
                     ui.label('Empty — nothing has been struck.').classes('text-sm text-gray-500 q-mt-sm')
                 with ui.column().classes('w-full q-mt-sm').style('gap: 4px; overflow-y: auto;'):
@@ -788,14 +811,22 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                                else f"{age_h:.0f}h ago" if age_h < 48 else f"{age_h / 24:.0f}d ago")
                         with ui.row().classes('w-full items-center flex-nowrap light-layer') \
                                 .style('gap: 8px; padding: 2px 8px;'):
-                            ui.icon('folder' if not en['occupied'] else 'block') \
-                                .classes('text-sm text-gray-500')
-                            ui.label(rel).classes('text-xs') \
+                            # the row speaks the studio's language: the note
+                            # names what this WAS; art shows its face
+                            payload = os.path.join('data', '.trash', en['entry'], 'payload')
+                            if os.path.isfile(payload) and payload.lower().endswith(
+                                    ('.png', '.jpg', '.jpeg', '.webp')):
+                                ui.image(source=payload).classes('light-thumb').props('fit=cover')
+                            else:
+                                ui.icon('folder' if not en['occupied'] else 'block') \
+                                    .classes('text-sm text-gray-500')
+                            ui.label(en['note'] or rel).classes('text-xs') \
                                 .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;') \
-                                .tooltip(en['note'] or rel)
+                                .tooltip(rel)
                             ui.label(age).classes('text-xs text-gray-500').style('flex-shrink: 0;')
                             if en['occupied']:
-                                ui.label('superseded').classes('text-xs text-gray-500')
+                                ui.label('superseded').classes('text-xs text-gray-500') \
+                                    .tooltip('An older copy — the current version holds its place')
                             else:
                                 def bring_back(entry=en['entry'], rel=rel):
                                     restored = restore_entry("data", entry)

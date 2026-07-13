@@ -121,10 +121,12 @@ def _apply(state: APPState):
     # THE ORIGINAL GOES TO THE WASTEBASKET FIRST: applying an edit must
     # never be the only copy's last moment (dot-prefixed files are invisible
     # to listings; the receipt's UNDO chip restores the pre-edit art).
-    backup = os.path.join(os.path.dirname(original),
-                          f".trash--{uuid4().hex[:6]}--{os.path.basename(original)}")
+    from storage.trash import soft_backup
+    _base = str(getattr(getattr(state, "storage", None), "base_path", "data"))
+    backup_entry = soft_backup(_base, original,
+                               note=f"the art before a heal was applied — {os.path.basename(original)}")
+    backup = os.path.join(backup_entry, "payload")
     try:
-        shutil.copyfile(original, backup)
         # CLEAR ACETATE: healing a transparent image must never paste an
         # opaque card into the layered composite — outside the healed
         # patch, the ORIGINAL's alpha survives verbatim
@@ -173,12 +175,12 @@ def _apply(state: APPState):
     def undo(backup=backup, original=original):
         # the CURRENT art goes to the wastebasket in turn — an old receipt's
         # undo must never be the newest artwork's last moment
-        counter = os.path.join(os.path.dirname(original),
-                               f".trash--{uuid4().hex[:6]}--{os.path.basename(original)}")
-        shutil.copyfile(original, counter)
+        from storage.trash import soft_backup as _sb
+        _sb(_base, original, note=f"the healed art an undo replaced — {os.path.basename(original)}")
         shutil.copyfile(backup, original)
     from gui.light_table import table_receipt
-    table_receipt(state, "🖌 applied the edit — the artwork was repainted in place", undo=undo)
+    table_receipt(state, "🖌 applied the edit — the artwork was repainted in place.  "
+                         "The other takes wait in the wastebasket.", undo=undo)
 
     # Return to editor view
     new_sel = [s for s in state.selection if s.kind != SelectedKind.IMAGE_EDITOR_CHOICES]
@@ -192,14 +194,20 @@ def _cancel(state: APPState):
 
 
 def _cleanup_choices(state: APPState, keep_original: bool = True):
+    # NOTHING PAID-FOR BURNS: unpicked takes go to the ONE wastebasket,
+    # not to os.remove — apply and cancel both leave a way back
+    from storage.trash import soft_delete
+    base = str(getattr(getattr(state, "storage", None), "base_path", "data"))
+    origin = state.image_editor_original_image or state.image_editor_image or ""
     for path in state.image_editor_choices or []:
         try:
             if keep_original and path == state.image_editor_original_image:
                 continue
             if os.path.exists(path):
-                os.remove(path)
+                soft_delete(base, path,
+                            note=f"an unpicked take from a heal of {os.path.basename(origin)}")
         except Exception:
-            logger.debug(f"Failed to delete choice file {path}")
+            logger.debug(f"Failed to wastebasket choice file {path}")
     if state.image_editor_original_image and state.image_editor_session_id:
         manifest = os.path.join(os.path.dirname(state.image_editor_original_image), f".choices-{state.image_editor_session_id}.json")
         if os.path.exists(manifest):
