@@ -771,6 +771,44 @@ def view_issue(state: APPState):
             sh.tooltip(f'{lbl} — click to work on it')
             sh.on('click', lambda _, l=lbl: door(l))
 
+    def open_layout_feel():
+        # THE LAYOUT KNOBS: steer the auto-flow's feel for the whole book.  Each
+        # dial persists as you release it; 'Reflow' re-stitches with the new feel.
+        from schema import Issue as _Issue
+        fresh = storage.read_object(_Issue, {"series_id": series_id, "issue_id": issue_id}) or issue
+        lf = fresh.layout_feel
+        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 440px;'):
+            ui.label('Layout feel — the whole book').classes('caption-box caption-box-sm')
+            ui.label('Steers how the auto-flow lays out unlocked panels.  '
+                     'Locked panels always keep their shape.') \
+                .classes('text-xs text-gray-500 q-mb-sm')
+
+            def knob(name, left, right):
+                with ui.row().classes('w-full items-center flex-nowrap').style('gap: 8px;'):
+                    ui.label(left).classes('text-xs text-gray-500') \
+                        .style('width: 88px; text-align: right;')
+                    sl = ui.slider(min=-1, max=1, step=0.1, value=getattr(lf, name)) \
+                        .props('label-always snap').classes('col')
+
+                    def _set(e, name=name):
+                        fi = storage.read_object(_Issue, {"series_id": series_id,
+                                                          "issue_id": issue_id}) or fresh
+                        setattr(fi.layout_feel, name, round(float(e.args), 2))
+                        storage.update_object(fi)
+                    sl.on('change', _set)
+                    ui.label(right).classes('text-xs text-gray-500').style('width: 88px;')
+
+            knob('density', 'few big', 'many small')
+            knob('verticality', 'wide', 'tall')
+            knob('irregularity', 'grid', 'dynamic')
+            knob('variety', 'calm', 'restless')
+            with ui.row().classes('w-full justify-end q-mt-md').style('gap: 8px;'):
+                ui.button('Close', icon='close').props('flat no-caps') \
+                    .on('click', lambda _: dlg.close())
+                ui.button('Reflow the book', icon='auto_awesome').props('unelevated no-caps') \
+                    .on('click', lambda _: (dlg.close(), state.refresh_details()))
+        dlg.open()
+
     with details:
         # ---- the masthead stays put over the table ------------------------
         with ui.row().classes('book-masthead w-full flex-nowrap items-center').style('gap: 12px;') as _mast:
@@ -800,6 +838,9 @@ def view_issue(state: APPState):
             badge.tooltip('  ·  '.join(l.text for l in ledger.todos)
                           or 'Every board inked, every panel placed — bind it')
             badge.on('click', lambda _: (remember_spot('colophon'), state.refresh_details()))
+            ui.button(icon='tune').props('flat round dense') \
+                .tooltip('Layout feel — density, verticality, irregularity, variety') \
+                .on('click', lambda _: open_layout_feel())
             ui.button('Read', icon='menu_book').props('rounded') \
                 .tooltip('Read the issue front to back') \
                 .on('click', lambda _: ui.run_javascript(
