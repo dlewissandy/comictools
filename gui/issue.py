@@ -179,45 +179,30 @@ def view_issue(state: APPState):
                     # reshaping a panel breaks the exact fill — say so
                     receipt("📌 the reshape released this page's pin — the swatch no longer fit")
 
-    def cycle_aspect(scene_id, panel_id):
+    def set_shape(scene_id, panel_id, aspect, size):
+        # PICK THE WHOLE SHAPE AT ONCE: aspect AND size in one action, so a
+        # 2x2 square -> 4x6 portrait is a single pick, not a walk through
+        # intermediate locked states.  A picked shape HOLDS (the flow honors it).
         p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
                                         "scene_id": scene_id, "panel_id": panel_id})
         if p is None:
             return
-        p.aspect = FrameLayout(ASPECT_CYCLE[p.aspect.value])
-        # normalize the size to the multiplier it packs at under the NEW
-        # aspect (legacy 'regular' stays 1x; a square's 3x clamps to 2x)
-        p.size = _norm_size(getattr(p, 'size', None), p.aspect.value)
-        p.shape_locked = True   # OVERRIDE IS A LOCK: the flow now honors this shape
+        p.aspect = FrameLayout(aspect)
+        p.size = size
+        p.shape_locked = True
         storage.update_object(p)
         _repack_prints(panel_id)
-        receipt(f"🔒 turned the panel {p.aspect.value} and held it — the book reflowed around it")
+        receipt(f"🔒 held the panel at {aspect} {size} — the book reflowed around it")
 
-    def cycle_size(scene_id, panel_id):
+    def set_auto(scene_id, panel_id):
         p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
                                         "scene_id": scene_id, "panel_id": panel_id})
         if p is None:
             return
-        sizes = _sizes_for(p.aspect.value)
-        cur = _norm_size(getattr(p, 'size', None), p.aspect.value)
-        p.size = sizes[(sizes.index(cur) + 1) % len(sizes)]
-        p.shape_locked = True   # OVERRIDE IS A LOCK: the flow now honors this shape
+        p.shape_locked = False   # released: the flow reshapes it to fill the page
         storage.update_object(p)
         _repack_prints(panel_id)
-        receipt(f"🔒 sized the panel {p.size} and held it — the book reflowed around it")
-
-    def toggle_lock(scene_id, panel_id):
-        p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
-                                        "scene_id": scene_id, "panel_id": panel_id})
-        if p is None:
-            return
-        p.shape_locked = not bool(getattr(p, 'shape_locked', False))
-        storage.update_object(p)
-        _repack_prints(panel_id)
-        if p.shape_locked:
-            receipt(f"🔒 held the panel at {p.aspect.value} {p.size} — the flow works around it")
-        else:
-            receipt("🔓 released the panel — the flow may reshape it to fill the page")
+        receipt("🔓 released the panel — the flow shapes it to fill the page")
 
     def move_beat(scene_id, panel_id, d):
         sibs = sorted(storage.read_all_objects(Panel, primary_key={
@@ -374,23 +359,44 @@ def view_issue(state: APPState):
                             lambda v, s=s, pid=p.panel_id: save_beat_text(s, pid, v),
                             f"Let's work on the script for panel {p.panel_number} "
                             f"of this scene together."))
-                    ui.button(icon=ASPECT_ICON[p.aspect.value]).props('flat round dense size=xs') \
-                        .tooltip(f'{p.aspect.value} — click to turn the panel') \
-                        .on('click.stop', lambda _, s=scene_id, pid=panel_id: cycle_aspect(s, pid))
-                    sz = ui.element('div').classes('size-chip')
-                    with sz:
-                        ui.label(size)
-                    sz.tooltip(f'{size} of {"/".join(_sizes_for(p.aspect.value))} — click to resize')
-                    sz.on('click.stop', lambda _, s=scene_id, pid=panel_id: cycle_size(s, pid))
-                    # THE LOCK: a held panel keeps its shape; the flow works
-                    # around it.  Overriding aspect/size holds it automatically;
-                    # this releases it back to flexible.
+                    # THE SHAPE PICKER: pick the panel's WHOLE shape — aspect AND
+                    # size — in one action (a 2x2 square to a 4x6 portrait is a
+                    # single pick, no walk through intermediate locked states),
+                    # or set it Auto to flex into the flow.
                     _held = bool(getattr(p, 'shape_locked', False))
-                    ui.button(icon='lock' if _held else 'lock_open') \
-                        .props('flat round dense size=xs') \
-                        .tooltip('Held to this shape — the flow honors it (click to release)'
-                                 if _held else 'Flexes to fill the page (click to hold this shape)') \
-                        .on('click.stop', lambda _, s=scene_id, pid=panel_id: toggle_lock(s, pid))
+                    _SHAPES = [("square", "1x", 2, 2), ("landscape", "1x", 3, 2),
+                               ("portrait", "1x", 2, 3), ("square", "2x", 4, 4),
+                               ("landscape", "2x", 6, 4), ("portrait", "2x", 4, 6)]
+                    shape_btn = ui.button(icon='lock' if _held else 'crop_free') \
+                        .props('flat round dense size=xs')
+                    shape_btn.tooltip(f'{p.aspect.value} {size}'
+                                      + (' · held — the flow honors it' if _held
+                                         else ' · auto — flexes to fit')
+                                      + '   (click to shape the panel)')
+                    shape_btn.on('click.stop', lambda *_: None)   # open the menu, don't open the panel
+                    with shape_btn:
+                        with ui.menu().props('auto-close'):
+                            ui.label('Shape this panel').classes('comic-label-sm') \
+                                .style('padding: 8px 10px 2px;')
+                            with ui.element('div').style(
+                                    'display: grid; grid-template-columns: repeat(3, 46px); '
+                                    'gap: 6px; padding: 6px 10px 10px; justify-items: center; '
+                                    'align-items: center;'):
+                                for (a, s, gw, gh) in _SHAPES:
+                                    _cur = (p.aspect.value == a and size == s)
+                                    box = ui.element('div').style(
+                                        f'width: {gw / 6 * 40:.0f}px; height: {gh / 6 * 40:.0f}px; '
+                                        f'border: 2px solid '
+                                        f'{"#c0392b" if _cur else "rgba(130,130,130,.55)"}; '
+                                        f'border-radius: 3px; cursor: pointer; '
+                                        f'background: {"rgba(192,57,43,.18)" if _cur else "transparent"};')
+                                    box.tooltip(f'{a} {s}  ({gw}×{gh})')
+                                    box.on('click', lambda _, a=a, s=s, sc=scene_id, pid=panel_id:
+                                           set_shape(sc, pid, a, s))
+                            ui.separator()
+                            ui.menu_item('Auto — let the flow shape it',
+                                         on_click=lambda *_, sc=scene_id, pid=panel_id:
+                                         set_auto(sc, pid)).props('dense')
                     ui.button(icon='chevron_right').props('flat round dense size=xs') \
                         .tooltip('Later in the scene') \
                         .on('click.stop', lambda _, s=scene_id, pid=panel_id: move_beat(s, pid, 1))
