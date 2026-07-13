@@ -95,24 +95,24 @@ Head through the door into **Series** and make one:
 
 > **You:** Start a new series — *The Long Way Down*, a rain-soaked detective story.
 
-Open your new series and meet your lead. A **character** is the idea of a person; a **variant** is a specific *look* — an age, a costume, a disguise. You draw variants, not characters, and that's the secret to consistency.
+Open your new series and meet your lead. A **character** is the idea of a person; a **look** is a specific rendering of them — an age, a costume, a disguise. You draw looks, not characters, and that's the secret to consistency.
 
-> **You:** Create a character named Vera Kell, a tired private investigator. Give her a variant: late forties, long grey coat, sharp eyes.
+> **You:** Create a character named Vera Kell, a tired private investigator. Give her a base look: late forties, long grey coat, sharp eyes.
 
 Now the important part — the thing that keeps Vera looking like Vera in every panel:
 
 > **You:** Render her reference sheet.
 
-The studio generates a **model sheet** for that variant in your style — a single source of truth for how she looks. From here on, whenever Vera appears in a panel, the studio hands her sheet to the renderer as a reference. That's why panel 3 and panel 9 show the same woman.
+The studio generates a **reference sheet** for that look in your style — a single source of truth for how she looks. From here on, whenever Vera appears in a panel, the studio hands her sheet to the renderer as a reference. That's why panel 3 and panel 9 show the same woman.
 
-Here's the **variant's workbench**: the structured fields the studio draws from, with the Character Designer standing by. Her chips do the work — **"Render the reference sheet," "Swap the outfit," "Extract this look's outfit."**
+Here's the **look's workbench**: the structured fields the studio draws from, with the Character Designer standing by. Her chips do the work — **"Render the reference sheet," "Swap the outfit," "Extract this look's outfit."**
 
 <p align="center">
-  <img src="screenshots/ui-variant.png" alt="The variant view for 'Vera Kell (Trenchcoat)': structured fields — general description, race, gender, age, height, physical appearance, attire, behavior — with a rendered figure under Styled Images and the Character Designer's 'Render the reference sheet' chip" width="780" />
+  <img src="screenshots/ui-variant.png" alt="The look's workbench for 'Vera Kell (Trenchcoat)': structured fields — general description, race, gender, age, height, physical appearance, attire, behavior — with a rendered figure among the Reference Sheets and the Character Designer's 'Render the reference sheet' chip" width="780" />
 </p>
-<p align="center"><em>A variant's workbench. Describe who they are (or let the coauthor draft it), then tap <strong>Render the reference sheet</strong> — the drawing it produces is what keeps this character consistent in every panel to come.</em></p>
+<p align="center"><em>A look's workbench. Describe who they are (or let the coauthor draft it), then tap <strong>Render the reference sheet</strong> — the drawing it produces is what keeps this character consistent in every panel to come.</em></p>
 
-Reusable wardrobe and props work the same way — an **outfit** or a **prop** you build once and dress your cast in — but for a first comic, one character and one variant is plenty. Keep moving.
+Reusable wardrobe and props work the same way — an **outfit** or a **prop** you build once and dress your cast in; the Library shelves them beside your characters so any series can borrow them. But for a first comic, one character and one look is plenty. Keep moving.
 
 ---
 
