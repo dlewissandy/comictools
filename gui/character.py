@@ -120,13 +120,21 @@ def view_character(state:APPState):
                 ui.label('— dress the base character in wardrobe and props') \
                     .classes('text-xs text-gray-500')
             def on_upload(e: UploadEventArguments):
+                # DROP TO DRESS: the image becomes a WARDROBE exemplar, and a
+                # new look wears it on the base character.  Nothing renders
+                # until the look is inked (then the wardrobe inks first).
                 locator = storage.upload_reference_image(
                     obj=character,
                     name=e.name,
                     data=e.content,
                     mime_type=e.type
                 )
-                post_user_message(state, "I would like to create a new variant for this character from the uploaded image: " + locator)
+                post_user_message(state,
+                    f"Drop-to-dress: create a WARDROBE (outfit) from this image with "
+                    f"create_outfit_from_image (the image is its exemplar — do NOT render "
+                    f"anything), then compose a new look for {character.name} wearing that "
+                    f"outfit on the base (compose_character_variant), named after the wardrobe. "
+                    f"Don't ink the look yet — I'll ink it when ready.  Image: {locator}")
 
             with ruled_page() as packer:
                 view_all_instances(
@@ -141,7 +149,7 @@ def view_character(state:APPState):
                     )
                 # Drop an image here to create a new look from it
                 uploader_card(state, on_upload=on_upload, packer=packer,
-                              label='Drop image to create a look')
+                              label='Drop a wardrobe image — dress the base in a new look')
         
         
             

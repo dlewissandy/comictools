@@ -748,6 +748,17 @@ def create_styled_image_body(state, series_id: str, character_id: str,
             base_variant = next((v for v in _looks
                 if v.variant_id != variant_id and ((v.images or {}) or v.appearance)), None)
         if base_variant is not None:
+            # INK THE BASE FIRST: if the character has no sheet in this style
+            # yet, render it now (from its own description/exemplars) so this
+            # look anchors to a clean style-matched identity, not nothing.
+            if not ((base_variant.images or {}).get(style_id)
+                    and os.path.exists(base_variant.images[style_id])):
+                try:
+                    create_styled_image_body(state, series_id, character_id,
+                                             base_variant.variant_id, style_id)
+                    base_variant = storage.read_object(CharacterVariant, base_variant.primary_key) or base_variant
+                except Exception as ex:
+                    logger.warning(f"cascade-ink of base look failed: {ex}")
             base_img = (base_variant.images or {}).get(style_id) or next(
                 (i for i in (base_variant.images or {}).values() if i and os.path.exists(i)), None)
             base_ups = [u for u in storage.list_uploads(obj=base_variant) if u and os.path.exists(u)]
@@ -770,27 +781,53 @@ def create_styled_image_body(state, series_id: str, character_id: str,
                        f"* Physical appearance: {base_variant.appearance}\n"
                        f"* Behavior/bearing: {base_variant.behavior}")
 
+    # INK EVERY DEPENDENCY FIRST: a composite is only as consistent as its
+    # parts.  Anything not yet inked in THIS style — the wardrobe, a prop —
+    # gets rendered from its exemplar NOW, so the composite always draws
+    # from clean style-matched references, never a raw dropped photo.
+    def _inked_art(asset, render_body, kind_label):
+        art = (asset.images or {}).get(style_id)
+        if art and os.path.exists(art):
+            return art
+        exemplars_ = [u for u in storage.list_uploads(obj=asset) if u and os.path.exists(u)]
+        if exemplars_ or asset.description:
+            try:
+                render_body()
+                fresh_asset = storage.read_object(type(asset), asset.primary_key)
+                art = (fresh_asset.images or {}).get(style_id) if fresh_asset else None
+                if art and os.path.exists(art):
+                    return art
+            except Exception as ex:
+                logger.warning(f"cascade-ink of {kind_label} '{asset.name}' failed: {ex}")
+        return None
+
     if variant.outfit_id:
         outfit = storage.read_object(Outfit, {"series_id": series_id, "outfit_id": variant.outfit_id})
         if outfit is None:
             missing.append(f"outfit '{variant.outfit_id}' (asset not found)")
         else:
-            art = outfit.images.get(style_id)
-            if art and os.path.exists(art):
+            art = _inked_art(outfit,
+                             lambda: render_outfit_reference_body(state, series_id, outfit.outfit_id, style_id),
+                             "outfit")
+            if art:
                 reference_images.append(art)
             else:
-                missing.append(f"reference art for outfit '{outfit.name}' in style '{style_id}' (generate_outfit_reference)")
+                missing.append(f"reference art for outfit '{outfit.name}' in style '{style_id}' "
+                               f"(needs an exemplar or description to ink)")
             prompt += f"\n\n## Outfit: {outfit.name}\n{outfit.description}"
     for pid in (variant.prop_ids or []):
         prop = storage.read_object(PropAsset, {"series_id": series_id, "prop_id": pid})
         if prop is None:
             missing.append(f"prop '{pid}' (asset not found)")
             continue
-        art = prop.images.get(style_id)
-        if art and os.path.exists(art):
+        art = _inked_art(prop,
+                         lambda prop=prop: render_prop_reference_body(state, series_id, prop.prop_id, style_id),
+                         "prop")
+        if art:
             reference_images.append(art)
         else:
-            missing.append(f"reference art for prop '{prop.name}' in style '{style_id}' (generate_prop_reference)")
+            missing.append(f"reference art for prop '{prop.name}' in style '{style_id}' "
+                           f"(needs an exemplar or description to ink)")
         prompt += f"\n\n## Carried prop: {prop.name}\n{prop.description}"
 
     styled_variant = StyledVariant(
@@ -2615,6 +2652,13 @@ using this reference match the rest of the issue.
     storage.update_object(data=fresh)
     state.is_dirty = True
     return f"Reference art for '{asset.name}' rendered in style '{style_id}': {locator}"
+
+
+def render_outfit_reference_body(state, series_id: str, outfit_id: str, style_id: str) -> str:
+    """Render an outfit's reference art from its exemplar — GUI/callable."""
+    class _W:
+        context = state
+    return _generate_outfit_reference_sync(_W(), series_id, outfit_id, style_id)
 
 
 def render_prop_reference_body(state, series_id: str, prop_id: str, style_id: str) -> str:

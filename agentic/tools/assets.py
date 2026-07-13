@@ -158,6 +158,57 @@ def create_outfit(wrapper: RunContextWrapper[APPState], series_id: str, name: st
 
 
 @function_tool
+def create_outfit_from_image(wrapper: RunContextWrapper[APPState], series_id: str,
+                             name: str, image_locator: str) -> str:
+    """
+    Create an outfit (wardrobe) from a dropped/uploaded reference image — the
+    IMAGE BECOMES THE OUTFIT'S EXEMPLAR (its reference for inking), and its
+    attire is described from the picture.  NOTHING is rendered: the outfit's
+    style-keyed reference art is inked later, on demand, when a look wearing
+    it is inked.
+
+    Args:
+        series_id: The series that will own the outfit.
+        name: A short (1-4 word) name for the wardrobe.
+        image_locator: The filepath of the uploaded reference image.
+    """
+    import os, io
+    from helpers.generator import invoke_generate_api
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    if storage.read_object(cls=Series, primary_key={"series_id": series_id}) is None:
+        return f"Series '{series_id}' not found."
+    if not os.path.isfile(image_locator):
+        return f"Image '{image_locator}' not found.  Upload it first."
+
+    # describe the ATTIRE ONLY off the picture — garments, materials, colors,
+    # condition, accessories; never the wearer's face or body
+    prompt = ("Describe ONLY THE ATTIRE in this image as reusable wardrobe: "
+              "garments, materials, colors, condition, accessories — 1-2 paragraphs. "
+              "Ignore the wearer's face, body and identity; describe only what could "
+              "be worn by anyone.")
+    try:
+        description = str(invoke_generate_api(prompt, image=image_locator))
+    except Exception as e:
+        logger.warning(f"outfit description extraction failed: {e}")
+        description = ""
+
+    outfit = Outfit(outfit_id=normalize_id(name), series_id=series_id, name=name,
+                    description=description)
+    result = creator(wrapper=wrapper, obj=outfit, overwrite=True)
+    if isinstance(result, str):
+        return result
+    # THE IMAGE IS THE EXEMPLAR: store it as the outfit's reference upload,
+    # so inking its art (and any look wearing it) is held to this picture
+    with open(image_locator, "rb") as f:
+        storage.upload_reference_image(obj=outfit, name=os.path.basename(image_locator),
+                                       data=io.BytesIO(f.read()), mime_type="image/png")
+    state.is_dirty = True
+    return (f"Created wardrobe '{name}' from the image (the image is its exemplar; "
+            f"nothing rendered yet — its style art inks when a look wearing it is inked).")
+
+
+@function_tool
 def read_all_outfits(wrapper: RunContextWrapper[APPState], series_id: str) -> list[Outfit]:
     """
     List the outfits (wardrobe) of a series.

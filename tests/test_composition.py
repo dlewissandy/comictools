@@ -69,14 +69,37 @@ def test_styled_render_composites_outfit_and_props(storage, mock_imaging):
     assert "NOTE" not in str(out), f"no missing refs expected: {out}"
 
 
-def test_styled_render_reports_missing_asset_art(storage, mock_imaging):
+def test_ink_cascade_renders_missing_dependency_art_first(storage, mock_imaging):
+    """INK EVERY DEPENDENCY FIRST: an outfit with a description but no
+    style art gets inked from that description BEFORE the look composites,
+    so the composite always draws from clean style-matched references — and
+    the outfit ends up with its style art rendered."""
+    from schema import Outfit
     st = _Stub(storage)
     _invoke(assets.create_outfit, st, series_id=WL, name="Festival Cloak", description="violet cloak")
     _invoke(assets.compose_character_variant, st, series_id=WL, character_id="ezra",
             name="Festival Look", outfit_id="festival-cloak")
     out = _invoke(imaging.create_styled_image_for_character_variant, st,
                   series_id=WL, character_id="ezra", variant_id="festival-look", style_id="vintage-four-color")
-    assert "generate_outfit_reference" in str(out), "missing outfit art is reported with the fix"
+    outfit = storage.read_object(Outfit, {"series_id": WL, "outfit_id": "festival-cloak"})
+    assert outfit.images.get("vintage-four-color"), \
+        "the wardrobe was inked from its description before the look composited"
+    assert "needs an exemplar or description" not in str(out)
+
+
+def test_a_bare_asset_still_reports_it_cannot_ink(storage, mock_imaging):
+    """A dependency with neither art, exemplar, nor description can't be
+    inked — the render says so instead of pretending."""
+    from schema import Outfit
+    st = _Stub(storage)
+    # an outfit with an EMPTY description and no exemplar
+    storage.create_object(Outfit(outfit_id="bare-cloak", series_id=WL, name="Bare Cloak",
+                                 description=""), overwrite=True)
+    _invoke(assets.compose_character_variant, st, series_id=WL, character_id="ezra",
+            name="Bare Look", outfit_id="bare-cloak")
+    out = _invoke(imaging.create_styled_image_for_character_variant, st,
+                  series_id=WL, character_id="ezra", variant_id="bare-look", style_id="vintage-four-color")
+    assert "needs an exemplar or description" in str(out)
 
 
 def test_reroll_keeps_prior_takes(storage, mock_imaging):
@@ -136,3 +159,36 @@ def test_composed_look_render_anchors_to_the_base(storage, mock_imaging):
     assert art in refs, "the base sheet anchors the composed look's render"
     assert "identity anchor" in prompt.lower()
     assert "silver eyes" in prompt, "the base's identity text rides along"
+
+
+def test_create_outfit_from_image_stores_the_exemplar_and_renders_nothing(storage, mock_imaging, monkeypatch):
+    """Drop-to-wardrobe: the image becomes the outfit's exemplar, described
+    from the picture, with NO image render at create time."""
+    import asyncio, json as _json, os
+    from types import SimpleNamespace
+    from PIL import Image
+    import agentic.tools.assets as A
+    from schema import Outfit
+    WL = "wonders-of-the-witchlight"
+    # a source image
+    d = os.path.join(str(storage.base_path), "series", WL, "uploads")
+    os.makedirs(d, exist_ok=True)
+    src = os.path.join(d, "dropped.png")
+    Image.new("RGB", (128, 200), (120, 40, 40)).save(src)
+    # stub the text vision-extract so no network
+    monkeypatch.setattr(A, "creator", A.creator)  # keep
+    import helpers.generator as gen
+    monkeypatch.setattr(gen, "invoke_generate_api", lambda prompt, image=None, **k: "a crimson linen shift")
+    state = SimpleNamespace(storage=storage, is_dirty=False, selection=[])
+    out = str(asyncio.run(A.create_outfit_from_image.on_invoke_tool(
+        SimpleNamespace(context=state), _json.dumps({
+            "series_id": WL, "name": "Crimson Shift", "image_locator": src}))))
+    assert "Created wardrobe" in out
+    o = storage.read_object(Outfit, {"series_id": WL, "outfit_id": "crimson-shift"})
+    assert o is not None and o.description == "a crimson linen shift"
+    assert o.images == {} or not o.images, "nothing rendered at create time"
+    ups = storage.list_uploads(obj=o)
+    assert ups, "the image is kept as the outfit's exemplar"
+    # no image-generation call happened (mock_imaging records 'generate'/'edit')
+    assert all(k not in ("generate", "edit") for k, *_ in mock_imaging), \
+        "no image was rendered creating the wardrobe"

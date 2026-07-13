@@ -229,8 +229,10 @@ def _create_from_image(state, kind, name, image_path, notes):
             f"Use it as the prop's reference art.")
     else:
         post_user_message(state,
-            f"Create a new outfit (wardrobe) named '{name}' from this reference image: {ref}.{change}  "
-            f"Use it as the outfit's reference art.")
+            f"Create a WARDROBE (outfit) named '{name}' from this reference image using "
+            f"create_outfit_from_image — the image is its EXEMPLAR, and nothing renders yet "
+            f"(its style art inks on demand when a look wearing it is inked).  "
+            f"Image: {image_path}.{change}")
 
 
 def _create_by_copy(state, kind, source_id, source_name, name, diff):

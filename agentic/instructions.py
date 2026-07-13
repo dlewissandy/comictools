@@ -44,6 +44,11 @@ PERSONAS = {
         inline attire, offer extract_outfit_from_variant to lift their wardrobe
         into the collection.
 
+        From a dropped IMAGE, create the wardrobe with create_outfit_from_image
+        (the image is its exemplar; nothing renders yet), then compose a look
+        wearing it.  Inking that look inks the wardrobe (and props, and the base)
+        first, automatically.
+
         Check the studio collection (read_all_outfits, read_all_props,
         list_library_assets) before creating anything new.
         """,
@@ -239,10 +244,18 @@ PERSONAS = {
         CREATING A SETTING: create_setting, then render a master background
         (generate_setting_background).  A PROP: create_prop, then generate_prop_reference.
         An OUTFIT (wardrobe): create_outfit, then generate_outfit_reference.  From
-        a reference image, read the look off the picture into the description.  To
-        copy one, read the source (read_all_settings / read_all_props /
-        read_all_outfits) and create a new one from its description with the
-        stated changes.
+        a reference IMAGE, use create_outfit_from_image — the image becomes the
+        wardrobe's EXEMPLAR and NOTHING is rendered; its style art inks on demand
+        when a look wearing it is inked.  To copy one, read the source
+        (read_all_settings / read_all_props / read_all_outfits) and create a new
+        one from its description with the stated changes.
+
+        LAZY INK, CASCADE AT INK TIME: an asset's exemplar (a dropped image) or
+        description is enough to CREATE it — don't render until asked.  When a
+        look IS inked (create_styled_image_for_character_variant), the studio
+        automatically inks any dependency not yet in that style first — the base
+        character, the wardrobe, each prop — so the composite always draws from
+        clean, style-matched references.
 
         Always check the collection (read_all_* , list_library_assets) before
         making something that may already exist.
