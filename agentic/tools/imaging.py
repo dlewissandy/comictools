@@ -280,13 +280,17 @@ def _compose_table_rough(storage, board, scene) -> str | None:
         return None
 
     from helpers.compositor import base_canvas, paste_acetates, collect_letters, paste_letters
+    from helpers.stitcher import laid_aspect
+    # THE ROUGH IS THE PAGE'S SHAPE: composite at the shape the layout gave this
+    # panel (the flow may have flexed it), so the inked rough fills its cell
+    _ba = laid_aspect(storage, board).value
     src, _ = _resolve_layer_source(board, scene, storage, board.series_id, 'background')
-    base = base_canvas(board.aspect.value, src if (src and on('background')) else None)
-    paste_acetates(base, board.aspect.value,
+    base = base_canvas(_ba, src if (src and on('background')) else None)
+    paste_acetates(base, _ba,
                    [(path, {**dflt, **(blk.get(key) or {})}) for key, path, dflt in layers])
     # the author's blocked letters ride the rough too, so the inker sees
     # where the balloons and captions land (placeholders never composite)
-    paste_letters(base, board.aspect.value, collect_letters(board))
+    paste_letters(base, _ba, collect_letters(board))
 
     figures_dir = os.path.join(os.path.dirname(obj_to_imagepath(obj=board, base_path=storage.base_path)), "figures")
     os.makedirs(figures_dir, exist_ok=True)
@@ -2538,12 +2542,15 @@ must look; keep them strictly on-model."""
 {format_comic_style(style, heading_level=1)}
 """
 
+    from helpers.stitcher import laid_aspect as _laid_aspect
     locator = generate_object_image(
         wrapper=wrapper,
         obj=panel,
         prompt=prompt,
         reference_images=reference_images,
-        aspect_ratio=panel.aspect,
+        # render at the shape the PAGE gave this panel (the flow may have flexed
+        # it), so the art fills its cell instead of being letterboxed/cropped
+        aspect_ratio=_laid_aspect(storage, panel),
         image_quality=IMAGE_QUALITY.HIGH,
         name=f"{panel_id}-render",
     )

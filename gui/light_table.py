@@ -1695,10 +1695,16 @@ def light_table(state: APPState, panel, scene, setting,
                "keys": letter_keys}
     bg_layer = {"on": background is not None and _key_on('background'), "key": "background"}
 
-    aspect = _ASPECT[panel.aspect.value]
+    # THE TABLE MATCHES THE PAGE: show the shape the LAYOUT gave this panel (the
+    # flow may have flexed an unlocked panel off its beat-shape), not just the
+    # panel's own aspect — so the light table never disagrees with the book.
+    from helpers.stitcher import laid_aspect as _laid_aspect
+    _disp_aspect = (_laid_aspect(storage, panel).value
+                    if hasattr(panel, 'panel_id') else panel.aspect.value)
+    aspect = _ASPECT[_disp_aspect]
     # the rough and the print display in the board's orientation; portrait
     # boards cap their height so the table never towers off the page
-    _ar = {'landscape': 1.5, 'portrait': 2 / 3, 'square': 1.0}[panel.aspect.value]
+    _ar = {'landscape': 1.5, 'portrait': 2 / 3, 'square': 1.0}[_disp_aspect]
     canvas_style = (f'aspect-ratio: {aspect}; max-height: 72vh; '
                     f'max-width: calc(72vh * {_ar:.4f});')
 
@@ -1741,7 +1747,7 @@ def light_table(state: APPState, panel, scene, setting,
                             ui.button('Cast a figure', icon='person_add').props('outline dense size=sm') \
                                 .on('click', lambda _: pick_figure())
 
-            canvas_ar = {'landscape': 1.5, 'portrait': 2 / 3, 'square': 1.0}[panel.aspect.value]
+            canvas_ar = {'landscape': 1.5, 'portrait': 2 / 3, 'square': 1.0}[_disp_aspect]
 
             def img_k(path):
                 return _img_ar(path) / canvas_ar  # width%% per height%%

@@ -43,6 +43,31 @@ def layout_note(series_id: str, issue_id: str) -> str | None:
     return _LAYOUT_NOTES.get((series_id, issue_id))
 
 
+def laid_aspect(storage, panel):
+    """The aspect the CURRENT page layout gave this panel — what the book prints
+    — read from its page cell, so the light table and the render match the page
+    even when the flow FLEXED an unlocked panel off its beat-shape.  Falls back
+    to the panel's own aspect when it isn't placed (a cover, insert, or an
+    unstitched panel)."""
+    from schema import Page, FrameLayout
+    sid = getattr(panel, "series_id", None)
+    iid = getattr(panel, "issue_id", None)
+    pid = getattr(panel, "panel_id", None)
+    scid = getattr(panel, "scene_id", None)
+    default = getattr(panel, "aspect", FrameLayout.SQUARE)
+    if not (sid and iid and pid):
+        return default
+    for pg in storage.read_all_objects(Page, {"series_id": sid, "issue_id": iid}):
+        for c in (pg.cells or []):
+            if c.panel_id == pid and c.scene_id == scid:
+                if c.w > c.h + 1e-6:
+                    return FrameLayout.LANDSCAPE
+                if c.h > c.w + 1e-6:
+                    return FrameLayout.PORTRAIT
+                return FrameLayout.SQUARE
+    return default
+
+
 def resolve_layout_feel(issue, scene) -> dict | None:
     """The FEEL a scene's panels flow to: the scene's own override, else the
     book's feel (as a plain {density, verticality, irregularity, variety} dict);
