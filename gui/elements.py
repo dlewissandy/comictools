@@ -65,8 +65,12 @@ def crud_button(kind: CrudButtonKind, action: Callable, size: int = 2):
     """
     if size not in [1, 2]:
         raise ValueError("Size must be 1 or 2.")
-    
-    button = ui.button(icon=CRUD_ICON[kind.value]).classes('text-base rounded-md').style(CRUD_BUTTON_STYLES[str(size)])
+
+    # THE NARRATOR-BOX GLYPH, not a chunky blue slab: a small flat inked
+    # icon button, the same hand as the caption boxes' + and ✏️ glyphs
+    button = ui.button(icon=CRUD_ICON[kind.value]) \
+        .props('flat round dense size=' + ('md' if size == 1 else 'sm')) \
+        .classes('crud-glyph')
     button.on('click', action)
     return button
 

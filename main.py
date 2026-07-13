@@ -105,6 +105,11 @@ def init_layout(logger):
             overflow: visible; }
         .caption-btn { color: var(--caption-ink) !important; min-height: 0 !important;
                        padding: 0 !important; margin: -2px -4px -2px 2px !important; }
+        /* header/section action glyphs: small, flat, inked — never a chunky
+           blue slab; the same hand as the narrator-box + and pencil */
+        .crud-glyph { color: var(--ink) !important; opacity: .62;
+                      transition: opacity .12s; }
+        .crud-glyph:hover { opacity: 1; }
 
         .comic-label { font-weight: 800; text-transform: uppercase;
                        font-size: .8rem; letter-spacing: .5px; color: var(--ink); }

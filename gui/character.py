@@ -114,7 +114,7 @@ def view_character(state:APPState):
             # a prominent door to the composer, above the Looks wall
             with ui.row().classes('w-full items-center q-mb-sm').style('gap: 8px;'):
                 ui.button('Compose a look', icon='checkroom') \
-                    .props('unelevated no-caps dense') \
+                    .props('flat dense no-caps').classes('crud-glyph') \
                     .tooltip('Dress the base character in wardrobe and props to make a new look') \
                     .on('click', lambda _: _compose_look())
                 ui.label('— dress the base character in wardrobe and props') \
