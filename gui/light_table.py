@@ -2203,6 +2203,60 @@ def light_table(state: APPState, panel, scene, setting,
                     .tooltip(heal_tip or 'Take this acetate to the healing bench') \
                     .on('click', lambda _: on_heal())
 
+    # ---- THE MINIMUM BAR: is the brief detailed enough to stage? ----------
+    async def _brief_gate(brief_text: str, is_cover: bool, action: str, collab_msg: str) -> bool:
+        """Weigh whether the written brief carries enough to STAGE the panel —
+        pose the cast, dress the setting, set the shot.  If it does, return True
+        and let <action> proceed.  If it's too thin, speak up: offer to flesh it
+        out together (posts to the coauthor) — but the author can always
+        override.  Returns True to proceed, False if they chose to collaborate
+        or backed out.  The judge fails OPEN, so it never hard-blocks."""
+        import asyncio
+        from agentic.tools.imaging import assess_brief
+        with ui.dialog().props('persistent') as busy, \
+                ui.card().classes('soft-card').style('min-width: 300px;'):
+            with ui.row().classes('items-center').style('gap: 12px;'):
+                ui.spinner('dots', size='1.6em', color='primary')
+                ui.label('Weighing the brief…').classes('text-sm')
+        busy.open()
+        try:
+            verdict = await asyncio.to_thread(assess_brief, state, series_id, brief_text, is_cover)
+        finally:
+            busy.close()
+        if not verdict or verdict.get('ready', True):
+            return True
+        gaps = verdict.get('gaps') or []
+        note = verdict.get('note') or ''
+        with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                .style('min-width: 420px; max-width: 560px;'):
+            ui.label(f'This brief may be too thin to {action}').classes('caption-box caption-box-sm')
+            ui.label('There may not be enough here to stage the panel well — to pose the '
+                     'cast, dress the setting, and set the shot. We can fill it in together, '
+                     f'or {action} it anyway.').classes('text-sm q-mt-sm')
+            if gaps:
+                with ui.column().classes('q-mt-sm').style('gap: 3px;'):
+                    for g in gaps:
+                        with ui.row().classes('items-start flex-nowrap').style('gap: 6px;'):
+                            ui.icon('chevron_right').style('font-size: 1rem; margin-top: 1px; color: #c08a2b;')
+                            ui.label(g).classes('text-sm')
+            if note:
+                ui.label(note).classes('text-sm text-gray-500 q-mt-sm').style('font-style: italic;')
+            with ui.row().classes('w-full items-center q-mt-md').style('gap: 8px;'):
+                ui.button('Flesh it out together', icon='forum').props('unelevated dense no-caps') \
+                    .on('click', lambda _: dlg.submit('collab'))
+                ui.button(f'{action.title()} it anyway', icon='bolt').props('flat dense no-caps') \
+                    .on('click', lambda _: dlg.submit('override'))
+                ui.space()
+                ui.button('Not now', icon='close').props('flat dense no-caps') \
+                    .on('click', lambda _: dlg.submit('cancel'))
+        choice = await dlg
+        if choice == 'override':
+            return True
+        if choice == 'collab':
+            msg = collab_msg + (('  Specifically, what is missing: ' + '; '.join(gaps) + '.') if gaps else '')
+            post_user_message(state, msg)
+        return False
+
     # ---- INK: hand the rough to the coauthor -----------------------------
     def ink():
         parts = []
@@ -2257,6 +2311,34 @@ def light_table(state: APPState, panel, scene, setting,
                 else f"'{panel.name}' insert page" if insert_mode else "panel")
         post_user_message(state, f"Ink this rough into a new take of this {noun} — compose it with " +
                           "; ".join(parts) + ".")
+
+    # ---- PROOF: from the rough if one is laid, else from the script -------
+    async def proof_flow():
+        """THE PROOF: if a rough is on the table, ink it (its arrangement IS the
+        brief).  If the board is BARE, render a take straight from the script —
+        gated on the script being detailed enough, and WITHOUT composing a board
+        brief (an empty board would just say 'no setting, no cast' — pure noise
+        that would only muddy the brief)."""
+        has_rough = any(f.get("on") and f.get("img") for f in figures) \
+            or bool(bg_layer.get("on") and setting is not None)
+        if has_rough:
+            ink()
+            return
+        # NO ROUGH — proof from the written beat, as it stands
+        brief = f"{(getattr(panel, 'beat', '') or '').strip()}\n\n{(panel.description or '').strip()}".strip()
+        if not brief:
+            ui.notify('No rough is laid and the script is empty — write the beat first, '
+                      'then proof it.', type='warning')
+            return
+        noun = ("cover" if cover_mode
+                else f"'{panel.name}' insert page" if insert_mode else "panel")
+        collab = (f"There is no rough laid for this {noun}, and its script is thin to "
+                  f"proof from. Let's build out the beat together first.")
+        if not await _brief_gate(brief, cover_mode, 'proof', collab):
+            return
+        post_user_message(state, f"Render a new take of this {noun} straight from its script — "
+                                 f"no rough is laid, so work from the written beat as it stands "
+                                 f"(don't rewrite the brief).")
 
     with ui.row().classes('w-full flex-nowrap light-columns').style('gap: 12px; align-items: stretch;'):
         stack_col = ui.column().classes('w-1/3 acetate-stack').style('gap: 4px; min-width: 220px;')
@@ -3132,6 +3214,12 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.notify('Write the script or visual description first — the table is built from the brief.',
                               type='warning')
                     return
+                # THE MINIMUM BAR: enough here to stage a rough?  If not, speak
+                # up and offer to flesh it out together (the author can override).
+                collab = ("The brief for this panel is a bit thin to rough well. Let's flesh "
+                          "it out together so the cast can be posed and the setting dressed.")
+                if not await _brief_gate(brief, cover_mode, 'rough', collab):
+                    return
                 # the click answers IMMEDIATELY, before the slow read starts
                 ui.notify('📖 Reading the brief — breaking it into acetates…', type='info')
                 pending = getattr(state, '_render_pending', None)
@@ -3667,7 +3755,7 @@ def light_table(state: APPState, panel, scene, setting,
             # the main action never scrolls out of reach
             with ui.row().classes('q-mt-sm ink-bar').style('gap: 8px;'):
                 ui.button('Ink this rough', icon='brush').props('unelevated dense') \
-                    .on('click', lambda _: ink())
+                    .on('click', lambda _: proof_flow())
                 ui.button('Flatten', icon='layers').props('outline dense') \
                     .tooltip('Composite the visible acetates into one image and save it as a new asset') \
                     .on('click', lambda _: flatten_dialog())
@@ -3712,10 +3800,46 @@ def light_table(state: APPState, panel, scene, setting,
                         b.tooltip(tip)
                         b.on('click', lambda _, s=shape: reshape(s))
             rough()
-            # THE BRIEF: the same margin notes under every rough — panel,
-            # cover, or insert page — the words the render is drawn from
-            from gui.elements import markdown_field_editor
-            markdown_field_editor(state, description_label, panel.description, header_size=3)
+            # THE BRIEF: the words the render is drawn from — editable RIGHT
+            # HERE (a real editor, no confused coauthor round-trip), panel,
+            # cover, or insert page alike.
+            from gui.elements import caption_action, CrudButtonKind, markdown as _brief_md
+
+            def edit_brief_dialog():
+                with ui.dialog() as _bdlg, ui.card().classes('soft-card') \
+                        .style('min-width: 520px; max-width: 760px;'):
+                    ui.label(f'Edit {description_label.lower()}').classes('caption-box caption-box-sm')
+                    ui.label('The words the render is drawn from — describe exactly what THIS '
+                             'panel shows: who and what is in frame, where, and how. '
+                             'What you leave out is left out of the art.') \
+                        .classes('text-sm text-gray-500 q-mt-xs')
+                    _ta = ui.textarea(value=panel.description or '') \
+                        .props('outlined autogrow').classes('w-full').style('min-height: 220px;')
+                    with ui.row().classes('w-full justify-end q-mt-sm').style('gap: 8px;'):
+                        ui.button('Cancel', icon='close').props('flat dense no-caps') \
+                            .on('click', lambda _: _bdlg.close())
+
+                        def _save_brief():
+                            fresh = storage.read_object(cls=type(panel),
+                                                        primary_key=panel.primary_key) or panel
+                            fresh.description = (_ta.value or '').strip()
+                            storage.update_object(fresh)
+                            panel.description = fresh.description
+                            _bdlg.close()
+                            state.refresh_details()
+                        ui.button(f'Save {description_label.lower()}', icon='check') \
+                            .props('unelevated dense no-caps').on('click', lambda _: _save_brief())
+                _bdlg.open()
+
+            _has_brief = bool((panel.description or '').strip())
+            caption_action(description_label.title(),
+                           CrudButtonKind.UPDATE if _has_brief else CrudButtonKind.CREATE,
+                           lambda _: edit_brief_dialog(), 3)
+            if _has_brief:
+                _brief_md(panel.description)
+            else:
+                ui.label('No brief yet — click the pencil to write what this panel shows.') \
+                    .classes('text-sm text-gray-500').style('font-style: italic; padding: 0 16px;')
         # an EXPLODED take auto-opens the split flow on its fresh plate
         if getattr(state, '_auto_split_board', None) == panel.id and split_plate:
             state._auto_split_board = None
@@ -3723,12 +3847,12 @@ def light_table(state: APPState, panel, scene, setting,
 
         # THE BEAT/ROUGH/PROOF PENCIL, fired from the open book: when a tile's
         # pencil sent us here to rough or proof THIS panel, run the light
-        # table's OWN action — build_table_flow (rough) or ink (proof).  Same
-        # code path, just auto-fired.  (build_table_flow is conditional, so
+        # table's OWN action — build_table_flow (rough) or proof_flow (proof).
+        # Same code path, just auto-fired.  (build_table_flow is conditional, so
         # look it up in locals(); a locked board simply has no rougher.)
         _auto = getattr(state, '_board_autorun', None)
         if _auto and _auto[1] == panel.id:
-            _fn = locals().get('build_table_flow') if _auto[0] == 'rough' else locals().get('ink')
+            _fn = locals().get('build_table_flow') if _auto[0] == 'rough' else locals().get('proof_flow')
             if _fn is not None:
                 state._board_autorun = None
                 ui.timer(0.4, _fn, once=True)

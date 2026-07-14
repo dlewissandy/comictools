@@ -2475,11 +2475,29 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
     reference_images: list[str] = []
     missing: list[str] = []
 
-    # 1) The setting's master background is shared by every panel in the scene.
+    # DID THE AUTHOR ROUGH THIS PANEL?  A rough — figures or props laid, a plate
+    # dropped — is authoritative: compose from the board.  A BARE board is a
+    # FROM-BRIEF render: READ the brief and pull ONLY the reference objects it
+    # actually calls for — no rough required, no scene furniture auto-stamped.
+    roughed = bool(panel.character_references) or bool(panel.figure_images)
+    brief_plan = None
+    if not roughed:
+        _brief = f"{panel.beat or ''}\n\n{panel.description or ''}".strip()
+        if _brief:
+            try:
+                brief_plan = breakdown_brief(state, series_id, _brief, False)
+            except Exception as _bex:
+                logger.error(f"brief breakdown for render failed: {_bex}")
+
+    # 1) The setting's master background.  Roughed → the scene's setting (the
+    # plate the author works over).  From-brief → ONLY the setting the brief
+    # NAMES; a brief that describes no place gets no background at all.
     setting: Setting | None = None
     background_first = False
-    if scene.setting_id:
-        setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": scene.setting_id})
+    _setting_id = (scene.setting_id if roughed
+                   else (brief_plan.get('setting_id') if brief_plan else None))
+    if _setting_id:
+        setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": _setting_id})
         if setting is not None:
             from helpers.masters import scene_background
             # the scene's chosen SHOT (angle + time of day) wins over the master
@@ -2492,9 +2510,28 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
                 missing.append(f"master background for '{setting.name}' in style '{scene.style_id}' (generate_setting_background)")
 
     # 2) The cast's styled reference sheets keep the characters on-model.
+    # Roughed → the panel's own cast.  From-brief → ONLY the characters the
+    # brief NAMES (breakdown), each reconciled to the scene cast for their
+    # wardrobe — never the whole scene stamped in.
     cast_info = ""
     char_names: dict[str, str] = {}
-    for ref in panel.character_references:
+    if roughed:
+        cast_refs = list(panel.character_references or [])
+    else:
+        cast_refs = []
+        _scene_var = {c.character_id: c.variant_id for c in (getattr(scene, 'cast', None) or [])}
+        for _f in ((brief_plan.get('figures') if brief_plan else None) or []):
+            _cid = _f.get('character_id')
+            if not _cid:
+                continue
+            _vid = _scene_var.get(_cid)
+            if not _vid:   # a character the brief names but the scene never cast
+                _vs = list(storage.read_all_objects(CharacterVariant, {
+                    "series_id": series_id, "character_id": _cid}))
+                _vid = _vs[0].variant_id if _vs else None
+            if _vid:
+                cast_refs.append(CharacterRef(series_id=series_id, character_id=_cid, variant_id=_vid))
+    for ref in cast_refs:
         variant: CharacterVariant = storage.read_object(cls=CharacterVariant, primary_key={
             "series_id": series_id, "character_id": ref.character_id, "variant_id": ref.variant_id})
         if variant is None:
@@ -2513,29 +2550,51 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
             missing.append(f"styled image of '{ref.character_id}' ({ref.variant_id}) in style '{scene.style_id}' (create_styled_image_for_character_variant)")
         cast_info += format_character_variant(char_names[ref.character_id], variant, 2) + "\n"
 
-    # 2b) THE PROPS RIDE THE RENDER: the scene's props (and the setting's
-    # standing props) go into the prompt by NAME and DESCRIPTION, and any
-    # style-keyed reference art the author paid for rides along — a prop
-    # laid on the table must never vanish from the finished panel
+    # 2b) THE PROPS ARE PER-PANEL.  Roughed → the props laid on THIS panel's
+    # light table (element/* acetates).  From-brief → the standalone props the
+    # brief NAMES (breakdown elements), matched to library art.  Never the whole
+    # scene's props stamped onto every panel.
     props_info = ""
     _prop_lines = []
     _seen_props = set()
+    import re as _re
     from schema import PropAsset as _PropAsset
-    _assets = {a.name.strip().lower(): a for a in storage.read_all_objects(
+    from agentic.tools.normalization import normalize_id as _nid
+    _assets_by_nid = {_nid(a.name): a for a in storage.read_all_objects(
         _PropAsset, {"series_id": series_id})}
-    for _p in list(getattr(scene, "props", None) or []) + list(getattr(setting, "props", None) or []):
-        _key = (_p.name or "").strip().lower()
-        if not _key or _key in _seen_props:
-            continue
-        _seen_props.add(_key)
-        _prop_lines.append(f"* **{_p.name}**: {_p.description}")
-        _asset = _assets.get(_key)
-        _art = (_asset.images or {}).get(scene.style_id) if _asset else None
+
+    def _add_prop(_name, _desc, _asset):
+        _nmk = (_name or "").strip().lower()
+        if not _nmk or _nmk in _seen_props:
+            return
+        _seen_props.add(_nmk)
+        _prop_lines.append(f"* **{_name}**: {_desc}" if _desc else f"* **{_name}**")
+        _art = (_asset.images or {}).get(scene.style_id) if _asset is not None else None
         if _art and os.path.exists(_art):
             reference_images.append(_art)
         elif _asset is not None:
-            missing.append(f"reference art for prop '{_p.name}' in style "
+            missing.append(f"reference art for prop '{_name}' in style "
                            f"'{scene.style_id}' (generate_prop_reference)")
+
+    if roughed:
+        _pblk = panel.figure_blocking or {}
+        for _key, _path in sorted((panel.figure_images or {}).items()):
+            if not _key.startswith('element/'):
+                continue
+            if not (_pblk.get(_key) or {}).get('on', 1):
+                continue   # the author lifted this prop off the table
+            _pid = _key.split('/', 1)[1]
+            # library props key as <slug> (a de-duplicated instance as <slug>-2, …)
+            _asset = _assets_by_nid.get(_pid) or _assets_by_nid.get(_re.sub(r'-\d+$', '', _pid))
+            _name = _asset.name if _asset is not None else _pid.replace('-', ' ')
+            _add_prop(_name, (getattr(_asset, 'description', '') or '') if _asset is not None else '', _asset)
+    else:
+        for _el in ((brief_plan.get('elements') if brief_plan else None) or []):
+            _name = (_el.get('name') or '').strip()
+            _asset = _assets_by_nid.get(_nid(_name)) if _name else None
+            _desc = (_el.get('description')
+                     or (getattr(_asset, 'description', '') if _asset is not None else '') or '')
+            _add_prop(_name, _desc, _asset)
     props_info = chr(10).join(_prop_lines)
 
     # 3) Panel-specific uploaded reference images.
@@ -2592,6 +2651,17 @@ remove, move, or re-stage anything to match the beat or panel description — th
 identity, costume and surface detail ONLY, never for what appears or where.   Finish and
 ink the rough in the style below.   The remaining references show the setting and the
 on-model cast."""
+    elif not roughed:
+        # FROM-BRIEF: the panel description IS the exact visual brief.
+        ref_guidance = (
+            "The Panel description below is the EXACT visual brief — draw precisely what it "
+            "specifies and NOTHING it excludes. If it says no background, no characters, or "
+            "empty space, then there are none; let the negative space carry it. The Beat is "
+            "narrative intent (why this moment matters), NOT a license to add characters, "
+            "objects, or scenery the description does not call for. Render one single panel — "
+            "never a multi-panel page."
+            + (" The reference images show the setting and the on-model cast the brief names; "
+               "keep them strictly on-model." if reference_images else ""))
     elif background_first:
         ref_guidance = """The FIRST reference image is the setting's master background: use it
 as the panel's setting — same architecture, same props, same palette — reframed as
@@ -2613,12 +2683,12 @@ must look; keep them strictly on-model."""
 # Panel description
 {panel.description}
 
-{f"# Scene blocking{chr(10)}{scene.blocking}" if scene.blocking else ""}
+{f"# Scene blocking{chr(10)}{scene.blocking}" if (scene.blocking and roughed) else ""}
 
 # Characters in panel
 {cast_info if cast_info else "* (no characters in panel)"}
 
-{f"# Props in scene (draw them as their reference art shows){chr(10)}{props_info}" if props_info else ""}
+{f"# Props on this panel (draw them as their reference art shows){chr(10)}{props_info}" if props_info else ""}
 
 {f"# Layout — the author BLOCKED this on the light table; honor positions and depths{chr(10)}{table_layout}{chr(10)}" if table_layout else ""}
 # Lettering (render these balloons/boxes per the style's bubble styles;
@@ -2626,7 +2696,7 @@ must look; keep them strictly on-model."""
 {script if script else "* (silent panel — no lettering)"}
 
 # One hand, one finish
-Redraw EVERY element of this panel — background and setting, characters, and props alike —
+Redraw EVERY element the panel calls for — whatever setting, characters, and props appear —
 in ONE unified hand: the same line weight, the same level of detail and shading, the same
 palette and finish, as if a single artist inked the whole panel in one pass.   The
 reference images fix identity, placement and composition ONLY — never copy a reference at
@@ -3627,6 +3697,68 @@ def series_cast_roster(storage, series_id: str) -> list[dict]:
         roster.append({"character_id": c.character_id, "name": c.name,
                        "notes": (getattr(c, 'description', '') or '')})
     return roster
+
+
+def assess_brief(state, series_id: str, description: str, is_cover: bool) -> dict:
+    """THE MINIMUM BAR: judge whether a written brief carries enough to STAGE
+    the panel — who is present and roughly what they're doing, WHERE it happens,
+    and the gist of the shot/mood — so an artist needn't invent the whole scene.
+    Text-only, strict JSON.  Deliberately CONSERVATIVE: prefer ready:true and
+    only flag a brief that plainly lacks the staging essentials.  Fails OPEN
+    (ready=True) on any error, so a flaky judge never blocks the author.
+
+    Returns {"ready": bool, "gaps": [short strings], "note": one friendly line}."""
+    import json as _json
+    import re as _re
+
+    import openai
+    try:
+        storage = state.storage
+        roster = series_cast_roster(storage, series_id)
+        roster_txt = ", ".join(c.get("name") or c["character_id"] for c in roster[:30]) or "(none yet)"
+        openai.api_key = os.getenv('OPENAI_API_KEY')
+        kind = 'cover' if is_cover else 'panel'
+        prompt = f"""You are a comics art director sanity-checking whether a {kind}'s written
+brief is detailed enough to hand an artist to ROUGH (stage) — you are NOT judging
+its prose, only whether the scene can be staged from it.
+
+BRIEF:
+{description}
+
+KNOWN CAST (for reference only): {roster_txt}
+
+A brief is READY when an artist could stage it without inventing the scene: it is
+clear WHO (if anyone) is present and roughly what they are doing or feeling, WHERE
+it takes place, and the gist of the SHOT or mood.  Not every detail is required —
+a spare establishing shot of a place can be ready with no cast at all.
+
+It is NOT ready when the staging essentials are missing — e.g. a character is
+named with no action, expression, or blocking; there is no sense of place; or it
+is so terse the artist would have to make up the whole scene.
+
+Respond with STRICT JSON only, no prose:
+{{"ready": <bool>,
+  "gaps": ["<short, concrete missing piece>", ...],
+  "note": "<one friendly sentence proposing what to pin down together, or ''>"}}
+
+Be conservative — prefer ready:true unless the brief is clearly too thin to stage."""
+        resp = openai.chat.completions.create(
+            model=os.getenv('VISION_MODEL', 'gpt-5.2'),
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = resp.choices[0].message.content or ""
+        m = _re.search(r"\{.*\}", text, _re.DOTALL)
+        if not m:
+            return {"ready": True, "gaps": [], "note": ""}
+        data = _json.loads(m.group(0))
+        return {
+            "ready": bool(data.get("ready", True)),
+            "gaps": [str(g) for g in (data.get("gaps") or []) if str(g).strip()][:6],
+            "note": str(data.get("note") or "").strip(),
+        }
+    except Exception as ex:
+        logger.error(f"brief readiness assessment failed: {ex}")
+        return {"ready": True, "gaps": [], "note": ""}
 
 
 def _resolve_layer_source(panel, scene, storage, series_id: str, layer: str):
