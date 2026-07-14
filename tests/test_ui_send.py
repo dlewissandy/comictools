@@ -164,15 +164,15 @@ async def test_inline_scalar_edit_affordance(user: User) -> None:
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    # THE COLOPHON prints the credits set in type — every line a pencil
+    # THE COLOPHON prints the issue-wide indicia — every line a pencil
     await user.should_see("COLOPHON")
-    await user.should_see("WRITER")
     await user.should_see("PRICE")
+    await user.should_see("CREATIVE MINDS")
     # every credit line advertises its pencil
     tips = [getattr(e, "text", "") for e in user.client.elements.values()
             if e.__class__.__name__ == "Tooltip"]
-    assert any("Set the writer" in t for t in tips), "writer line is a pencil"
     assert any("Set the price" in t for t in tips), "price line is a pencil"
+    assert any("Set the creative minds" in t for t in tips), "creative minds line is a pencil"
 
 
 def _seat_tent_cast(storage):
@@ -412,8 +412,10 @@ async def test_long_manuscript_fades_at_200_words(user: User) -> None:
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
 async def test_colophon_prints_all_credits_and_each_line_is_a_pencil(user: User, monkeypatch) -> None:
-    """THE CREDITS SET IN TYPE: all six roles print; set values show, unset
-    ones ghost; clicking a line posts the edit ask for THAT role."""
+    """THE INDICIA SET IN TYPE: the issue-wide credits (creative minds,
+    publication date, price) print — set values show, unset ones ghost, a
+    click posts the edit ask for THAT role.  The per-STORY credits (writer,
+    artist, letterer) print in the production dashboard, one team per feature."""
     main.LocalStorage = _TmpStorage
     sent = []
     monkeypatch.setattr('gui.issue.post_user_message', lambda state, msg: sent.append(msg))
@@ -423,18 +425,21 @@ async def test_colophon_prints_all_credits_and_each_line_is_a_pencil(user: User,
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
     await user.should_see("COLOPHON")
-    for role in ("WRITER", "ARTIST", "COLORIST", "CREATIVE MINDS", "PUBLICATION DATE", "PRICE"):
+    for role in ("CREATIVE MINDS", "PUBLICATION DATE", "PRICE"):
         await user.should_see(role)
-    await user.should_see("Mud, scribe of the Earth")     # set in fixture data
-    await user.should_see("unset — pencil it in")
+    await user.should_see("Summer 2024")             # publication date, set in fixture
+    await user.should_see("unset — pencil it in")    # creative minds / price are unset
+    # the per-story credits print in the dashboard — the issue's own script
+    # carries the issue-wide writer as its byline
+    await user.should_see("Mud, scribe of the Earth")
 
     lines = [e for e in user.client.elements.values()
              if 'credit-line' in getattr(e, "_classes", [])]
-    assert len(lines) == 6
+    assert len(lines) == 3
     for ev in lines[0]._event_listeners.values():
         if ev.type.startswith("click"):
             lines[0]._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
-    assert sent == ["I would like to edit the writer."]
+    assert sent == ["I would like to edit the creative minds."]
 
 
 @pytest.mark.module_under_test(main)
@@ -474,15 +479,16 @@ async def test_mailbag_letter_blocks_ride_the_table(user: User) -> None:
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
 async def test_lobby_resume_card_and_scene_door(user: User) -> None:
-    """ONE HOME PER THING: the lobby offers the last bench back; the scene
-    view keeps a door to the book instead of its own panel grid."""
+    """ONE HOME PER THING: the lobby offers the last bench back; a scene is
+    never its own page — selecting one opens the book to its manuscript page,
+    production line and all, with no scene chip in the breadcrumb."""
     main.LocalStorage = _TmpStorage
     json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
     await user.should_see("STILL ON THE DRAWING BOARD")
 
-    # the scene view: a door, not a grid
+    # a scene is not a page — it rides in the book
     from schema import SceneModel, Panel
     WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
     storage = _TmpStorage()
@@ -495,7 +501,12 @@ async def test_lobby_resume_card_and_scene_door(user: User) -> None:
                              {"name": "S", "id": sc.scene_id, "kind": "scene"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    await user.should_see("read them in the book")
+    # the book opened to the scene's manuscript page — its production line
+    # rides in the book (no standalone scene page, no "read them in the book"
+    # door), which only renders at SCENES detail (the redirect set it)
+    strips = [e for e in user.client.elements.values()
+              if 'scene-prod' in str(getattr(e, "_classes", []))]
+    assert strips, "the scene's production line rides in the book"
 
 
 @pytest.mark.module_under_test(main)

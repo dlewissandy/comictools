@@ -483,9 +483,11 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
         reference_image_locators.insert(0, rough_ref)
         background_guidance = (
             "The FIRST reference image is the author's ROUGH of this cover — the exact "
-            "composition assembled on the light table.   Treat it as the pencils: keep every "
-            "figure and element at its position, scale and facing; finish and ink it in the "
-            "style, then letter the trade dress over it.\n"
+            "composition assembled on the light table.   It is AUTHORITATIVE and OVERRIDES the "
+            "cover design text for composition: keep every figure and element at its position, "
+            "scale and facing, draw only what it shows, then finish and ink it in the style and "
+            "letter the trade dress over it (the cover-design text is for identity and detail "
+            "only).\n"
             + ("The NEXT reference image is the setting's master background — same architecture, "
                "same palette, reframed as the composition requires.\n" if background_first else ""))
 
@@ -526,6 +528,14 @@ def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id:
 {cover.description}
 
 {f"# Layout — the author BLOCKED this on the light table; honor positions and depths{chr(10)}{table_layout}" if table_layout else ""}
+
+# One hand, one finish
+Redraw EVERY element — background, characters, props, trade dress — in ONE unified hand:
+the same line weight, level of detail, shading, palette and finish, as if a single artist
+painted the whole cover in one pass.   The reference images fix identity and composition
+ONLY — never copy one at its own resolution or finish; the background must not read as more
+photographic or more finely rendered than the figures.   Flatten everything to the single
+style above so nothing looks pasted in.
 """
 
     try:
@@ -2575,9 +2585,13 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
     if rough_ref:
         reference_images.insert(0, rough_ref)
         ref_guidance = """The FIRST reference image is the author's ROUGH of this panel — the exact
-composition assembled on the light table.   Treat it as the pencils: keep every
-figure and element at its position, scale and facing; finish and ink it in the
-style below.   The remaining references show the setting and the on-model cast."""
+composition they assembled on the light table.   It is AUTHORITATIVE and OVERRIDES the
+written description below for composition: draw EXACTLY the figures and elements it shows,
+each at its position, scale and facing, and NOTHING it does not show.   Do not add,
+remove, move, or re-stage anything to match the beat or panel description — those are for
+identity, costume and surface detail ONLY, never for what appears or where.   Finish and
+ink the rough in the style below.   The remaining references show the setting and the
+on-model cast."""
     elif background_first:
         ref_guidance = """The FIRST reference image is the setting's master background: use it
 as the panel's setting — same architecture, same props, same palette — reframed as
@@ -2610,6 +2624,15 @@ must look; keep them strictly on-model."""
 # Lettering (render these balloons/boxes per the style's bubble styles;
 # bracketed placements are the author's — put each balloon and tail there)
 {script if script else "* (silent panel — no lettering)"}
+
+# One hand, one finish
+Redraw EVERY element of this panel — background and setting, characters, and props alike —
+in ONE unified hand: the same line weight, the same level of detail and shading, the same
+palette and finish, as if a single artist inked the whole panel in one pass.   The
+reference images fix identity, placement and composition ONLY — never copy a reference at
+its own resolution or level of finish.   In particular the setting/background must not read
+as more photographic or more finely rendered than the figures and props (or the reverse):
+flatten everything to the single style below so nothing looks pasted in from another source.
 
 {format_comic_style(style, heading_level=1)}
 """
@@ -3521,19 +3544,12 @@ def _resolve_layer_source(panel, scene, storage, series_id: str, layer: str):
     board itself when it IS its own scene (a cover)."""
     owner = scene if scene is not None else panel
     if layer == 'background':
+        # THE SETTING IS A LAYER: the rough shows a background only when the
+        # author LAID one on the table (background/plate) — never auto-derived
+        # from the scene's setting, so the rough matches the light table.
         plate = (panel.figure_images or {}).get("background/plate")
         if plate and os.path.exists(plate):
             return plate, 'background'
-        if getattr(owner, 'setting_id', None):
-            setting: Setting = storage.read_object(cls=Setting, primary_key={
-                "series_id": series_id, "setting_id": owner.setting_id})
-            if setting is not None:
-                from helpers.masters import scene_background
-                cand, _exact = scene_background(setting, getattr(owner, 'style_id', None),
-                                                getattr(owner, 'aspect', 'landscape'),
-                                                getattr(owner, 'setting_shot_id', None))
-                if cand and os.path.exists(cand):
-                    return cand, 'background'
         return None, 'background'
     path = (panel.figure_images or {}).get(layer)
     if path and os.path.exists(path):

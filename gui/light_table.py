@@ -1199,23 +1199,69 @@ def lay_figure_on_table(state, panel, character_id: str, variant_id: str,
     state.refresh_details()
 
 
+def _lay_plate(state, panel, img):
+    """Write a background/plate LAYER onto the board — full-frame by default
+    (x centered, sitting on the floor, full height), lowest in the stack.  The
+    author moves, scales, dresses or removes it like any other acetate."""
+    b = state.storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
+    b.figure_images['background/plate'] = img
+    b.figure_blocking['background/plate'] = {"x": 50, "y": 0, "h": 100, "z": -9}
+    # a freshly laid background starts visible — clear any stale on/off flag
+    b.figure_blocking.pop('background', None)
+    # a fresh plate leaves no split-group behind
+    for gname in list(b.layer_groups or {}):
+        if 'background/plate' in (b.layer_groups[gname] or []):
+            b.layer_groups.pop(gname)
+    state.storage.update_object(b)
+
+
 def lay_background_on_table(state, scene, panel, setting, shot=None):
+    """Lay a setting's master on the board as the background LAYER — a deliberate
+    act, full-frame by default, never auto-stamped.  If the master isn't inked in
+    this board's style yet, ink it and let it land on the table by itself."""
     scene.setting_id = setting.setting_id
-    # picking a set (or its master) clears any prior shot; picking a shot pins it
     if scene is not None and hasattr(scene, 'setting_shot_id'):
         scene.setting_shot_id = shot.shot_id if shot is not None else None
     state.storage.update_object(scene)
-    # a new background replaces any split plate
     fresh_board(state.storage, panel)
-    if (panel.figure_images or {}).pop('background/plate', None) is not None:
-        for gname in list(panel.layer_groups or {}):
-            panel.layer_groups[gname] = [k for k in panel.layer_groups[gname]
-                                         if k != 'background/plate']
-            if not panel.layer_groups[gname]:
-                panel.layer_groups.pop(gname)
-        state.storage.update_object(panel)
+
+    from helpers.masters import scene_background
+    style_id = (getattr(scene, 'style_id', None) if scene is not None
+                else getattr(panel, 'style_id', None)) or 'vintage-four-color'
+    shot_id = getattr(scene, 'setting_shot_id', None)
+    master, _exact = scene_background(setting, style_id, panel.aspect, shot_id)
     _what = f"{setting.name} · {shot.name}" if shot is not None else setting.name
-    table_receipt(state, f"🏔 laid the **{_what}** background on the table")
+
+    if master and os.path.exists(master):
+        _lay_plate(state, panel, master)
+        table_receipt(state, f"🏔 laid the **{_what}** background on the table "
+                             f"(full frame — drag or scale it, or dress it)")
+        state.refresh_details()
+        return
+
+    # not inked in this style yet — ink it, then lay it when it lands
+    from agentic.tools.imaging import generate_setting_background_body
+    from helpers.render_queue import enqueue_renders
+    table_receipt(state, f"🖌 inking the **{setting.name}** master in {style_id} — "
+                         f"it lays itself on the table when it lands")
+
+    def _land(_result, _pk=panel.primary_key, _sid=setting.setting_id,
+              _series=setting.series_id, _style=style_id, _aspect=panel.aspect, _shot=shot_id):
+        from schema import Setting as _Setting
+        s = state.storage.read_object(cls=_Setting, primary_key={"series_id": _series, "setting_id": _sid})
+        if s is None:
+            return
+        m, _ = scene_background(s, _style, _aspect, _shot)
+        if m and os.path.exists(m):
+            p = state.storage.read_object(cls=type(panel), primary_key=_pk)
+            if p is not None:
+                _lay_plate(state, p, m)
+    enqueue_renders(state, [(
+        f"master background — {setting.name} in {style_id} ({panel.aspect.value})",
+        lambda: generate_setting_background_body(state, setting.series_id, setting.setting_id,
+                                                 style_id, panel.aspect),
+        _land,
+    )], role='the Background Artist')
     state.refresh_details()
 
 
@@ -1628,21 +1674,14 @@ def light_table(state: APPState, panel, scene, setting,
         ui.on('stack_reorder', _on_reorder)
 
     # ---- gather the acetates -------------------------------------------
+    # THE SETTING IS A LAYER, NOT AN AUTOMATIC BACKDROP.  It shows only when the
+    # author LAID it (pick_background writes background/plate) — it is never
+    # auto-derived from scene.setting_id, so nothing lands on the table unasked.
     background = None
-    bg_style_missing = False   # the setting has no master inked in THIS style
+    bg_style_missing = False
     split_plate = (panel.figure_images or {}).get("background/plate")
     if split_plate and os.path.exists(split_plate):
         background = split_plate
-    elif setting is not None:
-        style_id = scene.style_id if scene is not None else None
-        from helpers.masters import scene_background
-        # the scene's chosen SHOT (angle + time of day) rides the table in place
-        # of the establishing master
-        background, _exact = scene_background(setting, style_id, panel.aspect,
-                                              getattr(scene, 'setting_shot_id', None))
-        # not exact = borrowed style or orientation — the honest re-ink
-        # offer stands, and re-inking writes ITS OWN key (no clobber)
-        bg_style_missing = not _exact
 
     _char_names = {c.character_id: c.name for c in storage.read_all_objects(
         CharacterModel, primary_key={"series_id": series_id})}
@@ -1663,37 +1702,8 @@ def light_table(state: APPState, panel, scene, setting,
                         "posed": posed is not None,
                         "on": bool(blocking.get("on", 1)), "blocking": blocking})
 
-    # AUTO-LAY SCENE PROPS: if a prop is IN THE SCENE it belongs ON THE TABLE,
-    # laid as an acetate automatically — like a cast member auto-poses, no extra
-    # click.  A prop with art but no acetate gets one (once, at a default spot;
-    # the author moves it from there).  Removing the acetate takes the scene prop
-    # with it (below), so it stays gone; props still lacking art show as rows.
-    if scene is not None and getattr(scene, 'props', None):
-        from schema import PropAsset as _PA_auto
-        from agentic.tools.normalization import normalize_id as _nid_auto
-        import re as _re_auto
-        _placed = {_re_auto.sub(r'-\d+$', '', k.split('/', 1)[1])
-                   for k in (panel.figure_images or {}) if k.startswith('element/')}
-        _assets = {(a.name or '').strip().lower(): a
-                   for a in storage.read_all_objects(_PA_auto, {"series_id": panel.series_id})}
-        _laid_any = False
-        for _sp in scene.props:
-            _slug = _nid_auto(_sp.name)
-            if _slug in _placed:
-                continue
-            _pa = _assets.get((_sp.name or '').strip().lower())
-            _art = None
-            if _pa is not None:
-                _art = (_pa.images or {}).get(getattr(scene, 'style_id', None)) \
-                    or next((i for i in (_pa.images or {}).values() if i and os.path.exists(i)), None)
-            if _art and os.path.exists(_art):
-                panel.figure_images[f'element/{_slug}'] = _art
-                panel.figure_blocking[f'element/{_slug}'] = {"x": 50, "y": 6, "h": 28, "z": 55}
-                _placed.add(_slug)
-                _laid_any = True
-        if _laid_any:
-            storage.update_object(panel)
-
+    # A prop is added to a panel deliberately, per panel, like any other
+    # element — never auto-stamped from the scene onto every light table.
     for key, path in sorted((panel.figure_images or {}).items()):
         if not key.startswith("element/") or not (path and os.path.exists(path)):
             continue
@@ -1705,9 +1715,6 @@ def light_table(state: APPState, panel, scene, setting,
         figures.append({"ref": None, "key": key, "img": path, "posed": True,
                         "on": bool(blocking.get("on", 1)), "blocking": blocking,
                         "name": key.split("/", 1)[1].replace("-", " ")})
-
-    props = [{"name": p.name, "on": True}
-             for p in (getattr(scene, 'props', None) or [])]
 
     references = [{"img": u, "on": True} for u in storage.list_uploads(panel)
                   if u and os.path.exists(u)]
@@ -1840,12 +1847,6 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.label(nm).classes('rough-silhouette__name')
                     sil.tooltip(f'{nm} is cast but not posed yet — click to pose them')
                     sil.on('click', lambda _, r=f["ref"]: pose_dialog(r.character_id, r.variant_id))
-
-            live_props = [p["name"] for p in props if p["on"]]
-            if live_props:
-                with ui.row().classes('absolute').style('bottom: 4px; left: 6px; z-index: 65; gap: 4px;'):
-                    for name in live_props:
-                        ui.label(name).classes('rough-prop')
 
             pinned = [r for r in references if r["on"]]
             for i, r in enumerate(pinned[:4]):
@@ -2123,9 +2124,6 @@ def light_table(state: APPState, panel, scene, setting,
                 f"{depth(blk(f)['h'])}" for f in on_figs))
         else:
             parts.append("no characters in frame")
-        live_props = [p["name"] for p in props if p["on"]]
-        if live_props:
-            parts.append("foreground props: " + ", ".join(live_props))
         pinned = [r for r in references if r["on"]]
         if pinned:
             parts.append(f"{len(pinned)} pinned reference image(s)")
@@ -2332,54 +2330,8 @@ def light_table(state: APPState, panel, scene, setting,
                                 state.refresh_details()
                             ui.button(icon='close').props('flat round dense size=xs') \
                                 .tooltip('Remove this narrator box').on('click', lambda _, n=n: drop_caption(n))
-            # A scene prop shows as a ROW you can act on: lay it on the table as
-            # a movable, sizable acetate, or strike it.  Once it's on the table
-            # (an element acetate owns it), its pill drops away — the acetate row
-            # is the one you manipulate.
-            from schema import PropAsset as _PA_prop
-            from agentic.tools.normalization import normalize_id as _nid_prop
-            import re as _re_prop
-            _prop_assets = {(a.name or '').strip().lower(): a
-                            for a in storage.read_all_objects(_PA_prop, {"series_id": panel.series_id})}
-            _placed_prop_slugs = {_re_prop.sub(r'-\d+$', '', k.split('/', 1)[1])
-                                  for k in (panel.figure_images or {}) if k.startswith('element/')}
-
-            def _remove_scene_prop(name):
-                if scene is not None:
-                    fs = storage.read_object(type(scene), scene.primary_key) or scene
-                    fs.props = [q for q in (fs.props or []) if q.name != name]
-                    storage.update_object(fs)
-                _receipt(f"✂️ removed the **{name}** prop from the scene")
-                state.refresh_details()
-
-            for p in props:
-                if _nid_prop(p['name']) in _placed_prop_slugs:
-                    continue   # already an acetate on the table — its element row rules
-                _pa = _prop_assets.get((p['name'] or '').strip().lower())
-                _thumb = None
-                if _pa is not None:
-                    _thumb = next((i for i in (_pa.images or {}).values()
-                                   if i and os.path.exists(i)), None) \
-                        or next((u for u in storage.list_uploads(_pa) if u and os.path.exists(u)), None)
-                with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
-                    eye(p)
-                    padlock(p)
-                    if _thumb:
-                        ui.image(source=_src(_thumb)).classes('light-thumb')
-                    else:
-                        ui.icon('category').classes('text-lg').style('width: 40px; text-align: center;')
-                    ui.label(p['name']).classes('text-sm') \
-                        .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
-                    ui.space()
-                    if _pa is not None:
-                        ui.button(icon='add_photo_alternate').props('flat round dense size=xs') \
-                            .classes('row-tool') \
-                            .tooltip('Lay it on the table — a movable, sizable acetate') \
-                            .on('click', lambda _, pa=_pa: lay_prop_acetate(
-                                state, panel, pa, getattr(scene, 'style_id', None)))
-                    ui.button(icon='close').props('flat round dense size=xs').classes('row-tool') \
-                        .tooltip('Remove this prop from the scene') \
-                        .on('click', lambda _, name=p['name']: _remove_scene_prop(name))
+            # NOTHING auto-lists here: a prop reaches the table only when the
+            # person deliberately places it (or the agent builds a rough board).
             # THE STACK IS THE Z-ORDER: drag rows to restack (top prints
             # last); split products sit nested under their group.
             def mirror_btn(f):
@@ -2943,37 +2895,19 @@ def light_table(state: APPState, panel, scene, setting,
                                                              panel.aspect),
                 )], role='the Background Artist')
 
-            bg_label = f"Background — {setting.name if setting else 'no setting yet'}"
-            if split_plate and background == split_plate:
-                bg_label += " (split from the take)"
-            elif setting is not None and bg_style_missing:
-                if background is None:
-                    bg_label += " — not inked in this style yet"
-                else:
-                    # borrowed: right style/wrong orientation, or another
-                    # style entirely — either way the honest re-ink writes
-                    # this board's OWN key and clobbers nothing
-                    _sid = getattr(scene, 'style_id', None) or ''
-                    _same_style = any((k == _sid or k.startswith(_sid + '/')) and v == background
-                                      for k, v in (setting.images or {}).items()) if _sid else False
-                    bg_label += (f" — borrowed; re-ink for this {panel.aspect.value} board"
-                                 if _same_style else " (borrowed from another style)")
-            with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
-                eye(bg_layer)
-                if background:
+            # THE BACKGROUND LAYER — a row ONLY when a plate is actually laid, so
+            # removing it clears its row like every other layer (no turds left).
+            if background:
+                bg_label = "Background — " + (setting.name if setting else 'the take')
+                if split_plate and background == split_plate:
+                    bg_label += " (split from the take)"
+                with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
+                    eye(bg_layer)
                     ui.image(source=_src(background)).classes('light-thumb cursor-pointer') \
                         .tooltip('Swap the background — pick another setting') \
                         .on('click', lambda _: pick_background())
-                else:
-                    ui.icon('landscape').classes('text-lg').style('width: 40px; text-align: center;')
-                ui.label(bg_label).classes('text-sm').style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
-                if setting is not None and bg_style_missing:
-                    if not background:
-                        ui.space()
-                    ui.button(icon='brush').props('flat round dense size=xs') \
-                        .tooltip(f"Ink the {setting.name} master background in this board's style") \
-                        .on('click', lambda _: ink_master_here())
-                if background:
+                    ui.label(bg_label).classes('text-sm') \
+                        .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
                     ui.space()
                     ui.button(icon='content_cut').props('flat round dense size=xs') \
                         .tooltip('Split this background into its elements (recognize, lift, repaint beneath)') \
@@ -2981,6 +2915,43 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.button(icon='healing').props('flat round dense size=xs') \
                         .tooltip('Heal or extend this background on the healing bench') \
                         .on('click', lambda _: heal_background())
+
+                    # REMOVE THE BACKGROUND — like any other layer: the ✕ lifts
+                    # the plate off the board outright (the eye just hides it),
+                    # AND clears its on/off flag so nothing stale is left behind.
+                    def drop_background():
+                        fresh_board(storage, panel)
+                        saved_plate = (panel.figure_images or {}).get('background/plate')
+                        saved_blk = (panel.figure_blocking or {}).get('background/plate')
+                        saved_onflag = (panel.figure_blocking or {}).get('background')
+                        saved_groups = {g: list(ks) for g, ks in (panel.layer_groups or {}).items()}
+                        if saved_plate is None:
+                            return
+                        panel.figure_images.pop('background/plate', None)
+                        panel.figure_blocking.pop('background/plate', None)
+                        panel.figure_blocking.pop('background', None)   # the on/off flag, too
+                        for gname in list(panel.layer_groups or {}):
+                            panel.layer_groups[gname] = [k for k in panel.layer_groups[gname]
+                                                         if k != 'background/plate']
+                            if not panel.layer_groups[gname]:
+                                panel.layer_groups.pop(gname)
+                        storage.update_object(panel)
+
+                        def undo():
+                            p = _fresh()
+                            p.figure_images['background/plate'] = saved_plate
+                            if saved_blk is not None:
+                                p.figure_blocking['background/plate'] = saved_blk
+                            if saved_onflag is not None:
+                                p.figure_blocking['background'] = saved_onflag
+                            p.layer_groups = saved_groups
+                            storage.update_object(p)
+                            state.refresh_details()
+                        _receipt('✂️ removed the background from the table', undo=undo)
+                        state.refresh_details()
+                    ui.button(icon='close').props('flat round dense size=xs').classes('row-tool') \
+                        .tooltip('Remove the background from this board') \
+                        .on('click', lambda _: drop_background())
 
             # LAY A NEW ACETATE: figures, props and backgrounds lay down in
             # ONE CLICK from a picker; letters go through the coauthor (they
@@ -3427,6 +3398,57 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.button(icon='chat_bubble').props('flat round dense size=sm') \
                         .tooltip('Letters — lay a balloon or narrator box on the table') \
                         .on('click', lambda _: new_letters())
+
+                # CLEAR THE BOARD — rightmost in the bar.  Removes EVERYTHING
+                # from the table, no exceptions: the background/setting, every
+                # acetate and posed figure, the cast on it, AND the letters
+                # (balloons + narrator boxes).  Only the PRINT is kept.  Undoable.
+                if not locked:
+                    ui.space()
+
+                    def clear_board():
+                        fresh_board(storage, panel)
+                        saved_imgs = dict(panel.figure_images or {})
+                        saved_blk = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()}
+                        saved_groups = {g: list(ks) for g, ks in (panel.layer_groups or {}).items()}
+                        saved_cast = list(getattr(panel, 'character_references', None) or [])
+                        saved_dlg = list(getattr(panel, 'dialogue', None) or [])
+                        saved_narr = list(getattr(panel, 'narration', None) or [])
+                        if not (saved_imgs or saved_blk or saved_groups or saved_cast
+                                or saved_dlg or saved_narr):
+                            _receipt('the board is already bare — nothing to clear')
+                            return
+                        panel.figure_images = {}
+                        panel.figure_blocking = {}
+                        panel.layer_groups = {}
+                        if hasattr(panel, 'character_references'):
+                            panel.character_references = []
+                        if hasattr(panel, 'dialogue'):
+                            panel.dialogue = []
+                        if hasattr(panel, 'narration'):
+                            panel.narration = []
+                        storage.update_object(panel)
+
+                        def undo():
+                            p = _fresh()
+                            p.figure_images = saved_imgs
+                            p.figure_blocking = saved_blk
+                            p.layer_groups = saved_groups
+                            if hasattr(p, 'character_references'):
+                                p.character_references = saved_cast
+                            if hasattr(p, 'dialogue'):
+                                p.dialogue = saved_dlg
+                            if hasattr(p, 'narration'):
+                                p.narration = saved_narr
+                            storage.update_object(p)
+                            state.refresh_details()
+                        _receipt('🧹 cleared the board — everything lifted off '
+                                 '(only the print stays)', undo=undo)
+                        state.refresh_details()
+                    ui.button(icon='close').props('flat round dense size=sm') \
+                        .tooltip('Clear the board — remove everything from the table '
+                                 '(only the print stays; undoable)') \
+                        .on('click', lambda _: clear_board())
 
             # or just drop an image straight onto the table as a reference
             with ui.row().classes('light-layer w-full items-center justify-center relative overflow-hidden').style('min-height: 34px;'):

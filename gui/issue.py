@@ -96,6 +96,11 @@ def view_issue(state: APPState):
     inserts_all.sort(key=lambda i: (i.after_scene_number, i.insert_id))
 
     scene_by_id = {sc.scene_id: sc for sc in scenes_all}
+    # THE CAST ROSTER, read once: a scene's cast/props strip (now living in
+    # the book, not a page of its own) wears NAMES, not ids
+    from schema import CharacterModel as _CharacterModel
+    roster = {c.character_id: c for c in
+              storage.read_all_objects(_CharacterModel, primary_key={"series_id": series_id})}
     covers_all = storage.read_all_objects(Cover, primary_key={"series_id": series_id, "issue_id": issue_id})
     cover_at = {}
     for c in covers_all:
@@ -451,6 +456,23 @@ def view_issue(state: APPState):
         long_read = wc > 200
         with ui.element('div').classes('book-page book-page--script') as sh:
             ui.label(name.upper()).classes('page-cap')
+            # THE BYLINE: each feature carries its own creative team.  The
+            # issue's own script falls back to the issue-wide writer/artist.
+            _w = (story.writer if story else None) or (issue.writer if not story else None)
+            _a = (story.artist if story else None) or (issue.artist if not story else None)
+            _l = (story.letterer if story else None)
+            _parts = [('by', _w), ('art', _a), ('letters', _l)]
+            byline = ui.row().classes('script-byline items-baseline flex-nowrap').style('gap: 6px;')
+            with byline:
+                if any(v for _r, v in _parts):
+                    for role, val in _parts:
+                        if val:
+                            ui.label(f'{role} {val}')
+                else:
+                    ui.label('by — · art — · letters —').classes('unset')
+            byline.tooltip('Set this story’s writer, artist and letterer')
+            byline.on('click', lambda _, sp=spoken: post_user_message(
+                state, f"I would like to set the writer, artist and letterer credits for {sp}."))
             with ui.element('div').classes('script-body' + (' script-clamp' if long_read else '')):
                 if text:
                     ui.markdown(text).classes('script-text')
@@ -494,14 +516,19 @@ def view_issue(state: APPState):
                         .tooltip(f"The book already has {len(scenes_all)} scenes — I'll read them "
                                  f"first and update in place (or replace, with your approval), "
                                  f"never mint duplicates") \
-                        .on('click', lambda _, sp=spoken: post_user_message(
+                        .on('click', lambda _, sp=spoken, sid=sid: post_user_message(
                             state, f"The script changed.  Read the existing scenes first, then "
                                    f"update {sp}'s breakdown IN PLACE to match — merge or "
-                                   f"replace with my approval, never duplicate scenes."))
+                                   f"replace with my approval, never duplicate scenes."
+                                   + (f"  Its scenes file under story_id '{sid}'." if sid else "")))
                 elif text:
+                    # file every new scene under THIS story so the dashboard's
+                    # story→scene breakdown is right (the issue's own script
+                    # needs no story_id — scenes default to it)
+                    _file = f"  File every scene under story_id '{sid}'." if sid else ""
                     ui.chip('break into scenes', icon='view_agenda').props('dense outline clickable size=sm') \
-                        .on('click', lambda _, sp=spoken: post_user_message(
-                            state, f"Break {sp} into scenes."))
+                        .on('click', lambda _, sp=spoken, f=_file: post_user_message(
+                            state, f"Break {sp} into scenes.{f}"))
                 else:
                     ui.chip('write it with me', icon='forum').props('dense outline clickable size=sm') \
                         .on('click', lambda _: post_user_message(state, "Help me write the story for this issue."))
@@ -576,6 +603,112 @@ def view_issue(state: APPState):
                                              anchor=f'insert-{i.insert_id}'))
         sh._props['data-banchor'] = f'insert-{ins.insert_id}'
 
+    def scene_production_strip(sc):
+        """The scene's production line — setting, cast, props — editable right
+        on its manuscript page.  (This used to be the scene's own page; the
+        scene lives in the book now, so its production rides here.)"""
+        from schema import Setting, CharacterVariant, PropAsset
+        from gui.elements import removable_chips_inline
+        panels = panels_by_scene.get(sc.scene_id, [])
+        setting_obj = storage.read_object(cls=Setting, primary_key={
+            "series_id": series_id, "setting_id": sc.setting_id}) if sc.setting_id else None
+
+        def _series_base():
+            idx = next((i for i, s in enumerate(state.selection)
+                        if s.kind.value == 'series'), None)
+            return state.selection[:idx + 1] if idx is not None else state.selection
+
+        def _visit_character(key):
+            cid = key.split('/', 1)[0]
+            ch = roster.get(cid)
+            state.change_selection(new=[*_series_base(),
+                SelectionItem(name=(ch.name if ch else cid), id=cid, kind=SelectedKind.CHARACTER)])
+
+        def _visit_setting(_key):
+            state.change_selection(new=[*_series_base(),
+                SelectionItem(name=setting_obj.name, id=setting_obj.setting_id,
+                              kind=SelectedKind.SETTING)])
+
+        def _visit_prop(key):
+            asset = next((a for a in storage.read_all_objects(PropAsset, {"series_id": series_id})
+                          if (a.name or "").strip().lower() == key.strip().lower()), None)
+            if asset is None:
+                ui.notify(f"'{key}' lives only in this scene — extract it into a prop "
+                          f"asset to give it a room of its own.", type='info')
+                return
+            state.change_selection(new=[*_series_base(),
+                SelectionItem(name=asset.name, id=asset.prop_id, kind=SelectedKind.PROP)])
+
+        def _save():
+            storage.update_object(data=sc)
+
+        def _remove_setting(_key):
+            sc.setting_id = None; _save()
+
+        def _remove_cast(key):
+            sc.cast = [c for c in sc.cast if f"{c.character_id}/{c.variant_id}" != key]
+            _save()
+
+        def _remove_prop(key):
+            sc.props = [p for p in sc.props if p.name != key]
+            _save()
+
+        def _todo(label, fix_message):
+            chip = ui.chip(label, icon='radio_button_unchecked', color='orange').props('dense clickable')
+            chip.tooltip("Click and I'll get started")
+            chip.on('click', lambda _, m=fix_message: post_user_message(state, m))
+
+        def pick_setting():
+            with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                    .style('min-width: 480px; max-width: 720px;'):
+                ui.label('Set the scene').classes('caption-box caption-box-sm')
+                with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
+                    for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}, order_by="name"):
+                        img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
+                        with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 150px;') as card:
+                            if img:
+                                ui.image(source=img).style('height: 80px;').props('fit=cover')
+                            ui.label(s.name.title()).classes('text-xs text-center w-full')
+
+                        def choose(s=s):
+                            sc.setting_id = s.setting_id
+                            storage.update_object(sc)
+                            receipt(f"🏔 set the scene in **{s.name}**")
+                            dlg.close(); state.refresh_details()
+                        card.on('click', lambda _, s=s: choose(s))
+                ui.button('A brand-new setting instead…', icon='add') \
+                    .props('flat dense no-caps').classes('q-mt-sm') \
+                    .on('click', lambda _: (dlg.close(), post_user_message(
+                        state, f"I would like to create a new setting for scene '{sc.name}'.")))
+            dlg.open()
+
+        def _cast_label(c):
+            nm = roster[c.character_id].name if c.character_id in roster else c.character_id
+            if (c.variant_id or "base") == "base":
+                return nm
+            v = storage.read_object(CharacterVariant, {
+                "series_id": series_id, "character_id": c.character_id, "variant_id": c.variant_id})
+            return f"{nm} · {(v.name if v is not None and v.name else c.variant_id)}"
+
+        with ui.row().classes('scene-prod w-full items-center').style('gap: 6px; flex-wrap: wrap;'):
+            ui.label('Production').classes('comic-label-sm')
+            if not sc.setting_id:
+                chip = ui.chip('setting', icon='location_on', color='orange').props('dense clickable')
+                chip.tooltip('Pick where this scene is set — one click')
+                chip.on('click', lambda _: pick_setting())
+            if not sc.cast:
+                _todo('cast', f"Cast the characters for scene '{sc.name}'.")
+            if not panels:
+                _todo('panels', f"Break scene '{sc.name}' into panels.")
+            if setting_obj:
+                removable_chips_inline(state, [(setting_obj.setting_id, setting_obj.name)],
+                                       _remove_setting, icon='location_on', visit=_visit_setting)
+            removable_chips_inline(state,
+                [(f"{c.character_id}/{c.variant_id}", _cast_label(c)) for c in (sc.cast or [])],
+                _remove_cast, icon='theater_comedy', visit=_visit_character)
+            removable_chips_inline(state, [(p.name, p.name) for p in (sc.props or [])],
+                                   _remove_prop, icon='category', visit=_visit_prop)
+
     def scene_sheet(sc, folio=None):
         """A scene holding its place as a manuscript page."""
         panels = panels_by_scene[sc.scene_id]
@@ -600,6 +733,9 @@ def view_issue(state: APPState):
                         lambda v, sid=s.scene_id: save_scene_text(sid, v),
                         f"Let's work on scene '{s.name}' together — read it back to "
                         f"me and we'll develop it."))
+            # THE SCENE'S PRODUCTION LINE, right on its page — setting, cast,
+            # props (no separate scene page anymore)
+            scene_production_strip(sc)
             with ui.row().classes('script-foot items-center flex-nowrap').style('gap: 2px;'):
                 footer_btn('chevron_left', 'Earlier in the book', lambda _, s=sc: move_scene(s, -1))
                 footer_btn('chevron_right', 'Later in the book', lambda _, s=sc: move_scene(s, 1))
@@ -1054,13 +1190,12 @@ def view_issue(state: APPState):
                 colophon_sheet._props['data-banchor'] = 'colophon'
                 ui.label('COLOPHON').classes('page-cap')
                 with ui.element('div').classes('script-body'):
-                    # THE CREDITS, SET IN TYPE: the colophon prints like a
-                    # real indicia block — every line is still a pencil
+                    # THE ISSUE INDICIA: the book-wide credits.  An anthology
+                    # runs each story with its OWN writer/artist/letterer (those
+                    # print in the dashboard below, per story) — the issue keeps
+                    # the masthead credits every feature shares.
                     with ui.element('div').classes('colophon-credits q-mt-md'):
-                        for role, val in (("writer", issue.writer),
-                                          ("artist", issue.artist),
-                                          ("colorist", issue.colorist),
-                                          ("creative minds", issue.creative_minds),
+                        for role, val in (("creative minds", issue.creative_minds),
                                           ("publication date", issue.publication_date),
                                           ("price", f"${issue.price:.2f}" if issue.price is not None else None)):
                             line = ui.row().classes('credit-line items-baseline flex-nowrap')
@@ -1116,26 +1251,113 @@ def view_issue(state: APPState):
                             .on('click', lambda _: post_user_message(
                                 state, "Add a full-page insert to this issue — ask me what "
                                        "kind and where it goes."))
-                # THE PRODUCTION LEDGER, set in the colophon's small print —
-                # every line is a door to the first thing it counts
-                def ledger_door(line):
-                    if line.detail:
-                        state._book_detail[issue_id] = line.detail
-                    if line.anchor:
-                        remember_spot(line.anchor)
-                    state.refresh_details()
-                with ui.column().classes('q-mt-sm w-full').style('gap: 0;'):
-                    for ln in ledger.lines:
-                        row = ui.row().classes(
-                            'items-center ledger-line w-full'
-                            + ('' if ln.ok else ' cursor-pointer')).style('gap: 6px; flex-wrap: nowrap; overflow: hidden;')
-                        with row:
-                            ui.icon('check' if ln.ok else 'radio_button_unchecked') \
-                                .style('font-size: 12px;' + ('' if ln.ok else ' opacity: .7;'))
-                            ui.label(ln.text)
-                        if not ln.ok and (ln.anchor or ln.detail):
-                            row.tooltip('Open the book to it')
-                            row.on('click', lambda _, l=ln: ledger_door(l))
+
+                    # THE PRODUCTION DASHBOARD: the eight stages from script to
+                    # bound book, then the story→scene breakdown.  Every stage
+                    # and every row is a door into the open book.
+                    from helpers.production import production_board
+                    board = production_board(storage, series_id, issue_id)
+
+                    def open_to(anchor=None, dial=None):
+                        if dial:
+                            state._book_detail[issue_id] = dial
+                        if anchor:
+                            remember_spot(anchor)
+                        state.refresh_details()
+
+                    ui.label('PRODUCTION').classes('prod-cap')
+                    with ui.element('div').classes('prod-strip'):
+                        for stg in board.stages:
+                            done = stg.total > 0 and stg.done >= stg.total
+                            cls = 'prod-stage'
+                            if not stg.started:
+                                cls += ' prod-stage--empty'
+                            elif done:
+                                cls += ' prod-stage--done'
+                            can_door = stg.started and not done and (stg.anchor or stg.detail)
+                            if can_door:
+                                cls += ' prod-stage--door'
+                            cell = ui.element('div').classes(cls)
+                            with cell:
+                                with ui.element('div').classes('prod-stage__lbl'):
+                                    if done:
+                                        ui.icon('check').style('font-size: 11px; color: #2e6e3c;')
+                                    ui.label(stg.label)
+                                with ui.element('div').classes('prod-stage__num'):
+                                    ui.html(f"{stg.done}<small>/{stg.total}</small>")
+                                pct = int(100 * stg.done / stg.total) if stg.total else 0
+                                with ui.element('div').classes('prod-bar'):
+                                    ui.element('div').classes(
+                                        'prod-bar__fill' + (' prod-bar__fill--done' if done else '')) \
+                                        .style(f'width: {pct}%;')
+                            if can_door:
+                                cell.tooltip('Open the book to the next one')
+                                cell.on('click', lambda _, s=stg: open_to(s.anchor, s.detail))
+
+                    # THE BREAKDOWN, story by story, scene by scene
+                    def gauge(label, done, total):
+                        if done >= total:
+                            state_cls, body = 'prod-g--done', f'{done}/{total}'
+                        elif done == 0:
+                            state_cls, body = 'prod-g--part', f'0/{total}'
+                        else:
+                            state_cls, body = 'prod-g--part', f'{done}/{total}'
+                        with ui.element('span').classes(f'prod-g {state_cls}'):
+                            ui.label(label)
+                            ui.label(body).classes('prod-g__v')
+
+                    with ui.element('div').classes('prod-board'):
+                        for story in board.stories:
+                            hdr = ui.element('div').classes('prod-story cursor-pointer')
+                            with hdr:
+                                ui.label(story.name.title()).classes('prod-story__ttl')
+                                bits = ['scripted' if story.scripted else 'no script yet']
+                                if story.scripted:
+                                    bits.append(f"{len(story.scenes)} scene"
+                                                f"{'s' if len(story.scenes) != 1 else ''}"
+                                                if story.scenes else 'no scenes yet')
+                                ui.label(' · '.join(bits)).classes('prod-story__meta')
+                                cred = ' · '.join(c for c in (story.writer, story.artist,
+                                                              story.letterer) if c) \
+                                    or 'writer · artist · letterer'
+                                cl = ui.label(cred).classes('prod-story__credits')
+                                cl.tooltip('Set this story’s writer, artist and letterer')
+                                cl.on('click.stop', lambda _, n=story.name: post_user_message(
+                                    state, f"I would like to set the writer, artist and letterer "
+                                           f"credits for the story '{n}'."))
+                            hdr.on('click', lambda _, a=story.anchor: open_to(a, 'stories'))
+                            for sr in story.scenes:
+                                row = ui.element('div').classes('prod-scene')
+                                with row:
+                                    with ui.element('div').classes('prod-scene__name'):
+                                        ui.label(str(sr.scene_number)).classes('prod-scene__n')
+                                        ui.label(sr.name).classes('prod-scene__t')
+                                    with ui.element('div').classes('prod-gauges'):
+                                        if not sr.has_beats:
+                                            with ui.element('span').classes('prod-g prod-g--bare'):
+                                                ui.label('no beats yet')
+                                        else:
+                                            gauge('laid', sr.laid, sr.panels)
+                                            gauge('rough', sr.roughed, sr.panels)
+                                            gauge('inked', sr.inked, sr.panels)
+                                row.on('click', lambda _, a=sr.anchor: open_to(a, 'beats'))
+
+                    # LOOSE ENDS the stages don't track — an unbroken story,
+                    # drifted script, placeholder lettering, un-rendered inserts
+                    # — kept as small print so nothing reaches print unwarned.
+                    loose = [ln for ln in ledger.lines
+                             if ln.key in ('breakdown', 'drift', 'letters', 'inserts') and not ln.ok]
+                    if loose:
+                        ui.label('LOOSE ENDS').classes('prod-cap')
+                        with ui.column().classes('w-full').style('gap: 0;'):
+                            for ln in loose:
+                                r = ui.row().classes('items-center ledger-line w-full cursor-pointer') \
+                                    .style('gap: 6px; flex-wrap: nowrap; overflow: hidden;')
+                                with r:
+                                    ui.icon('radio_button_unchecked').style('font-size: 12px; opacity: .7;')
+                                    ui.label(ln.text)
+                                r.tooltip('Open the book to it')
+                                r.on('click', lambda _, l=ln: open_to(l.anchor, l.detail))
 
         # THE BOOK REMEMBERS YOUR SPOT: walking into a panel and back lands
         # you on the page you left.  The spot is spent once used — editing

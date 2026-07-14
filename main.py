@@ -445,6 +445,73 @@ def init_layout(logger):
         /* the colophon's ledger rows FLOW — seven absolute lines on one
            spot is a smear, not a ledger */
         .ledger-line { font-size: .56rem; color: #8a8378; font-style: italic; }
+
+        /* THE PRODUCTION BOARD: the colophon's dashboard — the eight stages
+           from script to bound book, then the story/scene breakdown.  Set
+           like an indicia block: small, inked, printed-looking. */
+        .prod-cap { font-size: .52rem; font-weight: 800; letter-spacing: .16em;
+                    text-transform: uppercase; color: #6b6459; margin: 14px 0 6px; }
+        .prod-strip { display: flex; flex-wrap: wrap; gap: 5px; }
+        .prod-stage { flex: 1 1 auto; min-width: 92px; padding: 4px 7px 5px;
+                      border: 1px solid rgba(28,26,23,.22); border-radius: 3px;
+                      cursor: default; background: rgba(255,255,255,.35); }
+        .prod-stage--door { cursor: pointer; }
+        .prod-stage--door:hover { border-color: #c62828;
+                                  box-shadow: inset 0 0 0 1px rgba(198,40,40,.35); }
+        .prod-stage--done { background: rgba(46,110,60,.12);
+                            border-color: rgba(46,110,60,.42); }
+        .prod-stage--empty { opacity: .5; }
+        .prod-stage__lbl { font-size: .5rem; font-weight: 700; letter-spacing: .06em;
+                           text-transform: uppercase; color: #4a453d; line-height: 1.25;
+                           display: flex; align-items: center; gap: 3px; }
+        .prod-stage__num { font-size: .62rem; font-variant-numeric: tabular-nums;
+                           font-weight: 700; color: #2b2822; margin-top: 1px; }
+        .prod-stage__num small { font-weight: 400; color: #8a8378; }
+        .prod-bar { height: 3px; margin-top: 3px; border-radius: 2px;
+                    background: rgba(28,26,23,.12); overflow: hidden; }
+        .prod-bar__fill { height: 100%; background: #b98a2e; }
+        .prod-bar__fill--done { background: #2e6e3c; }
+
+        /* the story/scene breakdown */
+        .prod-board { display: flex; flex-direction: column; gap: 1px;
+                      margin-top: 4px; }
+        .prod-story { display: flex; align-items: baseline; flex-wrap: wrap;
+                      gap: 8px; margin-top: 9px; padding-bottom: 2px;
+                      border-bottom: 1px solid rgba(28,26,23,.28); }
+        .prod-story__ttl { font-size: .74rem; font-variant: small-caps;
+                           font-weight: 700; letter-spacing: .02em; color: #201d19; }
+        .prod-story__meta { font-size: .5rem; color: #8a8378; font-style: italic; }
+        .prod-story__credits { margin-left: auto; font-size: .5rem; color: #6b6459;
+                               font-variant: small-caps; letter-spacing: .03em;
+                               cursor: pointer; }
+        .prod-story__credits:hover { color: #c62828; }
+        .prod-scene { display: grid; grid-template-columns: 1fr auto; gap: 6px;
+                      align-items: center; padding: 2px 4px; border-radius: 2px;
+                      cursor: pointer; }
+        .prod-scene:hover { background: rgba(28,26,23,.06); }
+        .prod-scene__name { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+        .prod-scene__n { font-variant-numeric: tabular-nums; color: #8a8378;
+                         font-size: .55rem; flex: none; }
+        .prod-scene__t { font-size: .62rem; color: #3a362f; overflow: hidden;
+                         text-overflow: ellipsis; white-space: nowrap; }
+        /* the scene's production line, on its manuscript page */
+        .scene-prod { border-top: 1px solid rgba(28,26,23,.14);
+                      margin-top: 8px; padding-top: 6px; }
+        /* a story's byline, set under its manuscript cap */
+        .script-byline { font-size: .58rem; color: #6b6459; font-variant: small-caps;
+                         letter-spacing: .04em; margin: 2px 0 6px 10px; cursor: pointer;
+                         align-self: flex-start; }
+        .script-byline:hover { color: #c62828; }
+        .script-byline .unset { opacity: .45; font-style: italic; font-variant: normal; }
+        .prod-gauges { display: flex; gap: 5px; flex: none; }
+        .prod-g { font-size: .5rem; font-variant-numeric: tabular-nums;
+                  letter-spacing: .03em; color: #8a8378; white-space: nowrap;
+                  display: inline-flex; align-items: center; gap: 2px; }
+        .prod-g__v { font-weight: 700; }
+        .prod-g--done { color: #2e6e3c; }
+        .prod-g--part { color: #b98a2e; }
+        .prod-g--bare { color: #b4ada0; }
+        .prod-g--empty { opacity: .4; }
         /* the coauthor must be readable in the dark room — Quasar pins
            message text to black unless told to inherit the theme's ink */
         .q-message-text-content { color: inherit !important; }

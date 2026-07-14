@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -13,6 +14,14 @@ class Story(BaseModel):
     story_number: int = Field(..., description="The story's order in the book, 1-based.")
     name: str = Field(..., description="The story's title, e.g. 'The Witchlight Carnival' or 'Backup: The Mailbag Mystery'.")
     text: str = Field("", description="The story's script text.  Default to empty string.")
+
+    # THE CREATIVE TEAM: a comics anthology runs each feature with its own
+    # credits — the writer, the artist(s), the letterer (typist + narrator).
+    # The issue-wide credits (creative minds, publication date, price) stay
+    # on the Issue; these belong to the individual story.
+    writer: Optional[str] = Field(None, description="Who wrote this story.  Optional.  Default None.")
+    artist: Optional[str] = Field(None, description="Who drew this story — pencils and inks (name one or several).  Optional.  Default None.")
+    letterer: Optional[str] = Field(None, description="Who lettered this story — the typist (dialogue) and narrator (captions).  Optional.  Default None.")
 
     @property
     def primary_key(self) -> dict[str, str]:

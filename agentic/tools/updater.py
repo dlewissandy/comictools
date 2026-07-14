@@ -1333,10 +1333,12 @@ def update_panel_dialogue(wrapper: RunContextWrapper[APPState],
 
 @function_tool
 def update_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str,
-                 story_id: str, title: Optional[str], text: Optional[str]) -> str:
+                 story_id: str, title: Optional[str], text: Optional[str],
+                 writer: Optional[str] = None, artist: Optional[str] = None,
+                 letterer: Optional[str] = None) -> str:
     """
-    Update one of the issue's stories — its title, its script text, or both.
-    Use this when editing a story's words with the author.
+    Update one of the issue's stories — its title, its script text, or its
+    creative credits.  Use this when editing a story with the author.
 
     Args:
         series_id: The ID of the series.
@@ -1344,6 +1346,9 @@ def update_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
         story_id: The ID of the story to update.
         title: A new title for the story.  Optional.
         text: The new script text.  Optional.
+        writer: Who wrote this story.  Optional.
+        artist: Who drew this story (pencils/inks).  Optional.
+        letterer: Who lettered this story (typist + narrator).  Optional.
 
     Returns:
         A status message indicating the result of the update.
@@ -1351,13 +1356,12 @@ def update_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
     from schema import Story
     pk = {"series_id": series_id, "issue_id": issue_id, "story_id": story_id}
     results = []
-    if title is not None:
-        results.append(update_attribute(wrapper=wrapper, cls=Story, primary_key=pk,
-                                        attribute="name", value=title))
-    if text is not None:
-        results.append(update_attribute(wrapper=wrapper, cls=Story, primary_key=pk,
-                                        attribute="text", value=text))
-    return "  ".join(results) if results else "Nothing to update — pass a title or text."
+    for attr, val in (("name", title), ("text", text), ("writer", writer),
+                      ("artist", artist), ("letterer", letterer)):
+        if val is not None:
+            results.append(update_attribute(wrapper=wrapper, cls=Story, primary_key=pk,
+                                            attribute=attr, value=val))
+    return "  ".join(results) if results else "Nothing to update — pass a title, text, or a credit."
 
 
 @function_tool

@@ -13,6 +13,7 @@ class SceneModel(BaseModel):
     scene_id: str = Field(..., description="The unique identifier of the scene.  This is the same as the title, but with spaces replaced by underscores.")
     issue_id: str = Field(..., description="The identifier of the issue comic book or project that this scene belongs to. default to empty string")
     series_id: str = Field(..., description="The identifier of the series that this scene belongs to. default to empty string")
+    story_id: Optional[str] = Field(None, description="Which of the issue's stories this scene belongs to (an issue can run several features, Archie-style).  None means the issue's own/opening script.  Default None.")
     name: str = Field(..., description="A short title for the scene.   Default to a short (5 words or less) description of the scene'")
     story: str = Field(..., description="The story or narrative arc of the scene")
     style_id: str = Field(..., description="The art style of the scene.   Default to 'vintage-four-color'")

@@ -300,6 +300,25 @@ class APPState:
             state: The GUI elements containing the selection.
             new: The new selection to set.
         """
+        from gui.selection import SelectedKind
+        # A SCENE IS NEVER A DESTINATION: scenes live in the open book, not on
+        # a page of their own.  Selecting one opens the issue to its manuscript
+        # page instead — so there is no scene page and no scene chip in the
+        # breadcrumb.  (A panel keeps its scene ancestor for its keys; the
+        # breadcrumb just doesn't draw a button for it.)
+        if new and new[-1].kind == SelectedKind.SCENE:
+            iidx = next((i for i in range(len(new) - 1, -1, -1)
+                         if new[i].kind == SelectedKind.ISSUE), None)
+            if iidx is not None:
+                iid = new[iidx].id
+                if not hasattr(self, '_book_detail') or self._book_detail is None:
+                    self._book_detail = {}
+                if not hasattr(self, '_book_anchor') or self._book_anchor is None:
+                    self._book_anchor = {}
+                self._book_detail[iid] = 'scenes'
+                self._book_anchor[iid] = f'scene-{new[-1].id}'
+                new = new[:iidx + 1]
+
         logger.trace(f"Changing selection to {new}")
         old = self.selection
         if old == new:
@@ -325,6 +344,10 @@ class APPState:
         with self.breadcrumbs:
             breadcrumb_selector(self)
             for i,item in enumerate(self.selection[1:]):
+                # a scene is never its own stop — it rides in the book, so the
+                # breadcrumb skips it even inside a panel's trail
+                if item.kind == SelectedKind.SCENE:
+                    continue
                 new_sel = self.selection[:i+2]
                 ui.button(item.name).props('rounded').on_click(lambda _, new_sel=new_sel: self.change_selection(new=new_sel))
             ui.space()

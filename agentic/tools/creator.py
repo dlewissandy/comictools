@@ -908,6 +908,7 @@ def create_scene_body(state: APPState,
         cast: Optional[list[CharacterRef]] = None,
         props: Optional[list[Prop]] = None,
         blocking: Optional[str] = None,
+        story_id: Optional[str] = None,
     ) -> str:
     """Create a scene on the issue in the current selection.  A bare name is
     enough: the story defaults to empty and the scene lands at the end."""
@@ -927,6 +928,16 @@ def create_scene_body(state: APPState,
         return f"Issue '{issue_id}' not found."
     scenes: list[SceneModel] = storage.read_all_objects(cls=SceneModel, primary_key=pk, order_by="scene_number")
 
+    # WHICH STORY OWNS THIS SCENE: an anthology issue runs several features,
+    # so a scene belongs to a story.  If the breakdown named one, honor it;
+    # otherwise, when the issue runs exactly one story, fold the scene into
+    # it silently so single-feature issues need no ceremony.
+    if story_id is None:
+        from schema import Story
+        _stories = storage.read_all_objects(cls=Story, primary_key=pk)
+        if len(_stories) == 1:
+            story_id = _stories[0].story_id
+
     # cast references resolve by id OR display name and never store
     # danglers — the sheets must find these characters later
     from agentic.tools.updater import resolve_cast
@@ -937,6 +948,7 @@ def create_scene_body(state: APPState,
         scene_id=normalize_id(name),
         issue_id=issue_id,
         series_id=series_id,
+        story_id=story_id,
         name=name,
         story=story or "",
         style_id=issue.style_id or "vintage-four-color",
@@ -982,6 +994,7 @@ def create_scene(wrapper: RunContextWrapper[APPState],
         cast: Optional[list[CharacterRef]] = None,
         props: Optional[list[Prop]] = None,
         blocking: Optional[str] = None,
+        story_id: Optional[str] = None,
     ) -> str:
     """
     Create a new scene for the currently selected comic book issue.
@@ -1008,12 +1021,16 @@ def create_scene(wrapper: RunContextWrapper[APPState],
         cast (list[CharacterRef], optional): The characters in the scene with the variant (wardrobe) worn.
         props (list[Prop], optional): Scene-specific props beyond the setting's standing props.
         blocking (str, optional): How the characters are staged and move through the setting.
+        story_id (str, optional): Which of the issue's stories this scene belongs to.  When
+            breaking a specific story into scenes, pass its story_id so the scene files under
+            the right feature.  Defaults to the issue's sole story when there is exactly one.
 
     Returns:
         A status message indicating the result of the scene creation.
     """
     return create_scene_body(wrapper.context, name, story, insertion_location,
-                             setting_id, time_of_day, mood, cast, props, blocking)
+                             setting_id, time_of_day, mood, cast, props, blocking,
+                             story_id=story_id)
 
 
 @function_tool
