@@ -596,15 +596,26 @@ Args:
 name (str): A short label summarizing the panel’s core beat (e.g., “Tormond
 Draws His Bow”).
 
-beat (str): The narrative beat for this panel. Describe the change or action
-in 1-3 sentences. This is the story moment the panel captures.
+beat (str): The moment THIS panel shows, written to STAND ON ITS OWN — an
+artist must be able to draw it without having read any other panel.  Say
+plainly what is visible in the frame (subject, action, staging) in the
+present tense.  No references to other panels or earlier events, no meta-
+labels ("Evidence:", "aftermath beat:"), no interior/mental states that
+assume context ("registers", "realizes", "the key clue") — describe what
+those look like instead.  Name every recurring subject the SAME specific
+way each time (a bare "the merchant" is not a cue).  1-3 sentences.
 
-description (str): A clear visual description of the panel. Describe what
-the reader sees: figure positions, motion, facial expressions, and the
-panel's framing (establishing, medium, close-up).  Speak comics — panel,
-frame, figure — never film vocabulary (shot, camera, footage).  Do not
-include narration or dialog here.  This description will be used by
-artists to ink the panel
+description (str): A clear visual description of the panel that stands on
+its own AND stays consistent with the other panels.  Describe what the
+reader sees: figure positions, motion, facial expressions, and the panel's
+framing (establishing, medium, close-up) — fully enough to ink from THIS
+panel alone.  Identify any recurring character, prop, or place the SAME
+specific way it appears elsewhere (never a bare "the merchant" — say which
+merchant and what he looks like, identically, every time; recurring
+characters should be cast so their sheet keeps them on-model).  Speak
+comics — panel, frame, figure — never film vocabulary (shot, camera,
+footage).  Do not include narration or dialog here.  This description will
+be used by artists to ink the panel
 
 characters: Names of all character variants visibly present in the panel.
 
@@ -1084,8 +1095,8 @@ def create_setting(wrapper: RunContextWrapper[APPState],
 class PanelSpec(BaseModel):
     """One panel in a scene's panel layout, used by create_scene_panels."""
     name: str = Field(..., description="A short (3-5 word) name for the panel.")
-    beat: str = Field(..., description="The narrative beat: what changes or happens in this moment (1-3 sentences).")
-    description: str = Field(..., description="A detailed visual description of the panel: framing, point of view, foreground/background, character poses and expressions.  Use comics vocabulary (panel, frame, figure), never film vocabulary (shot, camera, footage).")
+    beat: str = Field(..., description="The moment THIS panel shows, written to STAND ENTIRELY ON ITS OWN — an artist must be able to draw it without having seen any other panel.  State plainly what is VISIBLE in the frame (subject, action, staging) in the present tense.  NO references to other panels or earlier events, NO meta-labels ('Evidence:', 'aftermath beat:'), NO interior/mental states that assume prior context ('registers', 'realizes', 'decides', 'the key clue') — render those as what they LOOK like instead.  Name every recurring subject the SAME specific way each time (a bare 'the merchant' is not a cue); cast recurring characters so their reference sheet keeps them consistent.  1-3 sentences.")
+    description: str = Field(..., description="A detailed visual description of the panel that STANDS ON ITS OWN and stays CONSISTENT with the other panels: framing, point of view, foreground/background, character poses and expressions.  Describe every subject fully enough to draw from THIS panel alone, and identify any recurring character, prop, or place the SAME specific way it is described elsewhere — never a bare 'the merchant': say WHICH merchant and what he looks like, identically, every time (recurring characters should be cast so their sheet carries them).  Use comics vocabulary (panel, frame, figure), never film vocabulary (shot, camera, footage).")
     aspect: FrameLayout = Field(..., description="The aspect ratio of the panel: landscape, portrait or square.")
     characters: list[CharacterRef] = Field(default_factory=list, description="The characters in frame, with the variant (wardrobe) used as visual reference.")
     narration: list[Narration] = Field(default_factory=list, description="Narration boxes for the panel.")
@@ -1104,6 +1115,13 @@ def create_scene_panels(wrapper: RunContextWrapper[APPState],
     (beats already broken down) into panels appended to the scene in order.   Use this
     after the scene's story, cast and blocking are settled — it turns the thumbnailed
     layout into real panels.
+
+    EVERY panel must (1) STAND ON ITS OWN — its beat and description drawable in
+    isolation, with no reference to other panels, prior events, or a reader's
+    accumulated knowledge, and no meta-labels or interior states — AND (2) stay
+    CONSISTENT with the rest: name every recurring character, prop, or place the
+    SAME specific way each time it appears (never a bare 'the merchant'), and cast
+    recurring characters so their reference sheet keeps them on-model panel to panel.
 
     Args:
         series_id: The id of the series.

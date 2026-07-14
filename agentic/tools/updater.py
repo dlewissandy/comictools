@@ -874,14 +874,17 @@ def update_panel_name(wrapper: RunContextWrapper[APPState], series_id: str, issu
 @function_tool
 def update_panel_beat(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, scene_id: str, panel_id: str, beat: str) -> str:
     """
-    Update the narrative beat of a panel (what changes or happens in this moment).
+    Update the beat of a panel — the moment it shows, written to stand on its own.
 
     Args:
         series_id (str): The ID of the comic series.
         issue_id (str): The ID of the issue.
         scene_id (str): The ID of the scene the panel belongs to.
         panel_id (str): The ID of the panel.
-        beat (str): The new narrative beat for the panel.
+        beat (str): The new beat — the moment THIS panel shows, drawable on its own
+            (no reference to other panels, prior events, meta-labels, or interior
+            states), and consistent with the rest (name every recurring subject the
+            same specific way each time — never a bare "the merchant").
 
     Returns:
         A status message indicating the result of the update.
