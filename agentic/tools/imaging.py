@@ -2227,6 +2227,78 @@ generous negative space where characters can later be placed.
     return f"Shot '{shot.name}' of '{setting.name}' rendered in style '{style_id}': {locator}"
 
 
+# ---------------------------------------------------------------------------
+# REFRAME: move + scale an EXISTING master into a different aspect ratio — the
+# same painting cropped to fill a new frame, no re-render.
+# ---------------------------------------------------------------------------
+_REFRAME_DIMS = {"landscape": (1536, 1024), "portrait": (1024, 1536), "square": (1024, 1024)}
+
+
+def _reframe_crop_box(W: int, H: int, orient: str, z: float, px: float, py: float):
+    """The source-pixel crop rectangle (x, y, w, h) for a reframe: at zoom 1 it's
+    the largest target-aspect rectangle that fits the source; higher zoom crops
+    tighter; pan (px, py in -1..1) slides the rectangle within the source."""
+    tw, th = _REFRAME_DIMS[orient]
+    tr = tw / th
+    if W / H > tr:
+        h0 = float(H); w0 = H * tr
+    else:
+        w0 = float(W); h0 = W / tr
+    z = max(1.0, float(z))
+    w = w0 / z; h = h0 / z
+    x = (W - w) / 2.0 * (1 + float(px))
+    y = (H - h) / 2.0 * (1 + float(py))
+    return int(round(x)), int(round(y)), int(round(w)), int(round(h))
+
+
+def _reframe_region(source_img: str, orient: str, z: float, px: float, py: float):
+    from PIL import Image
+    im = Image.open(source_img).convert("RGB")
+    W, H = im.size
+    x, y, w, h = _reframe_crop_box(W, H, orient, z, px, py)
+    x = max(0, min(x, W - 1)); y = max(0, min(y, H - 1))
+    w = max(1, min(w, W - x)); h = max(1, min(h, H - y))
+    return im.crop((x, y, x + w, y + h))
+
+
+def reframe_preview(source_img: str, orient: str, z: float, px: float, py: float,
+                    out_path: str, maxside: int = 420) -> str:
+    """Write a small preview PNG of the reframed region (for the live dialog)."""
+    region = _reframe_region(source_img, orient, z, px, py)
+    tw, th = _REFRAME_DIMS[orient]
+    from PIL import Image
+    scale = min(maxside / tw, maxside / th)
+    region = region.resize((max(1, int(tw * scale)), max(1, int(th * scale))), Image.LANCZOS)
+    region.save(out_path, "PNG")
+    return out_path
+
+
+def reframe_setting_master(state, series_id: str, setting_id: str, style_id: str,
+                           source_img: str, orient: str, z: float, px: float, py: float) -> str | None:
+    """Crop the source master to the reframed region, resize to the target
+    orientation's dims, and save it as the style's master for that orientation."""
+    from io import BytesIO
+    from PIL import Image
+    from schema import Setting, FrameLayout
+    from helpers.masters import master_key
+    storage: GenericStorage = state.storage
+    if not (source_img and os.path.exists(source_img)):
+        return None
+    setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": setting_id})
+    if setting is None:
+        return None
+    region = _reframe_region(source_img, orient, z, px, py).resize(_REFRAME_DIMS[orient], Image.LANCZOS)
+    buf = BytesIO(); region.save(buf, "PNG")
+    locator = storage.upload_binary_image(obj=setting, data=buf.getvalue())
+    fresh = storage.read_object(cls=Setting, primary_key=setting.primary_key) or setting
+    mk = master_key(style_id, FrameLayout(orient))
+    fresh.images[mk] = locator
+    fresh.images_stale = [k for k in (fresh.images_stale or []) if k != mk]
+    storage.update_object(data=fresh)
+    state.is_dirty = True
+    return locator
+
+
 @function_tool
 async def generate_setting_background(
     wrapper: RunContextWrapper[APPState],

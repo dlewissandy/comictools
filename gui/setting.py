@@ -204,6 +204,63 @@ def view_setting(state: APPState):
                                                              st.style_id, orientation),
                 )], role='the Background Artist')
 
+            def reframe_dialog(source_img, base_style, orient):
+                # MOVE + SCALE an existing master to fill a different aspect —
+                # the same painting reframed, no re-render.  Sliders drive a
+                # live server-side crop preview; Save writes the target master.
+                import tempfile
+                from agentic.tools.imaging import reframe_preview, reframe_setting_master
+                knobs = {'z': 1.0, 'px': 0.0, 'py': 0.0}
+                seq = {'n': 0}
+                with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                        .style('min-width: 480px; max-width: 640px;'):
+                    ui.label(f'Reframe to {orient}').classes('caption-box caption-box-sm')
+                    ui.label(f"Move and scale this background to fill a {orient} frame — "
+                             f"the same painting, reframed (no re-render).") \
+                        .classes('text-xs text-gray-500 q-mb-sm')
+                    prev = ui.image().props('fit=contain').classes('rounded-md w-full') \
+                        .style('max-height: 46vh; background: rgba(0,0,0,.08);')
+
+                    def _update():
+                        seq['n'] += 1
+                        fd, p = tempfile.mkstemp(prefix=f"reframe-{seq['n']}-", suffix='.png')
+                        os.close(fd)
+                        try:
+                            reframe_preview(source_img, orient, knobs['z'], knobs['px'],
+                                            knobs['py'], p)
+                            prev.set_source(p)
+                        except Exception as ex:
+                            ui.notify(f'preview failed: {ex}', type='warning')
+
+                    def _knob(label, key, lo, hi):
+                        with ui.row().classes('w-full items-center flex-nowrap').style('gap: 8px;'):
+                            ui.label(label).classes('text-xs text-gray-500').style('width: 74px;')
+                            ui.slider(min=lo, max=hi, step=0.05, value=knobs[key]) \
+                                .props('label-always').classes('col') \
+                                .on('change', lambda e, key=key:
+                                    (knobs.__setitem__(key, float(e.args)), _update()))
+                    _knob('Zoom', 'z', 1.0, 3.0)
+                    _knob('Move ←→', 'px', -1.0, 1.0)
+                    _knob('Move ↑↓', 'py', -1.0, 1.0)
+
+                    def _save():
+                        loc = reframe_setting_master(state, series_id, setting.setting_id,
+                                                     base_style, source_img, orient,
+                                                     knobs['z'], knobs['px'], knobs['py'])
+                        dlg.close()
+                        if loc:
+                            from gui.light_table import table_receipt
+                            table_receipt(state, f"🖼 reframed **{setting.name}** to a "
+                                                 f"**{orient}** master")
+                        state.refresh_details()
+                    with ui.row().classes('w-full justify-end q-mt-md').style('gap: 8px;'):
+                        ui.button('Cancel', icon='close').props('flat no-caps') \
+                            .on('click', lambda _: dlg.close())
+                        ui.button('Save as master', icon='crop').props('unelevated no-caps') \
+                            .on('click', lambda _: _save())
+                    _update()
+                dlg.open()
+
             styles_by_id = {st.style_id: st for st in storage.read_all_objects(ComicStyle)}
 
             def heal_master(img, style_id):
@@ -260,6 +317,12 @@ def view_setting(state: APPState):
                                                         f'Ink a {_o} master',
                                                         on_click=lambda *_a, st=styles_by_id[_base], o=_o:
                                                         ink_in_style(st, o)).props('dense')
+                                                    # REFRAME: move+scale THIS
+                                                    # master into that aspect, no render
+                                                    ui.menu_item(
+                                                        f'Reframe to {_o} (move + scale)',
+                                                        on_click=lambda *_a, si=img, bs=_base, o=_o:
+                                                        reframe_dialog(si, bs, o)).props('dense')
                 # ONE COMPARATOR CARD instead of a wall of ghosts: every
                 # style the setting isn't inked in yet, one chip each
                 from helpers.masters import split_key as _sk
