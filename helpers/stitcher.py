@@ -338,6 +338,7 @@ def stitch_pages(storage, series_id: str, issue_id: str) -> list[Page]:
                for i in storage.read_all_objects(Insert, {"series_id": series_id,
                                                           "issue_id": issue_id})}
     issue = storage.read_object(Issue, {"series_id": series_id, "issue_id": issue_id})
+    by_scene = bool(getattr(issue, 'layout_by_scene', False))
     segments, run = [], []
     for scene, panels in _reading_order(storage, series_id, issue_id):
         if panels:
@@ -348,7 +349,9 @@ def stitch_pages(storage, series_id: str, issue_id: str) -> list[Page]:
                      getattr(p, 'size', None) or '1x',
                      p.aspect.value, bool(getattr(p, 'shape_locked', False)), feel)
                     for p in panels]
-        if (not panels or scene.scene_number in anchors) and run:
+        # LAYOUT BY SCENE: every scene is a page boundary.  Otherwise the run
+        # only breaks at a bare scene or an insert anchor (continuous flow).
+        if run and (by_scene or (not panels) or scene.scene_number in anchors):
             segments.append(run)
             run = []
     if run:

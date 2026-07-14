@@ -783,6 +783,19 @@ def view_issue(state: APPState):
                      'Locked panels always keep their shape.') \
                 .classes('text-xs text-gray-500 q-mb-sm')
 
+            # LAYOUT BY SCENE ↔ CONTINUOUS: whether a scene may share a page with
+            # the next, or each scene flows into its own pages.
+            def _set_by_scene(e):
+                fi = storage.read_object(_Issue, {"series_id": series_id,
+                                                  "issue_id": issue_id}) or fresh
+                fi.layout_by_scene = bool(e.value)
+                storage.update_object(fi)
+            with ui.row().classes('w-full items-center q-mb-sm').style('gap: 8px;'):
+                ui.switch('Layout by scene', value=bool(getattr(fresh, 'layout_by_scene', False)),
+                          on_change=_set_by_scene).props('dense')
+                ui.label('— each scene flows into its own pages (off = continuous across scenes)') \
+                    .classes('text-xs text-gray-500')
+
             def knob(name, left, right):
                 with ui.row().classes('w-full items-center flex-nowrap').style('gap: 8px;'):
                     ui.label(left).classes('text-xs text-gray-500') \
@@ -907,6 +920,7 @@ def view_issue(state: APPState):
                 # a panel carries neighbors onto the next or previous page.
                 # Bare scenes and inserts hold their place as full pages.
                 from helpers.stitcher import flow_run, AR, resolve_layout_feel
+                _by_scene = bool(getattr(issue, 'layout_by_scene', False))
                 segments, run = [], []
 
                 def flush():
@@ -924,6 +938,8 @@ def view_issue(state: APPState):
                                  getattr(p, 'size', None) or '1x',
                                  p.aspect.value, bool(getattr(p, 'shape_locked', False)), feel)
                                 for p in panels]
+                        if _by_scene:
+                            flush()   # each scene flows into its OWN pages
                     else:
                         flush()
                         segments.append(('manuscript', sc))

@@ -20,7 +20,8 @@ class Issue(BaseModel):
     artist: Optional[str] = Field(..., description="The artist of the issue.  Optional.   Default to None")
     colorist: Optional[str] = Field(..., description="The colorist of the issue.  Optional.   Default to None")
     creative_minds: Optional[str] = Field(..., description="The creative minds behind the issue. Optional. Default to None")
-    layout_feel: LayoutFeel = Field(default_factory=LayoutFeel, description="The book's page-flow FEEL — density, verticality, irregularity, variety (each -1..1, 0 neutral).  A scene may override it.  Default all-neutral.")
+    layout_feel: LayoutFeel = Field(default_factory=LayoutFeel, description="The book's page-flow FEEL — density, verticality, irregularity, variety (each -1..1, 0 neutral).  Default all-neutral.")
+    layout_by_scene: bool = Field(False, description="When True, each scene's panels flow into their OWN pages (a scene never shares a page with the next); when False, panels flow continuously across scenes.  Default False (continuous).")
 
     @property
     def primary_key(self) -> dict[str, str]:
