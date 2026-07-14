@@ -54,3 +54,36 @@ def test_read_one_out_of_context_raises(storage):
 def test_read_all_children_of_selection(storage):
     issues = reader.read_all(ctx(storage, sel(*ISSUE_SEL[:2])), Issue, {"series_id": "wonders-of-the-witchlight"})
     assert len(issues) >= 1
+
+
+# On a panel's light table the PANEL is the selection; composing its render
+# must read UP the chain (scene setting, style, issue).  Reading an ancestor
+# was rejected — every render from the light table died on it.
+SCENE_ID = "b3cc50eb-5a57-463c-ba10-927d941c9779"
+PANEL_ID = "667ca06e-8b94-4d98-ab88-f996d6f3c8f9"
+PANEL_SEL = (*ISSUE_SEL,
+             ("Tent", SCENE_ID, SelectedKind.SCENE),
+             ("A Panel", PANEL_ID, SelectedKind.PANEL))
+
+
+def test_read_one_ancestor_scene_of_selected_panel(storage):
+    from schema import SceneModel
+    scene = reader.read_one(ctx(storage, sel(*PANEL_SEL)), SceneModel,
+                            {"series_id": "wonders-of-the-witchlight",
+                             "issue_id": "witchlight-carnival", "scene_id": SCENE_ID})
+    assert isinstance(scene, SceneModel), "a panel's own scene is in its context"
+
+
+def test_read_one_ancestor_issue_of_selected_panel(storage):
+    issue = reader.read_one(ctx(storage, sel(*PANEL_SEL)), Issue,
+                            {"series_id": "wonders-of-the-witchlight", "issue_id": "witchlight-carnival"})
+    assert isinstance(issue, Issue), "a panel's own issue is in its context"
+
+
+def test_sibling_scene_still_out_of_context_with_panel_selected(storage):
+    # the ancestor allowance must NOT open the door to unrelated siblings
+    from schema import SceneModel
+    with pytest.raises(ValueError):
+        reader.read_one(ctx(storage, sel(*PANEL_SEL)), SceneModel,
+                        {"series_id": "wonders-of-the-witchlight",
+                         "issue_id": "witchlight-carnival", "scene_id": "some-other-scene"})

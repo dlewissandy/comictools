@@ -2257,88 +2257,52 @@ def light_table(state: APPState, panel, scene, setting,
             post_user_message(state, msg)
         return False
 
-    # ---- INK: hand the rough to the coauthor -----------------------------
-    def ink():
-        parts = []
-        if bg_layer["on"] and setting is not None:
-            parts.append(f"the '{setting.name}' master background as the setting")
-        elif not bg_layer["on"]:
-            parts.append("no setting background")
-        on_figs = [f for f in figures if f["on"]]
-        if on_figs:
-            fresh = storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
-
-            def depth(h):
-                return "near/large" if h >= 88 else ("far/small" if h <= 55 else "mid-ground")
-
-            def blk(f):
-                return {**f["blocking"], **((fresh.figure_blocking or {}).get(f["key"]) or {})}
-
-            def fig_name(f):
-                if not f["ref"]:
-                    return f["name"]
-                return f"{_char_names.get(f['ref'].character_id, f['ref'].character_id)} ({f['ref'].variant_id})"
-
-            parts.append("figures: " + ", ".join(
-                f"{fig_name(f)} at {round(blk(f)['x'])}% from left, "
-                f"{depth(blk(f)['h'])}" for f in on_figs))
-        else:
-            parts.append("no characters in frame")
-        pinned = [r for r in references if r["on"]]
-        if pinned:
-            parts.append(f"{len(pinned)} pinned reference image(s)")
-        from helpers.compositor import is_placeholder
-        real_letters = [t for t in ([n.text for n in board_narration] +
-                                    [d.text for d in board_dialogue])
-                        if t and not is_placeholder(t)]
-        if letters["on"] and has_letters and real_letters:
-            fresh_blk = (storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel).figure_blocking or {}
-            placed = []
-            for i, d in enumerate(board_dialogue[:4]):
-                b = fresh_blk.get(f'balloon/{i}') or {}
-                # unwritten placeholder balloons never reach the inker's brief
-                if not b.get('on', 1) or is_placeholder(d.text):
-                    continue
-                desc = f"{d.character_id}'s {d.emphasis.value} balloon at {round(b.get('x', 50))}%"
-                if b.get('tx') is not None:
-                    desc += f" (tail aimed at {round(b['tx'])}%, {round(b.get('ty', 0))}% up)"
-                placed.append(desc)
-            parts.append("letter it AS BLOCKED on the table"
-                         + (f" — {'; '.join(placed)}" if placed else ""))
-        elif supports_letters:
-            parts.append("leave it unlettered")
-        noun = ("cover" if cover_mode
-                else f"'{panel.name}' insert page" if insert_mode else "panel")
-        post_user_message(state, f"Ink this rough into a new take of this {noun} — compose it with " +
-                          "; ".join(parts) + ".")
-
-    # ---- PROOF: from the rough if one is laid, else from the script -------
+    # ---- PROOF: render a NEW take of THIS board, DIRECTLY -----------------
     async def proof_flow():
-        """THE PROOF: if a rough is on the table, ink it (its arrangement IS the
-        brief).  If the board is BARE, render a take straight from the script —
-        gated on the script being detailed enough, and WITHOUT composing a board
-        brief (an empty board would just say 'no setting, no cast' — pure noise
-        that would only muddy the brief)."""
+        """THE PROOF renders a new take of this exact board through the render
+        queue — the SAME way everything else the table makes is rendered — NOT
+        by asking the coauthor, whose tool context may not even hold this panel.
+        render_panel_impl (and the cover body) compose the take from the board
+        when it's roughed, or from the brief when the board is bare — one code
+        path, deterministic, no selection to get wrong."""
         has_rough = any(f.get("on") and f.get("img") for f in figures) \
             or bool(bg_layer.get("on") and setting is not None)
-        if has_rough:
-            ink()
-            return
-        # NO ROUGH — proof from the written beat, as it stands
-        brief = f"{(getattr(panel, 'beat', '') or '').strip()}\n\n{(panel.description or '').strip()}".strip()
-        if not brief:
-            ui.notify('No rough is laid and the script is empty — write the beat first, '
-                      'then proof it.', type='warning')
-            return
         noun = ("cover" if cover_mode
                 else f"'{panel.name}' insert page" if insert_mode else "panel")
-        collab = (f"There is no rough laid for this {noun}, and its script is thin to "
-                  f"proof from. Let's build out the beat together first.")
-        if not await _brief_gate(brief, cover_mode, 'proof', collab):
+        if not has_rough:
+            # BARE BOARD → a from-brief proof: make sure the brief can carry it.
+            brief = f"{(getattr(panel, 'beat', '') or '').strip()}\n\n{(panel.description or '').strip()}".strip()
+            if not brief:
+                ui.notify('No rough is laid and the brief is empty — write the brief first, '
+                          'then proof it.', type='warning')
+                return
+            collab = (f"There is no rough laid for this {noun}, and its brief is thin to "
+                      f"proof from. Let's build it out together first.")
+            if not await _brief_gate(brief, cover_mode, 'proof', collab):
+                return
+
+        import types
+        from helpers.render_queue import enqueue_renders
+        from agentic.tools.imaging import render_panel_impl, _generate_cover_image_body
+
+        if cover_mode:
+            def _job(_sid=panel.series_id, _iid=panel.issue_id, _cid=panel.cover_id):
+                return _generate_cover_image_body(types.SimpleNamespace(context=state), _sid, _iid, _cid)
+        elif insert_mode:
+            # a full-page insert renders its take through the coauthor for now
+            post_user_message(state, f"Render a new take of this {noun} from the light table "
+                                     f"as it stands (don't rewrite the brief).")
             return
-        post_user_message(state, f"Render a new take of this {noun} straight from its script — "
-                                 f"no rough is laid, so work from the written beat as it stands "
-                                 f"(don't rewrite the brief).")
+        else:
+            def _job(_sid=panel.series_id, _iid=panel.issue_id,
+                     _scid=panel.scene_id, _pid=panel.panel_id):
+                return render_panel_impl(state, _sid, _iid, _scid, _pid)
+
+        enqueue_renders(state, [(
+            f"proofing this {noun} — a new take",
+            _job,
+            lambda _r: state.refresh_details(),
+        )], role='the Inker')
 
     with ui.row().classes('w-full flex-nowrap light-columns').style('gap: 12px; align-items: stretch;'):
         stack_col = ui.column().classes('w-1/3 acetate-stack').style('gap: 4px; min-width: 220px;')

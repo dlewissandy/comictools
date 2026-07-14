@@ -128,6 +128,16 @@ def read_one(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], pk: dic
             if pk[k] != parent_pk[k]:
                 logger.error(CONTEXT_ERROR_MSG)
                 raise ValueError(CONTEXT_ERROR_MSG)
+
+    # An ANCESTOR of the selected object — a panel's own scene, issue, and
+    # series are all part of ITS context.  Reading UP the chain (for the
+    # setting, style, or issue that composing the panel needs) is never
+    # wandering into unrelated data, so it must be allowed: with a panel
+    # selected, reading its scene was being rejected, blocking every render.
+    elif len(context) > 0 and all(
+            k in context[-1][1] and context[-1][1][k] == v for k, v in pk.items()):
+        logger.debug(f"Finding ancestor {pk} of the current selection")
+
     else:
         logger.error(CONTEXT_ERROR_MSG)
         raise ValueError(CONTEXT_ERROR_MSG)
