@@ -1521,6 +1521,18 @@ def takes_row(state, board, featured: str | None):
                         .tooltip('EXPLODE into layers — it becomes the background and its '
                                  'figures and elements are recognized and lifted onto acetates') \
                         .on('click.stop', lambda _, img=img: explode_take(img))
+
+                    def heal_take(img=img):
+                        # PATCH UP THE TAKE: repaint a spot or extend the paper on
+                        # the healing bench — the edited versions land back here as
+                        # takes (the bench edits within the board's images)
+                        from gui.selection import SelectionItem as _SI, SelectedKind as _SK
+                        state.change_selection(new=[*state.selection, _SI(
+                            name="Edit this take", id=img, kind=_SK.IMAGE_EDITOR)])
+                    ui.button(icon='healing').props('flat round dense size=xs') \
+                        .classes('absolute bottom-1 left-1 z-10 bg-white/70 dark:bg-black/50') \
+                        .tooltip('Patch it up — repaint a spot or extend the paper on the healing bench') \
+                        .on('click.stop', lambda _, img=img: heal_take(img))
                 take.tooltip('The featured take — this is the print' if img == featured
                              else 'Feature this take as the print — the table locks to its arrangement')
                 take.on('click', lambda _, img=img: set_image(img))

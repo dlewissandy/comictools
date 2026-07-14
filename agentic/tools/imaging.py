@@ -3753,19 +3753,33 @@ COMPLETELY TRANSPARENT background: a cut-out acetate.""",
         # the repaint keeps the SOURCE's orientation — figure acetates are
         # not always portrait (a lifted element can be any shape)
         base_size = "1536x1024" if _s.width > _s.height else ("1024x1536" if _s.height > _s.width else "1024x1024")
-    base_bytes = invoke_edit_image_api(
-        f"""Remove the following from this image ENTIRELY: {names}.
-Leave NO trace and NO copy of any of them anywhere in the frame.
-Reveal and draw what lies BENEATH each removed item, consistent with the
-image (a garment removed reveals the body/clothing beneath it, drawn
-on-model; a prop removed reveals the scenery behind it).   Everything
-else must remain PIXEL-IDENTICAL — same composition, same style, same colors.""",
-        reference_images=[source],
-        size=base_size,
-        quality=IMAGE_QUALITY.MEDIUM,
-        background="transparent" if kind != 'background' else None,
-        input_fidelity="high",
-    )
+
+    # A MASK MAKES THE REMOVAL RELIABLE: the edit API regenerates ONLY the
+    # transparent (lifted) regions, so it CAN'T leave a ghost of the lifted
+    # thing on the remainder — the failure the free-form "remove X" prompt hit.
+    # (The crop-paste below still guarantees everything outside is untouched.)
+    mask_img = _Img.new("RGBA", (W0, H0), (0, 0, 0, 255))          # opaque = KEEP
+    for (rl, rt, rr, rb) in (used_rects or [(0, 0, W0, H0)]):
+        mask_img.paste((0, 0, 0, 0), (int(rl), int(rt), int(rr), int(rb)))  # clear = REPAINT here
+    mask_path = os.path.join(figures_dir, f"mask-{uuid4().hex[:6]}.png")
+    mask_img.save(mask_path, 'PNG')
+    try:
+        base_bytes = invoke_edit_image_api(
+            f"""The transparent regions of the mask are where {names} used to be —
+they have been cleared.  FILL those regions with what lies BENEATH: reveal and
+draw the body, clothing or scenery that was behind each removed item, on-model
+and consistent with the surrounding art.  Leave NO trace, edge, shadow or copy
+of {names} anywhere.  Everything outside the cleared regions stays PIXEL-IDENTICAL.""",
+            reference_images=[source],
+            mask=mask_path,
+            size=base_size,
+            quality=IMAGE_QUALITY.MEDIUM,
+            background="transparent" if kind != 'background' else None,
+            input_fidelity="high",
+        )
+    finally:
+        if os.path.exists(mask_path):
+            os.remove(mask_path)
     # FIDELITY: the edit API redraws the WHOLE frame, so untouched art
     # drifts.  Keep the ORIGINAL pixels everywhere except inside the lifted
     # regions — only where something came off may the repaint show through.
