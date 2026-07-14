@@ -536,7 +536,7 @@ def book_signature(storage: GenericStorage, series_id: str, issue_id: str) -> st
                 face = stamp(p.image)
             else:
                 # an unprinted panel's face is its ROUGH — table changes
-                # must refresh the cached proof
+                # must refresh the cached reading-room proof
                 from helpers.rough_face import rough_signature
                 face = f"rough:{rough_signature(p, scene) or 'brief'}"
             parts.append(f"{scene.scene_id}/{p.panel_id}#{p.panel_number}@{p.aspect.value}={face}")
@@ -604,8 +604,8 @@ def layout_pages(storage: GenericStorage, series_id: str, issue_id: str):
                 img = panel.image if ok else None
                 if img is None and panel is not None:
                     # THE PANEL'S TRUEST FACE, on hand-designed pages too:
-                    # no print yet but a rough on the table — the page shows
-                    # the rough instead of a gray hole
+                    # no print yet but a rough on the table — the reading room
+                    # shows the rough instead of a gray hole
                     from helpers.rough_face import rough_face
                     from schema import SceneModel as _Scene
                     scene = storage.read_object(_Scene, {"series_id": series_id, "issue_id": issue_id,
@@ -632,8 +632,8 @@ def resolve_cells(storage: GenericStorage, series_id: str, issue_id: str, pm) ->
         img = panel.image if ok else None
         if img is None and panel is not None:
             # THE PANEL'S TRUEST FACE: no print yet, but a rough on the
-            # table — the proof shows the rough, stamped as one, instead
-            # of a gray hole
+            # table — the reading room shows the rough, stamped as one,
+            # instead of a gray hole
             from helpers.rough_face import rough_face
             from schema import SceneModel as _Scene
             scene = storage.read_object(_Scene, {"series_id": series_id, "issue_id": issue_id,

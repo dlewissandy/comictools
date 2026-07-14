@@ -328,6 +328,17 @@ if (!window._roughDragInit) {
             offY: (isNaN(b0) ? 0 : b0) - cy0, live: false};
   });
   document.addEventListener('pointermove', (e) => {
+    // A POINTERUP WE NEVER SAW: if NO button is held yet we still think we are
+    // dragging/resizing, the release landed on something outside the canvas
+    // that swallowed the event.  Stop now — persist where it ended — so a mere
+    // hover over anything outside the lightbox never moves or resizes an acetate.
+    if ((drag || resize || tailDrag) && e.buttons === 0) {
+      if (drag) { drag.fig.style.zIndex = drag.z; if (drag.live) report(drag.fig, drag.canvas); }
+      else if (resize) report(resize.fig, resize.canvas);
+      else if (tailDrag) report(tailDrag.fig, tailDrag.canvas);
+      drag = resize = tailDrag = null;
+      return;
+    }
     if (tailDrag) {
       const r = tailDrag.canvas.getBoundingClientRect();
       const tx = Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100));
@@ -1185,6 +1196,41 @@ def pose_element_bg(state, board, key: str, pose_direction: str | None = None,
     )], role="the Penciller")
 
 
+def dress_setting_bg(state, board, direction: str | None = None, style_id: str | None = None):
+    """Queue a DRESS re-render of the board's background — the setting twin of
+    pose_element_bg.  One dressing at a time: the row shows a spinner and a
+    second click is refused while it's on the drawing board."""
+    from agentic.tools.imaging import dress_setting_acetate_body
+    from helpers.render_queue import enqueue_renders
+    pending = getattr(state, '_poses_pending', None)
+    if pending is None:
+        pending = set()
+        try:
+            state._poses_pending = pending
+        except Exception:
+            pass
+    pkey = element_pending_key(board, 'background/plate')
+    if pkey in pending:
+        ui.notify("the setting is already on the drawing board — "
+                  "the dressing lands when it's ready.", type='warning')
+        return
+    pending.add(pkey)
+    kw = ({"cover_id": board.cover_id} if is_cover(board)
+          else {"insert_id": board.insert_id} if is_insert(board)
+          else {"scene_id": board.scene_id, "panel_id": board.panel_id})
+
+    def job():
+        try:
+            return dress_setting_acetate_body(
+                state, board.series_id, board.issue_id,
+                direction=direction, style_id=style_id, **kw)
+        finally:
+            pending.discard(pkey)
+    enqueue_renders(state, [(
+        f"dressing the setting for {board_label(board)}", job,
+    )], role="the Background Artist")
+
+
 def lay_figure_on_table(state, panel, character_id: str, variant_id: str,
                         name: str | None = None):
     fresh_board(state.storage, panel)
@@ -1631,6 +1677,27 @@ def light_table(state: APPState, panel, scene, setting,
                 cur["ty"] = round(a.get('ty', 0), 1)
             p.figure_blocking[a['key']] = cur
             state.storage.update_object(p)
+            # SYNC THE SERVER MODEL: the drag/resize moved the DOM directly, but
+            # the element's server-side style still holds the OLD position — so a
+            # later re-patch (e.g. when you scroll) would snap it back.  Update
+            # the live element to match; the DOM already shows this, so it is
+            # invisible, but now nothing reverts it.  (No full rebuild, so the
+            # image never re-fades and the selection is kept.)
+            el = getattr(state, '_rough_els', {}).get(a['key'])
+            if el is not None:
+                try:
+                    bits = {"left": f"{round(a['x'], 1)}%",
+                            "bottom": f"{round(a['y'], 1)}%", "top": "auto"}
+                    if a.get('h'):
+                        k = float(el._props.get('data-war') or 1) or 1
+                        bits["height"] = f"{round(a['h'], 1)}%"
+                        bits["width"] = f"{round(a['h'] * k, 2)}%"
+                    if a.get('rot'):
+                        _fl = ' scaleX(-1)' if el._props.get('data-flip') else ''
+                        bits["transform"] = f"translateX(-50%){_fl} rotate({round(a['rot'])}deg)"
+                    el.style('; '.join(f'{kk}: {vv}' for kk, vv in bits.items()))
+                except Exception:
+                    pass
         ui.on('rough_block', _on_block)
 
         def _on_text(e):
@@ -1722,6 +1789,21 @@ def light_table(state: APPState, panel, scene, setting,
     def _key_on(key, default=1):
         return bool(((panel.figure_blocking or {}).get(key) or {}).get('on', default))
 
+    # THE SETTING RIDES THE SAME RAIL: the background is a layer exactly like a
+    # figure or prop, so placing/moving/scaling it goes through the ONE code
+    # path (the acetate render + drag).  It sits at the bottom of the stack and
+    # starts full-frame; its on/off flag lives under 'background' (the eye), its
+    # position/scale under 'background/plate' (dragged like any other key).
+    if background:
+        _bgblk = dict((panel.figure_blocking or {}).get('background/plate') or {})
+        _bgblk.setdefault("x", 50)
+        _bgblk.setdefault("y", 0)
+        _bgblk.setdefault("h", 100)
+        _bgblk.setdefault("z", -9)
+        figures.append({"ref": None, "key": "background/plate", "img": background,
+                        "posed": True, "on": _key_on('background'),
+                        "blocking": _bgblk, "name": "background"})
+
     # LETTERS live on panels AND covers (taglines, a balloon spoken right off
     # the cover) — any board with dialogue/narration fields gets the full
     # letters experience.
@@ -1771,10 +1853,9 @@ def light_table(state: APPState, panel, scene, setting,
         if locked:
             canvas._props['data-locked'] = '1'
         with canvas:
-            if bg_layer["on"] and background:
-                ui.image(source=_src(background)).props('fit=cover') \
-                    .classes('absolute inset-0 w-full h-full').style('z-index: 1;')
-            elif locked and featured and not any(f["on"] and f["img"] for f in figures):
+            # the background is a layer now — it renders in the acetate loop
+            # below (one code path), not as a fixed full-frame image here.
+            if locked and featured and not any(f["on"] and f["img"] for f in figures):
                 # A LOCKED, EMPTY TABLE still shows its truth: the featured
                 # print sits ghosted on the glass — this is what the board
                 # prints; unlock to lay it back down as layers
@@ -1782,10 +1863,10 @@ def light_table(state: APPState, panel, scene, setting,
                     .classes('absolute inset-0 w-full h-full rough-ghost-print').style('z-index: 1;')
                 ui.label('the featured print — the table is locked to it') \
                     .classes('rough-ghost-print__note')
-            else:
+            elif not any(f["on"] and f["img"] for f in figures):
                 with ui.column().classes('absolute inset-0 items-center justify-center') \
                         .style('z-index: 1; gap: 8px;'):
-                    ui.label('bare board — no background on the table').classes('text-xs text-gray-500')
+                    ui.label('bare board — nothing on the table').classes('text-xs text-gray-500')
                     if not locked:
                         with ui.row().style('gap: 8px;'):
                             if setting is not None and bg_style_missing:
@@ -1803,6 +1884,10 @@ def light_table(state: APPState, panel, scene, setting,
                 return _img_ar(path) / canvas_ar  # width%% per height%%
 
             live_blk = panel.figure_blocking or {}
+            # key -> the LIVE element, so a drag/resize can sync the server-side
+            # style out of band (see _on_block) — otherwise a later re-patch
+            # snaps the acetate back to its old, server-held position.
+            state._rough_els = {}
             visible = [f for f in figures if f["on"] and f["img"]]
             for f in sorted(visible, key=lambda g: {**g["blocking"], **(live_blk.get(g["key"]) or {})}.get("z", 0)):
                 b = {**f["blocking"], **(live_blk.get(f["key"]) or {})}
@@ -1825,6 +1910,7 @@ def light_table(state: APPState, panel, scene, setting,
                     fig._props['data-lock'] = '1'
                 if b.get('rot'):
                     fig._props['data-rot'] = f'{float(b["rot"]):g}'
+                state._rough_els[f["key"]] = fig
 
             # UNPOSED SILHOUETTES: a cast figure with no acetate yet still
             # stands on the rough — a dashed stand-in where they'll be,
@@ -1986,24 +2072,36 @@ def light_table(state: APPState, panel, scene, setting,
                     .on('click', lambda _: go())
         dlg.open()
 
-    def pose_dialog(character_id: str, variant_id: str):
-        name = _char_names.get(character_id) or character_id.replace('-', ' ').title()
+    # ONE DIALOG for posing a figure, posing a prop, OR dressing the setting.
+    # They are the SAME act — describe what you want in words — so they share
+    # the same code; only the title, the placeholder, and the button differ.
+    def acetate_direction_dialog(title, placeholder, on_go, *,
+                                 go_label='Pose', go_icon='accessibility_new', on_script=None):
         with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 460px;'):
-            ui.label(f"Pose {name}").classes('caption-box caption-box-sm')
-            hint = getattr(panel, 'beat', None) or panel.description or ''
-            direction = ui.textarea(
-                placeholder=f"Describe the pose — e.g. from the script: “{hint[:120]}…”" if hint
-                else 'Describe the pose, expression and action…').classes('w-full').props('outlined autofocus')
+            ui.label(title).classes('caption-box caption-box-sm')
+            direction = ui.textarea(placeholder=placeholder).classes('w-full').props('outlined autofocus')
             with ui.row().classes('w-full justify-end').style('gap: 8px;'):
-                ui.button('Let the script decide').props('flat dense') \
-                    .on('click', lambda _: (dlg.close(), pose_figure(character_id, variant_id)))
+                if on_script is not None:
+                    ui.button('Let the script decide').props('flat dense') \
+                        .on('click', lambda _: (dlg.close(), on_script()))
 
                 def go():
                     text = (direction.value or '').strip()
                     dlg.close()
-                    pose_figure(character_id, variant_id, text or None)
-                ui.button('Pose', icon='accessibility_new').props('unelevated dense').on('click', lambda _: go())
+                    on_go(text or None)
+                ui.button(go_label, icon=go_icon).props('unelevated dense').on('click', lambda _: go())
         dlg.open()
+
+    def pose_dialog(character_id: str, variant_id: str):
+        name = _char_names.get(character_id) or character_id.replace('-', ' ').title()
+        hint = getattr(panel, 'beat', None) or panel.description or ''
+        acetate_direction_dialog(
+            f"Pose {name}",
+            (f"Describe the pose — e.g. from the script: “{hint[:120]}…”" if hint
+             else 'Describe the pose, expression and action…'),
+            lambda t: pose_figure(character_id, variant_id, t),
+            go_label='Pose', go_icon='accessibility_new',
+            on_script=lambda: pose_figure(character_id, variant_id))
 
     def pose_element(key: str, name: str, pose_direction: str | None = None):
         _style = getattr(scene, 'style_id', None) if scene is not None \
@@ -2013,20 +2111,28 @@ def light_table(state: APPState, panel, scene, setting,
         state.refresh_details()
 
     def pose_element_dialog(key: str, name: str):
-        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 460px;'):
-            ui.label(f"Pose {name.title()}").classes('caption-box caption-box-sm')
-            direction = ui.textarea(
-                placeholder='Describe the orientation or state — e.g. “drawn and raised”, '
-                '“open on the lectern”, “seen 3/4 from below”, “lit and glowing”…') \
-                .classes('w-full').props('outlined autofocus')
-            with ui.row().classes('w-full justify-end').style('gap: 8px;'):
-                def go():
-                    text = (direction.value or '').strip()
-                    dlg.close()
-                    pose_element(key, name, text or None)
-                ui.button('Pose', icon='3d_rotation').props('unelevated dense') \
-                    .on('click', lambda _: go())
-        dlg.open()
+        acetate_direction_dialog(
+            f"Pose {name.title()}",
+            'Describe the orientation or state — e.g. “drawn and raised”, '
+            '“open on the lectern”, “seen 3/4 from below”, “lit and glowing”…',
+            lambda t: pose_element(key, name, t),
+            go_label='Pose', go_icon='3d_rotation')
+
+    def dress_setting(direction: str | None = None):
+        _style = getattr(scene, 'style_id', None) if scene is not None \
+            else getattr(panel, 'style_id', None)
+        dress_setting_bg(state, panel, direction, style_id=_style)
+        # rebuild so the background row shows its dressing… spinner right away
+        state.refresh_details()
+
+    def dress_dialog():
+        nm = (setting.name if setting else 'the setting')
+        acetate_direction_dialog(
+            f"Dress {nm.title() if setting else nm}",
+            'Describe the light, time of day, weather or angle — '
+            'e.g. “early morning, slight fog, bird’s-eye view”…',
+            lambda t: dress_setting(t),
+            go_label='Dress', go_icon='videocam')
 
     # ---- one acetate row on the table -----------------------------------
     def eye(layer: dict):
@@ -2751,6 +2857,8 @@ def light_table(state: APPState, panel, scene, setting,
                     display.append(('group', gname, members))
                     grouped_keys.update(m["key"] for m in members)
             for f in figures:
+                if f["key"] == 'background/plate':
+                    continue   # the background layer keeps its own rich row below
                 if f["key"] not in grouped_keys:
                     display.append(('fig', None, [f]))
             display.sort(key=lambda it: -max(m["blocking"].get("z", 0) for m in it[2]))
@@ -2903,12 +3011,20 @@ def light_table(state: APPState, panel, scene, setting,
                     bg_label += " (split from the take)"
                 with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
                     eye(bg_layer)
+                    # PIN TO THE LIGHTBOX — like any other layer: a pinned
+                    # background won't drag, scale or tilt until unpinned.
+                    padlock({"key": "background/plate"})
                     ui.image(source=_src(background)).classes('light-thumb cursor-pointer') \
                         .tooltip('Swap the background — pick another setting') \
                         .on('click', lambda _: pick_background())
                     ui.label(bg_label).classes('text-sm') \
                         .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
                     ui.space()
+                    # DRESS THE SETTING — the setting's pose: new light, time of
+                    # day, weather or camera angle.  Same dialog as posing.
+                    ui.button(icon='videocam').props('flat round dense size=xs') \
+                        .tooltip('Dress the setting — light, time of day, weather, camera angle') \
+                        .on('click', lambda _: dress_dialog())
                     ui.button(icon='content_cut').props('flat round dense size=xs') \
                         .tooltip('Split this background into its elements (recognize, lift, repaint beneath)') \
                         .on('click', lambda _, p=background: split_flow('background', p))
@@ -2961,17 +3077,6 @@ def light_table(state: APPState, panel, scene, setting,
 
             def _fresh():
                 return storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
-
-            def _default_variant(cid):
-                for r in (panel.character_references or []):
-                    if r.character_id == cid:
-                        return r.variant_id
-                for r in (getattr(scene, 'cast', None) or []):
-                    if r.character_id == cid:
-                        return r.variant_id
-                vs = list(storage.read_all_objects(CharacterVariant, primary_key={
-                    "series_id": series_id, "character_id": cid}))
-                return vs[0].variant_id if vs else 'default'
 
             def conjure_prop(name: str, description: str):
                 """Create a prop asset and queue its reference art in this
@@ -3075,9 +3180,33 @@ def light_table(state: APPState, panel, scene, setting,
                         checks.append(('new_setting', ns,
                                        ui.checkbox(f"NEW setting — {ns.get('name', 'unnamed')}", value=True)))
                     for f in plan['figures']:
-                        nm2 = (cast_names.get(f['character_id']) or f['character_id']).title()
-                        checks.append(('figure', f,
-                                       ui.checkbox(f"Pose {nm2} — {str(f.get('pose', ''))[:70]}", value=True)))
+                        cid = f['character_id']
+                        nm2 = (cast_names.get(cid) or cid).title()
+                        # THE WARDROBE COMES FROM THE SCENE'S CAST — never guessed.
+                        cast_vid = next((c.variant_id for c in (getattr(scene, 'cast', None) or [])
+                                         if c.character_id == cid), None)
+                        _variants = storage.read_all_objects(CharacterVariant,
+                            primary_key={"series_id": series_id, "character_id": cid})
+                        _vname = {v.id: (getattr(v, 'name', None) or v.id) for v in _variants}
+                        if cast_vid is not None:
+                            f['_variant_id'] = cast_vid
+                            checks.append(('figure', f, ui.checkbox(
+                                f"Pose {nm2} ({_vname.get(cast_vid, cast_vid)}) — "
+                                f"{str(f.get('pose', ''))[:56]}", value=True)))
+                        elif len(_variants) <= 1:
+                            f['_variant_id'] = _variants[0].id if _variants else 'base'
+                            checks.append(('figure', f, ui.checkbox(
+                                f"Pose {nm2} — {str(f.get('pose', ''))[:60]}", value=True)))
+                        else:
+                            # NOT CAST + several wardrobes — ASK, never assume.
+                            f['_variant_id'] = None
+                            with ui.row().classes('w-full items-center flex-nowrap').style('gap: 8px;'):
+                                _cb = ui.checkbox(f"Pose {nm2} — {str(f.get('pose', ''))[:40]}", value=True)
+                                _sel = ui.select({v.id: _vname[v.id] for v in _variants}, value=None,
+                                                 label="wardrobe — not cast, pick one") \
+                                    .props('dense outlined').style('min-width: 220px;')
+                                _sel.on_value_change(lambda e, f=f: f.__setitem__('_variant_id', e.value))
+                            checks.append(('figure', f, _cb))
                     for e in plan['elements']:
                         checks.append(('element', e,
                                        ui.checkbox(f"Conjure {e['name']} — {str(e.get('description', ''))[:60]}",
@@ -3090,6 +3219,7 @@ def light_table(state: APPState, panel, scene, setting,
                         dlg.close()
                         fresh_board(storage, panel)
                         laid = []
+                        _uncast = []
                         for kind2, item, cb in checks:
                             if not cb.value:
                                 continue
@@ -3116,7 +3246,12 @@ def light_table(state: APPState, panel, scene, setting,
                                 laid.append(f"the new {new_s.name} set")
                             elif kind2 == 'figure':
                                 cid = item['character_id']
-                                vid = _default_variant(cid)
+                                # THE WARDROBE IS THE SCENE'S CAST (or a picked
+                                # one) — never a guess.  No wardrobe → don't pose.
+                                vid = item.get('_variant_id')
+                                if not vid:
+                                    _uncast.append(cast_names.get(cid) or cid.replace('-', ' '))
+                                    continue
                                 if not any(c.character_id == cid and c.variant_id == vid
                                            for c in (panel.character_references or [])):
                                     panel.character_references = (panel.character_references or []) + [
@@ -3132,6 +3267,11 @@ def light_table(state: APPState, panel, scene, setting,
                                 laid.append('the masthead')
                         if laid:
                             _receipt('🛠 building the table from the brief — ' + ', '.join(laid))
+                        if _uncast:
+                            ui.notify(
+                                'No wardrobe chosen for ' + ', '.join(sorted(set(_uncast)))
+                                + ' — cast them in the scene, or pick a look, then rough again.',
+                                type='warning', timeout=6000)
                         state.refresh_details()
                     with ui.row().classes('w-full justify-end q-mt-sm'):
                         ui.button('Build the table', icon='auto_awesome').props('unelevated dense') \
@@ -3580,6 +3720,18 @@ def light_table(state: APPState, panel, scene, setting,
         if getattr(state, '_auto_split_board', None) == panel.id and split_plate:
             state._auto_split_board = None
             ui.timer(0.6, lambda: split_flow('background', split_plate), once=True)
+
+        # THE BEAT/ROUGH/PROOF PENCIL, fired from the open book: when a tile's
+        # pencil sent us here to rough or proof THIS panel, run the light
+        # table's OWN action — build_table_flow (rough) or ink (proof).  Same
+        # code path, just auto-fired.  (build_table_flow is conditional, so
+        # look it up in locals(); a locked board simply has no rougher.)
+        _auto = getattr(state, '_board_autorun', None)
+        if _auto and _auto[1] == panel.id:
+            _fn = locals().get('build_table_flow') if _auto[0] == 'rough' else locals().get('ink')
+            if _fn is not None:
+                state._board_autorun = None
+                ui.timer(0.4, _fn, once=True)
 
         if featured is not None:
             with ui.column().style('flex: 1 1 0; min-width: 0;'):

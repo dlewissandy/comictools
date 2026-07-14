@@ -3337,6 +3337,97 @@ as directed.  This is a cut-out acetate to be layered over a background."""
     return f"Posed element acetate for {name}: {filepath}"
 
 
+def dress_setting_acetate_body(state, series_id: str, issue_id: str,
+                               direction: str | None = None,
+                               scene_id: str | None = None, panel_id: str | None = None,
+                               cover_id: str | None = None, insert_id: str | None = None,
+                               style_id: str | None = None) -> str:
+    """DRESS THE SETTING: re-render the board's background plate under new light,
+    time of day, weather, or camera angle — the setting twin of posing a figure or
+    a prop.  Same place, new dressing; lands back on the board's background/plate.
+
+    Like a pose, this is a spatial guide the final ink redraws — inked at MEDIUM."""
+    from helpers.generator import invoke_edit_image_api
+    from storage.filepath import obj_to_imagepath
+    from helpers.stitcher import laid_aspect as _laid_aspect
+    from schema import SceneModel as _Scene
+    storage: GenericStorage = state.storage
+
+    if cover_id:
+        board = storage.read_object(cls=Cover, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
+    elif insert_id:
+        from schema import Insert as _Insert
+        board = storage.read_object(cls=_Insert, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "insert_id": insert_id})
+    else:
+        board = storage.read_object(cls=Panel, primary_key={
+            "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
+    if board is None:
+        return "Board not found for dressing the setting."
+
+    # the scene owns the setting/style (a cover or insert is its own scene)
+    scene = (storage.read_object(cls=_Scene, primary_key={
+        "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
+        if (scene_id and not (cover_id or insert_id)) else None)
+    owner = scene if scene is not None else board
+    _style = style_id or getattr(owner, 'style_id', None) or 'vintage-four-color'
+    style: ComicStyle = storage.read_object(cls=ComicStyle, primary_key={"style_id": _style})
+
+    # SOURCE: the plate already on the table (a re-dress builds on it), else the
+    # scene's setting master
+    source = (board.figure_images or {}).get('background/plate')
+    if not (source and os.path.exists(source)):
+        sid = getattr(owner, 'setting_id', None)
+        if sid:
+            setting = storage.read_object(cls=Setting, primary_key={
+                "series_id": series_id, "setting_id": sid})
+            if setting is not None:
+                from helpers.masters import scene_background
+                cand, _ = scene_background(setting, _style, getattr(board, 'aspect', 'landscape'),
+                                           getattr(owner, 'setting_shot_id', None))
+                source = cand
+    if not (source and os.path.exists(source)):
+        return "No background to dress — lay a setting on the table first."
+
+    aspect = _laid_aspect(storage, board) if hasattr(board, 'panel_id') else board.aspect
+    cond = (direction or "").strip() or "the same light and time of day, a touch more atmosphere"
+    style_block = format_comic_style(style, include_bubble_styles=False,
+                                     include_character_style=False, heading_level=1) if style else ""
+    prompt = f"""The attached image is the master background of a comic setting.
+Re-render THIS exact place — same architecture, same props, same layout and palette
+identity — under new conditions.
+
+CONDITIONS (follow exactly): {cond}
+
+Keep it an EMPTY setting: fully dressed with its props but NO characters, people, or
+creatures, with generous negative space where figures are later placed.  A full-frame
+background — no transparency, no frame, no text — in the style below.
+
+{style_block}"""
+    image_bytes = invoke_edit_image_api(
+        prompt, reference_images=[source], size=frame_layout_to_dims(aspect),
+        quality=IMAGE_QUALITY.MEDIUM, input_fidelity="high")
+
+    from uuid import uuid4
+    images_dir = obj_to_imagepath(obj=board, base_path=storage.base_path)
+    figures_dir = os.path.join(os.path.dirname(images_dir), "figures")
+    os.makedirs(figures_dir, exist_ok=True)
+    filepath = os.path.join(figures_dir, f"plate--dressed--{uuid4().hex[:8]}.png")
+    with open(filepath, "wb") as f:
+        f.write(image_bytes)
+
+    fresh = storage.read_object(cls=type(board), primary_key=board.primary_key) or board
+    fresh.figure_images['background/plate'] = filepath
+    # keep its place and scale if the author set one; else it lands full-frame,
+    # and a fresh dressing always shows (clear any stale hide flag)
+    fresh.figure_blocking.setdefault('background/plate', {"x": 50, "y": 0, "h": 100, "z": -9})
+    fresh.figure_blocking.pop('background', None)
+    storage.update_object(data=fresh)
+    state.is_dirty = True
+    return f"Dressed the setting for the board: {filepath}"
+
+
 @function_tool
 async def generate_figure_acetate(wrapper: RunContextWrapper, series_id: str, issue_id: str,
                             scene_id: str, panel_id: str, character_id: str, variant_id: str,

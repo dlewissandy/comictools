@@ -135,13 +135,19 @@ async def test_asset_catalog_drawer(user: User) -> None:
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
+    # read the book as PROOFS (bound images) so the drawer's filter assertions
+    # aren't confounded by panel BEAT text behind it (a beat mentions the very
+    # 'cracked crystal ball' prop this test filters on)
+    user.find(marker="detail-proofs").click()
     user.find("Assets").click()
     await user.should_see("in the studio")           # header with total count
     await user.should_see("Fortune Teller Tent")     # a setting tile
 
-    # filter by type: styles shows the house styles, hides the props
-    from nicegui import ui as _ui
-    kind_toggle = user.find(_ui.toggle).elements.pop()
+    # filter by type: styles shows the house styles, hides the props.  Target
+    # the drawer's KIND toggle by its option labels; set.pop() over all toggles
+    # is non-deterministic — other toggles share the page.
+    kind_toggle = next(t for t in user.client.elements.values()
+                       if t.__class__.__name__ == "Toggle" and t.value == "all")
     kind_toggle.set_value("style")
     # styles wear their HOUSE's name — 'studio-wide' is the retired claim
     await user.should_see("DND NERDS")
@@ -250,12 +256,15 @@ async def test_issue_production_dashboard(user: User) -> None:
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    # the detail dial reads the book at script, scene, or panel altitude
-    await user.should_see("SCRIPT")
-    await user.should_see("PANELS")
+    # the detail dial reads the book at five altitudes: scripts, scenes,
+    # beats, roughs, proofs
+    await user.should_see("SCRIPTS")
+    await user.should_see("BEATS")
+    await user.should_see("ROUGHS")
+    await user.should_see("PROOFS")
     await user.should_see("COLOPHON")
-    await user.should_see("panels inked")
-    # a broken-down story steps back at panels detail; the dial brings it up
+    await user.should_see("panels inked")   # a production stage on the colophon
+    # a broken-down story steps back at beats detail; the dial brings it up
     user.find(marker="detail-stories").click()
     await user.should_see("THE SCRIPT")
 

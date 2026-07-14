@@ -318,7 +318,7 @@ def view_issue(state: APPState):
                          on_click=lambda _, s=sc: post_user_message(
                              state, f"I would like to delete scene '{s.name}'."))
 
-    def tile(scene_id, panel_id, x, y, w, h, grid_h=10.0, cap_scene=None):
+    def tile(scene_id, panel_id, x, y, w, h, grid_h=10.0, cap_scene=None, mode='beats'):
         p = panel_of.get(panel_id)
         live_h = TRIM_H - 2 * MY
         box = (f'left: {(MX + x) / TRIM_W * 100:.2f}%; '
@@ -327,25 +327,38 @@ def view_issue(state: APPState):
                f'height: {(h / grid_h * live_h) / TRIM_H * 100:.2f}%;')
         t = ui.element('div').classes('tile').style(box)
         t._props['data-banchor'] = f'panel-{panel_id}'
+
+        def _beat_text():
+            with ui.element('div').classes('tile-beat' + (' tile-beat--capped' if cap_scene else '')):
+                txt = (p.beat or '').strip()
+                ui.label(txt if txt else 'unwritten panel').classes(
+                    'tile-beat__text' + ('' if txt else ' italic opacity-60'))
+
         with t:
-            # THE PANEL'S TRUEST FACE: the selected print if it has one,
-            # else its rough (the composed light table), else its brief
-            rough = None
-            if p is not None and not (p.image and os.path.exists(p.image)):
-                from helpers.rough_face import rough_face
-                rough = rough_face(storage, p, scene_by_id.get(scene_id))
             if p is None:
                 ui.label('missing panel').classes('tile-beat text-xs text-gray-400')
-            elif p.image and os.path.exists(p.image):
-                ui.image(source=p.image).props('fit=cover').classes('absolute inset-0 w-full h-full')
-            elif rough:
-                ui.image(source=rough).props('fit=cover').classes('absolute inset-0 w-full h-full')
-                ui.label('ROUGH').classes('tile-rough-tag')
+            elif mode == 'roughs':
+                # ROUGHS: the composed light-table rough of any panel that has
+                # one — shown even when the proof is already inked
+                from helpers.rough_face import rough_face
+                rough = rough_face(storage, p, scene_by_id.get(scene_id))
+                if rough:
+                    ui.image(source=rough).props('fit=cover').classes('absolute inset-0 w-full h-full')
+                    ui.label('ROUGH').classes('tile-rough-tag')
+                else:
+                    _beat_text()
+            elif mode == 'proofs':
+                # PROOFS: the inked proof if there is one, else a PLACEHOLDER —
+                # never the rough (that lives in the ROUGHS view)
+                if p.image and os.path.exists(p.image):
+                    ui.image(source=p.image).props('fit=cover').classes('absolute inset-0 w-full h-full')
+                else:
+                    with ui.element('div').classes('tile-placeholder'):
+                        ui.icon('image_not_supported').classes('tile-placeholder__icon')
+                        ui.label('no proof yet').classes('tile-placeholder__label')
             else:
-                with ui.element('div').classes('tile-beat' + (' tile-beat--capped' if cap_scene else '')):
-                    txt = (p.beat or '').strip()
-                    ui.label(txt if txt else 'unwritten panel').classes(
-                        'tile-beat__text' + ('' if txt else ' italic opacity-60'))
+                # BEATS: just the beat, the words of the moment
+                _beat_text()
             if cap_scene is not None:
                 cap = ui.label(f'{cap_scene.scene_number} · {cap_scene.name}'.upper()).classes('tile-cap')
                 with cap:
@@ -353,36 +366,64 @@ def view_issue(state: APPState):
                 cap.on('click.stop', lambda _: None)
             if p is not None:
                 size = _norm_size(getattr(p, 'size', None), p.aspect.value)
+                # THE PENCIL is context-aware AND non-destructive: "Rough it"
+                # shows ONLY while the panel has no rough — the instant one
+                # exists the pencil becomes "Proof it" (in every view), so a
+                # click can never clobber a rough.  PROOFS proofs even with no
+                # rough (a take from the beat).  Rebuilding a rough from scratch
+                # is the guarded "Re-rough" in the menu below.  Both fire the
+                # light table's OWN action (build_table_flow / ink) via the
+                # book -> board hop — one code path, no copy that can drift.
+                _has_rough = bool(p.figure_images)
+                if _has_rough or mode == 'proofs':
+                    _icon, _tip = 'brush', 'Proof it — render a take on the light table'
+                    _act = 'proof'
+                else:
+                    _icon, _tip = 'draw', 'Rough it — pose the acetates from the script'
+                    _act = 'rough'
+
+                def _go_board(act, sc=scene_id, pid=panel_id):
+                    state._board_autorun = (act, pid)
+                    open_scene_panel(sc, pid)
+
+                def _pencil(act=_act):
+                    _go_board(act)
+
+                def _rerough(sc=scene_id, pid=panel_id, pnum=(p.panel_number if p else '?')):
+                    # DESTRUCTIVE: rebuilding from the script re-poses the cast
+                    # and re-lays the acetates — confirm before it happens.
+                    with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                            .style('min-width: 360px; max-width: 460px;'):
+                        ui.label('Re-rough this panel?').classes('caption-box caption-box-sm')
+                        ui.label(f'Panel {pnum} already has a rough.  Rebuilding from the '
+                                 'script re-poses the cast and re-lays the acetates from the '
+                                 'brief — anything you hand-arranged on this board is redrawn.') \
+                            .classes('text-sm q-mt-sm')
+                        with ui.row().classes('w-full justify-end q-mt-sm').style('gap: 8px;'):
+                            ui.button('Keep the rough', icon='close').props('flat dense no-caps') \
+                                .on('click', lambda _: dlg.close())
+                            ui.button('Rebuild from script', icon='draw') \
+                                .props('unelevated dense no-caps color=negative') \
+                                .on('click', lambda _: (dlg.close(), _go_board('rough')))
+                    dlg.open()
+
+                _held = bool(getattr(p, 'shape_locked', False))
+                _SHAPES = [("square", "1x", 2, 2), ("landscape", "1x", 3, 2),
+                           ("portrait", "1x", 2, 3), ("square", "2x", 4, 4),
+                           ("landscape", "2x", 6, 4), ("portrait", "2x", 4, 6)]
                 with ui.row().classes('tile-tools items-center flex-nowrap'):
-                    ui.button(icon='chevron_left').props('flat round dense size=xs') \
-                        .tooltip('Earlier in the scene') \
-                        .on('click.stop', lambda _, s=scene_id, pid=panel_id: move_beat(s, pid, -1))
-                    ui.button(icon='edit').props('flat round dense size=xs') \
-                        .tooltip('Pencil the panel — edit its script') \
-                        .on('click.stop', lambda _, s=scene_id, p=p: edit_text_dialog(
-                            f'Panel {p.panel_number} — {p.name}', p.beat,
-                            lambda v, s=s, pid=p.panel_id: save_beat_text(s, pid, v),
-                            f"Let's work on the script for panel {p.panel_number} "
-                            f"of this scene together."))
-                    # THE SHAPE PICKER: pick the panel's WHOLE shape — aspect AND
-                    # size — in one action (a 2x2 square to a 4x6 portrait is a
-                    # single pick, no walk through intermediate locked states),
-                    # or set it Auto to flex into the flow.
-                    _held = bool(getattr(p, 'shape_locked', False))
-                    _SHAPES = [("square", "1x", 2, 2), ("landscape", "1x", 3, 2),
-                               ("portrait", "1x", 2, 3), ("square", "2x", 4, 4),
-                               ("landscape", "2x", 6, 4), ("portrait", "2x", 4, 6)]
-                    shape_btn = ui.button(icon='lock' if _held else 'crop_free') \
-                        .props('flat round dense size=xs')
-                    shape_btn.tooltip(f'{p.aspect.value} {size}'
-                                      + (' · held — the flow honors it' if _held
-                                         else ' · auto — flexes to fit')
-                                      + '   (click to shape the panel)')
-                    shape_btn.on('click.stop', lambda *_: None)   # open the menu, don't open the panel
-                    with shape_btn:
+                    ui.button(icon=_icon).props('flat round dense size=xs') \
+                        .tooltip(_tip).on('click.stop', lambda _, f=_pencil: f())
+                    # EVERYTHING ELSE folds into ONE menu so the tools fit even a
+                    # 2-unit-wide tile: shape, reorder, edit the script, tear it out.
+                    more_btn = ui.button(icon='more_vert').props('flat round dense size=xs')
+                    more_btn.tooltip('More — shape, reorder, edit the script, remove')
+                    more_btn.on('click.stop', lambda *_: None)   # open the menu, not the panel
+                    with more_btn:
                         with ui.menu().props('auto-close'):
-                            ui.label('Shape this panel').classes('comic-label-sm') \
-                                .style('padding: 8px 10px 2px;')
+                            ui.label(f'Shape — {p.aspect.value} {size}'
+                                     + (' · held' if _held else ' · auto')) \
+                                .classes('comic-label-sm').style('padding: 8px 10px 2px;')
                             with ui.element('div').style(
                                     'display: grid; grid-template-columns: repeat(3, 46px); '
                                     'gap: 6px; padding: 6px 10px 10px; justify-items: center; '
@@ -398,18 +439,30 @@ def view_issue(state: APPState):
                                     box.tooltip(f'{a} {s}  ({gw}×{gh})')
                                     box.on('click', lambda _, a=a, s=s, sc=scene_id, pid=panel_id:
                                            set_shape(sc, pid, a, s))
-                            ui.separator()
                             ui.menu_item('Auto — let the flow shape it',
                                          on_click=lambda *_, sc=scene_id, pid=panel_id:
                                          set_auto(sc, pid)).props('dense')
-                    ui.button(icon='chevron_right').props('flat round dense size=xs') \
-                        .tooltip('Later in the scene') \
-                        .on('click.stop', lambda _, s=scene_id, pid=panel_id: move_beat(s, pid, 1))
-                    ui.button(icon='close').props('flat round dense size=xs') \
-                        .tooltip('Tear this panel out of the book…') \
-                        .on('click.stop', lambda _, p=p: post_user_message(
-                            state, f"I would like to delete panel {p.panel_number} "
-                                   f"('{p.name}') of this scene."))
+                            ui.separator()
+                            ui.menu_item('◂ Move earlier in the scene',
+                                         on_click=lambda *_, s=scene_id, pid=panel_id:
+                                         move_beat(s, pid, -1)).props('dense')
+                            ui.menu_item('Move later in the scene ▸',
+                                         on_click=lambda *_, s=scene_id, pid=panel_id:
+                                         move_beat(s, pid, 1)).props('dense')
+                            ui.menu_item('Edit the script…',
+                                         on_click=lambda *_, s=scene_id, p=p: edit_text_dialog(
+                                             f'Panel {p.panel_number} — {p.name}', p.beat,
+                                             lambda v, s=s, pid=p.panel_id: save_beat_text(s, pid, v),
+                                             f"Let's work on the script for panel {p.panel_number} "
+                                             f"of this scene together.")).props('dense')
+                            ui.separator()
+                            if _has_rough:
+                                ui.menu_item('Re-rough — rebuild from the script…',
+                                             on_click=lambda *_, f=_rerough: f()).props('dense')
+                            ui.menu_item('Tear this panel out of the book…',
+                                         on_click=lambda *_, p=p: post_user_message(
+                                             state, f"I would like to delete panel {p.panel_number} "
+                                                    f"('{p.name}') of this scene.")).props('dense')
         if p is not None:
             t.tooltip(f"panel {p.panel_number}: {p.name or ''} — open its light table")
             t.on('click', lambda _, s=scene_id, pid=panel_id: open_scene_panel(s, pid))
@@ -607,7 +660,7 @@ def view_issue(state: APPState):
         """The scene's production line — setting, cast, props — editable right
         on its manuscript page.  (This used to be the scene's own page; the
         scene lives in the book now, so its production rides here.)"""
-        from schema import Setting, CharacterVariant, PropAsset
+        from schema import Setting, CharacterVariant, PropAsset, CharacterModel, CharacterRef
         from gui.elements import removable_chips_inline
         panels = panels_by_scene.get(sc.scene_id, [])
         setting_obj = storage.read_object(cls=Setting, primary_key={
@@ -690,14 +743,65 @@ def view_issue(state: APPState):
                 "series_id": series_id, "character_id": c.character_id, "variant_id": c.variant_id})
             return f"{nm} · {(v.name if v is not None and v.name else c.variant_id)}"
 
+        def pick_cast():
+            # CAST FROM THE ASSET SELECTOR: pick the character AND the wardrobe
+            # (variant) they wear here — this is the cast the render uses, so no
+            # variant is ever guessed.
+            already = {(c.character_id, c.variant_id) for c in (sc.cast or [])}
+            with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                    .style('min-width: 480px; max-width: 760px;'):
+                ui.label('Cast a character in this scene').classes('caption-box caption-box-sm')
+                ui.label('Pick the character AND the wardrobe (variant) they wear here — '
+                         'the render dresses them exactly as cast.') \
+                    .classes('text-xs text-gray-500 q-mt-xs')
+                any_left = False
+                with ui.row().classes('w-full q-mt-sm').style('gap: 8px; flex-wrap: wrap;'):
+                    for ch in storage.read_all_objects(CharacterModel,
+                                                       primary_key={"series_id": series_id}, order_by="name"):
+                        for v in storage.read_all_objects(CharacterVariant,
+                                                          primary_key={"series_id": series_id,
+                                                                       "character_id": ch.character_id}):
+                            if (ch.character_id, v.id) in already:
+                                continue
+                            any_left = True
+                            img = storage.find_variant_image(series_id=series_id,
+                                                             character_id=ch.character_id, variant_id=v.id)
+                            vname = getattr(v, 'name', None) or v.id
+                            with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 130px;') as card:
+                                if img and os.path.exists(img):
+                                    ui.image(source=img).style('height: 70px;').props('fit=contain')
+                                ui.label(f"{ch.name.title()} · {vname}").classes('text-xs text-center w-full')
+
+                            def choose(ch=ch, v=v, vname=vname):
+                                fs = storage.read_object(type(sc), sc.primary_key) or sc
+                                fs.cast = (fs.cast or []) + [CharacterRef(
+                                    series_id=series_id, character_id=ch.character_id, variant_id=v.id)]
+                                storage.update_object(fs)
+                                receipt(f"🎭 cast **{ch.name}** ({vname}) in the scene")
+                                dlg.close(); state.refresh_details()
+                            card.on('click', lambda _, ch=ch, v=v, vname=vname: choose(ch, v, vname))
+                if not any_left:
+                    ui.label('Every wardrobe is already cast in this scene.') \
+                        .classes('text-sm text-gray-500 q-mt-sm')
+                ui.button('A brand-new character or look instead…', icon='add') \
+                    .props('flat dense no-caps').classes('q-mt-sm') \
+                    .on('click', lambda _: (dlg.close(), post_user_message(
+                        state, f"I would like to cast a new character (or a new wardrobe) "
+                               f"for scene '{sc.name}'.")))
+            dlg.open()
+
         with ui.row().classes('scene-prod w-full items-center').style('gap: 6px; flex-wrap: wrap;'):
             ui.label('Production').classes('comic-label-sm')
             if not sc.setting_id:
                 chip = ui.chip('setting', icon='location_on', color='orange').props('dense clickable')
                 chip.tooltip('Pick where this scene is set — one click')
                 chip.on('click', lambda _: pick_setting())
-            if not sc.cast:
-                _todo('cast', f"Cast the characters for scene '{sc.name}'.")
+            # CAST: pick characters + wardrobe right here (amber until someone's
+            # cast) — the render uses exactly this cast.
+            _cast_chip = ui.chip('cast' if not sc.cast else '+ cast', icon='person_add',
+                                 color='orange' if not sc.cast else None).props('dense clickable')
+            _cast_chip.tooltip('Cast a character in this scene — pick their wardrobe')
+            _cast_chip.on('click', lambda _: pick_cast())
             if not panels:
                 _todo('panels', f"Break scene '{sc.name}' into panels.")
             if setting_obj:
@@ -969,13 +1073,15 @@ def view_issue(state: APPState):
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
             from gui.light_table import style_swatch
             style_swatch(state, issue, shared_with='the whole issue')
-            # THE DETAIL DIAL: read the book at script, scene, panel, or
-            # print altitude — the fourth stop IS the bound proof
+            # THE DETAIL DIAL: read the book at five altitudes — scripts,
+            # scenes, beats (the text), roughs (the composed pencils), proofs
+            # (the bound book).  The production truth lives on the colophon now.
             with ui.row().classes('items-center flex-nowrap').style('gap: 4px;'):
-                for key, label, hint in (('stories', 'SCRIPT', 'the written script'),
+                for key, label, hint in (('stories', 'SCRIPTS', 'the written scripts'),
                                          ('scenes', 'SCENES', 'scene manuscript pages'),
-                                         ('beats', 'PANELS', 'panels laid out on the pages'),
-                                         ('print', 'PRINT', 'the bound proof — composed as it prints')):
+                                         ('beats', 'BEATS', 'the beat of every panel, laid out'),
+                                         ('roughs', 'ROUGHS', 'the composed rough of every panel that has one'),
+                                         ('proofs', 'PROOFS', 'the inked panels; the rest as placeholders')):
                     chip = ui.element('div').classes('dial-chip' + (' dial-chip--on' if detail == key else ''))
                     chip.mark(f'detail-{key}')
                     with chip:
@@ -983,14 +1089,6 @@ def view_issue(state: APPState):
                     chip.tooltip(f'Read the book as {hint}')
                     chip.on('click', lambda _, k=key: set_detail(k))
             ui.space()
-            # THE LEDGER BADGE: the one production truth, worn on the
-            # masthead — click it and the book opens to the colophon
-            badge = ui.chip(ledger.summary(),
-                            icon='verified' if ledger.complete else 'fact_check') \
-                .props('dense outline clickable size=sm')
-            badge.tooltip('  ·  '.join(l.text for l in ledger.todos)
-                          or 'Every board inked, every panel placed — bind it')
-            badge.on('click', lambda _: (remember_spot('colophon'), state.refresh_details()))
             ui.button(icon='tune').props('flat round dense') \
                 .tooltip('Layout feel — density, verticality, irregularity, variety') \
                 .on('click', lambda _: open_layout_feel())
@@ -1022,19 +1120,18 @@ def view_issue(state: APPState):
                     ui.label(f"Couldn't make an exact-fill layout — {_lnote}  "
                              f"Showing a flowed layout meanwhile; release a lock or move a "
                              f"panel to fix it.")
-            if detail == 'print':
-                # THE PRINT STOP: the reading room folded into the studio —
-                # the covers, pages and inserts live INSIDE the proof sheets
-                print_sheets()
-            else:
-                cover_sheet('front', recto=True)
-                cover_sheet('inside-front')
+            # PROOFS is a per-panel altitude now (not the bound reading room):
+            # its tiles show the inked proof or a placeholder, and click opens
+            # the light board — just like BEATS and ROUGHS.  The bound spreads
+            # live behind the 'Read' button.
+            cover_sheet('front', recto=True)
+            cover_sheet('inside-front')
 
             # THE STORIES: the issue's own script, then the backups, in order.
             # Once a story has been expanded into scenes it steps back — the
             # scenes ARE the story now; the STORIES dial reads it any time.
             stories = ([None] if issue.story or not stories_all else []) + stories_all
-            if detail != 'print' and (detail == 'stories' or not scenes_all):
+            if detail == 'stories' or not scenes_all:
                 for i, st in enumerate(stories):
                     # ‹ › move only among the REAL stories — the issue's own
                     # script always opens the book
@@ -1044,9 +1141,8 @@ def view_issue(state: APPState):
             inserts_by_anchor = {}
             for ins in inserts_all:
                 inserts_by_anchor.setdefault(ins.after_scene_number, []).append(ins)
-            if detail != 'print':
-                for ins in inserts_by_anchor.get(0, []):
-                    insert_sheet(ins)
+            for ins in inserts_by_anchor.get(0, []):
+                insert_sheet(ins)
 
             if detail == 'scenes':
                 # every scene as a manuscript page, in order, inserts slotted in
@@ -1054,11 +1150,13 @@ def view_issue(state: APPState):
                     scene_sheet(sc)
                     for ins in inserts_by_anchor.get(sc.scene_number, []):
                         insert_sheet(ins)
-            elif detail == 'beats':
+            elif detail in ('beats', 'roughs', 'proofs'):
                 # THE BOOK FLOWS CONTINUOUSLY: beats pack across page turns the
                 # way text reflows across lines — turning, resizing, or moving
                 # a panel carries neighbors onto the next or previous page.
-                # Bare scenes and inserts hold their place as full pages.
+                # Bare scenes and inserts hold their place as full pages.  The
+                # SAME layout serves both altitudes — BEATS fills each tile with
+                # the beat's words, ROUGHS with the composed pencils.
                 from helpers.stitcher import flow_run, AR, resolve_layout_feel
                 _by_scene = bool(getattr(issue, 'layout_by_scene', False))
                 segments, run = [], []
@@ -1132,7 +1230,7 @@ def view_issue(state: APPState):
                     with ui.element('div').classes('book-page') as sheet:
                         for key, x, y, w, h in cells:
                             tile(key[0], key[1], x, y, w, h, grid_h,
-                                 cap_scene=first_tiles.get(key[1]))
+                                 cap_scene=first_tiles.get(key[1]), mode=detail)
                         ui.label(str(folio)).classes('page-folio')
                         ordered = [k[1] for k, x, y, _w, _h in sorted(
                             ((k, x, y, w2, h2) for k, x, y, w2, h2 in cells),
@@ -1176,14 +1274,13 @@ def view_issue(state: APPState):
 
             # inserts whose anchor no longer matches a scene must never
             # vanish out of reach — they wait at the back of the book
-            if detail != 'print':
-                valid_anchors = {0} | {sc.scene_number for sc in scenes_all}
-                for ins in inserts_all:
-                    if ins.after_scene_number not in valid_anchors:
-                        insert_sheet(ins)
+            valid_anchors = {0} | {sc.scene_number for sc in scenes_all}
+            for ins in inserts_all:
+                if ins.after_scene_number not in valid_anchors:
+                    insert_sheet(ins)
 
-                cover_sheet('inside-back')
-                cover_sheet('back')
+            cover_sheet('inside-back')
+            cover_sheet('back')
 
             # THE COLOPHON: credits, downloads, the production small print
             with ui.element('div').classes('book-page book-page--script') as colophon_sheet:

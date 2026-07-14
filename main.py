@@ -544,6 +544,16 @@ def init_layout(logger):
                           border: 1px solid #6b6455; border-radius: 2px;
                           font-size: .48rem; font-weight: 800; letter-spacing: .08em;
                           padding: 0 4px; }
+        /* PROOFS placeholder: an un-inked panel with no proof yet — a plain
+           hatched gap, clearly not art (and not a rough) */
+        .tile-placeholder { position: absolute; inset: 0; display: flex;
+                            flex-direction: column; align-items: center;
+                            justify-content: center; gap: 4px; color: #b4ada0;
+                            background: repeating-linear-gradient(45deg,
+                              #efeade 0, #efeade 8px, #e7e1d2 8px, #e7e1d2 16px); }
+        .tile-placeholder__icon { font-size: 1.4rem !important; opacity: .55; }
+        .tile-placeholder__label { font-size: .5rem; letter-spacing: .08em;
+                                   text-transform: uppercase; }
         .tile-cap { position: absolute; top: 0; left: 0; z-index: 6; cursor: pointer;
                     background: var(--caption, #f3e5ab); border: 1px solid var(--ink);
                     border-top: none; border-left: none; color: var(--caption-ink, #1c1a17);
