@@ -627,6 +627,10 @@ def view_issue(state: APPState):
                         .tooltip("I'll break this scene into panels — they flow onto these pages") \
                         .on('click', lambda _, s=sc: post_user_message(
                             state, f"Break scene '{s.name}' into panels."))
+                # THE SCENE'S STYLE, on its card: the swatch every panel here
+                # prints in — click to swap it
+                from gui.light_table import style_swatch as _scene_style_swatch
+                _scene_style_swatch(state, sc)
                 ui.space()
                 footer_btn('close', 'Tear this scene out…',
                            lambda _, s=sc: post_user_message(
