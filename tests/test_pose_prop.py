@@ -57,8 +57,9 @@ def test_pose_prop_writes_low_transparent_square_acetate(storage, tmp_data, monk
         scene_id=SC, panel_id="pose-test")
 
     assert "Posed element acetate" in note
-    # blocking is fast and cheap: LOW quality, transparent, neutral square canvas
-    assert seen["quality"] == "low"
+    # a pose is a spatial guide the final ink redraws — MEDIUM (LOW read too
+    # rough to block by), transparent, neutral square canvas
+    assert seen["quality"] == "medium"
     assert seen["background"] == "transparent"
     assert seen["size"] == "1024x1024"
     assert "lit and raised" in seen["prompt"]

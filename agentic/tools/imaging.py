@@ -3197,16 +3197,15 @@ Render a single FULL-BODY figure, head to toe, feet at the bottom edge, on a
 COMPLETELY TRANSPARENT background.  No scenery, no ground, no frame, no text,
 no speech balloons, no turnaround strip — ONE figure only, posed as directed.
 This is a cut-out acetate to be layered over a background."""
-    # BLOCKING IS FAST AND CHEAP: a pose acetate is a throwaway spatial guide,
-    # not a deliverable — the final ink render redraws it from scratch, and the
-    # character's identity is anchored twice over (input_fidelity holds the sheet
-    # here, and the final render gets the styled sheet directly).  So we rough it
-    # in at LOW: the cut-out only has to say WHERE the figure stands and WHO it is.
+    # A pose acetate is a spatial guide the final ink redraws, and identity is
+    # anchored twice over (input_fidelity holds the sheet here, and the final
+    # render gets the styled sheet directly) — but LOW read too rough on the
+    # table, so poses ink at MEDIUM: legible enough to block by.
     image_bytes = invoke_edit_image_api(
         prompt,
         reference_images=[sheet],
         size="1024x1536",
-        quality=IMAGE_QUALITY.LOW,
+        quality=IMAGE_QUALITY.MEDIUM,
         background="transparent",
         input_fidelity="high",
     )
@@ -3241,8 +3240,8 @@ def pose_element_acetate_body(state, series_id: str, issue_id: str, key: str,
     element names one (so a re-pose never drifts off a prior pose), else from the
     element's current image.
 
-    Blocking is fast and cheap: like a figure pose, this is a throwaway spatial
-    guide the final ink redraws, so it rooms in at LOW."""
+    Like a figure pose, this is a spatial guide the final ink redraws — inked at
+    MEDIUM (LOW read too rough to block by)."""
     from helpers.generator import invoke_edit_image_api
     from storage.filepath import obj_to_imagepath
     from agentic.tools.normalization import normalize_id
@@ -3297,7 +3296,7 @@ scenery, no ground, no cast shadow, no frame, no text — just the object, posed
 as directed.  This is a cut-out acetate to be layered over a background."""
     image_bytes = invoke_edit_image_api(
         prompt, reference_images=[source], size="1024x1024",
-        quality=IMAGE_QUALITY.LOW, background="transparent", input_fidelity="high")
+        quality=IMAGE_QUALITY.MEDIUM, background="transparent", input_fidelity="high")
 
     from uuid import uuid4
     images_dir = obj_to_imagepath(obj=board, base_path=storage.base_path)

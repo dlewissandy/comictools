@@ -2301,8 +2301,54 @@ def light_table(state: APPState, panel, scene, setting,
                                 state.refresh_details()
                             ui.button(icon='close').props('flat round dense size=xs') \
                                 .tooltip('Remove this narrator box').on('click', lambda _, n=n: drop_caption(n))
+            # A scene prop shows as a ROW you can act on: lay it on the table as
+            # a movable, sizable acetate, or strike it.  Once it's on the table
+            # (an element acetate owns it), its pill drops away — the acetate row
+            # is the one you manipulate.
+            from schema import PropAsset as _PA_prop
+            from agentic.tools.normalization import normalize_id as _nid_prop
+            import re as _re_prop
+            _prop_assets = {(a.name or '').strip().lower(): a
+                            for a in storage.read_all_objects(_PA_prop, {"series_id": panel.series_id})}
+            _placed_prop_slugs = {_re_prop.sub(r'-\d+$', '', k.split('/', 1)[1])
+                                  for k in (panel.figure_images or {}) if k.startswith('element/')}
+
+            def _remove_scene_prop(name):
+                if scene is not None:
+                    fs = storage.read_object(type(scene), scene.primary_key) or scene
+                    fs.props = [q for q in (fs.props or []) if q.name != name]
+                    storage.update_object(fs)
+                _receipt(f"✂️ removed the **{name}** prop from the scene")
+                state.refresh_details()
+
             for p in props:
-                layer_row('category', f"Foreground — {p['name']}", p)
+                if _nid_prop(p['name']) in _placed_prop_slugs:
+                    continue   # already an acetate on the table — its element row rules
+                _pa = _prop_assets.get((p['name'] or '').strip().lower())
+                _thumb = None
+                if _pa is not None:
+                    _thumb = next((i for i in (_pa.images or {}).values()
+                                   if i and os.path.exists(i)), None) \
+                        or next((u for u in storage.list_uploads(_pa) if u and os.path.exists(u)), None)
+                with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 6px;'):
+                    eye(p)
+                    padlock(p)
+                    if _thumb:
+                        ui.image(source=_src(_thumb)).classes('light-thumb')
+                    else:
+                        ui.icon('category').classes('text-lg').style('width: 40px; text-align: center;')
+                    ui.label(p['name']).classes('text-sm') \
+                        .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
+                    ui.space()
+                    if _pa is not None:
+                        ui.button(icon='add_photo_alternate').props('flat round dense size=xs') \
+                            .classes('row-tool') \
+                            .tooltip('Lay it on the table — a movable, sizable acetate') \
+                            .on('click', lambda _, pa=_pa: lay_prop_acetate(
+                                state, panel, pa, getattr(scene, 'style_id', None)))
+                    ui.button(icon='close').props('flat round dense size=xs').classes('row-tool') \
+                        .tooltip('Remove this prop from the scene') \
+                        .on('click', lambda _, name=p['name']: _remove_scene_prop(name))
             # THE STACK IS THE Z-ORDER: drag rows to restack (top prints
             # last); split products sit nested under their group.
             def mirror_btn(f):
