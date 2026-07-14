@@ -1663,6 +1663,37 @@ def light_table(state: APPState, panel, scene, setting,
                         "posed": posed is not None,
                         "on": bool(blocking.get("on", 1)), "blocking": blocking})
 
+    # AUTO-LAY SCENE PROPS: if a prop is IN THE SCENE it belongs ON THE TABLE,
+    # laid as an acetate automatically — like a cast member auto-poses, no extra
+    # click.  A prop with art but no acetate gets one (once, at a default spot;
+    # the author moves it from there).  Removing the acetate takes the scene prop
+    # with it (below), so it stays gone; props still lacking art show as rows.
+    if scene is not None and getattr(scene, 'props', None):
+        from schema import PropAsset as _PA_auto
+        from agentic.tools.normalization import normalize_id as _nid_auto
+        import re as _re_auto
+        _placed = {_re_auto.sub(r'-\d+$', '', k.split('/', 1)[1])
+                   for k in (panel.figure_images or {}) if k.startswith('element/')}
+        _assets = {(a.name or '').strip().lower(): a
+                   for a in storage.read_all_objects(_PA_auto, {"series_id": panel.series_id})}
+        _laid_any = False
+        for _sp in scene.props:
+            _slug = _nid_auto(_sp.name)
+            if _slug in _placed:
+                continue
+            _pa = _assets.get((_sp.name or '').strip().lower())
+            _art = None
+            if _pa is not None:
+                _art = (_pa.images or {}).get(getattr(scene, 'style_id', None)) \
+                    or next((i for i in (_pa.images or {}).values() if i and os.path.exists(i)), None)
+            if _art and os.path.exists(_art):
+                panel.figure_images[f'element/{_slug}'] = _art
+                panel.figure_blocking[f'element/{_slug}'] = {"x": 50, "y": 6, "h": 28, "z": 55}
+                _placed.add(_slug)
+                _laid_any = True
+        if _laid_any:
+            storage.update_object(panel)
+
     for key, path in sorted((panel.figure_images or {}).items()):
         if not key.startswith("element/") or not (path and os.path.exists(path)):
             continue
@@ -2545,6 +2576,10 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.space()
 
                         def drop_element(key=f["key"], nm=f["name"]):
+                            import re as _re_d
+                            from agentic.tools.normalization import normalize_id as _nid_d
+                            _slug_d = _re_d.sub(r'-\d+$', '', key.split('/', 1)[1]) \
+                                if key.startswith('element/') else None
                             fresh_board(storage, panel)
                             saved_img = (panel.figure_images or {}).get(key)
                             saved_blk = (panel.figure_blocking or {}).get(key)
@@ -2556,6 +2591,16 @@ def light_table(state: APPState, panel, scene, setting,
                                 if not panel.layer_groups[gname]:
                                     panel.layer_groups.pop(gname)
                             storage.update_object(panel)
+                            # if this element IS a scene prop, remove it from the
+                            # scene too — otherwise the auto-lay re-lays it
+                            saved_prop = None
+                            if scene is not None and _slug_d is not None:
+                                fs = storage.read_object(type(scene), scene.primary_key) or scene
+                                saved_prop = next((q for q in (fs.props or [])
+                                                   if _nid_d(q.name) == _slug_d), None)
+                                if saved_prop is not None:
+                                    fs.props = [q for q in fs.props if _nid_d(q.name) != _slug_d]
+                                    storage.update_object(fs)
 
                             def undo():
                                 p = _fresh()
@@ -2565,6 +2610,11 @@ def light_table(state: APPState, panel, scene, setting,
                                     p.figure_blocking[key] = saved_blk
                                 p.layer_groups = saved_groups
                                 storage.update_object(p)
+                                if saved_prop is not None and scene is not None:
+                                    fs2 = storage.read_object(type(scene), scene.primary_key) or scene
+                                    if not any(_nid_d(q.name) == _slug_d for q in (fs2.props or [])):
+                                        fs2.props = (fs2.props or []) + [saved_prop]
+                                        storage.update_object(fs2)
                             _receipt(f"✂️ removed **{nm}** from the table", undo=undo)
                             state.refresh_details()
                         ui.button(icon='close').props('flat round dense size=xs') \
