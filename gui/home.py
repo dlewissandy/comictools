@@ -218,6 +218,109 @@ def _house_bench(storage):
     return (newest[0], issue, when) if issue else (None, None, 0.0)
 
 
+def view_lobby(state: APPState):
+    """THE FRONT DOOR: one screen that says where you are and where to go —
+    the bench you left (dominant), the rack of houses, the Library."""
+    from storage import registry as _reg
+    from gui.selection import SelectionItem, SelectedKind
+    from schema import Issue
+    storage: GenericStorage = state.storage
+    with state.details:
+        ui.label('COMIC STUDIO').classes('comic-title')
+
+        pubs = all_house_publishers(storage)
+        if not pubs:
+            # A BRAND-NEW STUDIO: every comic starts with a conversation
+            ui.label('Every comic starts with a conversation.') \
+                .classes('caption-box q-mt-md')
+            ui.label('Tell the Editor a story below — but first the studio '
+                     'needs a publishing house to work in.') \
+                .classes('text-sm text-gray-600 q-mt-sm')
+            with ui.row().classes('q-mt-md').style('gap: 12px;'):
+                ui.button('Found your publishing house', icon='home_work') \
+                    .props('unelevated no-caps size=lg') \
+                    .on('click', lambda _: found_house_dialog(state))
+            return
+
+        # DOOR 1 — THE BENCH YOU LEFT (dominant): the stashed selection,
+        # falling back to the last-touched issue
+        resume_sel = getattr(state, 'resume_selection', None)
+        series_id = issue = bench_storage = None
+        if resume_sel:
+            sid = next((it.id for it in resume_sel if it.kind == SelectedKind.SERIES), None)
+            iid = next((it.id for it in resume_sel if it.kind == SelectedKind.ISSUE), None)
+            if sid:
+                series_id = sid
+                slug = _reg.house_of_series(sid) if _reg.registered() else None
+                bench_storage = _reg.storage_for(slug) if slug else storage
+                if iid:
+                    issue = bench_storage.read_object(cls=Issue, primary_key={
+                        "series_id": sid, "issue_id": iid})
+        if issue is None:
+            series_id, issue, bench_storage = _last_bench(storage)
+            resume_sel = None
+        if issue is not None:
+            series = bench_storage.read_object(cls=Series, primary_key={"series_id": series_id})
+            cover = bench_storage.find_series_image(series_id=series_id)
+            try:
+                from helpers.ledger import issue_ledger
+                led = issue_ledger(bench_storage, series_id, issue.issue_id)
+                summary = led.summary()
+                first_todo = led.todos[0].text if led.todos else None
+            except Exception:
+                summary, first_todo = None, None
+
+            def resume(_=None, rs=resume_sel, sid=series_id, iss=issue, ser=series):
+                if rs:
+                    state.change_selection(new=rs)
+                else:
+                    state.change_selection(new=[
+                        SelectionItem(name="Studio", id=None, kind=SelectedKind.LOBBY),
+                        SelectionItem(name=(ser.name if ser else sid), id=sid,
+                                      kind=SelectedKind.SERIES),
+                        SelectionItem(name=iss.name, id=iss.issue_id, kind=SelectedKind.ISSUE)])
+            card = ui.element('div').classes('resume-card cursor-pointer q-mt-md')
+            with card:
+                if cover and os.path.exists(cover):
+                    ui.image(source=cover).classes('resume-card__art').props('fit=cover')
+                with ui.column().style('gap: 2px; min-width: 0;'):
+                    ui.label('STILL ON THE DRAWING BOARD').classes('caption-box caption-box-sm')
+                    ui.label(f"{(series.name if series else series_id).title()} — "
+                             f"issue {issue.issue_number}: {issue.name}") \
+                        .classes('text-lg font-bold').style('line-height: 1.2;')
+                    if summary:
+                        badge = summary + (f" — next: {first_todo}" if first_todo else "")
+                        ui.label(badge).classes('text-xs text-gray-500 italic')
+            card.tooltip('Pick up exactly where you left off')
+            card.on('click', resume)
+
+        # DOOR 2 — THE RACK: every house on one strip; each logo a door
+        from gui.elements import caption_action, CrudButtonKind as _CK
+        caption_action('The publishing houses', _CK.READ,
+                       lambda _: state.change_selection(new=[SelectionItem(
+                           name='Publishers', id=None, kind=SelectedKind.ALL_PUBLISHERS)]), 3)
+        with ui.row().classes('w-full q-mt-xs').style('gap: 10px;'):
+            for pub in pubs:
+                logo = house_logo(pub)
+                with ui.card().classes('soft-card p-2 cursor-pointer') \
+                        .style('width: 130px;') as pc:
+                    if logo and os.path.exists(logo):
+                        ui.image(source=logo).style('height: 72px;').props('fit=contain')
+                    ui.label(pub.name.title()).classes('text-xs text-center w-full')
+                pc.tooltip(f'Open the {pub.name} house')
+                pc.on('click', lambda _, p=pub: state.change_selection(new=[
+                    SelectionItem(name='Publishers', id=None, kind=SelectedKind.ALL_PUBLISHERS),
+                    SelectionItem(name=p.name, id=p.publisher_id, kind=SelectedKind.PUBLISHER)]))
+
+        # DOOR 3 — THE LIBRARY
+        with ui.row().classes('items-center q-mt-md cursor-pointer').style('gap: 8px;') as lib:
+            ui.icon('local_library').classes('text-xl')
+            ui.label('The Library — every reusable character, setting, prop and '
+                     'wardrobe across the houses').classes('text-sm')
+        lib.on('click', lambda _: state.change_selection(new=[SelectionItem(
+            name='Library', id=None, kind=SelectedKind.LIBRARY)]))
+
+
 def view_all_series(state: APPState):
     from gui.messaging import new_item_messager
     storage: GenericStorage = state.storage

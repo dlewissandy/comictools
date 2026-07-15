@@ -20,9 +20,20 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
     """
     sel = state.selection
     storage = state.storage
-    kind = sel[-1].kind.value if sel else "all-series"
+    kind = sel[-1].kind.value if sel else "lobby"
     try:
         match kind:
+            case "lobby":
+                from gui.home import all_house_publishers
+                if not all_house_publishers(storage):
+                    return ("Welcome to the studio.  I'm the Editor — tell me a story "
+                            "and I'll help you build it into a comic.  First we need "
+                            "a publishing house to work in.",
+                            ["Found a publishing house", "What can you do?"])
+                return ("Welcome back.  The bench you left is on the card — "
+                        "or tell me what we're making today.",
+                        ["Pick up where I left off", "Start something new…",
+                         "What still needs doing?"])
             case "all-series":
                 return ("Welcome to the studio.  Tell me a story idea and I'll help you build it into a comic.",
                         ["Create a new series", "What series do we have?", "Show me the asset library"])
@@ -170,6 +181,7 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
 # The studio staff: who you're talking to on each view.  The coauthor is a
 # person with a role, not a "Bot".
 ROLE_NAMES = {
+    "lobby": "the Editor",
     "all-series": "the Editor",
     "all-publishers": "the Editor",
     "all-styles": "the Art Director",

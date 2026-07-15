@@ -165,3 +165,17 @@ def test_begin_turn_orders_work_before_reply():
     finally:
         th.ui = orig_ui
         av.comic_chat_message = orig_ccm
+
+
+def test_root_is_the_lobby():
+    """THE FRONT DOOR: / parses to the lobby and the lobby prints as /."""
+    from gui.routes import selection_from_path, selection_to_url
+    from gui.selection import SelectionItem, SelectedKind
+    from types import SimpleNamespace
+    sel = selection_from_path(SimpleNamespace(), [])
+    assert sel and sel[0].kind == SelectedKind.LOBBY
+    assert selection_to_url([SelectionItem(name="Studio", id=None,
+                                           kind=SelectedKind.LOBBY)]) == "/"
+    # the retired all-series root still prints / so old trails re-home
+    assert selection_to_url([SelectionItem(name="Series", id=None,
+                                           kind=SelectedKind.ALL_SERIES)]) == "/"

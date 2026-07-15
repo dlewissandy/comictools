@@ -451,8 +451,14 @@ class APPState:
         identifier = selection[-1].id
         
         match kind.value:
+            case "lobby":
+                from gui.home import view_lobby
+                return view_lobby(self)
             case "all-series":
-                return view_all_series(self)
+                # THE RETIRED ROOM: / is the lobby now — stale trails land
+                # on the front door, not a bare series wall
+                from gui.home import view_lobby
+                return view_lobby(self)
             case "all-publishers":
                 return view_all_publishers(self)
             case "all-styles":
@@ -568,8 +574,8 @@ def breadcrumb_selector(state: APPState):
                                            split=True, auto_close=True)
     # styles live IN the house (each repo edits its own copies), so the
     # rack is on the publisher's page — no global Styles room
-    rooms = (("Publishers", SelectedKind.ALL_PUBLISHERS),
-             ("Series", SelectedKind.ALL_SERIES),
+    rooms = (("Studio", SelectedKind.LOBBY),
+             ("Publishers", SelectedKind.ALL_PUBLISHERS),
              ("Library", SelectedKind.LIBRARY))
     with primary_selection:
         for label, kind in rooms:

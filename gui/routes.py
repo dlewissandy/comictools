@@ -41,7 +41,8 @@ _SEGMENTS = {
 }
 
 _ROOTS = {
-    SelectedKind.ALL_SERIES: "/",
+    SelectedKind.LOBBY: "/",
+    SelectedKind.ALL_SERIES: "/",         # retired root — old trails re-home
     SelectedKind.ALL_PUBLISHERS: "/publishers",
     SelectedKind.ALL_STYLES: "/styles",
     SelectedKind.LIBRARY: "/library",
@@ -176,7 +177,7 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
     from schema import (Series, Issue, SceneModel, Panel, Cover, CharacterModel,
                         CharacterVariant, ComicStyle, Publisher, Setting)
 
-    sel = [SelectionItem(name="Series", id=None, kind=SelectedKind.ALL_SERIES)]
+    sel = [SelectionItem(name="Studio", id=None, kind=SelectedKind.LOBBY)]
     if not parts:
         return sel
 

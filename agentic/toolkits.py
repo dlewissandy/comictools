@@ -622,6 +622,16 @@ TOOLKITS["inside-back-cover"] = TOOLKITS["cover"]
 
 # THE INSERT WORKBENCH: a full-page insert is a board like a cover — it
 # composes on the light table and renders from its rough + description.
+TOOLKITS["lobby"] = [
+    # THE FRONT DOOR: found a house, read the rack, walk anywhere
+    create_publisher,
+    read_all_publishers,
+    read_all_series,
+    select_publisher,
+    select_series,
+    undo_last_delete,
+]
+
 TOOLKITS["insert"] = [
     # a board with cast can ink a missing sheet; drawer tiles import
     create_styled_image_for_character_variant,

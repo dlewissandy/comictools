@@ -7,6 +7,7 @@ from enum import StrEnum
 
 class SelectedKind(StrEnum):
     """Enum for the selections that can occur in the gui."""
+    LOBBY = "lobby"
     ALL_SERIES = "all-series"
     ALL_PUBLISHERS = "all-publishers"
     ALL_STYLES = "all-styles"

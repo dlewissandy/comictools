@@ -23,8 +23,8 @@ def _index(storage):
     (icon, label, sublabel, selection)."""
     entries = []
     # THE ROOT ROOMS themselves are jumpable
-    for icon, label, kind in (("🏢", "Publishers", K.ALL_PUBLISHERS),
-                              ("📚", "Series", K.ALL_SERIES),
+    for icon, label, kind in (("🏠", "Studio", K.LOBBY),
+                              ("🏢", "Publishers", K.ALL_PUBLISHERS),
                               ("🗄️", "Library", K.LIBRARY)):
         entries.append((icon, label, "room", [S(name=label, id=None, kind=kind)]))
     from storage import registry as _reg

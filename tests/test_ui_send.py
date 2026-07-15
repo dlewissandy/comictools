@@ -41,6 +41,23 @@ class _TmpStorage(LocalStorage):
         super().__init__(base_path=os.path.join(_tmp, "data"))
 
 
+def _url_for(sel_dicts):
+    """The canonical deep link for a dumped selection — tests walk in
+    through the front door's real URLs now, not a persisted teleport.
+    Address-less tails (a healing bench, a choices sheet) resolve to their
+    nearest addressable ancestor; the persisted selection restores the
+    bench on load (RELOAD KEEPS THE BENCH)."""
+    from gui.routes import selection_to_url
+    from gui.selection import SelectionItem
+    sel = [SelectionItem(**d) for d in sel_dicts]
+    while sel:
+        url = selection_to_url(sel)
+        if url is not None:
+            return url
+        sel = sel[:-1]
+    return "/"
+
+
 # Neutralize the module-level ui.run() in main.py.
 from nicegui import ui
 ui.run = lambda *a, **k: None
@@ -78,13 +95,16 @@ async def test_send_message_updates_history(user: User, api_alive) -> None:
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
 async def test_coauthor_speaks_first_with_chips(user: User) -> None:
-    """On a fresh conversation the coauthor greets, and suggestion chips render."""
+    """THE FRONT DOOR: / lands in the lobby — the Editor greets in the
+    your-turn strip and the NEXT: chips offer the way in."""
     main.LocalStorage = _TmpStorage
     json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    await user.should_see("Welcome to the studio")          # the opener
-    await user.should_see("Create a new series")            # a suggestion chip
+    await user.should_see("Welcome back")                    # the lobby opener
+    await user.should_see("NEXT:")                           # the your-turn strip
+    await user.should_see("COMIC STUDIO")                    # the lobby masthead
+    await user.should_see("STILL ON THE DRAWING BOARD")      # the resume card
 
 
 @pytest.mark.api
@@ -134,7 +154,9 @@ async def test_asset_catalog_drawer(user: User) -> None:
                              {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}]))
     # read the book as PROOFS (bound images) so the drawer's filter assertions
     # aren't confounded by panel BEAT text behind it (a beat mentions the very
     # 'cracked crystal ball' prop this test filters on)
@@ -169,7 +191,9 @@ async def test_inline_scalar_edit_affordance(user: User) -> None:
                              {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}]))
     # THE COLOPHON prints the issue-wide indicia — every line a pencil
     await user.should_see("COLOPHON")
     await user.should_see("PRICE")
@@ -213,7 +237,11 @@ async def test_palette_and_chip_removal(user: User) -> None:
         {"name": "C", "id": "witchlight-carnival", "kind": "issue"},
         {"name": "T", "id": "b3cc50eb-5a57-463c-ba10-927d941c9779", "kind": "scene"}],
         "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([
+        {"name": "Series", "id": None, "kind": "all-series"},
+        {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+        {"name": "C", "id": "witchlight-carnival", "kind": "issue"},
+        {"name": "T", "id": "b3cc50eb-5a57-463c-ba10-927d941c9779", "kind": "scene"}]))
     # attached assets render as chips
     await user.should_see("Fortune Teller Tent")
     # the cast chip wears the character's NAME, not the raw id
@@ -255,7 +283,9 @@ async def test_issue_production_dashboard(user: User) -> None:
                              {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}]))
     # the detail dial reads the book at five altitudes: scripts, scenes,
     # beats, roughs, proofs
     await user.should_see("SCRIPTS")
@@ -278,7 +308,9 @@ async def test_drawer_scopes_to_current_series(user: User) -> None:
                              {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}]))
     user.find("Assets").click()
     await user.should_see("Fortune Teller Tent")
     await user.should_not_see("Squonk")   # Rugor's assets are out of scope
@@ -304,7 +336,12 @@ async def test_cast_card_corner_remove(user: User) -> None:
         {"name": "T", "id": SC, "kind": "scene"},
         {"name": "P", "id": P, "kind": "panel"}],
         "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([
+        {"name": "Series", "id": None, "kind": "all-series"},
+        {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+        {"name": "C", "id": "witchlight-carnival", "kind": "issue"},
+        {"name": "T", "id": SC, "kind": "scene"},
+        {"name": "P", "id": P, "kind": "panel"}]))
     # the panel's cast cardwall has ✕ buttons (icon=close) on each card —
     # poll: the light table builds after the palette satisfies should_see
     import asyncio as _asyncio
@@ -341,7 +378,9 @@ async def test_slips_pack_every_bare_scene_exactly_once(user: User) -> None:
                              {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}]))
     await user.should_see("COLOPHON")          # default dial stop is PANELS
 
     from schema import SceneModel, Panel
@@ -393,7 +432,9 @@ async def test_long_manuscript_fades_at_200_words(user: User) -> None:
                                  {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
                                  {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                    "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-        await user.open("/")
+        await user.open(_url_for([{"name": "Series", "id": None, "kind": "all-series"},
+                                 {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                                 {"name": "C", "id": "witchlight-carnival", "kind": "issue"}]))
         await user.should_see("COLOPHON")
         user.find(marker="detail-scenes").click()
         await user.should_see("continues — open to read")
@@ -432,7 +473,9 @@ async def test_colophon_prints_all_credits_and_each_line_is_a_pencil(user: User,
                              {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
                              {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}]))
     await user.should_see("COLOPHON")
     for role in ("CREATIVE MINDS", "PUBLICATION DATE", "PRICE"):
         await user.should_see(role)
@@ -471,7 +514,10 @@ async def test_mailbag_letter_blocks_ride_the_table(user: User) -> None:
                                  {"name": "C", "id": CARN, "kind": "issue"},
                                  {"name": "M", "id": ins.insert_id, "kind": "insert"}],
                    "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-        await user.open("/")
+        await user.open(_url_for([{"name": "S", "id": None, "kind": "all-series"},
+                                 {"name": "WL", "id": WL, "kind": "series"},
+                                 {"name": "C", "id": CARN, "kind": "issue"},
+                                 {"name": "M", "id": ins.insert_id, "kind": "insert"}]))
         n = len(letter_blocks(ins.description))
         assert n > 0
         blocks = [e for e in user.client.elements.values()
@@ -509,7 +555,10 @@ async def test_lobby_resume_card_and_scene_door(user: User) -> None:
                              {"name": "C", "id": CARN, "kind": "issue"},
                              {"name": "S", "id": sc.scene_id, "kind": "scene"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([{"name": "Series", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": WL, "kind": "series"},
+                             {"name": "C", "id": CARN, "kind": "issue"},
+                             {"name": "S", "id": sc.scene_id, "kind": "scene"}]))
     # the book opened to the scene's manuscript page — its production line
     # rides in the book (no standalone scene page, no "read them in the book"
     # door), which only renders at SCENES detail (the redirect set it)
@@ -531,7 +580,11 @@ async def test_cast_chip_is_a_door_to_the_character(user: User) -> None:
         {"name": "C", "id": "witchlight-carnival", "kind": "issue"},
         {"name": "T", "id": "b3cc50eb-5a57-463c-ba10-927d941c9779", "kind": "scene"}],
         "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([
+        {"name": "Series", "id": None, "kind": "all-series"},
+        {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
+        {"name": "C", "id": "witchlight-carnival", "kind": "issue"},
+        {"name": "T", "id": "b3cc50eb-5a57-463c-ba10-927d941c9779", "kind": "scene"}]))
     await user.should_see("Ezra")
 
     chips = [e for e in user.client.elements.values()
@@ -593,7 +646,10 @@ async def test_a_posters_bench_lays_no_letter_acetates(user: User) -> None:
                              {"name": "C", "id": CARN, "kind": "issue"},
                              {"name": "M", "id": ins.insert_id, "kind": "insert"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([{"name": "S", "id": None, "kind": "all-series"},
+                             {"name": "WL", "id": WL, "kind": "series"},
+                             {"name": "C", "id": CARN, "kind": "issue"},
+                             {"name": "M", "id": ins.insert_id, "kind": "insert"}]))
     await user.should_see("Letters To Mud")
     blocks = [e for e in user.client.elements.values()
               if 'rough-letterblock' in str(getattr(e, "_classes", []))]
@@ -617,7 +673,9 @@ async def test_styles_live_in_the_house(user: User) -> None:
         {"name": "Publishers", "id": None, "kind": "all-publishers"},
         {"name": pub.name, "id": pub.publisher_id, "kind": "publisher"}],
         "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([
+        {"name": "Publishers", "id": None, "kind": "all-publishers"},
+        {"name": pub.name, "id": pub.publisher_id, "kind": "publisher"}]))
     # the rack: every house style hangs on the publisher's page, with a door
     await user.should_see("House Styles")
     await user.should_see(styles[0].name.title())
@@ -728,7 +786,10 @@ async def test_style_rename_saves_on_the_spot(user: User) -> None:
         {"name": pub.name, "id": pub.publisher_id, "kind": "publisher"},
         {"name": st.name, "id": st.style_id, "kind": "style"}],
         "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([
+        {"name": "Publishers", "id": None, "kind": "all-publishers"},
+        {"name": pub.name, "id": pub.publisher_id, "kind": "publisher"},
+        {"name": st.name, "id": st.style_id, "kind": "style"}]))
     await user.should_see(st.name.title())
 
     def click(btn):
@@ -832,7 +893,13 @@ async def test_the_healing_bench_speaks_comics(user: User) -> None:
         {"name": pnl.name, "id": pnl.panel_id, "kind": "panel"},
         {"name": "Edit Panel Image", "id": img, "kind": "image-editor"}],
         "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([
+        {"name": "Series", "id": None, "kind": "all-series"},
+        {"name": "WL", "id": WL, "kind": "series"},
+        {"name": "C", "id": CARN, "kind": "issue"},
+        {"name": "T", "id": SC, "kind": "scene"},
+        {"name": pnl.name, "id": pnl.panel_id, "kind": "panel"},
+        {"name": "Edit Panel Image", "id": img, "kind": "image-editor"}]))
     await user.should_see(f"Healing the {pnl.name} acetate")
     await user.should_see("Heal the patch")
     await user.should_see("Extend the paper")
@@ -876,7 +943,13 @@ async def test_the_choices_sheet_pins_the_original(user: User) -> None:
         {"name": pnl.name, "id": pnl.panel_id, "kind": "panel"},
         {"name": "Choices", "id": f"sheettest|{orig}", "kind": "image-editor-choices"}],
         "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([
+        {"name": "Series", "id": None, "kind": "all-series"},
+        {"name": "WL", "id": WL, "kind": "series"},
+        {"name": "C", "id": CARN, "kind": "issue"},
+        {"name": "T", "id": SC, "kind": "scene"},
+        {"name": pnl.name, "id": pnl.panel_id, "kind": "panel"},
+        {"name": "Choices", "id": f"sheettest|{orig}", "kind": "image-editor-choices"}]))
     await user.should_see("The choices sheet")
     await user.should_see("THE ORIGINAL")
     await user.should_see("Paste it down")
@@ -922,7 +995,7 @@ async def test_library_shelves_show_wardrobe_and_props(user: User) -> None:
                                  description="A cloak for the shelf test."), overwrite=True)
     json.dump({"selection": [{"name": "Library", "id": None, "kind": "library"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
+    await user.open(_url_for([{"name": "Library", "id": None, "kind": "library"}]))
     await user.should_see("Shelf Test Cloak")
     # props already in the fixture shelve too
     props = storage.read_all_objects(PropAsset, {"series_id": WL})

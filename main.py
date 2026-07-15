@@ -7,7 +7,7 @@ from nicegui import ui, app
 from gui.speech import init_speech_support, start_listening, stop_listening, speak, cancel_speech
 from gui.state import APPState, STATE_FILEPATH, set_dark_mode
 from dotenv import load_dotenv
-from gui.selection import (SelectionItem)
+from gui.selection import SelectionItem, SelectedKind
 from messaging import send
 from storage.local import LocalStorage
 # MOUNT EVERY HOUSE FIRST: data/ becomes the rack of publisher mounts
@@ -31,7 +31,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 HEADFOOT_STYLING_CLASSES = "studio-chrome"
 MIDDLE_STYLING_CLASSES = "text-gray-900 dark:text-gray-300"
 # Default selection to initialize the breadcrumbs
-DEFAULT_SELECTION = [{"kind":"all-publishers", "name":"Publishers", "id":None}]
+DEFAULT_SELECTION = [{"kind":"lobby", "name":"Studio", "id":None}]
 
 # ---------------------------------------------------------
 # LOGGER INITIALIZATION
@@ -823,9 +823,30 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     # is root-window behavior
     conversations = state_data.get('conversations', {})
     if selection_override is None:
-        selection = [SelectionItem(**item) for item in state_data.get('selection', DEFAULT_SELECTION)]
+        # THE FRONT DOOR: / always lands in the lobby; the bench the author
+        # left becomes the resume card's target, never a teleport
+        stashed = [SelectionItem(**item) for item in state_data.get('selection', DEFAULT_SELECTION)]
+        resume_selection = stashed if (stashed and stashed[0].kind.value not in
+                                       ('lobby', 'all-series', 'all-publishers', 'all-styles', 'library')
+                                       or len(stashed) > 1) else None
+        selection = [SelectionItem(name="Studio", id=None, kind=SelectedKind.LOBBY)]
     else:
         selection = selection_override
+        resume_selection = None
+        # RELOAD KEEPS THE BENCH: when the persisted selection sits ON this
+        # address and extends it only with address-less rooms (the healing
+        # bench, a choices sheet, a picker), restore it — F5 on a bench
+        # lands back on the bench, never ejects to the parent
+        stashed = [SelectionItem(**item) for item in state_data.get('selection', [])]
+        _unaddressed = {'image-editor', 'image-editor-choices', 'pick-style',
+                        'pick-publisher', 'reference-image', 'character-reference',
+                        'style-example'}
+        tail = selection[-1] if selection else None
+        idx = next((i for i, it in enumerate(stashed)
+                    if tail is not None and it.kind == tail.kind and it.id == tail.id), None)
+        if idx is not None and len(stashed) > idx + 1 and all(
+                it.kind.value in _unaddressed for it in stashed[idx + 1:]):
+            selection = stashed
     dark_value = state_data.get('dark_mode', False)
     darkswitch.value = dark_value
 
@@ -841,6 +862,8 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                            # writes merge by object, never clobber
         suggestions_row = suggestions_row,
      )
+
+    state.resume_selection = resume_selection
 
     # STYLES MOVED INTO THE HOUSE: legacy '/styles…' threads re-key to the
     # canonical trail (bare style ids are ambiguous across houses by design —
