@@ -107,3 +107,24 @@ def test_attach_panel_reference_attaches(storage):
                                         "scene_id": panel.scene_id, "panel_id": panel.panel_id})
     ref = (fresh.reference_images or [])[-1]
     assert ref.image == img and ref.relation.value == "left"
+
+
+def test_a_take_wears_its_own_orientation(tmp_path):
+    """The takes wall frames each take by the IMAGE's orientation — a
+    portrait render on a landscape-flipped board must get a portrait frame
+    (fit=cover would otherwise crop it sideways)."""
+    from PIL import Image
+    from schema.enums import FrameLayout
+    from gui.light_table import take_shape, TAKE_SHAPES
+
+    land = str(tmp_path / "l.jpg"); Image.new("RGB", (1536, 1024)).save(land)
+    port = str(tmp_path / "p.jpg"); Image.new("RGB", (1024, 1536)).save(port)
+    sq = str(tmp_path / "s.jpg"); Image.new("RGB", (1024, 1024)).save(sq)
+
+    # the art decides, whatever the board claims
+    assert take_shape(port, FrameLayout.LANDSCAPE) == TAKE_SHAPES[FrameLayout.PORTRAIT]
+    assert take_shape(land, FrameLayout.PORTRAIT) == TAKE_SHAPES[FrameLayout.LANDSCAPE]
+    assert take_shape(sq, FrameLayout.LANDSCAPE) == TAKE_SHAPES[FrameLayout.SQUARE]
+    # an unreadable file falls back to the board's shape
+    assert take_shape(str(tmp_path / "missing.jpg"), FrameLayout.PORTRAIT) \
+        == TAKE_SHAPES[FrameLayout.PORTRAIT]

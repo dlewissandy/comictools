@@ -1442,9 +1442,27 @@ def rework_take_on_table(state, board, img: str):
     state.refresh_details()
 
 
-# TAKES: frame sizes per board shape — every frame the exact shape of its art.
+# TAKES: every frame the exact shape of ITS art — measured from the image,
+# never assumed from the board (a board flipped to landscape after portrait
+# renders would otherwise crop every old take into the wrong orientation).
 TAKE_SHAPES = {FrameLayout.LANDSCAPE: (3, 2), FrameLayout.PORTRAIT: (2, 3), FrameLayout.SQUARE: (3, 3)}
 DROP_SHAPES = {FrameLayout.LANDSCAPE: (3, 2), FrameLayout.PORTRAIT: (3, 3), FrameLayout.SQUARE: (3, 3)}
+
+
+def take_shape(img: str, board_aspect) -> tuple[int, int]:
+    """The frame a take deserves: its OWN orientation, read off the file.
+    Falls back to the board's shape only when the image can't be read."""
+    try:
+        from PIL import Image as _Image
+        with _Image.open(img) as im:
+            r = im.width / max(im.height, 1)
+    except Exception:
+        return TAKE_SHAPES[board_aspect]
+    if r > 1.15:
+        return TAKE_SHAPES[FrameLayout.LANDSCAPE]
+    if r < 0.87:
+        return TAKE_SHAPES[FrameLayout.PORTRAIT]
+    return TAKE_SHAPES[FrameLayout.SQUARE]
 
 
 def tear_up_take(state, board, img: str):
@@ -1595,7 +1613,7 @@ def takes_row(state, board, featured: str | None):
         wastebasket_chip(state, board)
     with ruled_page() as packer:
         for img in takes:
-            with packer.place_cell([TAKE_SHAPES[board.aspect]], fudge=False):
+            with packer.place_cell([take_shape(img, board.aspect)], fudge=False):
                 with ui.card().classes('soft-card p-2 mosaic-card relative panel-fill cursor-pointer') as take:
                     ui.image(source=img).props('fit=cover').classes('absolute inset-0 w-full h-full')
                     if img == featured:
