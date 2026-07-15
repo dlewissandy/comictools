@@ -380,9 +380,11 @@ async def test_long_manuscript_fades_at_200_words(user: User) -> None:
         assert len(chips) == 1
 
         # the door holds the FULL text, not the faded view
+        # THE CONVERSATION IS THE MODAL: the door lands the FULL manuscript
+        # in the conversation box (prefix + story), ready to edit in place
         user.find('continues — open to read').click()
-        await user.should_see('Save')
-        assert any(getattr(t, 'value', '') == long_sc.story
+        await user.should_see('Enter saves')
+        assert any(getattr(t, 'value', '').endswith(long_sc.story)
                    for t in user.client.elements.values()
                    if t.__class__.__name__ == 'Textarea')
     finally:

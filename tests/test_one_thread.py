@@ -262,3 +262,24 @@ def test_lobby_chips_keep_their_promises():
     assert "Rugor" in grounded and "Guardian" in grounded, "the ask names the real bench"
     assert any(isinstance(c, str) and c.endswith("…") for c in chips), "a prefill starter"
     assert "Guardian of Blackstone Pass" in opener
+
+
+def test_text_editors_ride_the_conversation_box():
+    """No text-entry modals: the bench brief and the book's shared text
+    editor arm the one-shot intercept instead of opening a dialog."""
+    import re
+    lt = open("gui/light_table.py").read()
+    m = re.search(r"def edit_brief_dialog\(\):(.*?)\n            _has_brief", lt, re.S)
+    assert m, "the brief editor exists"
+    body = m.group(1)
+    assert "_input_intercept" in body, "the brief rides the conversation box"
+    assert "ui.dialog" not in body and "studio_dialog" not in body, \
+        "the brief editor must not open a modal"
+
+    iss = open("gui/issue.py").read()
+    m = re.search(r"def edit_text_dialog\(.*?\):(.*?)\n    # ----", iss, re.S)
+    assert m, "the shared text editor exists"
+    body = m.group(1)
+    assert "_input_intercept" in body, "book text edits ride the conversation box"
+    assert "studio_dialog" not in body and "ui.textarea" not in body, \
+        "the shared text editor must not open a modal"

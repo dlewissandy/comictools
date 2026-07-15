@@ -75,3 +75,25 @@ def test_the_mark_bench_renders(storage):
     src = open("gui/light_table.py").read()
     assert "def view_artboard" in src
     assert "data-artboard" in src, "drag events resolve back to the mark"
+
+
+def test_the_mark_bench_hangs_its_takes(storage, mock_imaging):
+    """A rendered take must APPEAR: the mark bench hangs the takes wall,
+    and a render lands where that wall reads."""
+    import agentic.tools.imaging as imaging
+    from types import SimpleNamespace
+    from schema import ArtBoard
+    src = open("gui/light_table.py").read()
+    va = src.split("def view_artboard", 1)[1]
+    assert "takes_row(state, board, featured)" in va, \
+        "the mark bench shows its takes like every other board"
+
+    b = ArtBoard(board_id="masthead-takes-pin", scope_id=WL,
+                 board_kind="masthead", name="takes pin",
+                 description="TAKES PIN in woodtype",
+                 style_id="vintage-four-color")
+    storage.create_object(data=b, overwrite=True)
+    state = SimpleNamespace(storage=storage, is_dirty=False)
+    imaging.render_artboard_body(state, WL, "masthead-takes-pin")
+    takes = [t for t in storage.list_images(b) if os.path.exists(t)]
+    assert takes, "the render lands in the very folder the takes wall lists"

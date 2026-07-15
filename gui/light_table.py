@@ -8,6 +8,7 @@ composition goes to the coauthor to render as a real take.
 """
 import os
 
+from loguru import logger
 from nicegui import ui
 
 from gui.messaging import post_user_message
@@ -3927,30 +3928,43 @@ def light_table(state: APPState, panel, scene, setting,
             from gui.elements import caption_action, CrudButtonKind, markdown as _brief_md
 
             def edit_brief_dialog():
-                with ui.dialog() as _bdlg, ui.card().classes('soft-card') \
-                        .style('min-width: 520px; max-width: 760px;'):
-                    ui.label(f'Edit {description_label.lower()}').classes('caption-box caption-box-sm')
-                    ui.label('The words the render is drawn from — describe exactly what THIS '
-                             'panel shows: who and what is in frame, where, and how. '
-                             'What you leave out is left out of the art.') \
-                        .classes('text-sm text-gray-500 q-mt-xs')
-                    _ta = ui.textarea(value=panel.description or '') \
-                        .props('outlined autogrow').classes('w-full').style('min-height: 220px;')
-                    with ui.row().classes('w-full justify-end q-mt-sm').style('gap: 8px;'):
-                        ui.button('Cancel', icon='close').props('flat dense no-caps') \
-                            .on('click', lambda _: _bdlg.close())
+                # THE CONVERSATION IS THE MODAL (the author's ruling): the
+                # brief is words, so it's written in the conversation box —
+                # prefilled with the current brief, Enter saves DIRECTLY
+                # (one-shot intercept, no agent round-trip), Shift+Enter
+                # breaks a line, and an erased prefix stands down.
+                prefix = f"{description_label}: "
+                state.user_input.value = prefix + (panel.description or '')
 
-                        def _save_brief():
-                            fresh = storage.read_object(cls=type(panel),
-                                                        primary_key=panel.primary_key) or panel
-                            fresh.description = (_ta.value or '').strip()
-                            storage.update_object(fresh)
-                            panel.description = fresh.description
-                            _bdlg.close()
-                            state.refresh_details()
-                        ui.button(f'Save {description_label.lower()}', icon='check') \
-                            .props('unelevated dense no-caps').on('click', lambda _: _save_brief())
-                _bdlg.open()
+                def _save_brief(text):
+                    if text is None:
+                        ui.notify(f'{description_label} unchanged — write the words '
+                                  f'after the prompt to rewrite it.', type='info')
+                        return
+                    old = panel.description or ''
+                    fresh = storage.read_object(cls=type(panel),
+                                                primary_key=panel.primary_key) or panel
+                    fresh.description = text
+                    storage.update_object(fresh)
+                    panel.description = fresh.description
+
+                    def undo(prev=old):
+                        f2 = storage.read_object(cls=type(panel),
+                                                 primary_key=panel.primary_key) or panel
+                        f2.description = prev
+                        storage.update_object(f2)
+                        panel.description = prev
+                        state.refresh_details()
+                    _receipt(f"✍️ rewrote {description_label.lower()}", undo=undo)
+                    state.refresh_details()
+                state._input_intercept = (prefix, _save_brief, None)
+                try:
+                    state.user_input.run_method('focus')
+                except Exception:
+                    pass
+                ui.notify('The words the render is drawn from — what you leave out is '
+                          'left out of the art.  Enter saves; Shift+Enter for a new line.',
+                          type='info', position='bottom', timeout=4000)
 
             _has_brief = bool((panel.description or '').strip())
             caption_action(description_label.title(),
@@ -4016,3 +4030,6 @@ def view_artboard(state: APPState):
             header(board.name.title(), 0)
         light_table(state, board, board, None, featured=featured,
                     description_label='The lettering brief')
+        # TAKES: every render of the mark on one wall — click one to
+        # feature it (writes through to the series masthead / house logo)
+        takes_row(state, board, featured)

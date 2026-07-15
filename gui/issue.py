@@ -154,22 +154,30 @@ def view_issue(state: APPState):
         remember_spot(f'panel-{panel_id}')
         open_panel(state, series_id, issue_id, scene_id, panel_id)
 
-    # ---- shared text editor: save directly, or hand it to the coauthor --
+    # ---- shared text editor: THE CONVERSATION IS THE MODAL --------------
     def edit_text_dialog(title, initial, on_save, develop_msg):
-        from gui.elements import studio_dialog
-        with studio_dialog(title, min_w=560, max_w=820) as dlg:
-            ta = ui.textarea(value=initial or '').classes('w-full q-mt-sm') \
-                .props('autogrow outlined input-style="font-size: 0.85rem"')
-            with ui.row().classes('w-full items-center q-mt-sm').style('gap: 8px;'):
-                ui.button('Save', icon='save').props('unelevated dense no-caps') \
-                    .on('click', lambda _: (dlg.close(), on_save(ta.value)))
-                ui.chip('work on it with me', icon='forum').props('dense outline clickable') \
-                    .tooltip("Hand it to me in the conversation — we'll edit it together") \
-                    .on('click', lambda _: (dlg.close(), post_user_message(state, develop_msg)))
-                ui.space()
-                ui.button('Never mind', icon='close').props('flat dense no-caps') \
-                    .on('click', lambda _: dlg.close())
-        dlg.open()
+        # The words land in the conversation box, prefilled: Enter saves
+        # DIRECTLY (one-shot intercept, no agent turn), Shift+Enter breaks
+        # a line, an erased prefix stands down — and typing something else
+        # entirely simply talks to the Editor (the old 'work on it with
+        # me' door, without the detour; develop_msg kept for callers).
+        prefix = f"{title}: "
+        state.user_input.value = prefix + (initial or '')
+
+        def _save(text):
+            if text is None:
+                ui.notify(f'{title} unchanged — write the words after the prompt '
+                          f'to rewrite it.', type='info')
+                return
+            on_save(text)
+        state._input_intercept = (prefix, _save, None)
+        try:
+            state.user_input.run_method('focus')
+        except Exception:
+            pass
+        ui.notify('Enter saves; Shift+Enter for a new line; clear the line to '
+                  'change the subject instead.', type='info',
+                  position='bottom', timeout=4000)
 
     # ---- mutations -------------------------------------------------------
     def _repack_prints(panel_id):
