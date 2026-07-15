@@ -283,8 +283,7 @@ def view_lobby(state: APPState):
                         else:
                             # NO MARK YET: the wall itself offers the brush
                             def _ink_logo(_=None, p=pub):
-                                _goto([SelectionItem(name=p.name, id=p.publisher_id,
-                                                     kind=SelectedKind.PUBLISHER)])
+                                # IN PLACE: the front desk designs it from here
                                 state.user_input.value = f"Design the {p.name} logo: "
                                 try:
                                     state.user_input.run_method('focus')
@@ -314,11 +313,7 @@ def view_lobby(state: APPState):
                                             .props('fit=contain')
                                     else:
                                         def _ink_mast(_=None, p=pub, x=ser):
-                                            _goto([
-                                                SelectionItem(name=p.name, id=p.publisher_id,
-                                                              kind=SelectedKind.PUBLISHER),
-                                                SelectionItem(name=x.name, id=x.series_id,
-                                                              kind=SelectedKind.SERIES)])
+                                            # IN PLACE: the Letterer works from here
                                             state.user_input.value = (
                                                 f"Letter the {x.name} masthead: ")
                                             try:

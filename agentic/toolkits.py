@@ -623,12 +623,23 @@ TOOLKITS["inside-back-cover"] = TOOLKITS["cover"]
 # THE INSERT WORKBENCH: a full-page insert is a board like a cover — it
 # composes on the light table and renders from its rough + description.
 TOOLKITS["lobby"] = [
-    # THE FRONT DOOR: found a house, read the rack, walk anywhere
+    # THE FRONT DESK: the studio wall is the primary workspace — every verb
+    # its doors promise works right here, no popping around screens
     create_publisher,
+    create_comic_series,
+    create_issue,
+    generate_series_title_art,
+    generate_publisher_logo_reference_image,
+    update_logo_description,
+    update_publisher_description,
     read_all_publishers,
     read_all_series,
+    read_series,
+    read_publisher,
+    read_all_issues,
     select_publisher,
     select_series,
+    select_issue,
     undo_last_delete,
 ]
 
@@ -656,3 +667,24 @@ TOOLKITS["insert"] = [
     generate_setting_background,
     generate_series_title_art,
 ]
+
+
+# ---------------------------------------------------------------------------
+# ONE EDITOR, EVERY TOOL: the author's ruling — the Editor is never stymied
+# by a feature the page exposes.  The per-kind kits above remain as the
+# room-by-room MAP of what matters where (and the tests' promise pins);
+# the RUNTIME agent carries the union of all of them.
+# ---------------------------------------------------------------------------
+def _union():
+    seen, out = set(), []
+    for kit in TOOLKITS.values():
+        for t in kit:
+            name = getattr(t, "name", str(t))
+            if name in seen:
+                continue
+            seen.add(name)
+            out.append(t)
+    return out
+
+
+ALL_TOOLS = _union()

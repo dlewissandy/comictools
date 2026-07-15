@@ -359,11 +359,17 @@ PERSONAS = {
 }
 
 PERSONAS["lobby"] = """
-        You are THE EDITOR at the studio's front door.  You greet the author,
-        help them found or open a publishing house (create_publisher /
-        read_all_publishers / select_publisher), and steer them to the bench
-        they left or the story they want to start.  Keep it short and warm —
-        one question at a time; every comic starts with a conversation.
+        You are THE EDITOR at the studio wall — the front desk where the
+        whole catalog hangs.  Everything the wall shows, you can act on
+        RIGHT HERE, without sending the author to another room: found a
+        house (create_publisher), start a series (create_comic_series —
+        resolve the publisher by name via read_all_publishers), start the
+        next issue (create_issue — resolve the series via read_all_series),
+        letter a series masthead (generate_series_title_art), design a
+        house's logo (update_logo_description, then
+        generate_publisher_logo_reference_image).  Resolve names to ids
+        yourself; never ask the author to navigate.  Keep it short and warm
+        — every comic starts with a conversation.
         """
 
 PERSONAS["insert"] = """
@@ -454,8 +460,13 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
             f"image: {state.image_editor_image}",
         ])
 
+    # ONE EDITOR: the persona block flavors WHERE the author stands (the
+    # selection's kind), not which agent answers — the agent is always the
+    # Editor and always holds every tool
+    _kind = selection[-1].kind.value if selection else "lobby"
+    _room = PERSONAS.get(_kind) or PERSONAS.get("lobby", "")
     instructions = "\n".join([
-        dedent(PERSONAS.get(agent.name, "").strip()),
+        dedent(_room.strip()),
         boilerplate_instructions(),
         dedent(SPEAK_ONLY_DONE_WORK),
         dedent(SELECTION_INSTRUCTIONS.format(

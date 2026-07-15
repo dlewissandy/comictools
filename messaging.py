@@ -158,24 +158,13 @@ async def handle_message_output_event(state: APPState, event: RunItemStreamEvent
     logger.debug(thought)
 
 async def handle_agent_events(state: APPState, messages: list[dict], response_markdown: ui.markdown, work: dict, refresh_work):
+    # ONE EDITOR, EVERY TOOL: the same agent answers in every room — the
+    # room flavors its instructions (see agentic.instructions), never its
+    # capabilities, so no page's feature can stymie it
     agents = state.agents
-    selection = state.selection
-    kind = "home" if not selection else selection[-1].kind
-    agent = agents.get(kind, None)
+    agent = agents.get("the Editor") or next(iter(agents.values()), None)
     if agent is None:
-        # a picker or reference room has no coworker of its own — the
-        # nearest addressable ancestor answers (the same walk the visible
-        # thread already makes), never a jargon ValueError forever
-        for item in reversed(selection or []):
-            k = getattr(item.kind, 'value', item.kind)
-            if agents.get(k) is not None:
-                kind, agent = k, agents[k]
-                break
-        else:
-            kind, agent = "all-series", agents.get("all-series")
-    logger.debug(f"Handling agent events for kind: {kind}")
-    if agent is None:
-        raise ValueError(f"Agent not found for kind: {kind}")
+        raise ValueError("The Editor is not initialized")
     stream = Runner.run_streamed(agent, input=messages, context=state, max_turns=40)
     state._live_stream = stream          # the STOP door holds this handle
     streamed_events = stream.stream_events()

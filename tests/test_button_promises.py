@@ -164,3 +164,16 @@ def test_racks_scroll_not_overflow():
         window = src[max(0, at - 300):at]
         assert "studio_dialog" in window, f"{title} still hand-rolls its shell"
     assert "studio_dialog" in open("gui/scene.py").read()
+
+
+def test_one_editor_holds_every_rooms_tools():
+    """THE RULING: the Editor is never stymied by a feature the page
+    exposes — the runtime agent carries the union of every room's kit."""
+    from agentic.toolkits import TOOLKITS, ALL_TOOLS
+    union = {getattr(t, "name", str(t)) for t in ALL_TOOLS}
+    for kind, kit in TOOLKITS.items():
+        missing = {getattr(t, "name", str(t)) for t in kit} - union
+        assert not missing, f"{kind} tools missing from the Editor: {missing}"
+    # and the one agent IS the one that answers
+    src = open("messaging.py").read()
+    assert 'agents.get("the Editor")' in src
