@@ -318,3 +318,47 @@ def delete_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id
     from schema import Insert
     pk = {"series_id": series_id, "issue_id": issue_id, "insert_id": insert_id}
     return deleter(wrapper=wrapper, cls=Insert, primary_key=pk)
+
+
+@function_tool
+def delete_styled_image(wrapper: RunContextWrapper[APPState],
+                        series_id: str, character_id: str, variant_id: str,
+                        style_id: str, image_locator: str | None = None) -> str:
+    """
+    Strike a styled reference sheet into the wastebasket (recoverable — never
+    burned).  With no image_locator, strikes the sheet currently PICKED for
+    that style and clears the pick.
+
+    Args:
+        series_id: The series the character belongs to.
+        character_id: The character whose look the sheet belongs to.
+        variant_id: The look (variant) the sheet was inked for.
+        style_id: The style the sheet is inked in.
+        image_locator: Optional filepath of the exact sheet to strike;
+            defaults to the currently picked sheet for that style.
+    Returns:
+        A status message naming what was struck.
+    """
+    import os
+    from schema import CharacterVariant
+    state: APPState = wrapper.context
+    storage = state.storage
+    variant = storage.read_object(cls=CharacterVariant, primary_key={
+        "series_id": series_id, "character_id": character_id,
+        "variant_id": variant_id})
+    if variant is None:
+        return f"PROBLEM: no look {variant_id} on character {character_id}."
+    target = image_locator or (variant.images or {}).get(style_id)
+    if not target or not os.path.exists(target):
+        return ("PROBLEM: no sheet to strike — none is picked for that style "
+                "and no image_locator was given.")
+    from storage.trash import soft_delete
+    soft_delete(str(storage.base_path), target,
+                note=f"a struck reference sheet — {variant.name or variant_id} "
+                     f"inked in {style_id}")
+    if (variant.images or {}).get(style_id) == target:
+        variant.images.pop(style_id, None)
+        storage.update_object(data=variant)
+        state.is_dirty = True
+    return (f"Deleted the sheet {os.path.basename(target)} — it waits in the "
+            f"wastebasket, and the style's pick is cleared.")

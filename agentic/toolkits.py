@@ -88,6 +88,8 @@ from agentic.tools.updater import (
 )
 from agentic.tools.imaging import generate_setting_background, generate_series_title_art, generate_panel_image, generate_figure_acetate, split_layer, export_issue_pdf, export_issue_cbz, preflight_issue, layout_issue_pages, stitch_issue_pages, render_missing_panels, ink_cast_in_one_hand
 from agentic.tools.library import list_library_assets, import_character, import_setting, import_prop, import_outfit
+from agentic.tools.updater import attach_panel_reference
+from agentic.tools.deleter import delete_styled_image
 from agentic.tools.assets import (
     create_prop, create_prop_from_image, read_all_props, update_prop_description, delete_prop,
     create_outfit, create_outfit_from_image, create_setting_from_image,
@@ -217,6 +219,11 @@ TOOLKITS: dict[str,list[Tool]] = {
         create_prop,
     ],
     "cover": [
+        # a board with cast can ink a missing sheet; drawer tiles import
+        create_styled_image_for_character_variant,
+        import_character,
+        import_setting,
+        list_library_assets,
         # Create
         # Read
         read_board_table,
@@ -242,6 +249,8 @@ TOOLKITS: dict[str,list[Tool]] = {
     ],
     "issue": [
         mark_breakdown_current,
+        import_prop,
+        import_outfit,
         # every verb the persona and the book's chips speak
         derive_character,
         create_character,
@@ -317,6 +326,12 @@ TOOLKITS: dict[str,list[Tool]] = {
     ],
     "panel": [
         create_styled_image_for_character_variant,
+        attach_panel_reference,
+        import_character,
+        import_setting,
+        import_prop,
+        import_outfit,
+        list_library_assets,
         # Create
         create_prop,
         create_setting,
@@ -377,6 +392,7 @@ TOOLKITS: dict[str,list[Tool]] = {
     ],
     "scene": [
         create_styled_image_for_character_variant,
+        attach_panel_reference,
         # Create
         create_panel,
         create_scene_panels,
@@ -504,6 +520,8 @@ TOOLKITS: dict[str,list[Tool]] = {
         # Navigation
         # Create
         create_styled_image_for_character_variant,
+        # Delete
+        delete_styled_image,
         # Read
         read_style,
         read_series,
@@ -611,6 +629,11 @@ TOOLKITS["inside-back-cover"] = TOOLKITS["cover"]
 # THE INSERT WORKBENCH: a full-page insert is a board like a cover — it
 # composes on the light table and renders from its rough + description.
 TOOLKITS["insert"] = [
+    # a board with cast can ink a missing sheet; drawer tiles import
+    create_styled_image_for_character_variant,
+    import_character,
+    import_setting,
+    list_library_assets,
     # Read
     read_board_table,
     read_all_inserts,

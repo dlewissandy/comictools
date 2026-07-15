@@ -1447,3 +1447,53 @@ def update_cover_letters(wrapper: RunContextWrapper[APPState],
     state.is_dirty = True
     return (f"Lettered the cover: {', '.join(bits)}.  The author can drag them "
             f"into place on the cover's light table.")
+
+
+@function_tool
+def attach_panel_reference(wrapper: RunContextWrapper[APPState],
+                           series_id: str, issue_id: str, scene_id: str,
+                           panel_id: str, image_path: str,
+                           relation: str = "background") -> str:
+    """
+    Attach an existing image FILE to a panel as one of its reference images —
+    renders of the panel then use it to steer the composition.  This is how an
+    uploaded picture actually reaches the artwork: without attaching, a loose
+    upload is ignored by the render.
+
+    Args:
+        series_id: The identifier of the series the issue belongs to.
+        issue_id: The identifier of the issue the scene belongs to.
+        scene_id: The identifier of the scene the panel belongs to.
+        panel_id: The identifier of the panel to attach the reference to.
+        image_path: Filepath of an image that already exists on disk (e.g.
+            the locator from an upload).
+        relation: How the reference relates to the panel — one of 'background',
+            'left', 'right', 'above', 'below', 'before', 'after'.
+            Default 'background'.
+    Returns:
+        A status message naming the attached reference.
+    """
+    import os
+    from uuid import uuid4
+    from schema.reference_image import ReferenceImage
+    from schema.enums import Relation
+    state: APPState = wrapper.context
+    storage: GenericStorage = state.storage
+    panel = storage.read_object(cls=Panel, primary_key={
+        "series_id": series_id, "issue_id": issue_id,
+        "scene_id": scene_id, "panel_id": panel_id})
+    if panel is None:
+        return f"PROBLEM: no panel {panel_id} in scene {scene_id}."
+    if not image_path or not os.path.exists(image_path):
+        return f"PROBLEM: no image file at '{image_path}' — attach nothing."
+    try:
+        rel = Relation(relation)
+    except ValueError:
+        rel = Relation.BACKGROUND
+    panel.reference_images = [*(panel.reference_images or []),
+        ReferenceImage(image_id=uuid4().hex[:8], image=image_path, relation=rel)]
+    storage.update_object(data=panel)
+    state.is_dirty = True
+    return (f"Attached {os.path.basename(image_path)} to panel "
+            f"{panel.panel_number} as its {rel.value} reference — renders "
+            f"of this panel now take it into account.")

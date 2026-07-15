@@ -56,7 +56,10 @@ def view_scene(state: APPState):
             mime_type=e.type
         )
 
-        post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
+        post_user_message(state, "Create a new panel in this scene from this uploaded picture.  "
+            "Attach the image to the panel as its reference (attach_panel_reference), "
+            "write the panel's beat from what the picture shows, then render it "
+            "so the reference steers the artwork.  Image: " + locator)
 
     panels_all = storage.read_all_objects(Panel, primary_key={
         "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
@@ -251,7 +254,10 @@ def view_scene(state: APPState):
                     data=e.content,
                     mime_type=e.type
                 )
-                post_user_message(state, "I would like to generate a panel from the uploaded image: " + locator)
+                post_user_message(state, "Create a new panel in this scene from this uploaded picture.  "
+            "Attach the image to the panel as its reference (attach_panel_reference), "
+            "write the panel's beat from what the picture shows, then render it "
+            "so the reference steers the artwork.  Image: " + locator)
 
             from gui.elements import ruled_page, uploader_card
             # ONE HOME PER THING: panels live in the open book (and on

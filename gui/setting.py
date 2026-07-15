@@ -137,7 +137,9 @@ def view_setting(state: APPState):
                         ui.button('A brand-new prop instead…', icon='add') \
                             .props('flat dense no-caps').classes('q-mt-sm') \
                             .on('click', lambda _: (dlg.close(),
-                                post_user_message(state, 'I would like to create a new prop for this setting.')))
+                                post_user_message(state, 'Dress this setting with a brand-new prop: '
+                                    'ask me what it is, then add it to the '
+                                    "setting's prop list (update_setting_props).")))
                     dlg.open()
                 ui.button(icon='add').props('flat round dense size=sm') \
                     .tooltip('Dress the set with a prop — one click') \
