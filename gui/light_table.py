@@ -1847,7 +1847,6 @@ def light_table(state: APPState, panel, scene, setting,
     # author LAID it (pick_background writes background/plate) — it is never
     # auto-derived from scene.setting_id, so nothing lands on the table unasked.
     background = None
-    bg_style_missing = False
     split_plate = (panel.figure_images or {}).get("background/plate")
     if split_plate and os.path.exists(split_plate):
         background = split_plate
@@ -1994,10 +1993,6 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.label('bare board — nothing on the table').classes('text-xs text-gray-500')
                     if not locked:
                         with ui.row().style('gap: 8px;'):
-                            if setting is not None and bg_style_missing:
-                                ui.button(f'Ink the {setting.name.title()} master', icon='brush') \
-                                    .props('outline dense size=sm') \
-                                    .on('click', lambda _: ink_master_here())
                             ui.button('Lay a background', icon='landscape').props('outline dense size=sm') \
                                 .on('click', lambda _: pick_background())
                             ui.button('Cast a figure', icon='person_add').props('outline dense size=sm') \
@@ -3202,19 +3197,6 @@ def light_table(state: APPState, panel, scene, setting,
                 itm = SelectionItem(name=f"Edit {nm} background", id=background,
                                     kind=SelectedKind.IMAGE_EDITOR)
                 state.change_selection(new=[*state.selection, itm])
-
-            def ink_master_here():
-                style_id2 = getattr(scene, 'style_id', None) or 'vintage-four-color'
-                from agentic.tools.imaging import generate_setting_background_body
-                from helpers.render_queue import enqueue_renders
-                _receipt(f"🖌 inking the **{setting.name}** master in {style_id2} — "
-                         f"it lands on the table when it's done")
-                enqueue_renders(state, [(
-                    f"master background — {setting.name} in {style_id2} ({panel.aspect.value})",
-                    lambda: generate_setting_background_body(state, series_id,
-                                                             setting.setting_id, style_id2,
-                                                             panel.aspect),
-                )], role='the Background Artist')
 
             # THE BACKGROUND LAYER — a row ONLY when a plate is actually laid, so
             # removing it clears its row like every other layer (no turds left).

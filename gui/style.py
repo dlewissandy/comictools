@@ -1,14 +1,11 @@
 from loguru import logger
 from gui.state import APPState
 from gui.elements import (
-    header, view_all_instances, markdown_field_editor, view_attributes, Attribute, full_width_image_selector_grid, crud_button,
+    header, markdown_field_editor, view_attributes, Attribute, full_width_image_selector_grid, crud_button,
     CrudButtonKind)
-from gui.messaging import post_user_message
-from gui.constants import TAILWIND_CARD
 from nicegui import ui
 from gui.state import APPState
 from storage.generic import GenericStorage
-from gui.selection import SelectedKind
 from schema import ComicStyle, StyleExample
 
 def view_style(state: APPState):
@@ -184,61 +181,3 @@ def view_style(state: APPState):
                         )
                         
 
-def view_pick_style(state: APPState):
-    """
-    View the style picker.
-    
-    Args:
-        state: The GUI elements containing the details and selection.
-    """
-
-    from schema import Cover,CoverLocation, SceneModel, Series, Issue
-    logger.debug("view_pick_style")
-
-    # Dereference the state to get the selection and details.
-    selection = state.selection
-    storage: GenericStorage = state.storage
-    
-    parent_kind = selection[-2].kind
-    if parent_kind == SelectedKind.ISSUE:
-        issue_id = selection[-2].id
-        series_id = selection[-3].id
-        parent = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
-        writer = lambda: storage.update_object(data=parent)
-    elif parent_kind == SelectedKind.SCENE:
-        scene_id = selection[-2].id
-        issue_id = selection[-3].id
-        series_id = selection[-4].id
-        parent = storage.read_object(cls=SceneModel, primary_key={"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
-        writer = lambda: storage.update_object(data=parent)
-    elif parent_kind == SelectedKind.COVER:
-        issue_id = selection[-3].id
-        series_id = selection[-4].id
-        cover_id = selection[-2].id
-        parent = storage.read_object(cls=Cover, primary_key={"series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
-        writer = lambda: storage.update_object(data=parent)
-
-    style_id = selection[-1].id
-    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
-
-    # Create a setter function for the publisher choice
-    def set_style(style_id):
-        if parent is not None:
-            parent.style_id = style_id
-            writer()
-
-    with state.details:
-        header("Pick a Style", 1)
-        view_all_instances(
-            state=state,
-            get_instances=lambda: storage.read_all_objects(ComicStyle),
-            get_image_locator=lambda x: storage.find_image(StyleExample(style_id=x.style_id, example_type="art", mime_type="image/jpeg", image_id="art"), x.image.get('art',None)) if isinstance(x.image, dict) and x.image.get('art', None) else None,
-            kind="style",
-            aspect_ratio="1/1",
-            get_name=lambda _,x: x.name,
-            get_choice=lambda : parent.style_id if parent else None,
-            set_choice=set_style,
-            variants=[(3, 3)],
-        )           
-
-    

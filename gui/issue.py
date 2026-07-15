@@ -28,15 +28,6 @@ from gui.state import APPState
 from gui.messaging import post_user_message
 from gui.selection import SelectionItem, SelectedKind
 
-COVER_ORDER = ["front", "inside-front", "inside-back", "back"]
-ASPECT_CYCLE = {"landscape": "portrait", "portrait": "square", "square": "landscape"}
-ASPECT_ICON = {"landscape": "crop_landscape", "portrait": "crop_portrait", "square": "crop_square"}
-
-
-def _sizes_for(aspect: str) -> list[str]:
-    return ["1x", "2x", "3x"] if aspect == "square" else ["1x", "2x"]
-
-
 def _norm_size(size, aspect: str) -> str:
     """A panel's size as the multiplier it EFFECTIVELY packs at — legacy
     names ('regular', 'large', 'splash', 'small') read as their multiplier,
@@ -964,46 +955,6 @@ def view_issue(state: APPState):
                     card.tooltip('Shape the page to this layout')
                     card.on('click', lambda _, sw=sw: apply(sw))
         dlg.open()
-
-    def print_sheets():
-        """PRINT: the bound proof, sheet for sheet — composed with the exact
-        math that binds the PDF.  Every sheet is a door back to its bench."""
-        from helpers.binder import reader_sheets
-        sheets, _missing = reader_sheets(storage, series_id, issue_id)
-        if not sheets:
-            with ui.element('div').classes('book-page book-page--ghost book-page--recto') as sh:
-                ui.label('nothing to proof yet — ink a cover or a panel').classes('page-ghost-cta')
-            sh.on('click', lambda _: set_detail('beats'))
-            return
-        ins_by_name = {i.name: i for i in inserts_all}
-        COVER_LOC = {'front cover': 'front', 'inside front cover': 'inside-front',
-                     'inside back cover': 'inside-back', 'back cover': 'back'}
-
-        def door(lbl):
-            if lbl.startswith('page '):
-                state._book_detail[issue_id] = 'beats'
-                remember_spot(f"flow-{lbl.split()[1]}")
-                state.refresh_details()
-            elif lbl in COVER_LOC:
-                c = cover_at.get(COVER_LOC[lbl])
-                if c is not None:
-                    goto(SelectedKind.COVER, c.cover_id, lbl, anchor=f'cover-{COVER_LOC[lbl]}')
-            elif lbl.startswith('insert — '):
-                ins = ins_by_name.get(lbl[len('insert — '):])
-                if ins is not None:
-                    goto(SelectedKind.INSERT, ins.insert_id, ins.name,
-                         anchor=f'insert-{ins.insert_id}')
-            elif lbl == 'indicia':
-                remember_spot('colophon')
-                state.refresh_details()
-        for i, (lbl, path) in enumerate(sheets):
-            with ui.element('div').classes(
-                    'book-page cursor-pointer' + (' book-page--recto' if i == 0 else '')) as sh:
-                ui.image(source=path).props('fit=cover no-spinner') \
-                    .classes('absolute inset-0 w-full h-full')
-            sh._props['data-banchor'] = f'proof-{i}'
-            sh.tooltip(f'{lbl} — click to work on it')
-            sh.on('click', lambda _, l=lbl: door(l))
 
     def open_layout_feel():
         # THE LAYOUT KNOBS: steer the auto-flow's feel for the whole book.  Each

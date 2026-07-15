@@ -854,7 +854,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         # bench, a choices sheet, a picker), restore it — F5 on a bench
         # lands back on the bench, never ejects to the parent
         stashed = [SelectionItem(**item) for item in state_data.get('selection', [])]
-        _unaddressed = {'image-editor', 'image-editor-choices', 'pick-style',
+        _unaddressed = {'image-editor', 'image-editor-choices',
                         'pick-publisher', 'reference-image', 'character-reference',
                         'style-example'}
         tail = selection[-1] if selection else None

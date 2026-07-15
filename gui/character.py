@@ -1,6 +1,5 @@
 from loguru import logger
 from nicegui import ui
-from nicegui.events import UploadEventArguments
 from schema import CharacterModel, CharacterVariant
 from gui.elements import (
     header,
@@ -103,7 +102,7 @@ def view_character(state:APPState):
             if len(appears) > 12:
                 ui.label(f'…and {len(appears) - 12} more').classes('text-xs text-gray-500')
 
-        from gui.elements import caption_action, ruled_page, uploader_card, CrudButtonKind as _CK
+        from gui.elements import caption_action, ruled_page, CrudButtonKind as _CK
 
         def _compose_look():
             # THE LOOK COMPOSER: dress the base in wardrobe + props
@@ -119,23 +118,6 @@ def view_character(state:APPState):
                     .on('click', lambda _: _compose_look())
                 ui.label('— dress the base character in wardrobe and props') \
                     .classes('text-xs text-gray-500')
-            def on_upload(e: UploadEventArguments):
-                # DROP TO DRESS: the image becomes a WARDROBE exemplar, and a
-                # new look wears it on the base character.  Nothing renders
-                # until the look is inked (then the wardrobe inks first).
-                locator = storage.upload_reference_image(
-                    obj=character,
-                    name=e.name,
-                    data=e.content,
-                    mime_type=e.type
-                )
-                post_user_message(state,
-                    f"Drop-to-dress: create a WARDROBE (outfit) from this image with "
-                    f"create_outfit_from_image (the image is its exemplar — do NOT render "
-                    f"anything), then compose a new look for {character.name} wearing that "
-                    f"outfit on the base (compose_character_variant), named after the wardrobe. "
-                    f"Don't ink the look yet — I'll ink it when ready.  Image: {locator}")
-
             with ruled_page() as packer:
                 view_all_instances(
                     state=state,

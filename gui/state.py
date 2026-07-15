@@ -417,7 +417,7 @@ class APPState:
         except Exception:
             pass
         # These imports are here to avoid circular imports
-        from gui.style import view_style, view_pick_style
+        from gui.style import view_style
         from gui.series import view_series
         from gui.setting import view_setting
         from gui.character import view_character, view_character_reference
@@ -497,8 +497,6 @@ class APPState:
                 # PICK-PUBLISHER retired with the wall: the trail's own house rules
                 from gui.home import view_lobby
                 return view_lobby(self)
-            case "pick-style":
-                return view_pick_style(self)
             case "character-reference":
                 return view_character_reference(self)
             case "reference-image":

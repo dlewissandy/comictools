@@ -1,17 +1,14 @@
 import os
 import contextlib
-from typing import Optional, TypedDict, Callable, BinaryIO
+from typing import Optional, TypedDict, Callable
 from nicegui import ui
-from gui.avatars import comic_chat_message
 from nicegui.events import UploadEventArguments
 from gui.constants import TAILWIND_CARD
 from gui.messaging import post_user_message
 from gui.state import APPState
 from gui.selection import SelectionItem, SelectedKind
-from schema import FrameLayout, ReferenceImage
 from pydantic import BaseModel
 from loguru import logger
-from storage.generic import GenericStorage
 from enum import StrEnum
 
 # Comic type scale: 0-1 display lettering, 2-3 narrator caption boxes,
@@ -630,63 +627,6 @@ def _inline_editable(state: APPState, name: str, value: str, setter: Callable):
 
     show_label()
     return holder
-
-
-def view_character_references(state: APPState, parent: BaseModel):
-    storage: GenericStorage = state.storage
-
-    def _remove_ref(ref):
-        parent.character_references = [c for c in parent.character_references
-                                       if not (c.character_id == ref.character_id and c.variant_id == ref.variant_id)]
-        storage.update_object(data=parent)
-
-    with ui.expansion().classes('w-full section-flat') as expansion:
-        with expansion.add_slot('header'):
-            header("Characters", 2)
-            ui.space()
-            crud_button(CrudButtonKind.CREATE, lambda: post_user_message(state, "I would like to add a new character reference."))
-
-        with ruled_page() as packer:
-            view_all_instances(
-                state=state, 
-                kind=SelectedKind.CHARACTER_REFERENCE,
-                get_instances=lambda: parent.character_references,
-                get_image_locator=lambda x: storage.find_variant_image(series_id=x.series_id, character_id=x.character_id, variant_id=x.variant_id),
-                get_name= lambda _, x: x.name, 
-                on_remove=_remove_ref,
-                packer=packer, variants=[(3, 2)],
-            )
-    expansion.open()
-    return expansion
-
-def view_reference_images(state: APPState, parent: BaseModel, get_images: Callable[[], list[ReferenceImage]], upload_image: Callable[[str, BinaryIO, str], str]  ):
-
-    def on_upload(e: UploadEventArguments):
-        save_filepath = upload_image(e.name, e.content, e.type)
-        logger.debug(f"Saved uploaded file to {save_filepath}")
-        redraw()
-
-    def redraw():
-        with ui.expansion().classes('w-full section-flat') as expansion:
-            with expansion.add_slot('header'):
-                header("Reference Images", 2)
-                ui.space()
-                crud_button(CrudButtonKind.CREATE, lambda: post_user_message(state, "I would like to add a new reference image."))
-
-            with ruled_page() as packer:
-                view_all_instances(
-                    state=state, 
-                    kind=SelectedKind.REFERENCE_IMAGE,
-                    get_instances=lambda: get_images(),
-                    get_name= lambda _, x: x.relation.value + " image",
-                    get_image_locator=lambda x: x.image,
-                    packer=packer, variants=[(3, 2)],
-                )
-                uploader_card(state, on_upload=on_upload, packer=packer, label='Drop image to add a reference')
-        expansion.open()
-        return expansion
-    return redraw()
-            
 
 
 def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], None], aspect_ratio: str = "3/2",

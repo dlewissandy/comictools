@@ -115,8 +115,7 @@ def view_character_variant(state:APPState):
         # THE EXEMPLARS: the images this look is HELD to — sculpt one with
         # the coauthor, paste one, or drop one; every styled sheet anchors
         # to them.  The model sheet session starts here.
-        from nicegui.events import UploadEventArguments
-        from gui.elements import ruled_page as _rp, TAILWIND_CARD as _TC, uploader_card as _uc
+        from gui.elements import ruled_page as _rp, TAILWIND_CARD as _TC
         exemplars = [u for u in storage.list_uploads(variant) if u and os.path.exists(u)]
         with ui.expansion(value=bool(exemplars) or not (variant.images or {})) \
                 .classes('w-full section-flat') as _exp:
@@ -130,12 +129,6 @@ def view_character_variant(state:APPState):
                         .on('click.stop', lambda _: post_user_message(
                             state, f"Sculpt an exemplar portrait for {character.name}'s "
                                    f"'{variant.name or variant_id}' look — ask me for direction first."))
-
-            def _on_upload(e: UploadEventArguments):
-                storage.upload_reference_image(obj=variant, name=e.name,
-                                               data=e.content, mime_type=e.type)
-                ui.notify('Exemplar filed — every sheet is held to it now.', type='positive')
-                state.refresh_details()
 
             with _rp() as _packer:
                 for up in exemplars:

@@ -16,7 +16,6 @@ from gui.state import APPState
 from gui.elements import (
     header, crud_button, comic_page, ccell, CrudButtonKind,
 )
-from gui.messaging import post_user_message
 from gui.light_table import light_table, rework_take_on_table, takes_row, tear_up_take
 from storage.generic import GenericStorage
 

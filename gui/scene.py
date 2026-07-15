@@ -2,7 +2,7 @@ import os
 from nicegui import ui
 from nicegui.events import UploadEventArguments
 from gui.selection import SelectionItem
-from gui.elements import markdown, markdown_field_editor, header, crud_button, CrudButtonKind, view_attributes, Attribute
+from gui.elements import markdown_field_editor, header, crud_button, CrudButtonKind, view_attributes, Attribute
 from gui.messaging import post_user_message
 from schema import SceneModel, Panel
 from gui.state import APPState
@@ -47,20 +47,6 @@ def view_scene(state: APPState):
     #   +--------------------------------------------------+
     #   |           |              |           |           |
     #   +--------------------------------------------------+ 
-    def on_upload(e: UploadEventArguments):
-        # Save the uploaded file to the data/uploads directory with a unique name
-        locator = storage.upload_reference_image(
-            obj=scene,
-            name=e.name,
-            data=e.content,
-            mime_type=e.type
-        )
-
-        post_user_message(state, "Create a new panel in this scene from this uploaded picture.  "
-            "Attach the image to the panel as its reference (attach_panel_reference), "
-            "write the panel's beat from what the picture shows, then render it "
-            "so the reference steers the artwork.  Image: " + locator)
-
     panels_all = storage.read_all_objects(Panel, primary_key={
         "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
     rendered_ct = sum(1 for p in panels_all if p.image and os.path.exists(p.image))

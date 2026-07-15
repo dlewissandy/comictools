@@ -36,7 +36,7 @@ def test_unknown_id_still_selects(storage):
 
 def test_unaddressable_kinds_have_no_url():
     sel = [SelectionItem(name="Styles", id=None, kind=SelectedKind.ALL_STYLES),
-           SelectionItem(name="Pick", id="x", kind=SelectedKind.PICK_STYLE)]
+           SelectionItem(name="Pick", id="x", kind=SelectedKind.IMAGE_EDITOR)]
     assert selection_to_url(sel) is None
 
 

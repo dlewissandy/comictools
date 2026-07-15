@@ -1,16 +1,13 @@
 import os
-from loguru import logger
-from nicegui.events import UploadEventArguments
 from schema import Series, Issue, CharacterModel, Publisher, Setting, PropAsset, Outfit
 from gui.elements import (
-    markdown, header, uploader_card, view_all_instances, markdown_field_editor, crud_button, post_user_message, view_attributes, CrudButtonKind)
+    header, view_all_instances, markdown_field_editor, crud_button, post_user_message, CrudButtonKind)
 from nicegui import ui
 from gui.state import APPState
 from storage.generic import GenericStorage
-from gui.selection import SelectionItem, SelectedKind
+from gui.selection import SelectionItem
 
 def view_series(state: APPState):
-    from gui.messaging import new_item_messager
 
     # Dereference the state to get the selection and detials.
     selection: list[SelectionItem] = state.selection
@@ -27,25 +24,6 @@ def view_series(state: APPState):
     get_id = lambda : None if pub is None else pub.id
     get_image_filepath = lambda : None if pub is None else pub.image_filepath()
 
-    def upload_and_ask(e: UploadEventArguments, request: str):
-        """Save a dropped image into the series uploads and ask the coauthor
-        to create the named asset from it."""
-        images_path = os.path.join(series.path(), 'uploads')
-        if not e.name:
-            logger.error("No file name provided in upload event.")
-        if not e.type.startswith('image/'):
-            logger.error(f"Uploaded file is not an image: {e.type}")
-            return
-        save_filepath = os.path.join(images_path, e.name)
-        os.makedirs(images_path, exist_ok=True)
-        with open(save_filepath, 'wb') as f:
-            f.write(e.content.read())
-        logger.debug(f"Saved uploaded file to {save_filepath}")
-        post_user_message(state, f"{request} using this image as a reference: ![image]({save_filepath})")
-
-
-    
-    # Render the controls
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(series.name.title(), 0)
@@ -78,29 +56,6 @@ def view_series(state: APPState):
         from schema import ComicStyle
         from gui.elements import HEADER_CLASSES
 
-        def ink_title(st):
-            # THE CONVERSATION IS THE MODAL: the lettering direction is
-            # typed in the box; Enter sends it straight to the Letterer
-            from agentic.tools.imaging import generate_series_title_art_body
-            from helpers.render_queue import enqueue_renders
-            prefix = f"Letter the {series.name} masthead in {st.name}: "
-
-            def _go(direction, st=st):
-                enqueue_renders(state, [(
-                    f"title art — {series.name} in {st.name}",
-                    lambda n=direction: generate_series_title_art_body(
-                        state, series.series_id, st.style_id, n),
-                )], role='the Letterer')
-            state.user_input.value = prefix
-            state._input_intercept = (prefix, _go, None)
-            try:
-                state.user_input.run_method('focus')
-            except Exception:
-                pass
-            ui.notify("Describe the lettering — 'circus poster woodtype', 'drippy "
-                      "horror letters'…  (Enter alone lets the style decide.)",
-                      type='info', position='bottom', timeout=4000)
-
         def open_mark_bench(st):
             # FROM LAYERS: the mark composes on the light table — the same
             # bench as everything else (don't reinvent the wheel)
@@ -118,31 +73,6 @@ def view_series(state: APPState):
                 storage.create_object(data=board, overwrite=True)
             state.change_selection(new=[*state.selection, SelectionItem(
                 name=board.name, id=bid, kind=SelectedKind.ARTBOARD)])
-
-        def masthead_from_image(st):
-            # FROM A REFERENCE IMAGE: the wordmark you drop BECOMES the
-            # masthead for that style — the same door every asset has
-            from gui.elements import studio_dialog
-            with studio_dialog(f'A wordmark for {st.name.title()}', min_w=420) as dlg:
-                ui.label('Drop the lettering image — it becomes the masthead '
-                         'this style holds covers to.').classes('text-sm q-mt-sm')
-
-                def on_upload(e, st=st):
-                    locator = storage.upload_image(obj=series, name=e.name,
-                                                   data=e.content, mime_type=e.type)
-                    fresh = storage.read_object(cls=Series,
-                                                primary_key={"series_id": series.series_id}) or series
-                    fresh.title_images = dict(fresh.title_images or {})
-                    fresh.title_images[st.style_id] = locator
-                    storage.update_object(fresh)
-                    dlg.close()
-                    from gui.light_table import table_receipt
-                    table_receipt(state, f"🖼 the {st.name} masthead now wears your wordmark",
-                                  bench='the series room')
-                    state.refresh_details()
-                ui.upload(on_upload=on_upload, auto_upload=True).props('accept=image/*') \
-                    .classes('w-full q-mt-sm')
-            dlg.open()
 
         titled = {sid: img for sid, img in (getattr(series, 'title_images', {}) or {}).items()
                   if img and os.path.exists(img)}

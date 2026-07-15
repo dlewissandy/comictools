@@ -33,7 +33,6 @@ class SelectedKind(StrEnum):
     IMAGE_EDITOR_CHOICES = "image-editor-choices"
     # PICKERS
     PICK_PUBLISHER = "pick-publisher"
-    PICK_STYLE = "pick-style"
     REFERENCE_IMAGE = "reference-image"
     CHARACTER_REFERENCE = "character-reference"
 

@@ -4,28 +4,10 @@ wardrobe and props — across every series, grouped by publisher.  Browsing
 happens here; acting on assets (importing, editing) happens in conversation
 with the coauthor.
 """
-import os
-from loguru import logger
 from nicegui import ui
 
-from gui.elements import header, TAILWIND_CARD, ruled_page, HEADER_CLASSES
-from gui.selection import SelectionItem, SelectedKind
+from gui.elements import header
 from gui.state import APPState
-from schema import CharacterModel, Setting, Series, Publisher, Outfit, PropAsset
-from storage.generic import GenericStorage
-
-
-def _asset_card(state: APPState, packer, title: str, subtitle: str, image: str | None, deep_sel: list[SelectionItem]):
-    with packer.place_cell([(3, 2)], fudge=image is None):
-        with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative') as card:
-            if image and os.path.exists(image):
-                ui.label(f"{title} · {subtitle}").classes(HEADER_CLASSES[3] + ' panel-hover-caption')
-                ui.image(source=image).props('fit=contain')
-            else:
-                ui.label(title).classes('font-bold text-sm')
-                ui.label(subtitle).classes('text-xs text-gray-500')
-                ui.label('no reference art yet').classes('text-xs text-gray-500')
-        card.on('click', lambda _, s=deep_sel: state.change_selection(new=s))
 
 
 def view_library(state: APPState):
