@@ -1540,16 +1540,16 @@ def wastebasket_chip(state, board):
                 dlg.close()
                 state.refresh_details()
             with ui.row().classes('w-full justify-end q-mt-sm'):
-                eb = ui.button('Empty the wastebasket', icon='delete_forever', color='negative') \
-                    .props('outline dense no-caps')
-
-                def confirm_empty(_e, eb=eb):
-                    # two clicks for the only action with no way back
-                    if 'Really' in (eb.text or ''):
+                async def confirm_empty(_e):
+                    from gui.elements import confirm_dialog
+                    if await confirm_dialog(
+                            'EMPTY THE TORN-UP PILE?',
+                            f"{len(entries)} torn-up piece{'s' if len(entries) != 1 else ''} "
+                            f"burn for good — this is the one door with no way back.",
+                            go_label='Burn them', go_icon='delete_forever'):
                         empty_it()
-                    else:
-                        eb.set_text('Really empty it? This is forever')
-                eb.on('click', confirm_empty)
+                ui.button('Empty the pile', icon='delete_forever', color='negative') \
+                    .props('outline dense no-caps').on('click', confirm_empty)
         dlg.open()
 
     ui.chip(f'torn-up pile · {len(entries)}', icon='delete_outline').props('dense clickable outline') \

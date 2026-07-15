@@ -55,6 +55,25 @@ def init_cardwall(columns: int = 4):
     return ui.element('div').classes('w-full').style(
         f"display: grid; grid-template-columns: repeat(auto-fill, minmax({_GRID_MIN.get(columns, '180px')}, 1fr)); gap: 10px;")
 
+async def confirm_dialog(title: str, body: str, *, go_label: str,
+                         go_icon: str = 'check', keep_label: str = 'Keep it',
+                         danger: bool = True) -> bool:
+    """THE ONE CONFIRM: friction proportional to irreversibility — a plain
+    question, the safe door first, the destructive verb wearing its color.
+    Awaitable: True when the author says go."""
+    with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 440px;'):
+        ui.label(title).classes('caption-box caption-box-sm')
+        ui.label(body).classes('text-sm q-mt-sm')
+        with ui.row().classes('w-full justify-end q-mt-sm').style('gap: 8px;'):
+            ui.button(keep_label).props('flat dense no-caps') \
+                .on('click', lambda _: dlg.submit(False))
+            ui.button(go_label, icon=go_icon, color='negative' if danger else None) \
+                .props('unelevated dense no-caps') \
+                .on('click', lambda _: dlg.submit(True))
+    dlg.open()
+    return bool(await dlg)
+
+
 @contextlib.contextmanager
 def studio_dialog(title: str, *, min_w: int = 420, max_w: int | None = None,
                   scroll: bool = False):
