@@ -108,13 +108,16 @@ def view_setting(state: APPState):
                         PropAsset, {"series_id": series_id}, order_by="name")
                         if (a.name or '').strip().lower() not in have]
                     with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                            .style('min-width: 460px; max-width: 700px;'):
+                            .style('min-width: 460px; max-width: 700px; max-height: 84vh; '
+                                   'display: flex; flex-direction: column;'):
                         ui.label('Dress the set').classes('caption-box caption-box-sm')
                         if not assets:
                             ui.label('Every prop asset already dresses this set — '
                                      'ask the coauthor to create a new one.') \
                                 .classes('text-sm q-mt-sm')
-                        with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
+                        with ui.element('div').classes('w-full q-mt-sm') \
+                                .style('overflow-y: auto; min-height: 0; flex: 1;'), \
+                             ui.row().classes('w-full').style('gap: 8px;'):
                             for a in assets:
                                 img = next((i for i in (a.images or {}).values()
                                             if i and os.path.exists(i)), None)

@@ -128,3 +128,20 @@ def test_a_take_wears_its_own_orientation(tmp_path):
     # an unreadable file falls back to the board's shape
     assert take_shape(str(tmp_path / "missing.jpg"), FrameLayout.PORTRAIT) \
         == TAKE_SHAPES[FrameLayout.PORTRAIT]
+
+
+def test_a_silent_turn_speaks_the_work():
+    """A run that ends on a bare tool call gets a closing balloon built from
+    the tools' own human answers — not an apologetic shrug."""
+    from messaging import closing_from_receipts
+    out = closing_from_receipts([
+        "called create_scene({...})",
+        "→ Created scene 3 'Joey's Bedroom' (scene_id=abc).",
+        "→ {\"raw\": \"structured payload stays out\"}",
+        "→ " + "x" * 400,
+        "→ PROBLEM: nothing to see here",
+    ])
+    assert out is not None
+    assert "Created scene 3 'Joey's Bedroom'" in out
+    assert "structured payload" not in out and "xxx" not in out and "PROBLEM" not in out
+    assert closing_from_receipts(["called read_scene({})"]) is None

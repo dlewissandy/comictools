@@ -124,9 +124,12 @@ def view_scene(state: APPState):
                 def pick_setting():
                     from gui.light_table import table_receipt
                     with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                            .style('min-width: 480px; max-width: 720px;'):
+                            .style('min-width: 480px; max-width: 720px; max-height: 84vh; '
+                                   'display: flex; flex-direction: column;'):
                         ui.label('Set the scene').classes('caption-box caption-box-sm')
-                        with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
+                        with ui.element('div').classes('w-full q-mt-sm') \
+                                .style('overflow-y: auto; min-height: 0; flex: 1;'), \
+                             ui.row().classes('w-full').style('gap: 8px;'):
                             for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}, order_by="name"):
                                 img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
                                 with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 150px;') as card:

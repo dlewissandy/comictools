@@ -100,6 +100,25 @@ def _receipt_for(tool_name: str, args_json: str) -> tuple[str, bool]:
     return f"{icon} **{action}**{detail}", quiet
 
 
+def closing_from_receipts(receipts: list[str]) -> str | None:
+    """A silent turn's closing balloon, written from the tools' own answers.
+    Our tools return human sentences — the last few make an honest reply.
+    None when nothing said anything worth quoting (the caller falls back)."""
+    done = []
+    for r in receipts:
+        if not r.startswith("→ "):
+            continue
+        d = r[2:].strip()
+        if (not d or len(d) >= 300 or d.lstrip().startswith(("{", "[", "<"))
+                or d.startswith(("An error", "PROBLEM"))):
+            continue
+        done.append(d)
+    if not done:
+        return None
+    return ("Done —\n" + "\n".join(f"- {d}" for d in done[-6:])
+            + "\n\nSay **go on** if there's more to do.")
+
+
 _LIFE_SIGNS = [
     ("read", "reading the records…"), ("list", "reading the records…"),
     ("create", "putting it on paper…"), ("update", "penciling the change…"),
@@ -414,9 +433,12 @@ async def send(state: APPState):
         elif responses:
             threads[tkey] = responses   # the thread survives to the next turn
         if not getattr(state, '_stop_requested', False) and not (response_markdown.content or '').strip():
-            response_markdown.set_content(
+            # the coauthor finished quietly — speak the work itself: our
+            # tools answer in human sentences, so the receipts ARE a reply
+            closing = closing_from_receipts(getattr(state, '_turn_receipts', None) or [])
+            response_markdown.set_content(closing or (
                 "*(That finished without words — the receipts above are what "
-                "actually happened.  Say **go on** if there's more to do.)*")
+                "actually happened.  Say **go on** if there's more to do.)*"))
     except Exception as ex:
         from agents.exceptions import MaxTurnsExceeded
         if getattr(state, '_stop_requested', False):

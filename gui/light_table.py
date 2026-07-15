@@ -1394,14 +1394,19 @@ def style_swatch(state, scene, shared_with: str | None = None):
 
     def pick():
         with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                .style('min-width: 520px; max-width: 780px;'):
+                .style('min-width: 520px; max-width: 780px; max-height: 84vh; '
+                       'display: flex; flex-direction: column;'):
             ui.label('Swap the style swatch').classes('caption-box caption-box-sm')
             ui.label('Every take printed here wears the swatched style — '
                      'pick the one it should wear.').classes('text-sm q-mt-sm')
             if shared_with:
                 ui.label(f'This swatch is taped to {shared_with} — swapping it '
                          f'restyles everything that wears it.').classes('text-xs text-gray-500')
-            with ui.row().classes('w-full q-mt-sm').style('gap: 10px;'):
+            # EVERY SWATCH REACHABLE: the rack scrolls INSIDE the dialog —
+            # a tall book of styles must never push the first ones off the top
+            with ui.element('div').classes('w-full q-mt-sm') \
+                    .style('overflow-y: auto; min-height: 0; flex: 1;'), \
+                 ui.row().classes('w-full').style('gap: 10px;'):
                 for st in storage.read_all_objects(ComicStyle, order_by='name'):
                     art = _art(st)
                     current = getattr(scene, 'style_id', None) == st.style_id
