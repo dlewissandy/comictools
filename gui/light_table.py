@@ -391,6 +391,7 @@ if (!window._roughDragInit) {
       key: fig.dataset.key, series: canvas.dataset.series, issue: canvas.dataset.issue,
       scene: canvas.dataset.scene, panel: canvas.dataset.panel, cover: canvas.dataset.cover,
       insert: canvas.dataset.insert,
+      artboard: canvas.dataset.artboard, scope: canvas.dataset.scope,
       x: parseFloat(fig.style.left), y: parseFloat(fig.style.bottom) || 0,
       h: parseFloat(fig.style.height) || 0,
       fs: fig.dataset.scale === 'font'
@@ -500,7 +501,8 @@ if (!window._roughDragInit) {
       src: src.dataset.key, dst: row.dataset.key, mode: dropMode(e, row),
       series: stack.dataset.series, issue: stack.dataset.issue,
       scene: stack.dataset.scene, panel: stack.dataset.panel, cover: stack.dataset.cover,
-      insert: stack.dataset.insert});
+      insert: stack.dataset.insert,
+      artboard: stack.dataset.artboard, scope: stack.dataset.scope});
   });
   document.addEventListener('dragend', () => {
     clearDropMarks();
@@ -696,6 +698,14 @@ if (!window._roughDragInit) {
     if (!fig || !fig.dataset.kind || fig.dataset.kind === 'figure') return;
     const canvas = fig.closest('.rough-canvas');
     if (canvas && canvas.dataset.locked) return;   // the table is locked
+    // trade dress prints from the ISSUE's metadata — editing the stamp in
+    // place would be discarded at the next paint, so the dblclick asks the
+    // Editor to change the source of truth instead
+    if ((fig.dataset.key || '').startsWith('dress/')) {
+      e.preventDefault();
+      emitEvent('dress_ask', {key: fig.dataset.key});
+      return;
+    }
     e.preventDefault();
     fig.contentEditable = 'true';
     fig.classList.add('rough-editing');
@@ -981,6 +991,12 @@ def fresh_board(storage, board):
         board.figure_images = fresh.figure_images
         board.layer_groups = fresh.layer_groups
         board.image = fresh.image
+        # THE WORDS TOO: balloons/captions/the brief also persist out-of-band
+        # (dblclick-edit on the rough) — a stale copy here would write the
+        # OLD words back over what the author just typed
+        for attr in ('dialogue', 'narration', 'description'):
+            if hasattr(fresh, attr):
+                setattr(board, attr, getattr(fresh, attr))
     return board
 
 
@@ -1098,6 +1114,10 @@ def read_board(storage, a: dict):
         from schema import Insert as _Insert
         return storage.read_object(cls=_Insert, primary_key={
             "series_id": a['series'], "issue_id": a['issue'], "insert_id": a['insert']})
+    # a malformed event (a board kind whose ids never rode the payload)
+    # must land as a no-op, never a KeyError that eats the drag
+    if not (a.get('scene') and a.get('panel')):
+        return None
     from schema import Panel as _Panel
     return storage.read_object(cls=_Panel, primary_key={
         "series_id": a['series'], "issue_id": a['issue'],
@@ -1379,6 +1399,10 @@ def lay_prop_acetate(state, board, prop_asset, style_id: str | None = None) -> b
 
 def wear_style_on_table(state, scene, style):
     """`scene` is whatever owns the style_id: a scene, a cover, or an issue."""
+    # on a cover/insert/mark table the owner IS the board — sync its live
+    # blocking first or this full-object write clobbers the author's drags
+    if hasattr(scene, 'figure_blocking'):
+        fresh_board(state.storage, scene)
     scene.style_id = style.style_id
     state.storage.update_object(scene)
     table_receipt(state, f"🎨 swapped the style swatch — new work here prints in **{style.name}**")
@@ -1729,6 +1753,12 @@ def light_table(state: APPState, panel, scene, setting,
             if a.get('tx') or a.get('ty'):
                 cur["tx"] = round(a.get('tx', 0), 1)
                 cur["ty"] = round(a.get('ty', 0), 1)
+            # the tilt persists too — and rot: 0 CLEARS it (the JS undo
+            # reports zero to untilt, so the else arm matters)
+            if a.get('rot'):
+                cur["rot"] = round(a['rot'])
+            else:
+                cur.pop("rot", None)
             p.figure_blocking[a['key']] = cur
             state.storage.update_object(p)
             # SYNC THE SERVER MODEL: the drag/resize moved the DOM directly, but
@@ -1793,6 +1823,24 @@ def light_table(state: APPState, panel, scene, setting,
             state.storage.update_object(p)
             state.refresh_details()
         ui.on('stack_reorder', _on_reorder)
+
+        def _on_dress_ask(e):
+            # dblclick on a trade-dress stamp: the dress prints from the
+            # ISSUE's metadata, so the ask lands in the conversation where
+            # the Editor can change the source of truth
+            piece = (e.args or {}).get('key', '')
+            asks = {'dress/credits': "Update this issue's credits: ",
+                    'dress/issue': "Update this issue's number: ",
+                    'dress/price': "Update this issue's price: "}
+            state.user_input.value = asks.get(piece, "Update this issue's trade dress: ")
+            try:
+                state.user_input.run_method('focus')
+            except Exception:
+                pass
+            ui.notify('The dress prints from the issue itself — say the new value '
+                      'and I will set it there.', type='info', position='bottom',
+                      timeout=4000)
+        ui.on('dress_ask', _on_dress_ask)
 
     # ---- gather the acetates -------------------------------------------
     # THE SETTING IS A LAYER, NOT AN AUTOMATIC BACKDROP.  It shows only when the
@@ -2475,6 +2523,7 @@ def light_table(state: APPState, panel, scene, setting,
                         panel.figure_blocking[f"{prefix}{i - 1 if i > removed_idx else i}"] = v
 
                 def reassign_balloon(i, speaker):
+                    fresh_board(storage, panel)
                     panel.dialogue[i].character_id = speaker
                     storage.update_object(panel)
                     _receipt(f"🎙 handed a balloon to **{speaker.replace('-', ' ')}**")
@@ -3097,6 +3146,7 @@ def light_table(state: APPState, panel, scene, setting,
                         .on('click', lambda _, g=gname: flatten_group(g))
 
                     def ungroup(gname=gname):
+                        fresh_board(storage, panel)
                         saved_members = list((panel.layer_groups or {}).get(gname) or [])
                         panel.layer_groups.pop(gname, None)
                         storage.update_object(panel)
@@ -4001,9 +4051,14 @@ def light_table(state: APPState, panel, scene, setting,
                     if actions:
                         with ui.row().classes('absolute top-1 right-1 z-10 items-center').style('gap: 4px;'):
                             for icon, tip, handler in actions:
+                                # the sentinel 'proof' binds the table's OWN
+                                # proof flow — the render rides the queue with
+                                # the one board line and HOLD/STOP, never a
+                                # conversational detour
                                 ui.button(icon=icon).props('flat round dense size=xs') \
                                     .classes('bg-white/70 dark:bg-black/50') \
-                                    .tooltip(tip).on('click.stop', handler)
+                                    .tooltip(tip) \
+                                    .on('click.stop', proof_flow if handler == 'proof' else handler)
 
 
 def view_artboard(state: APPState):

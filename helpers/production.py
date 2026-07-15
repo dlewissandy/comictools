@@ -153,7 +153,10 @@ def production_board(storage, series_id: str, issue_id: str) -> ProductionBoard:
             laid=sum(1 for p in ps if (sc.scene_id, p.panel_id) in placed),
             roughed=sum(1 for p in ps if roughed(p)),
             inked=sum(1 for p in ps if rendered(p)),
-            anchor=f"scene-{sc.scene_id}")
+            # a paneled scene renders as beat TILES (panel-… anchors) at the
+            # dashboard's landing altitude — aim at its first tile, exactly
+            # like the '{n} panels' chip; only a bare scene keeps its slip
+            anchor=(f"panel-{ps[0].panel_id}" if ps else f"scene-{sc.scene_id}"))
 
     story_rows: list[StoryRow] = []
 

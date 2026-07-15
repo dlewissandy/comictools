@@ -118,7 +118,7 @@ def view_cover(state: APPState):
                     ('edit', 'Take this artwork to the healing bench', lambda _: open_editor()),
                     ('layers', 'Rework this take on the table — it becomes the background layer',
                      lambda _: rework_take_on_table(state, cover, featured)),
-                    ('brush', 'Render a new take', lambda _: post_user_message(state, "I would like to render this cover.")),
+                    ('brush', 'Render a new take (rides the render queue)', 'proof'),
                     ('delete', 'Tear up this take (the receipt can bring it back)',
                      lambda _: tear_up_take(state, cover, featured)),
                 ])

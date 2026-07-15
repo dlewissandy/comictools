@@ -162,7 +162,7 @@ def view_character_reference(state: APPState):
     board (panel or cover).  The light table's figure thumbs land here; the
     pose acetate and blocking follow the figure to its new wardrobe.
     """
-    from schema import Panel, Cover
+    from schema import Panel, Cover, Insert
 
     logger.trace("view_character_reference")
     storage: GenericStorage = state.storage
@@ -179,6 +179,10 @@ def view_character_reference(state: APPState):
     elif host is not None and host.kind.value == "cover" and len(sel) >= 4:
         board = storage.read_object(cls=Cover, primary_key={
             "series_id": series_id, "issue_id": sel[-3].id, "cover_id": host.id})
+    elif host is not None and host.kind.value == "insert" and len(sel) >= 4:
+        # figures cast on a full-page insert swap wardrobe like anywhere else
+        board = storage.read_object(cls=Insert, primary_key={
+            "series_id": series_id, "issue_id": sel[-3].id, "insert_id": host.id})
 
     character = storage.read_object(cls=CharacterModel, primary_key={
         "series_id": series_id, "character_id": character_id})

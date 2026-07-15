@@ -134,8 +134,7 @@ def view_insert(state: APPState):
                     ('edit', 'Take this artwork to the healing bench', lambda _: open_editor()),
                     ('layers', 'Rework this page on the table — it becomes the background layer',
                      lambda _: rework_take_on_table(state, insert, featured)),
-                    ('brush', 'Render the page',
-                     lambda _: post_user_message(state, f"Render the '{insert.name}' insert.")),
+                    ('brush', 'Render the page', 'proof'),
                     ('delete', 'Tear up this take (the receipt can bring it back)',
                      lambda _: tear_up_take(state, insert, featured)),
                 ])

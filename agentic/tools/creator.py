@@ -1188,6 +1188,7 @@ def mark_breakdown_current(wrapper: RunContextWrapper[APPState], series_id: str,
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
     import hashlib as _hl
+    from schema import Story
     issue = storage.read_object(Issue, {"series_id": series_id, "issue_id": issue_id})
     if issue is None:
         return f"Issue '{issue_id}' not found."

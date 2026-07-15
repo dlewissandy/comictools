@@ -2849,6 +2849,7 @@ def _export_issue_cbz_sync(wrapper: RunContextWrapper[APPState], series_id: str,
         return f"Issue '{issue_id}' not found in series '{series_id}'."
 
     _refresh_machine_layout(storage, series_id, issue_id)
+    from helpers.binder import export_basename
     output = os.path.join(str(storage.base_path), "series", series_id, "issues", issue_id, "exports", f"{export_basename(storage, series_id, issue_id)}.cbz")
     try:
         page_count, missing = bind_issue_cbz(storage, series_id, issue_id, output)

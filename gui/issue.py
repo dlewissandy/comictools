@@ -492,6 +492,9 @@ def view_issue(state: APPState):
         elif location in ('front', 'back'):
             with ui.element('div').classes(classes + ' book-page--ghost') as sh:
                 ui.label(f'+ {location} cover').classes('page-ghost-cta')
+            # the production dashboard's cover doors aim here even before
+            # the cover exists — a ghost sheet still answers its anchor
+            sh._props['data-banchor'] = f'cover-{location}'
             sh.tooltip('Every book needs one')
             sh.on('click', lambda _, loc=location: post_user_message(
                 state, f"I would like to create a {loc} cover for this issue."))
@@ -1120,7 +1123,12 @@ def view_issue(state: APPState):
             # THE STORIES: the issue's own script, then the backups, in order.
             # Once a story has been expanded into scenes it steps back — the
             # scenes ARE the story now; the STORIES dial reads it any time.
-            stories = ([None] if issue.story or not stories_all else []) + stories_all
+            # the issue's own script sheet also opens the book when UNFILED
+            # scenes shelter under it — the dashboard emits its row then, and
+            # a door must never point at a sheet that isn't printed
+            _real_story_ids = {st.story_id for st in stories_all}
+            _unfiled = any(sc.story_id not in _real_story_ids for sc in scenes_all)
+            stories = ([None] if issue.story or _unfiled or not stories_all else []) + stories_all
             if detail == 'stories' or not scenes_all:
                 for i, st in enumerate(stories):
                     # ‹ › move only among the REAL stories — the issue's own
