@@ -42,6 +42,8 @@ def collect_letters(board) -> list[dict]:
     defaults the rough displays, so a composite matches what the author saw.
     Letters the author switched off and unwritten placeholders are skipped
     (the guard against printing the table's training wheels)."""
+    from helpers.trade_dress import collect_dress
+    dress = collect_dress(getattr(board, 'figure_blocking', None))
     if not hasattr(board, 'dialogue'):
         # THE MAILBAG's letter blocks are captions; other inserts keep their
         # description as a render BRIEF only — production notes must never
@@ -58,8 +60,8 @@ def collect_letters(board) -> list[dict]:
                 letters.append({"kind": "caption", "text": text,
                                 "x": b.get('x', 8), "y": b.get('y', max(88 - i * step, 4)),
                                 "fs": b.get('fs', 11)})
-            return letters
-        return []
+            return letters + dress
+        return dress
     blk = getattr(board, 'figure_blocking', None) or {}
 
     def b_of(key):
@@ -89,7 +91,7 @@ def collect_letters(board) -> list[dict]:
         letters.append({"kind": "balloon", "text": d.text, "x": x, "y": y,
                         "fs": b.get('fs', 11), "emphasis": d.emphasis.value,
                         "tx": b.get('tx', x), "ty": b.get('ty', max(y - 14, 2))})
-    return letters
+    return letters + dress
 
 
 def _letter_font(size: int):
@@ -146,11 +148,24 @@ def paste_letters(base, aspect: str, letters: list[dict]) -> None:
         y1 = H - H * float(L['y']) / 100          # the letter's bottom edge
         box = (x0, y1 - line_h * len(lines) - 2 * pad, x0 + text_w + 2 * pad, y1)
 
-        if L['kind'] == 'caption':
+        if L['kind'] == 'credit':
+            # THE CREDITS STRIP: a paper band with an ink shadow offset —
+            # trade dress stands OFF the art, never melts into it
+            off = max(3, px // 4)
+            draw.rectangle([box[0] + off, box[1] + off, box[2] + off, box[3] + off],
+                           fill=INK)
+            draw.rectangle(box, fill=(250, 246, 236, 255), outline=INK, width=3)
+        elif L['kind'] == 'badge':
+            # THE CORNER BADGE: issue number and price wear a heavy stamp
+            off = max(3, px // 4)
+            draw.rectangle([box[0] + off, box[1] + off, box[2] + off, box[3] + off],
+                           fill=INK)
+            draw.rectangle(box, fill=(252, 216, 56, 255), outline=INK, width=5)
+        elif L['kind'] == 'caption':
             draw.rectangle(box, fill=(253, 244, 198, 255), outline=INK, width=3)
         elif emphasis == 'sound effect':
             pass                                   # raw display lettering, no bubble
-        else:
+        elif L['kind'] not in ('credit', 'badge'):
             radius = min(round(px * 1.2), round((box[3] - box[1]) / 2))
             tip = (W * float(L.get('tx', L['x'])) / 100, H - H * float(L.get('ty', 0)) / 100)
             cx = (box[0] + box[2]) / 2

@@ -1809,6 +1809,29 @@ def light_table(state: APPState, panel, scene, setting,
         _caps = [n for n in board_narration if n.position.value == _pos]
         letter_keys += [f'caption/{_pos}/{i}' for i in range(len(_caps[:2]))]
     letter_keys += [f'letterblock/{i}' for i in range(len(board_blocks))]
+    # THE TRADE DRESS: covers wear credits, issue № and price; a panel can
+    # carry attribution.  Text snapshots refresh from the issue each paint.
+    from helpers.trade_dress import (COVER_PIECES, PANEL_PIECES, DRESS_PIECES,
+                                     DRESS_DEFAULTS, dress_text, refresh_dress_text)
+    if cover_mode:
+        dress_pieces = list(COVER_PIECES)
+    elif insert_mode:
+        dress_pieces = []
+    else:
+        dress_pieces = list(PANEL_PIECES)
+    dress_issue = None
+    if dress_pieces:
+        from schema import Issue as _Issue
+        dress_issue = storage.read_object(cls=_Issue, primary_key={
+            "series_id": series_id, "issue_id": panel.issue_id})
+        try:
+            refresh_dress_text(storage, panel, dress_issue)
+        except Exception as _ex:
+            logger.debug(f"dress refresh skipped: {_ex}")
+    letter_keys += [k for k in dress_pieces if (panel.figure_blocking or {}).get(k)]
+    if dress_pieces:
+        has_letters = True     # the rail always OFFERS the dress — a bare
+                               # cover must still be able to stamp its first piece
     # the master eye rules its letters recursively; it reads as ON when any is
     letters = {"on": has_letters and (not letter_keys or any(_key_on(k) for k in letter_keys)),
                "keys": letter_keys}
@@ -1980,6 +2003,19 @@ def light_table(state: APPState, panel, scene, setting,
                     if lb is not None:
                         lb._props['title'] = ('a letter block — drag to place it on the page, '
                                               '⌘-wheel to size, double-click to edit')
+                # THE TRADE DRESS on the glass: credit band and corner badges,
+                # draggable like any letter — the print stamps them the same
+                for _dk in dress_pieces:
+                    _b = saved.get(_dk)
+                    if not _b or not (_b.get('text') or '').strip():
+                        continue
+                    _d = DRESS_DEFAULTS[_dk]
+                    _cls = ('rough-narration rough-dress'
+                            + (' rough-dress--badge' if DRESS_PIECES[_dk][1] == 'badge' else ''))
+                    _lb = letter(_dk, _cls, _b['text'], _d['x'], _d['y'], 'caption')
+                    if _lb is not None:
+                        _lb._props['title'] = (f"{DRESS_PIECES[_dk][0]} — trade dress from the "
+                                               f"issue's masthead data; drag to place")
 
     # ---- POSE: describe the pose first, then render in the background ----
     def pose_figure(character_id: str, variant_id: str, pose_direction: str | None = None):
@@ -2375,6 +2411,42 @@ def light_table(state: APPState, panel, scene, setting,
                 cast_ids = list(dict.fromkeys(
                     [r.character_id for r in (panel.character_references or [])] +
                     [c.character_id for c in (getattr(scene, 'cast', None) or [])]))
+
+                # THE TRADE DRESS ROWS: what the printed book wears —
+                # credits, issue №, price (covers) or attribution (panels).
+                # Toggling ON stamps the piece with the issue's own metadata.
+                for _dk in dress_pieces:
+                    _label, _kind = DRESS_PIECES[_dk]
+                    _b = (panel.figure_blocking or {}).get(_dk)
+                    _text = dress_text(dress_issue, _dk)
+                    with ui.row().classes('light-layer w-full items-center flex-nowrap') \
+                            .style('gap: 4px; margin-left: 14px; width: calc(100% - 14px);'):
+                        if _b:
+                            letter_eye(_dk)
+                        else:
+                            def _wear(_dk=_dk, _text=_text):
+                                if not _text:
+                                    ui.notify("The issue's masthead data doesn't have that "
+                                              "yet — fill it on the issue's colophon first.",
+                                              type='info')
+                                    return
+                                fresh_board(storage, panel)
+                                panel.figure_blocking = dict(panel.figure_blocking or {})
+                                panel.figure_blocking[_dk] = {"on": 1, "text": _text,
+                                                              **DRESS_DEFAULTS[_dk]}
+                                storage.update_object(panel)
+                                _receipt(f"🏷 the board wears its {DRESS_PIECES[_dk][0].lower()} now")
+                                state.refresh_details()
+                            ui.button(icon='approval').props('flat round dense size=xs') \
+                                .tooltip(f'Stamp the {_label.lower()} onto the board') \
+                                .on('click', lambda _, k=_dk: _wear(k, dress_text(dress_issue, k)))
+                        ui.icon('workspace_premium' if _kind == 'badge' else 'badge') \
+                            .classes('text-sm')
+                        ui.label(_label).classes('text-xs text-bold')
+                        ui.label((_b or {}).get('text') or _text or '— not in the masthead data yet') \
+                            .classes('text-xs' + ('' if (_b or _text) else ' text-gray-500')) \
+                            .style('overflow: hidden; text-overflow: ellipsis; white-space: nowrap;')
+                        ui.space()
 
                 # THE MAILBAG'S LETTER ROWS: one row per letter block, with
                 # its eye — the block's words live in the page description

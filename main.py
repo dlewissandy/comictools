@@ -333,6 +333,11 @@ def init_layout(logger):
                            width: max-content; line-height: 1.3;
                            white-space: normal; }
         /* RECEIPTS ARE PAPER SLIPS: stamped with the bench they came from */
+        /* THE TRADE DRESS on the glass: bands and badges stand OFF the art */
+        .rough-dress { background: var(--paper, #faf6ec); border: 2px solid var(--ink, #1a1512);
+                       box-shadow: 3px 3px 0 var(--ink, #1a1512); font-weight: 700;
+                       letter-spacing: .04em; text-transform: uppercase; border-radius: 2px; }
+        .rough-dress--badge { background: #fcd838; border-width: 3px; }
         .markdown-content { width: 100%; overflow-wrap: break-word;
                             word-break: break-word; }
         .markdown-content pre { white-space: pre-wrap; overflow-x: auto; }

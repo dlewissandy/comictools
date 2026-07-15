@@ -945,3 +945,43 @@ async def test_no_route_shadows_niceguis_image_serving(user: User) -> None:
     catchalls = [r.path for r in _app.routes
                  if getattr(r, 'path', '').startswith('/{')]
     assert not catchalls, f"catch-all routes shadow dynamic image routes: {catchalls}"
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_cover_bench_offers_the_trade_dress(user: User) -> None:
+    """The cover's letters rail offers Credits, Issue № and Price rows —
+    stamping one writes the piece from the issue's own metadata."""
+    main.LocalStorage = _TmpStorage
+    from schema import Cover, Issue
+    storage = _TmpStorage()
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+    iss = storage.read_object(Issue, {"series_id": WL, "issue_id": CARN})
+    iss.writer, iss.price = "Ann Author", 4.99
+    storage.update_object(iss)
+    cover = storage.read_object(Cover, {"series_id": WL, "issue_id": CARN, "cover_id": "front"})
+    sel = [{"name": "Series", "id": None, "kind": "all-series"},
+           {"name": "WL", "id": WL, "kind": "series"},
+           {"name": "C", "id": CARN, "kind": "issue"},
+           {"name": "front", "id": "front", "kind": "cover"}]
+    json.dump({"selection": sel, "messages": [], "dark_mode": False},
+              open(gui_state.STATE_FILEPATH, "w"))
+    await user.open(_url_for(sel))
+    await user.should_see("Credits")
+    await user.should_see("Issue №")
+    await user.should_see("Price")
+
+    # stamp the price: the board wears "$4.99" from the metadata
+    def click(btn):
+        for ev in btn._event_listeners.values():
+            if ev.type == "click":
+                btn._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+    stamps = [e for e in user.client.elements.values()
+              if e.__class__.__name__ == "Button"
+              and getattr(e, "props", {}).get("icon") == "approval"]
+    assert stamps, "unworn pieces offer their stamp"
+    click(stamps[-1])          # the last row is Price
+    await asyncio.sleep(0.3)
+    fresh = storage.read_object(Cover, {"series_id": WL, "issue_id": CARN, "cover_id": "front"})
+    worn = (fresh.figure_blocking or {}).get("dress/price")
+    assert worn and worn.get("text") == "$4.99", "the stamp writes the metadata snapshot"
