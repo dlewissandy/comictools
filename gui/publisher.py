@@ -71,8 +71,8 @@ def view_publisher(state: APPState):
                 if house is None:
                     post_user_message(state, "I would like to delete the current publisher.")
                     return
-                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 440px;'):
-                    ui.label('RETIRE THIS HOUSE?').classes('caption-box caption-box-sm')
+                from gui.elements import studio_dialog
+                with studio_dialog('RETIRE THIS HOUSE?', min_w=440) as dlg:
                     ui.label(f"{publisher.name} leaves the rack.  Its repository stays "
                              f"untouched on disk at {house['path']} — nothing is deleted, "
                              f"and it can rejoin any time.").classes('text-sm q-mt-sm')

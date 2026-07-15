@@ -61,8 +61,8 @@ async def confirm_dialog(title: str, body: str, *, go_label: str,
     """THE ONE CONFIRM: friction proportional to irreversibility — a plain
     question, the safe door first, the destructive verb wearing its color.
     Awaitable: True when the author says go."""
-    with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 440px;'):
-        ui.label(title).classes('caption-box caption-box-sm')
+    from gui.elements import studio_dialog
+    with studio_dialog(title, min_w=440) as dlg:
         ui.label(body).classes('text-sm q-mt-sm')
         with ui.row().classes('w-full justify-end q-mt-sm').style('gap: 8px;'):
             ui.button(keep_label).props('flat dense no-caps') \

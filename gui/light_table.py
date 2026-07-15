@@ -1014,8 +1014,8 @@ def handle_clipboard_image(state, args: dict):
         attach_reference(state, SimpleNamespace(name=name, content=BytesIO(raw), type=mime))
         return
     storage = state.storage
-    with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 380px;'):
-        ui.label('Pasted image').classes('caption-box caption-box-sm')
+    from gui.elements import studio_dialog
+    with studio_dialog('Pasted image', min_w=380) as dlg:
         ui.image(source=data_url).style('max-height: 180px;').props('fit=contain').classes('q-mt-sm')
 
         def as_take():
@@ -1493,8 +1493,8 @@ def wastebasket_chip(state, board):
         return
 
     def open_basket():
-        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 760px;'):
-            ui.label('The wastebasket').classes('caption-box caption-box-sm')
+        from gui.elements import studio_dialog
+        with studio_dialog('The wastebasket', min_w=480, max_w=760) as dlg:
             ui.label('THE TORN-UP PILE of this board — '
                      'put any of them back.').classes('text-sm q-mt-sm')
             with ui.row().classes('w-full q-mt-sm').style('gap: 10px;'):
@@ -2055,8 +2055,8 @@ def light_table(state: APPState, panel, scene, setting,
             ui.notify('No liftable elements recognized on that layer.', type='warning')
             return
         cast_names = {c['character_id']: (c.get('name') or c['character_id']) for c in roster}
-        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px;'):
-            ui.label('Split this layer').classes('caption-box caption-box-sm')
+        from gui.elements import studio_dialog
+        with studio_dialog('Split this layer', min_w=480) as dlg:
             ui.label('Pick what to lift onto its own acetate.  The layer is repainted '
                      'with them removed — revealing what was beneath.').classes('text-sm q-mt-sm')
             picks = []
@@ -2257,9 +2257,8 @@ def light_table(state: APPState, panel, scene, setting,
             return True
         gaps = verdict.get('gaps') or []
         note = verdict.get('note') or ''
-        with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                .style('min-width: 420px; max-width: 560px;'):
-            ui.label(f'This brief may be too thin to {action}').classes('caption-box caption-box-sm')
+        from gui.elements import studio_dialog
+        with studio_dialog(f'This brief may be too thin to {action}', min_w=420, max_w=560) as dlg:
             ui.label('There may not be enough here to stage the panel well — to pose the '
                      'cast, dress the setting, and set the shot. We can fill it in together, '
                      f'or {action} it anyway.').classes('text-sm q-mt-sm')
@@ -2642,9 +2641,8 @@ def light_table(state: APPState, panel, scene, setting,
                         def identify_element(key=f["key"], nm=f["name"]):
                             # link the cut-out to the asset it depicts: it
                             # becomes that character's posed acetate
-                            with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                                    .style('min-width: 480px; max-width: 720px;'):
-                                ui.label('Who is this?').classes('caption-box caption-box-sm')
+                            from gui.elements import studio_dialog
+                            with studio_dialog('Who is this?', min_w=480, max_w=720) as dlg:
                                 ui.label('Link this cut-out to a cast member — it becomes their posed '
                                          'acetate, tied to their reference sheets.').classes('text-sm q-mt-sm')
                                 with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
@@ -3256,9 +3254,8 @@ def light_table(state: APPState, panel, scene, setting,
 
                 cast_names = {c.character_id: c.name for c in storage.read_all_objects(
                     CharacterModel, primary_key={"series_id": series_id})}
-                with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                        .style('min-width: 520px; max-width: 760px;'):
-                    ui.label('Build the table from the brief').classes('caption-box caption-box-sm')
+                from gui.elements import studio_dialog
+                with studio_dialog('Build the table from the brief', min_w=520, max_w=760) as dlg:
                     ui.label('Pick what to lay: figures go to the Penciller with the pose the brief '
                              'directs, elements are conjured as props, and everything lands here.') \
                         .classes('text-sm q-mt-sm')
@@ -3628,8 +3625,8 @@ def light_table(state: APPState, panel, scene, setting,
                         .on('click', lambda _: lay_publisher_mark())
                 def new_letters():
                     from schema.dialog import Dialogue, Narration, DialogueEmphasis, NarrationPosition
-                    with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 380px;'):
-                        ui.label('New letters').classes('caption-box caption-box-sm')
+                    from gui.elements import studio_dialog
+                    with studio_dialog('New letters', min_w=380) as dlg:
 
                         def new_balloon(speaker: str):
                             fresh_board(storage, panel)
@@ -3750,8 +3747,8 @@ def light_table(state: APPState, panel, scene, setting,
                 return buf.getvalue()
 
             def flatten_dialog():
-                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 420px;'):
-                    ui.label('Flatten the table').classes('caption-box caption-box-sm')
+                from gui.elements import studio_dialog
+                with studio_dialog('Flatten the table', min_w=420) as dlg:
                     ui.label('Composite the visible acetates into one image and save it as…') \
                         .classes('text-sm q-mt-sm')
 

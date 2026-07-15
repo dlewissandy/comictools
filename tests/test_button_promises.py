@@ -197,3 +197,21 @@ def test_creating_never_redirects():
                        if "image_editor" in src[max(0, m.start() - 800):m.start()]]
         assert len(hits) == len(allowed), f"{path} navigates outside the bench flow"
     assert "STAY WHERE THE AUTHOR STANDS" in open("agentic/instructions.py").read()
+
+
+def test_no_hand_rolled_dialog_shells():
+    """ONE DIALOG SHELL: outside gui/elements.py, no dialog hand-rolls the
+    soft-card + caption pattern studio_dialog provides.  The wastebasket's
+    header-row shell is the one bespoke layout left, on purpose."""
+    import glob
+    offenders = []
+    for path in glob.glob("gui/*.py") + ["main.py"]:
+        if path.endswith("elements.py"):
+            continue
+        src = open(path).read()
+        n = src.count("ui.dialog() as dlg, ui.card().classes('soft-card')")
+        if path == "main.py":
+            n -= 1          # the wastebasket's row-headed shell
+        if n > 0:
+            offenders.append(f"{path}: {n}")
+    assert not offenders, f"hand-rolled shells: {offenders}"

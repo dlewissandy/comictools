@@ -156,9 +156,8 @@ def view_issue(state: APPState):
 
     # ---- shared text editor: save directly, or hand it to the coauthor --
     def edit_text_dialog(title, initial, on_save, develop_msg):
-        with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                .style('min-width: 560px; max-width: 820px;'):
-            ui.label(title).classes('caption-box caption-box-sm')
+        from gui.elements import studio_dialog
+        with studio_dialog(title, min_w=560, max_w=820) as dlg:
             ta = ui.textarea(value=initial or '').classes('w-full q-mt-sm') \
                 .props('autogrow outlined input-style="font-size: 0.85rem"')
             with ui.row().classes('w-full items-center q-mt-sm').style('gap: 8px;'):
@@ -392,9 +391,8 @@ def view_issue(state: APPState):
                 def _rerough(sc=scene_id, pid=panel_id, pnum=(p.panel_number if p else '?')):
                     # DESTRUCTIVE: rebuilding from the script re-poses the cast
                     # and re-lays the acetates — confirm before it happens.
-                    with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                            .style('min-width: 360px; max-width: 460px;'):
-                        ui.label('Re-rough this panel?').classes('caption-box caption-box-sm')
+                    from gui.elements import studio_dialog
+                    with studio_dialog('Re-rough this panel?', min_w=360, max_w=460) as dlg:
                         ui.label(f'Panel {pnum} already has a rough.  Rebuilding from the '
                                  'script re-poses the cast and re-lays the acetates from the '
                                  'brief — anything you hand-arranged on this board is redrawn.') \
@@ -698,9 +696,8 @@ def view_issue(state: APPState):
             chip.on('click', lambda _, m=fix_message: post_user_message(state, m))
 
         def pick_setting():
-            with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                    .style('min-width: 480px; max-width: 720px;'):
-                ui.label('Set the scene').classes('caption-box caption-box-sm')
+            from gui.elements import studio_dialog
+            with studio_dialog('Set the scene', min_w=480, max_w=720) as dlg:
                 with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
                     for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}, order_by="name"):
                         img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
@@ -734,9 +731,8 @@ def view_issue(state: APPState):
             # (variant) they wear here — this is the cast the render uses, so no
             # variant is ever guessed.
             already = {(c.character_id, c.variant_id) for c in (sc.cast or [])}
-            with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                    .style('min-width: 480px; max-width: 760px;'):
-                ui.label('Cast a character in this scene').classes('caption-box caption-box-sm')
+            from gui.elements import studio_dialog
+            with studio_dialog('Cast a character in this scene', min_w=480, max_w=760) as dlg:
                 ui.label('Pick the character AND the wardrobe (variant) they wear here — '
                          'the render dresses them exactly as cast.') \
                     .classes('text-xs text-gray-500 q-mt-xs')
@@ -924,9 +920,8 @@ def view_issue(state: APPState):
         panels = [panel_of[pid] for pid in ordered_panel_ids if pid in panel_of]
         n = len(panels)
         swatches = swatches_for(n)
-        with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                .style('min-width: 560px; max-width: 860px;'):
-            ui.label(f'THE SWATCH BOOK — {n}-PANEL PAGES').classes('caption-box caption-box-sm')
+        from gui.elements import studio_dialog
+        with studio_dialog(f'THE SWATCH BOOK — {n}-PANEL PAGES', min_w=560, max_w=860) as dlg:
             if not swatches:
                 ui.label(f"No exact-fill layout tiles a page with {n} panels — "
                          f"exact fills exist for 4 to 15.  Add or remove a panel, "
@@ -1005,8 +1000,8 @@ def view_issue(state: APPState):
         from schema import Issue as _Issue
         fresh = storage.read_object(_Issue, {"series_id": series_id, "issue_id": issue_id}) or issue
         lf = fresh.layout_feel
-        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 440px;'):
-            ui.label('Layout feel — the whole book').classes('caption-box caption-box-sm')
+        from gui.elements import studio_dialog
+        with studio_dialog('Layout feel — the whole book', min_w=440) as dlg:
             ui.label('Steers how the auto-flow lays out unlocked panels.  '
                      'Locked panels always keep their shape.') \
                 .classes('text-xs text-gray-500 q-mb-sm')

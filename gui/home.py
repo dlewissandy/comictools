@@ -53,8 +53,8 @@ def found_house_dialog(state: APPState):
     gets a fresh repo founded in it with the studio's default styles."""
     from storage import registry
     chosen = {'dir': None, 'existing': None}
-    with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px;'):
-        ui.label('A NEW PUBLISHING HOUSE').classes('caption-box caption-box-sm')
+    from gui.elements import studio_dialog
+    with studio_dialog('A NEW PUBLISHING HOUSE', min_w=480) as dlg:
         ui.label('Every house is its own git repository.  Pick where it lives — '
                  'an existing house joins the rack as it is.') \
             .classes('text-sm q-mt-sm')

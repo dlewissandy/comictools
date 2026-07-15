@@ -965,9 +965,8 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                     except (OSError, ValueError):
                         pass
             slips.sort(reverse=True)
-            with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                    .style('min-width: 460px; max-width: 640px;'):
-                ui.label('On the drawing board').classes('caption-box caption-box-sm')
+            from gui.elements import studio_dialog
+            with studio_dialog('On the drawing board', min_w=460, max_w=640) as dlg:
                 if not slips:
                     ui.label('Nothing on the board — the last piece just came off.') \
                         .classes('text-sm q-mt-sm')
@@ -1099,17 +1098,14 @@ def build_page(selection_override: list[SelectionItem] | None = None):
             asides = [e for e in (getattr(state, 'thread', None) or [])
                       if e.get('t') == 'aside']
             undos = getattr(state, '_daybook_undos', None) or {}
-            with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                    .style('min-width: 520px; max-width: 760px; max-height: 84vh; '
-                           'display: flex; flex-direction: column;'):
-                ui.label('The daybook').classes('caption-box caption-box-sm')
+            from gui.elements import studio_dialog
+            with studio_dialog('The daybook', min_w=520, max_w=760, scroll=True) as dlg:
                 ui.label("Everything the studio did at your hand — the conversation "
                          "stays a conversation; the receipts live here.") \
                     .classes('text-xs text-gray-500')
                 if not asides:
                     ui.label('A clean page — nothing done yet today.').classes('text-sm q-mt-sm')
-                with ui.element('div').classes('w-full q-mt-sm') \
-                        .style('overflow-y: auto; min-height: 0; flex: 1;'):
+                with ui.element('div').classes('w-full q-mt-sm'):
                     now = _time.time()
                     for e in reversed(asides[-80:]):
                         age = now - (e.get('ts') or now)
@@ -1144,9 +1140,8 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                     ledger = _json.load(open(SPEND_LEDGER))
             except (ValueError, OSError):
                 ledger = {}
-            with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                    .style('min-width: 420px; max-width: 560px;'):
-                ui.label("The day's receipts").classes('caption-box caption-box-sm')
+            from gui.elements import studio_dialog
+            with studio_dialog("The day's receipts", min_w=420, max_w=560) as dlg:
                 days = sorted(ledger, reverse=True)[:7]
                 today = _time.strftime("%Y-%m-%d")
                 if not days:

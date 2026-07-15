@@ -139,9 +139,8 @@ def view_setting(state: APPState):
                 from agentic.tools.imaging import reframe_preview, reframe_setting_master
                 knobs = {'z': 1.0, 'px': 0.0, 'py': 0.0}
                 seq = {'n': 0}
-                with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                        .style('min-width: 480px; max-width: 640px;'):
-                    ui.label(f'Reframe to {orient}').classes('caption-box caption-box-sm')
+                from gui.elements import studio_dialog
+                with studio_dialog(f'Reframe to {orient}', min_w=480, max_w=640) as dlg:
                     ui.label(f"Move and scale this background to fill a {orient} frame — "
                              f"the same painting, reframed (no re-render).") \
                         .classes('text-xs text-gray-500 q-mb-sm')
@@ -281,8 +280,8 @@ def view_setting(state: APPState):
         def new_shot_dialog(_=None):
             from agentic.tools.normalization import normalize_id
             from schema import SettingShot
-            with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 460px;'):
-                ui.label('A new shot of this set').classes('caption-box caption-box-sm')
+            from gui.elements import studio_dialog
+            with studio_dialog('A new shot of this set', min_w=460) as dlg:
                 ui.label('Re-frame the establishing master: name it, aim the camera, '
                          'set the light.').classes('text-sm q-mt-sm')
                 nm = ui.input(placeholder="Name — e.g. 'gate at night'") \
