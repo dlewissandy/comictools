@@ -201,3 +201,14 @@ def test_the_key_names_its_own_house():
     src = open("agentic/tools/imaging.py").read()
     body = src.split("def preflight_issue", 1)[1][:1600]
     assert "storage_for_key" in body, "preflight must read the series' OWN house"
+
+
+def test_the_carnival_rule_protects_fixtures(storage, tmp_path):
+    """storage_for_key must NEVER hijack a storage rooted outside the
+    mounts — fixture copies share real ids, and resolving would aim tool
+    writes at the author's live repos (the carnival-incident class)."""
+    from storage import registry
+    # the fixture storage lives in /var/... or /tmp — resolution declines
+    got = registry.storage_for_key({"series_id": "wonders-of-the-witchlight"},
+                                   storage)
+    assert got is storage, "an off-mount fallback is returned untouched"

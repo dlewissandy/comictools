@@ -1,3 +1,5 @@
+import os
+
 from loguru import logger
 from agents import function_tool, Tool, RunContextWrapper
 from typing import Callable, Optional, Union
@@ -52,7 +54,9 @@ def read_all(
     # not be standing in.
     if parent_key is not None:
         from storage import registry as _reg
-        _keyed_home = _reg.storage_for_key(parent_key, None)
+        _base = str(getattr(storage, 'base_path', ''))
+        _on_mounts = _base == _reg.DATA_DIR or _base.startswith(_reg.DATA_DIR + os.sep)
+        _keyed_home = _reg.storage_for_key(parent_key, None) if _on_mounts else None
         if _keyed_home is not None:
             objs = _keyed_home.read_all_objects(cls=cls, primary_key=parent_key)
             if order_by is None:
@@ -120,7 +124,9 @@ def read_one(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], pk: dic
     # falls through to the context discipline below (hallucinated ids
     # still get caught).
     from storage import registry as _reg
-    _keyed_home = _reg.storage_for_key(pk, None)
+    _base = str(getattr(storage, 'base_path', ''))
+    _on_mounts = _base == _reg.DATA_DIR or _base.startswith(_reg.DATA_DIR + os.sep)
+    _keyed_home = _reg.storage_for_key(pk, None) if _on_mounts else None
     if _keyed_home is not None:
         storage = _keyed_home
         logger.debug(f"Keyed read — {pk} names its own house")

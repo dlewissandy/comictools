@@ -4432,7 +4432,11 @@ def render_artboard_body(state, scope_id: str, board_id: str) -> str:
     a bare board.  Transparent background always (a mark is an acetate);
     the take lands on the BOARD — featuring writes it home."""
     from schema import ArtBoard, ComicStyle, Series, Publisher
-    storage = state.storage
+    # the scope names its own house (a mark's scope is a series OR a
+    # publisher id — try both before falling back to the bench's storage)
+    from storage import registry as _reg
+    storage = _reg.storage_for_key({"series_id": scope_id},
+              _reg.storage_for_key({"publisher_id": scope_id}, state.storage))
     board = storage.read_object(cls=ArtBoard, primary_key={
         "scope_id": scope_id, "board_id": board_id})
     if board is None:

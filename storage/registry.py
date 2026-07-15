@@ -155,7 +155,16 @@ def storage_for_key(pk: dict, fallback=None):
     publisher or style id resolves to the mount that actually holds it —
     regardless of where the author happens to be standing.  Returns
     `fallback` when no registered house claims the id (an unknown or
-    hallucinated id stays subject to the caller's own discipline)."""
+    hallucinated id stays subject to the caller's own discipline).
+
+    THE CARNIVAL RULE: a fallback storage rooted OUTSIDE the mounts (a
+    test fixture's tmp copy, a scratch clone) is never hijacked — fixture
+    data shares real ids, and resolving would aim tool writes at the
+    author's live repos."""
+    if fallback is not None:
+        base = str(getattr(fallback, "base_path", ""))
+        if base and base != DATA_DIR and not base.startswith(DATA_DIR + os.sep):
+            return fallback
     finders = (("series_id", house_of_series),
                ("publisher_id", house_of_publisher),
                ("style_id", house_of_style))
