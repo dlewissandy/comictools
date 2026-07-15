@@ -60,7 +60,12 @@ def view_setting(state: APPState):
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
             header(f"{setting.name.title()} ({'Interior' if setting.interior else 'Exterior'})", 0)
             ui.space()
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current setting."), size=1)
+            from gui.strike import strike
+            from agentic.tools.deleter import delete_setting as _del_setting
+            crud_button(kind=CrudButtonKind.DELETE, size=1,
+                        action=lambda _: strike(state, _del_setting,
+                            {"series_id": series_id, "setting_id": setting.setting_id},
+                            f"the setting '{setting.name}'"))
 
         markdown_field_editor(state, "Description", setting.description)
 

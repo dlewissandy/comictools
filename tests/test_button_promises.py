@@ -152,3 +152,15 @@ def test_a_silent_turn_speaks_the_work():
     assert "Created scene 3 'Joey's Bedroom'" in out
     assert "structured payload" not in out and "xxx" not in out and "PROBLEM" not in out
     assert closing_from_receipts(["called read_scene({})"]) is None
+
+
+def test_racks_scroll_not_overflow():
+    """ONE DIALOG SHELL: every bench picker rides studio_dialog with
+    scroll=True — a 30-swatch rack keeps its footer reachable."""
+    src = open("gui/light_table.py").read()
+    for title in ("Lay a figure on the table", "Lay a background on the table",
+                  "Lay a prop on the table", "Swap the style swatch"):
+        at = src.index(title)
+        window = src[max(0, at - 300):at]
+        assert "studio_dialog" in window, f"{title} still hand-rolls its shell"
+    assert "studio_dialog" in open("gui/scene.py").read()

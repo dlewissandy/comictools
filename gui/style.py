@@ -1,7 +1,7 @@
 from loguru import logger
 from gui.state import APPState
 from gui.elements import (
-    header, view_all_instances, markdown_field_editor, view_attributes, Attribute, image_drop_field_editor, full_width_image_selector_grid, crud_button,
+    header, view_all_instances, markdown_field_editor, view_attributes, Attribute, full_width_image_selector_grid, crud_button,
     CrudButtonKind)
 from gui.messaging import post_user_message
 from gui.constants import TAILWIND_CARD

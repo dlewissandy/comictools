@@ -55,6 +55,29 @@ def init_cardwall(columns: int = 4):
     return ui.element('div').classes('w-full').style(
         f"display: grid; grid-template-columns: repeat(auto-fill, minmax({_GRID_MIN.get(columns, '180px')}, 1fr)); gap: 10px;")
 
+@contextlib.contextmanager
+def studio_dialog(title: str, *, min_w: int = 420, max_w: int | None = None,
+                  scroll: bool = False):
+    """THE ONE DIALOG SHELL: studio paper, a caption-box title and, with
+    scroll=True, a bounded body (84vh) that keeps every option reachable
+    in a short window.  Yields the dialog; the caller fills the body and
+    opens it — exactly the hand-rolled shape it replaces, in one hand."""
+    style = f'min-width: {min_w}px;'
+    if max_w:
+        style += f' max-width: {max_w}px;'
+    if scroll:
+        style += ' max-height: 84vh; display: flex; flex-direction: column;'
+    with ui.dialog() as dlg:
+        with ui.card().classes('soft-card').style(style):
+            ui.label(title).classes('caption-box caption-box-sm')
+            if scroll:
+                with ui.element('div').classes('w-full q-mt-sm') \
+                        .style('overflow-y: auto; min-height: 0; flex: 1;'):
+                    yield dlg
+            else:
+                yield dlg
+
+
 def crud_button(kind: CrudButtonKind, action: Callable, size: int = 2):
     """Create a button with a specific style and action.
 
@@ -111,42 +134,11 @@ def header(text: str, level: int = 1) -> None:
      return ui.label(text).classes(HEADER_CLASSES[level]).style('margin-top: 0px; margin-bottom: 0px')
 
 def markdown(body: str) -> None:
+    """Markdown content that wraps properly — the stylesheet rides in
+    main.py's one head include, not a per-call injection."""
     with ui.element().classes('w-full q-pa-md'):
-            # Add custom CSS to ensure markdown content wraps properly
-            ui.add_head_html('''
-                <style>
-                    .markdown-content {
-                        width: 100%;
-                        max-width: 100%;
-                        overflow-wrap: break-word;
-                        word-wrap: break-word;
-                        word-break: normal;
-                        hyphens: auto;
-                    }
-                    .markdown-content * {
-                        white-space: normal !important;
-                        max-width: 100%;
-                    }
-                    .markdown-content pre {
-                        white-space: pre-wrap !important;
-                        max-width: 100%;
-                        overflow-x: auto;
-                    }
-                    .markdown-content code {
-                        white-space: pre-wrap !important;
-                    }
-                    .markdown-content p, .markdown-content li {
-                        overflow-wrap: break-word;
-                        word-wrap: break-word;
-                        word-break: normal;
-                    }
-                </style>
-            ''')
-            
-            # Apply the custom class to the markdown container
-            with ui.element('div').classes('markdown-content').style('padding: 0; margin: 0;') as element:
-                ui.markdown(body).style('padding: 0; margin: 0;')
-            return element
+        ui.markdown(body).classes('w-full markdown-content')
+
 
 def full_width_image_selector_grid(
     state: APPState,
@@ -248,49 +240,6 @@ def full_width_image_selector_grid(
             cardwall=cardwall,
             aspect_ratio=aspect_ratio
         )     
-
-def image_field_editor(
-        state: APPState, 
-        kind: SelectedKind, 
-        get_caption: Callable[[], str|None], 
-        get_id: Callable[[], str|None], 
-        get_image_filepath: Callable[[], str|None], 
-        aspect_ratio: str = "1/1",
-        caption_size: int = 2
-        ) -> ui.element:
-        
-    """
-    Display a field by a representative image.
-
-    Args:
-        state: The GUI elements containing the details and selection.
-        kind: The kind of image (e.g., 'publisher', 'series', 'logo').
-        get_caption: A function to get the caption of the item.
-        get_id: A function to get the ID of the item.
-        get_image_filepath: A function to get the file path of the image.
-        aspect_ratio: The aspect ratio of the image (default is "1/1").
-
-    """
-    caption = get_caption()
-    id = get_id()
-    image_filepath = get_image_filepath()
-
-    with ui.row().classes('w-full flex-nowrap') as row:
-        with ui.card().classes(TAILWIND_CARD+ " w-24%").style(f'aspect-ratio: {aspect_ratio}') as card:
-            if caption is not None and caption !="":
-                header(caption,2)
-            if image_filepath is None:
-                ui.label(f"Click to select").classes('text-gray-500').style('text-align: center;')
-            elif not os.path.exists(image_filepath):
-                ui.label(f"Image for {caption} not found.").style('color: red;')
-            else:
-                ui.image(source=image_filepath).style('top-padding: 0; bottom-padding:0')
-        itm_name = kind.value.replace('-',' ').title()
-        new_itm = SelectionItem(name=itm_name, id=id, kind=kind)
-        new_sel = [s for s in state.selection]+[new_itm]
-        card.on('click', lambda _, new_sel=new_sel: state.change_selection(new=new_sel))
-
-        return row
 
 def render_object_choices(
         state: APPState, 
@@ -592,7 +541,9 @@ def view_attributes(state: APPState, caption: str, attributes: list[Attribute], 
                     if individual_icons:
                         # the pencil edits THIS attribute — bound per row, not
                         # the section caption with a stray 'date' bolted on
-                        ui.button(icon='edit').classes('text-base rounded-md').style('font-size: 0.75em; height: 1em; aspect-ratio: 1/1; padding: 0; line-height: inherit').on('click', lambda _, n=attr_name: post_user_message(state, f"I would like to edit the {n}."))
+                        ui.button(icon='edit').props('flat round dense size=xs') \
+                            .tooltip(f'Rewrite {attr_name} with the coauthor') \
+                            .on('click', lambda _, n=attr_name: post_user_message(state, f"I would like to edit the {n}."))
                     header(attr_name,4)
                     value = attr.get("get_value")()
                     if value is None:
@@ -645,98 +596,6 @@ def _inline_editable(state: APPState, name: str, value: str, setter: Callable):
     return holder
 
 
-def image_drop_field_editor(
-        state: APPState,
-        caption: str, 
-        kind: SelectedKind,
-        get_image_filepath: Callable[[], str | None] = lambda: None,
-        on_upload: Callable[[UploadEventArguments], None] = lambda _: None,
-        aspect_ratio: str = "3/2",
-        width: str = "full", 
-    ):
-    """
-    A field editor for uploading an image.
-    Args:
-        state: The GUI elements containing the details and selection.
-        caption: The caption for the image field.
-        kind: The kind of image (e.g., 'publisher', 'series', 'logo').
-        on_upload: A function to call when an image is uploaded.
-        aspect_ratio: The aspect ratio of the image (default is "3/2").
-        width: The width of the image field (default is "full").
-    """
-    with ui.card().classes(TAILWIND_CARD).classes(f'w-{width} relative overflow-hidden').style(f'aspect-ratio: {aspect_ratio}') as card:
-        uploader = ui.upload(on_upload=on_upload, auto_upload=True, max_files=1)
-        uploader.classes('absolute inset-0 opacity-0 cursor-pointer z-10')
-
-        # Visible caption in center
-        with ui.row().classes('absolute inset-0 flex items-center justify-center z-0'):
-            ui.label('Drop image to upload').classes('text-lg text-gray-600')
-
-
-def view_image_choices(
-    state: APPState,
-    kind: SelectedKind,
-    images_path: str,
-    get_images: Callable[[], list[str]],
-    get_selection: Callable[[], list[str]],
-    set_selection: Callable[[str], None],
-): 
-    """
-    """
-    details = state.details
-    state.clear_details()
-    with details:
-        with ui.row():
-            header(1, f"Select {kind.title()} Image")
-            ui.space()
-            ui.button(icon="add").tooltip("Generate a new image")
-        full_width_image_selector_grid(
-            state=state,
-            image_kind_name=kind,
-            images_path=images_path,
-            get_images=get_images,
-            get_selection=get_selection,
-            set_selection=set_selection,
-
-        )
-
-    
-
-def aspect_ratio_picker(
-        state: APPState, 
-        parent: ui.element, 
-        caption: str, 
-        get_aspect_ratio: Callable[[], str],
-        set_aspect_ratio: Callable[[FrameLayout], None]):
-    """
-    A field editor for selecting an aspect ratio.
-    Args:
-        state: The GUI elements containing the details and selection.
-        caption: The caption for the aspect ratio field.
-        get_aspect_ratio: A function to get the current aspect ratio.
-        set_aspect_ratio: A function to set the current aspect ratio.
-    """
-
-    raw_value:FrameLayout = get_aspect_ratio()
-    text = raw_value.value.lower().replace("_", " ")
-    logger.debug(f"value={text}")
-
-    def on_click(value: FrameLayout):
-        select.text = value.value.lower().replace("_", " ")
-        set_aspect_ratio(value)
-
-    with parent:
-        header(caption,2)
-        with ui.dropdown_button(text=text, auto_close=True).style('width: 100%;') as select:
-            landscape = ui.item("landscape")
-            portrait = ui.item("portrait")
-            square = ui.item("square")
-
-    landscape.on_click(lambda _: on_click(FrameLayout.LANDSCAPE))
-    portrait.on_click(lambda _: on_click(FrameLayout.PORTRAIT))
-    square.on_click(lambda _: on_click(FrameLayout.SQUARE))
-    
-    
 def view_character_references(state: APPState, parent: BaseModel):
     storage: GenericStorage = state.storage
 
@@ -828,42 +687,6 @@ def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], N
                 ui.label(label).classes('text-lg text-gray-600 text-center').style('padding: 0 12px;')
 
 
-def removable_chips(state: APPState, caption: str, items: list[tuple[str, str]],
-                    remover: Callable, icon: str = "sell",
-                    visit: Callable | None = None):
-    """
-    Attached assets as chips with an ✕: the obvious way to take an asset back
-    OFF the thing it was added to.  Removal is direct — it severs the link,
-    persists, refreshes the view — and echoes a receipt into the conversation
-    so the coauthor stays aware.
-
-    Args:
-        items: list of (key, label) chips.
-        remover: called with the chip's key; must mutate + persist.
-    """
-    with ui.row().classes('items-center').style('gap: 6px;'):
-        ui.label(caption).classes('text-sm text-gray-500')
-        if not items:
-            ui.label('—').classes('text-sm text-gray-500')
-        for key, label in items:
-            def _remove(key=key, label=label):
-                try:
-                    remover(key)
-                except Exception as e:
-                    ui.notify(f"Couldn't remove {label}: {e}", type='warning')
-                    return
-                from gui.thread import thread_aside
-                thread_aside(state, f"✂️ removed **{label}** from {caption.lower()}")
-                state.refresh_details()
-            chip = ui.chip(label, removable=True, icon=icon) \
-                .props('dense outline' + (' clickable' if visit else '')) \
-                .tooltip(f'{label} — click to visit · ✕ removes it from {caption.lower()}'
-                         if visit else f'✕ removes {label} from {caption.lower()}') \
-                .on('remove', lambda _, k=key: _remove(k))
-            if visit:
-                chip.on('click', lambda _, k=key: visit(k))
-
-
 def removable_chips_inline(state: APPState, items: list[tuple[str, str]],
                            remover: Callable, icon: str = "sell",
                            visit: Callable | None = None):
@@ -907,17 +730,6 @@ def cpanel(span: int = 12):
 
 def ccell(span: int = 12):
     return ui.element('div').classes(f'cspan-{span}')
-
-
-def flow_caption(state: APPState, caption: str, message: str, span: int = 3):
-    """
-    A narrator box sitting IN the page flow: a small grid cell holding the
-    group's caption and its create button, with the group's panels flowing
-    right after it — so short groups share rows, like a real comic page.
-    """
-    with ui.element('div').classes(f'cspan-{span} flow-caption'):
-        caption_action(caption, CrudButtonKind.CREATE,
-                       lambda _: post_user_message(state, message), 2)
 
 
 @contextlib.contextmanager

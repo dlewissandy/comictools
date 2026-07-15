@@ -333,6 +333,9 @@ def init_layout(logger):
                            width: max-content; line-height: 1.3;
                            white-space: normal; }
         /* RECEIPTS ARE PAPER SLIPS: stamped with the bench they came from */
+        .markdown-content { width: 100%; overflow-wrap: break-word;
+                            word-break: break-word; }
+        .markdown-content pre { white-space: pre-wrap; overflow-x: auto; }
         .receipt-slip { position: relative; border: 1.5px dashed var(--ink);
                         border-radius: 2px; background: rgba(243,229,171,.25);
                         padding: 6px 10px 4px; transform: rotate(-.3deg); }

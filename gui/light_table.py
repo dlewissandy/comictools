@@ -1362,20 +1362,15 @@ def style_swatch(state, scene, shared_with: str | None = None):
         return art if art and os.path.exists(art) else None
 
     def pick():
-        with ui.dialog() as dlg, ui.card().classes('soft-card') \
-                .style('min-width: 520px; max-width: 780px; max-height: 84vh; '
-                       'display: flex; flex-direction: column;'):
-            ui.label('Swap the style swatch').classes('caption-box caption-box-sm')
+        from gui.elements import studio_dialog
+        with studio_dialog('Swap the style swatch', min_w=520, max_w=780,
+                           scroll=True) as dlg:
             ui.label('Every take printed here wears the swatched style — '
-                     'pick the one it should wear.').classes('text-sm q-mt-sm')
+                     'pick the one it should wear.').classes('text-sm')
             if shared_with:
                 ui.label(f'This swatch is taped to {shared_with} — swapping it '
                          f'restyles everything that wears it.').classes('text-xs text-gray-500')
-            # EVERY SWATCH REACHABLE: the rack scrolls INSIDE the dialog —
-            # a tall book of styles must never push the first ones off the top
-            with ui.element('div').classes('w-full q-mt-sm') \
-                    .style('overflow-y: auto; min-height: 0; flex: 1;'), \
-                 ui.row().classes('w-full').style('gap: 10px;'):
+            with ui.row().classes('w-full q-mt-sm').style('gap: 10px;'):
                 for st in storage.read_all_objects(ComicStyle, order_by='name'):
                     art = _art(st)
                     current = getattr(scene, 'style_id', None) == st.style_id
@@ -1500,7 +1495,7 @@ def wastebasket_chip(state, board):
     def open_basket():
         with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 760px;'):
             ui.label('The wastebasket').classes('caption-box caption-box-sm')
-            ui.label('Torn-up takes, replaced art and removed references — '
+            ui.label('THE TORN-UP PILE of this board — '
                      'put any of them back.').classes('text-sm q-mt-sm')
             with ui.row().classes('w-full q-mt-sm').style('gap: 10px;'):
                 for path, kind in entries:
@@ -1557,7 +1552,7 @@ def wastebasket_chip(state, board):
                 eb.on('click', confirm_empty)
         dlg.open()
 
-    ui.chip(f'wastebasket · {len(entries)}', icon='delete_outline').props('dense clickable outline') \
+    ui.chip(f'torn-up pile · {len(entries)}', icon='delete_outline').props('dense clickable outline') \
         .tooltip('Torn-up takes and removed references — restore them here') \
         .on('click', lambda _: open_basket())
 
@@ -3304,8 +3299,9 @@ def light_table(state: APPState, panel, scene, setting,
                 dlg.open()
 
             def pick_figure():
-                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 720px;'):
-                    ui.label('Lay a figure on the table').classes('caption-box caption-box-sm')
+                from gui.elements import studio_dialog
+                with studio_dialog('Lay a figure on the table',
+                                   min_w=480, max_w=720, scroll=True) as dlg:
                     already = {(c.character_id, c.variant_id) for c in (panel.character_references or [])}
                     with ui.row().classes('w-full').style('gap: 8px;'):
                         for ch in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
@@ -3341,8 +3337,9 @@ def light_table(state: APPState, panel, scene, setting,
                 dlg.open()
 
             def pick_background():
-                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 720px;'):
-                    ui.label('Lay a background on the table').classes('caption-box caption-box-sm')
+                from gui.elements import studio_dialog
+                with studio_dialog('Lay a background on the table',
+                                   min_w=480, max_w=720, scroll=True) as dlg:
                     _can_shot = not (cover_mode or insert_mode)  # shots pin to a scene
                     with ui.row().classes('w-full items-start').style('gap: 8px;'):
                         for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}, order_by="name"):
@@ -3420,8 +3417,9 @@ def light_table(state: APPState, panel, scene, setting,
 
             def pick_prop():
                 from agentic.tools.normalization import normalize_id
-                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 480px; max-width: 720px;'):
-                    ui.label('Lay a prop on the table').classes('caption-box caption-box-sm')
+                from gui.elements import studio_dialog
+                with studio_dialog('Lay a prop on the table',
+                                   min_w=480, max_w=720, scroll=True) as dlg:
                     already = {p.name for p in (getattr(scene, 'props', None) or [])}
                     with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
                         for pa in storage.read_all_objects(PropAsset, primary_key={"series_id": series_id}, order_by="name"):

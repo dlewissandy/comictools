@@ -90,7 +90,7 @@ def build_palette(state):
     from messaging import send
 
     dialog = ui.dialog().props('position=top')
-    with dialog, ui.card().classes('w-full').style('max-width: 640px;'):
+    with dialog, ui.card().classes('w-full soft-card').style('max-width: 640px;'):
         box = ui.input(placeholder='Jump to anything — or ask the coauthor…') \
             .props('dense outlined autofocus clearable').classes('w-full')
         results = ui.column().classes('w-full').style('gap: 2px; max-height: 60vh; overflow-y: auto;')

@@ -150,7 +150,6 @@ def view_character_variant(state:APPState):
                     character_id=character_id, variant_id=variant_id, packer=_packer)
 
         # Composition: what this look is built from — chips with ✕ to detach.
-        from gui.elements import removable_chips
         def _save_variant():
             storage.update_object(data=variant)
 
