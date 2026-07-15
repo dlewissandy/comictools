@@ -760,6 +760,11 @@ def is_cover(board) -> bool:
     return hasattr(board, 'cover_id')
 
 
+def is_artboard(board) -> bool:
+    """A mark — a series masthead or a house logo — composing on the bench."""
+    return hasattr(board, 'board_kind')
+
+
 def is_insert(board) -> bool:
     """A full-page insert (poster, ad, pin-up, the mailbag) — its own scene,
     like a cover: it owns style_id and setting_id and rides the table as
@@ -1049,7 +1054,12 @@ def handle_clipboard_image(state, args: dict):
 
 
 def read_board(storage, a: dict):
-    """Resolve a rough/stack event back to its board (panel, cover or insert)."""
+    """Resolve a rough/stack event back to its board (panel, cover, insert
+    or an art board — a masthead/logo mark)."""
+    if a.get('artboard'):
+        from schema import ArtBoard as _AB
+        return storage.read_object(cls=_AB, primary_key={
+            "scope_id": a['scope'], "board_id": a['artboard']})
     if a.get('cover'):
         from schema import Cover as _Cover
         return storage.read_object(cls=_Cover, primary_key={
@@ -1567,7 +1577,31 @@ def takes_row(state, board, featured: str | None):
         fresh_board(storage, board)
         board.image = locator
         storage.update_object(board)
-        table_receipt(state, '📌 featured a take — the table is locked to its arrangement')
+        if is_artboard(board):
+            # THE MARK GOES HOME: featuring writes through — a masthead to
+            # its series' title art, a logo onto its house
+            try:
+                if board.board_kind == 'masthead':
+                    from schema import Series as _Series
+                    ser = storage.read_object(cls=_Series,
+                                               primary_key={"series_id": board.scope_id})
+                    if ser is not None and board.style_id:
+                        ser.title_images = dict(ser.title_images or {})
+                        ser.title_images[board.style_id] = locator
+                        storage.update_object(ser)
+                elif board.board_kind == 'logo':
+                    from schema import Publisher as _Pub
+                    pub = storage.read_object(cls=_Pub,
+                                              primary_key={"publisher_id": board.scope_id})
+                    if pub is not None:
+                        pub.image = locator
+                        storage.update_object(pub)
+                table_receipt(state, f"📌 the {board.board_kind} is featured — "
+                                     f"it now hangs where it belongs", bench='the mark bench')
+            except Exception as ex:
+                logger.warning(f"mark write-through failed: {ex}")
+        else:
+            table_receipt(state, '📌 featured a take — the table is locked to its arrangement')
         state.refresh_details()
 
     def explode_take(img: str):
@@ -1638,8 +1672,11 @@ def light_table(state: APPState, panel, scene, setting,
     locked = featured is not None
     cover_mode = is_cover(panel)   # a cover is a board like any other
     insert_mode = is_insert(panel)  # so is a full-page insert
+    artboard_mode = is_artboard(panel)  # and so is a mark (masthead/logo)
     board_attrs = ({'data-cover': panel.cover_id} if cover_mode
                    else {'data-insert': panel.insert_id} if insert_mode
+                   else {'data-artboard': panel.board_id, 'data-scope': panel.scope_id}
+                   if artboard_mode
                    else {'data-scene': panel.scene_id, 'data-panel': panel.panel_id})
 
     # BLOCKING: the drag/scale script ships in main.py's page head; here we
@@ -1815,8 +1852,8 @@ def light_table(state: APPState, panel, scene, setting,
                                      DRESS_DEFAULTS, dress_text, refresh_dress_text)
     if cover_mode:
         dress_pieces = list(COVER_PIECES)
-    elif insert_mode:
-        dress_pieces = []
+    elif insert_mode or artboard_mode:
+        dress_pieces = []          # a mark IS lettering — it wears no dress
     else:
         dress_pieces = list(PANEL_PIECES)
     dress_issue = None
@@ -2297,7 +2334,8 @@ def light_table(state: APPState, panel, scene, setting,
         has_rough = any(f.get("on") and f.get("img") for f in figures) \
             or bool(bg_layer.get("on") and setting is not None)
         noun = ("cover" if cover_mode
-                else f"'{panel.name}' insert page" if insert_mode else "panel")
+                else f"'{panel.name}' insert page" if insert_mode
+                else panel.board_kind if artboard_mode else "panel")
         if not has_rough:
             # BARE BOARD → a from-brief proof: make sure the brief can carry it.
             brief = f"{(getattr(panel, 'beat', '') or '').strip()}\n\n{(panel.description or '').strip()}".strip()
@@ -2314,7 +2352,12 @@ def light_table(state: APPState, panel, scene, setting,
         from helpers.render_queue import enqueue_renders
         from agentic.tools.imaging import render_panel_impl, _generate_cover_image_body
 
-        if cover_mode:
+        if artboard_mode:
+            from agentic.tools.imaging import render_artboard_body
+
+            def _job(_scope=panel.scope_id, _bid=panel.board_id):
+                return render_artboard_body(state, _scope, _bid)
+        elif cover_mode:
             def _job(_sid=panel.series_id, _iid=panel.issue_id, _cid=panel.cover_id):
                 return _generate_cover_image_body(types.SimpleNamespace(context=state), _sid, _iid, _cid)
         elif insert_mode:
@@ -3907,3 +3950,29 @@ def light_table(state: APPState, panel, scene, setting,
                                 ui.button(icon=icon).props('flat round dense size=xs') \
                                     .classes('bg-white/70 dark:bg-black/50') \
                                     .tooltip(tip).on('click.stop', handler)
+
+
+def view_artboard(state: APPState):
+    """THE MARK'S BENCH: a masthead or logo composes on the light table —
+    from text (write the brief, proof it), from layers (acetates, explode,
+    rework), or from image (drop a take).  Featuring writes the mark home."""
+    from schema import ArtBoard
+    from gui.elements import header
+    storage = state.storage
+    selection = state.selection
+    board_id = selection[-1].id
+    scope_id = next((it.id for it in reversed(selection[:-1]) if it.id), None)
+    board = storage.read_object(cls=ArtBoard, primary_key={
+        "scope_id": scope_id, "board_id": board_id})
+    details = state.details
+    details.clear()
+    if board is None:
+        with details:
+            ui.markdown(f"No mark here — the board `{board_id}` is gone or was struck.")
+        return
+    featured = board.image if board.image and os.path.exists(board.image) else None
+    with details:
+        with ui.row().classes('w-full flex-nowrap items-center').style('padding: 0; margin: 0;'):
+            header(board.name.title(), 0)
+        light_table(state, board, board, None, featured=featured,
+                    description_label='The lettering brief')

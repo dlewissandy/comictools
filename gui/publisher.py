@@ -130,6 +130,30 @@ def view_publisher(state: APPState):
         # THE LOGO'S DOORS, like any asset: the current mark large with its
         # heal/rework tools, then describe (the pencil), render, or upload
         from gui.elements import art_tools
+
+        def open_logo_bench(_=None):
+            from schema import ArtBoard
+            from gui.selection import SelectionItem, SelectedKind
+            from schema.enums import FrameLayout
+            bid = "logo"
+            board = storage.read_object(cls=ArtBoard, primary_key={
+                "scope_id": publisher_id, "board_id": bid})
+            if board is None:
+                board = ArtBoard(board_id=bid, scope_id=publisher_id,
+                                 board_kind='logo',
+                                 name=f"{publisher.name} logo",
+                                 description=publisher.logo or
+                                     f"The mark of the house “{publisher.name}”.",
+                                 aspect=FrameLayout.SQUARE)
+                storage.create_object(data=board, overwrite=True)
+            state.change_selection(new=[*state.selection, SelectionItem(
+                name=board.name, id=bid, kind=SelectedKind.ARTBOARD)])
+
+        ui.button('Compose the logo on the light table', icon='layers') \
+            .props('flat dense no-caps') \
+            .tooltip('The mark bench: from text, from layers, or from a dropped image') \
+            .on('click', open_logo_bench)
+
         if publisher.image and os.path.exists(publisher.image):
             with ui.card().classes('soft-card p-2 relative').style('max-width: 320px;'):
                 ui.image(source=publisher.image).style('max-height: 160px;').props('fit=contain')

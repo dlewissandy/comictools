@@ -108,6 +108,24 @@ def view_series(state: APPState):
                       "horror letters'…  (Enter alone lets the style decide.)",
                       type='info', position='bottom', timeout=4000)
 
+        def open_mark_bench(st):
+            # FROM LAYERS: the mark composes on the light table — the same
+            # bench as everything else (don't reinvent the wheel)
+            from schema import ArtBoard
+            from gui.selection import SelectedKind
+            bid = f"masthead-{st.style_id}"
+            board = storage.read_object(cls=ArtBoard, primary_key={
+                "scope_id": series.series_id, "board_id": bid})
+            if board is None:
+                board = ArtBoard(board_id=bid, scope_id=series.series_id,
+                                 board_kind='masthead',
+                                 name=f"{series.name} masthead · {st.name}",
+                                 description=f"The series title “{series.name}” as a wordmark.",
+                                 style_id=st.style_id)
+                storage.create_object(data=board, overwrite=True)
+            state.change_selection(new=[*state.selection, SelectionItem(
+                name=board.name, id=bid, kind=SelectedKind.ARTBOARD)])
+
         def masthead_from_image(st):
             # FROM A REFERENCE IMAGE: the wordmark you drop BECOMES the
             # masthead for that style — the same door every asset has
@@ -159,6 +177,10 @@ def view_series(state: APPState):
                             .classes('absolute bottom-1 left-1 z-10 bg-white/70 dark:bg-black/50') \
                             .tooltip('Swap in a wordmark image instead') \
                             .on('click', lambda _, st=st: masthead_from_image(st))
+                        ui.button(icon='layers').props('flat round dense size=xs') \
+                            .classes('absolute bottom-1 left-8 z-10 bg-white/70 dark:bg-black/50') \
+                            .tooltip('Compose this masthead in layers on the mark bench') \
+                            .on('click', lambda _, st=st: open_mark_bench(st))
                     else:
                         art = st.image.get('art') if isinstance(st.image, dict) else st.image
                         if art and os.path.exists(art):
@@ -173,6 +195,10 @@ def view_series(state: APPState):
                                 .props('flat dense no-caps size=sm') \
                                 .tooltip('Drop lettering art — it becomes this masthead') \
                                 .on('click', lambda _, st=st: masthead_from_image(st))
+                            ui.button('Compose on the light table', icon='layers') \
+                                .props('flat dense no-caps size=sm') \
+                                .tooltip('Lay it out in layers on the mark bench') \
+                                .on('click', lambda _, st=st: open_mark_bench(st))
         # THE ISSUES HANG ON THE STUDIO WALL — the series room keeps only
         # what the series OWNS: its masthead and its reusable assets.
 

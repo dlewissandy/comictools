@@ -27,6 +27,7 @@ class SelectedKind(StrEnum):
     STYLED_VARIANT = "styled-variant"
     PUBLISHER = "publisher"
     STYLE = "style"
+    ARTBOARD = "artboard"
     STYLE_EXAMPLE = "style-example"
     IMAGE_EDITOR = "image-editor"
     IMAGE_EDITOR_CHOICES = "image-editor-choices"

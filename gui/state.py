@@ -473,6 +473,9 @@ class APPState:
                 return view_issue(self)
             case "scene":
                 return view_scene(self)
+            case "artboard":
+                from gui.light_table import view_artboard
+                return view_artboard(self)
             case "panel":
                 return view_panel(self)
             case "cover":

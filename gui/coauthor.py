@@ -182,6 +182,7 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
 # person with a role, not a "Bot".
 ROLE_NAMES = {
     "lobby": "the Editor",
+    "artboard": "the Letterer",
     "all-series": "the Editor",
     "all-publishers": "the Editor",
     "all-styles": "the Art Director",

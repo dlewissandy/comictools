@@ -17,6 +17,7 @@ from schema.style.comic import ComicStyle
 from schema.style.character import CharacterStyle
 from schema.style.style_example import StyleExample, ExampleKind
 from schema.styled_variant import StyledVariant
+from schema.artboard import ArtBoard
 from schema.character_reference import CharacterRef
 from schema.setting import Setting, SettingShot, Prop, AssetOrigin
 from schema.reference_image import ReferenceImage
@@ -34,6 +35,7 @@ __all__ = [
     "BubbleStyle",
     "BubbleStyles",
     "CharacterModel",
+    "ArtBoard",
     "CharacterRef",
     "CharacterStyle",
     "CharacterVariant",

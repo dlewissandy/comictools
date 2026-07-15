@@ -4349,3 +4349,65 @@ def _generate_character_exemplar_sync(wrapper: RunContextWrapper[APPState], seri
     """
     return generate_character_exemplar_body(wrapper.context, series_id,
                                             character_id, variant_id, notes)
+
+
+def render_artboard_body(state, scope_id: str, board_id: str) -> str:
+    """THE MARK'S PROOF: render a masthead or logo take from the art board —
+    the composed rough steers when layers are laid; the brief alone carries
+    a bare board.  Transparent background always (a mark is an acetate);
+    the take lands on the BOARD — featuring writes it home."""
+    from schema import ArtBoard, ComicStyle, Series, Publisher
+    storage = state.storage
+    board = storage.read_object(cls=ArtBoard, primary_key={
+        "scope_id": scope_id, "board_id": board_id})
+    if board is None:
+        return f"cannot render: no art board {board_id}."
+    style = storage.read_object(cls=ComicStyle, primary_key={"style_id": board.style_id}) \
+        if board.style_id else None
+
+    refs: list[str] = []
+    rough_note = ""
+    try:
+        rough = _compose_table_rough(storage, board, board)
+        if rough:
+            refs.append(rough)
+            rough_note = ("The attached rough is the author's own arrangement — "
+                          "follow its composition and redraw it as ONE clean mark.\n\n")
+    except Exception as ex:
+        logger.debug(f"mark rough skipped: {ex}")
+
+    if board.board_kind == 'masthead':
+        owner = storage.read_object(cls=Series, primary_key={"series_id": scope_id})
+        what = (f'THE MASTHEAD for the comic series "{owner.name if owner else scope_id}" — '
+                f'the title as hand-lettered display lettering, a wordmark.')
+    else:
+        owner = storage.read_object(cls=Publisher, primary_key={"publisher_id": scope_id})
+        what = (f'THE LOGO for the comic publishing house "{owner.name if owner else scope_id}" — '
+                f'a bold, high-contrast emblem that reads at any size.')
+
+    style_block = format_comic_style(style, include_bubble_styles=False,
+                                     include_character_style=False, heading_level=1) if style else ""
+    prompt = f"""{rough_note}Design {what}
+
+{("THE BRIEF: " + board.description) if (board.description or '').strip() else ''}
+
+Lettering/emblem only: NO scenery, NO characters, NO frame, NO other text.
+COMPLETELY TRANSPARENT background — this is an acetate to composite over art.
+
+{style_block}"""
+
+    art = style.image.get('art') if (style and isinstance(style.image, dict)) else None
+    if art and os.path.exists(art):
+        refs.append(art)
+    if refs:
+        image_bytes = invoke_edit_image_api(prompt, reference_images=refs,
+                                            size="1536x1024" if board.aspect.value == 'landscape'
+                                            else "1024x1024",
+                                            quality=IMAGE_QUALITY.HIGH, background="transparent")
+    else:
+        image_bytes = invoke_generate_image_api(prompt,
+                                                size="1536x1024" if board.aspect.value == 'landscape'
+                                                else "1024x1024",
+                                                quality=IMAGE_QUALITY.HIGH)
+    locator = storage.upload_binary_image(obj=board, data=image_bytes)
+    return f"Inked a {board.board_kind} take — it waits on the board: {locator}"

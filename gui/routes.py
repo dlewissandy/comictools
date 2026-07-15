@@ -27,6 +27,7 @@ from storage.generic import GenericStorage
 
 # selection kind -> the path segment that introduces it
 _SEGMENTS = {
+    SelectedKind.ARTBOARD: "mark",
     SelectedKind.ISSUE: "issue",
     SelectedKind.COVER: "cover",
     SelectedKind.INSERT: "insert",
@@ -203,6 +204,11 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
         sel.append(_named(st, SelectedKind.PUBLISHER, parts[1], Publisher, {"publisher_id": parts[1]}))
         if len(parts) == 2:
             return sel
+        if len(parts) == 4 and parts[2] == "mark":
+            from schema import ArtBoard
+            sel.append(_named(storage, SelectedKind.ARTBOARD, parts[3], ArtBoard,
+                              {"scope_id": parts[1], "board_id": parts[3]}))
+            return sel
         if len(parts) == 4 and parts[2] == "style":
             sel.append(_named(st, SelectedKind.STYLE, parts[3], ComicStyle, {"style_id": parts[3]}))
             return sel
@@ -247,6 +253,12 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
                 sel.append(_named(storage, SelectedKind.PANEL, rest[1], Panel, {"series_id": sid, "issue_id": iid, "scene_id": scid, "panel_id": rest[1]}))
                 return sel
         return None
+
+    if rest[0] == "mark" and len(rest) == 2:
+        from schema import ArtBoard
+        sel.append(_named(storage, SelectedKind.ARTBOARD, rest[1], ArtBoard,
+                          {"scope_id": sid, "board_id": rest[1]}))
+        return sel
 
     if rest[0] == "character" and len(rest) >= 2:
         chid = rest[1]

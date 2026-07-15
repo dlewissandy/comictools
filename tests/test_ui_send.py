@@ -936,3 +936,29 @@ async def test_cover_bench_offers_the_trade_dress(user: User) -> None:
     fresh = storage.read_object(Cover, {"series_id": WL, "issue_id": CARN, "cover_id": "front"})
     worn = (fresh.figure_blocking or {}).get("dress/price")
     assert worn and worn.get("text") == "$4.99", "the stamp writes the metadata snapshot"
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
+async def test_the_mark_bench_opens_on_the_light_table(user: User) -> None:
+    """THE MARK IS A BOARD: a masthead opens the real bench — brief, layers
+    rail, takes wall — with no issue in sight."""
+    main.LocalStorage = _TmpStorage
+    from schema import ArtBoard
+    storage = _TmpStorage()
+    WL = "wonders-of-the-witchlight"
+    b = ArtBoard(board_id="masthead-vintage-four-color", scope_id=WL,
+                 board_kind="masthead", name="Witchlight masthead",
+                 description="WONDERS OF THE WITCHLIGHT in circus woodtype",
+                 style_id="vintage-four-color")
+    storage.create_object(data=b, overwrite=True)
+    sel = [{"name": "Studio", "id": None, "kind": "lobby"},
+           {"name": "WL", "id": WL, "kind": "series"},
+           {"name": b.name, "id": b.board_id, "kind": "artboard"}]
+    json.dump({"selection": sel, "messages": [], "dark_mode": False},
+              open(gui_state.STATE_FILEPATH, "w"))
+    await user.open(_url_for(sel))
+    await user.should_see("Witchlight Masthead")
+    await user.should_see("THE ROUGH")               # the real bench, layers and all
+    await user.should_see("Ink this rough")          # the proof door
+    await user.should_not_see("Stamp the credits")   # a mark wears no trade dress
