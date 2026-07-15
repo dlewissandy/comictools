@@ -108,3 +108,8 @@ series, issue, and scene agents.  The /library route stays as a dormant deep lin
 ## Revision (2026-07-15): the drawer retires
 
 The catalog drawer is gone — every job it did has a sharper owner: the bench pickers lay assets (each with a *Borrow from another series…* door that hands the import to the conversation), the Library room browses every house, and Cmd-K jumps to anything by name.
+
+
+## Revision (2026-07-15): the Reading Room
+
+The Library room is now THE READING ROOM — walking in opens the immersive reader (or the spinner-rack wall of every readable issue), with THE RACK drawer on the left for switching books. Asset browsing lives where assets live: each series' own room, the bench pickers' borrow doors, and Cmd-K.
