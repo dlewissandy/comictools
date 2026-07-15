@@ -157,22 +157,11 @@ def found_house_dialog(state: APPState):
 
 
 def view_all_publishers(state: APPState):
-    from gui.elements import PagePacker, caption_action, CrudButtonKind as _CK
-    storage: GenericStorage = state.storage
-    with state.details:
-        packer = PagePacker(12)
-        with ui.element('div').classes('mosaic-host q-mt-md'), ui.element('div').classes('comic-mosaic w-full'):
-            view_all_instances(
-                state=state,
-                get_image_locator=house_logo,
-                get_instances=lambda: all_house_publishers(storage),
-                kind="publisher",
-                aspect_ratio="1/1",
-                packer=packer, variants=[(2, 2)],
-                overlap_caption=lambda: caption_action("Publishers", _CK.CREATE,
-                    lambda _: found_house_dialog(state), 3))
-            packer.finalize()
-        
+    """RETIRED ROOM: the studio wall is the one catalog — stale trails land
+    on the front door."""
+    return view_lobby(state)
+
+
 def _last_bench(storage):
     """(series, issue, storage) most recently touched anywhere under any
     mounted house — the bench the author left their pencils on."""
@@ -399,69 +388,8 @@ def view_lobby(state: APPState):
 
 
 def view_all_series(state: APPState):
-    from gui.messaging import new_item_messager
-    storage: GenericStorage = state.storage
-    with state.details:
-        new_item_messager(state, "SERIES", "I would like to create a new comic book series.")
+    """RETIRED ROOM: the studio wall is the one catalog — stale trails land
+    on the front door."""
+    return view_lobby(state)
 
-        # THE RESUME CARD: the lobby's front door — the bench you left your
-        # pencils on, badged by the one production ledger
-        series_id, issue, bench_storage = _last_bench(storage)
-        if issue is not None:
-            from gui.selection import SelectionItem, SelectedKind
-            series = bench_storage.read_object(cls=Series, primary_key={"series_id": series_id})
-            cover = bench_storage.find_series_image(series_id=series_id)
-            try:
-                from helpers.ledger import issue_ledger
-                summary = issue_ledger(bench_storage, series_id, issue.issue_id).summary()
-            except Exception:
-                summary = None
 
-            def resume():
-                state.change_selection(new=[
-                    SelectionItem(name="Series", id=None, kind=SelectedKind.ALL_SERIES),
-                    SelectionItem(name=(series.name if series else series_id),
-                                  id=series_id, kind=SelectedKind.SERIES),
-                    SelectionItem(name=issue.name, id=issue.issue_id, kind=SelectedKind.ISSUE)])
-            card = ui.element('div').classes('resume-card cursor-pointer')
-            with card:
-                if cover and os.path.exists(cover):
-                    ui.image(source=cover).classes('resume-card__art').props('fit=cover')
-                with ui.column().style('gap: 2px; min-width: 0;'):
-                    ui.label('STILL ON THE DRAWING BOARD').classes('caption-box caption-box-sm')
-                    ui.label(f"{(series.name if series else series_id).title()} — "
-                             f"issue {issue.issue_number}: {issue.name}") \
-                        .classes('text-lg font-bold').style('line-height: 1.2;')
-                    if summary:
-                        ui.label(summary).classes('text-xs text-gray-500 italic')
-            card.tooltip('Open the book where you left it')
-            card.on('click', lambda _: resume())
-
-        from gui.elements import ruled_page
-        from storage import registry as _reg
-
-        _rooted = (str(getattr(storage, 'base_path', '')) == _reg.DATA_DIR
-                   and _reg.registered())
-
-        def _all_series():
-            # THE LOBBY SEES EVERY HOUSE: the wall unions the mounted repos
-            if not _rooted:
-                return storage.read_all_objects(Series, order_by="name")
-            out = []
-            for _slug, st in _reg.mounted_storages():
-                out.extend(st.read_all_objects(Series))
-            return sorted(out, key=lambda x: x.name)
-
-        def _series_face(x):
-            slug = _reg.house_of_series(x.series_id) if _rooted else None
-            st = _reg.storage_for(slug) if slug else storage
-            return st.find_series_image(series_id=x.series_id)
-
-        with ruled_page() as packer:
-            view_all_instances(
-                state=state,
-                get_image_locator=_series_face,
-                get_instances=_all_series,
-                kind="series",
-                aspect_ratio="16/27",
-                packer=packer, variants=[(2, 3), (8/3, 4), (4, 6)])

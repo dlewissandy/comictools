@@ -409,7 +409,6 @@ class APPState:
         except Exception:
             pass
         # These imports are here to avoid circular imports
-        from gui.home import view_all_series, view_all_publishers
         from gui.style import view_style, view_pick_style
         from gui.series import view_series
         from gui.setting import view_setting
@@ -418,7 +417,7 @@ class APPState:
         from gui.scene import view_scene
         from gui.panel import view_panel
         from gui.cover import view_cover
-        from gui.publisher import view_publisher, view_pick_publisher
+        from gui.publisher import view_publisher
         from gui.reference_image import view_reference_image
         from gui.variant import view_character_variant
         from gui.styled_image import view_styled_image
@@ -450,8 +449,9 @@ class APPState:
                 return view_lobby(self)
             case "all-styles":
                 # THE RETIRED ROOM: styles live in the house — a stale
-                # persisted trail lands on the wall instead
-                return view_all_publishers(self)
+                # persisted trail lands on the front door instead
+                from gui.home import view_lobby
+                return view_lobby(self)
             case "library":
                 from gui.library import view_library
                 return view_library(self)
@@ -486,7 +486,9 @@ class APPState:
             case "publisher":
                 return view_publisher(self)
             case "pick-publisher":
-                return view_pick_publisher(self)
+                # PICK-PUBLISHER retired with the wall: the trail's own house rules
+                from gui.home import view_lobby
+                return view_lobby(self)
             case "pick-style":
                 return view_pick_style(self)
             case "character-reference":

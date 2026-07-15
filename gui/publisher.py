@@ -185,43 +185,8 @@ def view_publisher(state: APPState):
                 upload_image=upload_image
             )        
                 
-def view_pick_publisher(state:APPState):
-    """
-    View the publisher picker.
-    
-    Args:
-        state: The GUI elements containing the details and selection.
-    """
-    storage: GenericStorage = state.storage
-    logger.debug("view_pick_publisher")
+def view_pick_publisher(state: APPState):
+    """RETIRED: series never pick publishers (the repo IS the publisher)."""
+    from gui.home import view_lobby
+    return view_lobby(state)
 
-    # Dereference the state to get the selection and details.
-    selection = state.selection
-    series_id = selection[-2].id
-    series = storage.read_object(cls=Series, primary_key={"series_id": series_id}) if series_id else None
-    pub_id = selection[-1].id
-    pub = storage.read_object(cls=Publisher, primary_key={"publisher_id": pub_id}) if pub_id else None
-
-    # Create a setter function for the publisher choice
-    def set_publisher(publisher_id):
-        if series is not None:
-            series.publisher_id = publisher_id
-            storage.update_object(series)
-
-    with state.details:
-        header("Pick a Publisher", 1)
-
-        view_all_instances(
-            state=state,
-            get_instances=lambda: storage.read_all_objects(cls=Publisher, order_by="name"),
-            kind="publisher",
-            aspect_ratio="1/1",
-            get_name=lambda i,x: x.name,
-            get_choice=lambda : series.publisher_id if series else None,
-            set_choice=set_publisher,
-            get_image_locator=lambda publisher: publisher.image,
-            variants=[(2, 2)],
-        )            
-
-            
-        

@@ -34,9 +34,6 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                         "or tell me what we're making today.",
                         ["Pick up where I left off", "Start something new…",
                          "What still needs doing?"])
-            case "all-series":
-                return ("Welcome to the studio.  Tell me a story idea and I'll help you build it into a comic.",
-                        ["Create a new series", "What series do we have?", "Show me the asset library"])
 
             case "library":
                 return ("I keep the studio's collection — every character, wardrobe and setting across all series.  Ask me to find something or import it into a series.",
