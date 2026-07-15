@@ -236,3 +236,29 @@ def test_every_selection_kind_walks_the_context():
             selection_to_context(sel)
         except ValueError as ex:
             raise AssertionError(f"{kind.value} raises: {ex}")
+
+
+def test_lobby_chips_keep_their_promises():
+    """The resume chip is a DOOR (change_selection, no agent turn); the
+    status chip names the real bench; the starter chip is a prefill."""
+    from types import SimpleNamespace
+    from gui.coauthor import opening_and_chips
+    from gui.selection import SelectionItem, SelectedKind as K
+    walked = []
+    resume = [SelectionItem(name="Studio", id=None, kind=K.LOBBY),
+              SelectionItem(name="Rugor", id="rugor", kind=K.SERIES),
+              SelectionItem(name="Guardian of Blackstone Pass", id="i1", kind=K.ISSUE)]
+    state = SimpleNamespace(
+        selection=[SelectionItem(name="Studio", id=None, kind=K.LOBBY)],
+        resume_selection=resume,
+        change_selection=lambda new: walked.append(new),
+        storage=SimpleNamespace(read_all_objects=lambda *a, **k: [SimpleNamespace()]))
+    opener, chips = opening_and_chips(state)
+    door = next(c for c in chips if isinstance(c, tuple))
+    assert door[0] == "Pick up where I left off"
+    door[1]()
+    assert walked and walked[0][-1].id == "i1", "the door WALKS, no agent turn"
+    grounded = next(c for c in chips if isinstance(c, str) and "needs doing" in c)
+    assert "Rugor" in grounded and "Guardian" in grounded, "the ask names the real bench"
+    assert any(isinstance(c, str) and c.endswith("…") for c in chips), "a prefill starter"
+    assert "Guardian of Blackstone Pass" in opener

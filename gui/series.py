@@ -163,34 +163,25 @@ def view_series(state: APPState):
                         ui.image(source=timg).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
                         from gui.elements import art_tools
                         art_tools(state, timg,
-                                  on_reink=lambda st=st: ink_title(st),
-                                  reink_tip='Re-letter the masthead — with fresh direction',
+                                  on_reink=lambda st=st: open_mark_bench(st),
+                                  reink_tip='Re-letter on the mark bench',
                                   heal_name=f'{series.name} masthead')
-                        ui.button(icon='add_photo_alternate').props('flat round dense size=xs') \
-                            .classes('absolute bottom-1 left-1 z-10 bg-white/70 dark:bg-black/50') \
-                            .tooltip('Swap in a wordmark image instead') \
-                            .on('click', lambda _, st=st: masthead_from_image(st))
                         ui.button(icon='layers').props('flat round dense size=xs') \
-                            .classes('absolute bottom-1 left-8 z-10 bg-white/70 dark:bg-black/50') \
-                            .tooltip('Compose this masthead in layers on the mark bench') \
+                            .classes('absolute bottom-1 left-1 z-10 bg-white/70 dark:bg-black/50') \
+                            .tooltip('Open the mark bench — rework this masthead '
+                                     '(text, image or rough)') \
                             .on('click', lambda _, st=st: open_mark_bench(st))
                     else:
                         art = st.image.get('art') if isinstance(st.image, dict) else st.image
                         if art and os.path.exists(art):
                             ui.image(source=art).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
-                        with ui.column().classes('absolute inset-0 items-center justify-center z-10') \
-                                .style('gap: 6px;'):
+                        with ui.column().classes('absolute inset-0 items-center justify-center z-10'):
+                            # ONE TOOL, MANY USES: the lightboard is the one
+                            # door — text, image and rough all live there
                             ui.button(f'Letter it in {st.name.title()}', icon='brush') \
                                 .props('unelevated dense no-caps size=sm') \
-                                .tooltip('Describe the lettering — the Letterer inks it') \
-                                .on('click', lambda _, st=st: ink_title(st))
-                            ui.button('From a wordmark image', icon='add_photo_alternate') \
-                                .props('flat dense no-caps size=sm') \
-                                .tooltip('Drop lettering art — it becomes this masthead') \
-                                .on('click', lambda _, st=st: masthead_from_image(st))
-                            ui.button('Compose on the light table', icon='layers') \
-                                .props('flat dense no-caps size=sm') \
-                                .tooltip('Lay it out in layers on the mark bench') \
+                                .tooltip('Open the mark bench — render from text, '
+                                         'from a dropped image, or from a rough') \
                                 .on('click', lambda _, st=st: open_mark_bench(st))
         # Description callout — a text panel takes only the size its text needs.
         desc = series.description or ""

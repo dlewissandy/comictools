@@ -374,8 +374,16 @@ class APPState:
                     with ui.row().classes('w-full items-center').style('gap: 6px;'):
                         ui.label('NEXT:').classes('comic-label-sm').style('opacity: .6;')
                         for chip in chips[:4]:
-                            ui.button(chip, on_click=lambda _, t=chip: _fire(t)) \
-                                .props('outline rounded dense no-caps size=sm')
+                            # a chip is a WORD (send/prefill) or a DOOR
+                            # (label, action) — doors act instantly, no
+                            # agent turn to do what a click can do
+                            if isinstance(chip, tuple):
+                                label, action = chip
+                                ui.button(label, on_click=lambda _, a=action: a()) \
+                                    .props('outline rounded dense no-caps size=sm')
+                            else:
+                                ui.button(chip, on_click=lambda _, t=chip: _fire(t)) \
+                                    .props('outline rounded dense no-caps size=sm')
 
     def render_your_turn(self):
         """The strip is the thread's standing last line — recompute it."""

@@ -401,6 +401,13 @@ SPEAK_ONLY_DONE_WORK = """
         you stopped and what remains; the author can say 'go on'.  Never
         invent placeholder names ('New Publisher', 'Untitled') — ask.
 
+        THE LEDGER IS THE TRUTH: any question about what remains, what
+        still needs doing, or whether something is ready to press MUST be
+        answered by calling preflight_issue (or the read_* tools) FIRST and
+        quoting the result — NEVER from memory or inference.  If you cannot
+        resolve which issue is meant, ask one short question instead of
+        guessing.
+
         STAY WHERE THE AUTHOR STANDS: never change the author's room.
         The select_* tools exist ONLY for an explicit ask to go somewhere
         ('open it', 'take me to…').  Creating, reading, rendering or
@@ -424,7 +431,35 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
     selection: list[SelectionItem] = state.selection
 
     
-    if len(selection) == 1:
+    if selection and selection[0].kind.value == "lobby" and len(selection) == 1:
+        # THE FRONT DESK SEES THE WHOLE WALL: every house, series and issue
+        # with its REAL id — the Editor resolves names itself and can never
+        # invent a bench that doesn't exist
+        try:
+            from storage import registry as _registry
+            from schema import Publisher as _P, Series as _S, Issue as _I
+            lines = []
+            _handed = getattr(state, '_storage', state.storage)
+            if _registry.registered() and str(getattr(_handed, 'base_path', '')) == _registry.DATA_DIR:
+                _houses = _registry.mounted_storages()
+            else:
+                _houses = [(None, state.storage)]
+            for _slug, _st in _houses:
+                for _pub in _st.read_all_objects(_P):
+                    lines.append(f"HOUSE {_pub.name} (publisher_id={_pub.publisher_id})")
+                    for _sr in _st.read_all_objects(_S):
+                        if _sr.publisher_id != _pub.publisher_id:
+                            continue
+                        lines.append(f"  SERIES {_sr.name} (series_id={_sr.series_id})")
+                        for _is in _st.read_all_objects(_I, {"series_id": _sr.series_id}):
+                            lines.append(f"    ISSUE {_is.issue_number}: {_is.name} "
+                                         f"(issue_id={_is.issue_id})")
+            details = ("# THE STUDIO WALL (real ids — resolve names against THIS, "
+                       "never invent):\n" + "\n".join(lines)) if lines else ""
+        except Exception as e:
+            logger.debug(f"lobby roster skipped: {e}")
+            details = ""
+    elif len(selection) == 1:
         # One of the "all_*" is selected.   We can at least provide a list of identifiers
         try:
             i = ["all-publishers", "all-series", "all-styles"].index(selection[0].kind.value)

@@ -265,6 +265,25 @@ def view_lobby(state: APPState):
             state.change_selection(new=[SelectionItem(name='Studio', id=None,
                                                       kind=SelectedKind.LOBBY)] + sel_items)
 
+        def _open_mark(st, scope_id, board_kind, name, trail, style_id=None,
+                       aspect=None):
+            # ONE TOOL, MANY USES: every mark edits on the lightboard —
+            # render from text (the brief), from image (drop a take), or
+            # from rough (compose layers).  The click IS "open the editor".
+            from schema import ArtBoard
+            from schema.enums import FrameLayout
+            bid = f"{board_kind}-{style_id}" if style_id else board_kind
+            board = st.read_object(cls=ArtBoard, primary_key={
+                "scope_id": scope_id, "board_id": bid})
+            if board is None:
+                board = ArtBoard(board_id=bid, scope_id=scope_id,
+                                 board_kind=board_kind, name=name,
+                                 style_id=style_id,
+                                 aspect=aspect or (FrameLayout.SQUARE if board_kind == 'logo'
+                                                   else FrameLayout.LANDSCAPE))
+                st.create_object(data=board, overwrite=True)
+            _goto([*trail, SelectionItem(name=name, id=bid, kind=SelectedKind.ARTBOARD)])
+
         with ui.column().classes('w-full q-mt-md studio-wall').style('gap: 14px;'):
             for pub, st, series_list in _house_rows():
                 with ui.row().classes('w-full flex-nowrap items-start').style('gap: 10px;'):
@@ -276,13 +295,11 @@ def view_lobby(state: APPState):
                             ui.image(source=logo).style('height: 84px;').props('fit=contain')
                         else:
                             # NO MARK YET: the wall itself offers the brush
-                            def _ink_logo(_=None, p=pub):
-                                # IN PLACE: the front desk designs it from here
-                                state.user_input.value = f"Design the {p.name} logo: "
-                                try:
-                                    state.user_input.run_method('focus')
-                                except Exception:
-                                    pass
+                            def _ink_logo(_=None, p=pub, st=st):
+                                _open_mark(st, p.publisher_id, 'logo',
+                                           f"{p.name} logo",
+                                           [SelectionItem(name=p.name, id=p.publisher_id,
+                                                          kind=SelectedKind.PUBLISHER)])
                             ui.button(icon='brush').props('flat round dense size=sm') \
                                 .classes('absolute top-1 right-1 z-10') \
                                 .tooltip('No logo yet — describe one and the house gets its mark') \
@@ -306,14 +323,15 @@ def view_lobby(state: APPState):
                                             .style('width: 100%; aspect-ratio: 3/2;') \
                                             .props('fit=contain')
                                     else:
-                                        def _ink_mast(_=None, p=pub, x=ser):
-                                            # IN PLACE: the Letterer works from here
-                                            state.user_input.value = (
-                                                f"Letter the {x.name} masthead: ")
-                                            try:
-                                                state.user_input.run_method('focus')
-                                            except Exception:
-                                                pass
+                                        def _ink_mast(_=None, p=pub, x=ser, st=st):
+                                            _sid = getattr(x, 'style_id', None) or 'vintage-four-color'
+                                            _open_mark(st, x.series_id, 'masthead',
+                                                       f"{x.name} masthead",
+                                                       [SelectionItem(name=p.name, id=p.publisher_id,
+                                                                      kind=SelectedKind.PUBLISHER),
+                                                        SelectionItem(name=x.name, id=x.series_id,
+                                                                      kind=SelectedKind.SERIES)],
+                                                       style_id=_sid)
                                         ui.button(icon='brush').props('flat round dense size=xs') \
                                             .classes('absolute top-1 right-1 z-10') \
                                             .tooltip('No masthead yet — describe the lettering') \

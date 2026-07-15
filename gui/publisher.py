@@ -158,9 +158,8 @@ def view_publisher(state: APPState):
             with ui.card().classes('soft-card p-2 relative').style('max-width: 320px;'):
                 ui.image(source=publisher.image).style('max-height: 160px;').props('fit=contain')
                 art_tools(state, publisher.image,
-                          on_reink=lambda: post_user_message(
-                              state, "Render a new logo for this publisher from its description."),
-                          reink_tip='Re-ink the logo from its description',
+                          on_reink=open_logo_bench,
+                          reink_tip='Re-ink on the mark bench (text, image or rough)',
                           heal_name=f'the {publisher.name} logo')
 
         with view_attributes(

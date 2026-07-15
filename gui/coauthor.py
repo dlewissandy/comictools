@@ -30,10 +30,29 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                             "and I'll help you build it into a comic.  First we need "
                             "a publishing house to work in.",
                             ["Found a publishing house", "What can you do?"])
-                return ("Welcome back.  The bench you left is on the card — "
-                        "or tell me what we're making today.",
-                        ["Pick up where I left off", "Start something new…",
-                         "What still needs doing?"])
+                # THE CHIPS MUST WORK: the resume chip is a DOOR (a click
+                # does what a click can do); the status ask names the real
+                # bench so the Editor quotes the ledger, never a guess
+                resume_sel = getattr(state, 'resume_selection', None)
+                chips = []
+                bench_words = None
+                if resume_sel:
+                    def _resume(state=state, rs=resume_sel):
+                        state.change_selection(new=rs)
+                    chips.append(("Pick up where I left off", _resume))
+                    from gui.selection import SelectedKind as _K
+                    _ser = next((it for it in resume_sel if it.kind == _K.SERIES), None)
+                    _iss = next((it for it in resume_sel if it.kind == _K.ISSUE), None)
+                    if _ser is not None and _iss is not None:
+                        bench_words = f"{_ser.name} — {_iss.name}"
+                        chips.append(f"What still needs doing on {_ser.name}, "
+                                     f"issue “{_iss.name}”?")
+                chips.append("Create a new series about …")
+                opener = ("Welcome back.  " +
+                          (f"You left your pencils on **{bench_words}**.  "
+                           if bench_words else "") +
+                          "Tell me what we're making today.")
+                return (opener, chips[:4])
 
             case "library":
                 return ("I keep the studio's collection — every character, wardrobe and setting across all series.  Ask me to find something or import it into a series.",
