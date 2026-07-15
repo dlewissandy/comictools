@@ -126,21 +126,22 @@ def view_scene(state: APPState):
                     from gui.elements import studio_dialog
                     with studio_dialog('Set the scene', min_w=480, max_w=720,
                                        scroll=True) as dlg:
-                        with ui.row().classes('w-full').style('gap: 8px;'):
-                            for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}, order_by="name"):
-                                img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
-                                with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 150px;') as card:
-                                    if img:
-                                        ui.image(source=img).style('height: 80px;').props('fit=cover')
-                                    ui.label(s.name.title()).classes('text-xs text-center w-full')
+                        from gui.elements import swatch_rack
 
-                                def choose(s=s):
-                                    scene.setting_id = s.setting_id
-                                    storage.update_object(scene)
-                                    table_receipt(state, f"🏔 set the scene in **{s.name}**")
-                                    dlg.close()
-                                    state.refresh_details()
-                                card.on('click', lambda _, s=s: choose(s))
+                        def choose(st_obj):
+                            scene.setting_id = st_obj.setting_id
+                            storage.update_object(scene)
+                            table_receipt(state, f"🏔 set the scene in **{st_obj.name}**")
+                            dlg.close()
+                            state.refresh_details()
+                        swatch_rack(
+                            [(st_obj.name.title(),
+                              next((i for i in (st_obj.images or {}).values()
+                                    if i and os.path.exists(i)), None), st_obj)
+                             for st_obj in storage.read_all_objects(
+                                 Setting, primary_key={"series_id": series_id}, order_by="name")],
+                            choose, width=150, img_h=80, fit='cover',
+                            empty_text='No settings built yet — describe one below.')
                         ui.button('A brand-new setting instead…', icon='add') \
                             .props('flat dense no-caps').classes('q-mt-sm') \
                             .on('click', lambda _: (dlg.close(),

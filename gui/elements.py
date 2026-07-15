@@ -55,6 +55,23 @@ def init_cardwall(columns: int = 4):
     return ui.element('div').classes('w-full').style(
         f"display: grid; grid-template-columns: repeat(auto-fill, minmax({_GRID_MIN.get(columns, '180px')}, 1fr)); gap: 10px;")
 
+def swatch_rack(items, on_pick, *, width: int = 130, img_h: int = 70,
+                fit: str = 'contain', empty_text: str | None = None):
+    """A RACK OF SWATCHES: the one look for every picker's card grid —
+    (label, image, payload) in, a click out.  Sites with per-card extras
+    keep bespoke loops; everything plain rides this."""
+    with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
+        if not items and empty_text:
+            ui.label(empty_text).classes('text-sm text-gray-500')
+        for label, img, payload in items:
+            with ui.card().classes('soft-card p-1 cursor-pointer') \
+                    .style(f'width: {width}px;') as card:
+                if img and os.path.exists(img):
+                    ui.image(source=img).style(f'height: {img_h}px;').props(f'fit={fit}')
+                ui.label(label).classes('text-xs text-center w-full')
+            card.on('click', lambda _, pl=payload: on_pick(pl))
+
+
 async def confirm_dialog(title: str, body: str, *, go_label: str,
                          go_icon: str = 'check', keep_label: str = 'Keep it',
                          danger: bool = True) -> bool:

@@ -3373,23 +3373,23 @@ def light_table(state: APPState, panel, scene, setting,
                 from gui.elements import studio_dialog
                 with studio_dialog('Lay a figure on the table',
                                    min_w=480, max_w=720, scroll=True) as dlg:
+                    from gui.elements import swatch_rack
                     already = {(c.character_id, c.variant_id) for c in (panel.character_references or [])}
-                    with ui.row().classes('w-full').style('gap: 8px;'):
-                        for ch in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
-                            for v in storage.read_all_objects(CharacterVariant, primary_key={"series_id": series_id, "character_id": ch.character_id}):
-                                if (ch.character_id, v.id) in already:
-                                    continue
-                                img = storage.find_variant_image(series_id=series_id, character_id=ch.character_id, variant_id=v.id)
-                                with ui.card().classes('soft-card p-1 cursor-pointer').style('width: 130px;') as card:
-                                    if img and os.path.exists(img):
-                                        ui.image(source=img).style('height: 70px;').props('fit=contain')
-                                    vname = getattr(v, 'name', None) or v.id
-                                    ui.label(f"{ch.name.title()} · {vname}").classes('text-xs text-center w-full')
+                    items = []
+                    for ch in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
+                        for v in storage.read_all_objects(CharacterVariant, primary_key={"series_id": series_id, "character_id": ch.character_id}):
+                            if (ch.character_id, v.id) in already:
+                                continue
+                            img = storage.find_variant_image(series_id=series_id, character_id=ch.character_id, variant_id=v.id)
+                            vname = getattr(v, 'name', None) or v.id
+                            items.append((f"{ch.name.title()} · {vname}", img, (ch, v)))
 
-                                def lay(ch=ch, v=v):
-                                    dlg.close()
-                                    lay_figure_on_table(state, panel, ch.character_id, v.id, ch.name)
-                                card.on('click', lambda _, ch=ch, v=v: lay(ch, v))
+                    def lay(pl):
+                        ch, v = pl
+                        dlg.close()
+                        lay_figure_on_table(state, panel, ch.character_id, v.id, ch.name)
+                    swatch_rack(items, lay,
+                                empty_text='Every cast member is already on the table.')
 
                     def _borrow(kind_word):
                         # BORROW FROM ANOTHER SERIES: the conversation is the
@@ -3491,11 +3491,8 @@ def light_table(state: APPState, panel, scene, setting,
                 from gui.elements import studio_dialog
                 with studio_dialog('Lay a prop on the table',
                                    min_w=480, max_w=720, scroll=True) as dlg:
-                    already = {p.name for p in (getattr(scene, 'props', None) or [])}
                     with ui.row().classes('w-full q-mt-sm').style('gap: 8px;'):
                         for pa in storage.read_all_objects(PropAsset, primary_key={"series_id": series_id}, order_by="name"):
-                            if not cover_mode and pa.name in already:
-                                continue
                             img = next((i for i in (pa.images or {}).values() if i and os.path.exists(i)), None)
                             with ui.card().classes('soft-card p-1 cursor-pointer relative').style('width: 130px;') as card:
                                 if img:
