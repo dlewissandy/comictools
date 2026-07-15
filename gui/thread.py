@@ -102,16 +102,29 @@ def thread_reply(state, text: str) -> dict:
 
 def thread_aside(state, text: str, *, undo=None, bench: str | None = None,
                  image: str | None = None) -> dict:
-    """A paper slip in the margin — the receipts of GUI verbs.  UNDO rides
-    only the live slip; it is never persisted."""
+    """A receipt in THE DAYBOOK — the chat is the conversation; what
+    HAPPENED lives behind the daybook door.  UNDO rides the live entry
+    (never persisted); a quiet toast points at the daybook."""
     entry = _append(state, {"t": "aside", "text": text, "bench": bench,
                             "image": image})
+    if undo is not None:
+        undos = getattr(state, "_daybook_undos", None)
+        if undos is None:
+            undos = {}
+            state._daybook_undos = undos
+        undos[entry["id"]] = undo
     try:
-        with state.history:
-            _render_aside(state, entry, undo=undo)
-        _scroll(state)
+        import re as _re
+        plain = _re.sub(r"[*_`#]", "", text)
+        ui.notify(plain[:120], type="info", position="bottom-right", timeout=2500)
+    except Exception:
+        pass
+    try:
+        refresh = getattr(state, "_daybook_refresh", None)
+        if refresh is not None:
+            refresh()
     except Exception as ex:
-        logger.debug(f"thread_aside render skipped: {ex}")
+        logger.debug(f"daybook refresh skipped: {ex}")
     return entry
 
 
@@ -183,6 +196,53 @@ def thread_work(state) -> tuple[dict, callable]:
 
     entry["_close"] = close          # popped before persistence
     return entry, refresh
+
+
+def begin_turn(state):
+    """A dialog turn: ONE reply balloon holding the turn's work line above
+    the streaming words — the chat stays conversation; what the Editor DID
+    to answer rides inside the reply, one click away."""
+    from gui.avatars import comic_chat_message
+    work = _append(state, {"t": "work", "status": "running",
+                           "started": time.time(), "ended": None,
+                           "receipts": []})
+    reply = _append(state, {"t": "reply", "text": ""})
+    with state.history:
+        with comic_chat_message(name=EDITOR, sent=False).classes("w-full"):
+            with ui.column().classes("w-full").style("gap: 2px;"):
+                container = ui.element("div").classes("w-full")
+                md = ui.markdown("").classes("w-full")
+    _scroll(state)
+
+    def refresh():
+        try:
+            container.clear()
+            with container:
+                _render_work(state, work, live=True)
+            _scroll(state)
+        except Exception as ex:
+            logger.debug(f"work line refresh skipped: {ex}")
+
+    refresh()
+
+    def close(status: str = "done"):
+        work["status"] = status
+        work["ended"] = time.time()
+        if not work["receipts"]:
+            # a turn that touched nothing leaves no work line at all
+            try:
+                state.thread.remove(work)
+            except ValueError:
+                pass
+            try:
+                container.delete()
+            except Exception:
+                pass
+            return
+        refresh()
+
+    work["_close"] = close          # popped before persistence
+    return work, refresh, reply, md
 
 
 # ---------------------------------------------------------------------------
@@ -312,23 +372,37 @@ def render_thread(state, entries: list[dict] | None = None, limit: int = 60):
 
 def _render_entries(state, entries):
     from gui.avatars import comic_chat_message
+    pending_work = None
     for e in entries:
         t = e.get("t")
         try:
             if t == "user":
+                pending_work = None
                 with comic_chat_message(name="You", sent=True).classes("w-full"):
                     ui.markdown(e.get("text") or "")
             elif t == "reply":
                 with comic_chat_message(name=EDITOR, sent=False).classes("w-full"):
-                    ui.markdown(e.get("text") or "")
+                    with ui.column().classes("w-full").style("gap: 2px;"):
+                        if pending_work is not None:
+                            # the turn's work rides INSIDE the reply — what
+                            # the Editor did to answer, one click away
+                            _render_work(state, pending_work, live=False)
+                        ui.markdown(e.get("text") or "")
+                pending_work = None
             elif t == "room":
                 _render_room(state, e)
             elif t == "aside":
-                _render_aside(state, e)          # undo is live-only
+                continue                       # the DAYBOOK renders these
             elif t == "work":
-                _render_work(state, e, live=False)
+                if e.get("status") == "running":
+                    _render_work(state, e, live=False)   # interrupted note
+                else:
+                    pending_work = e           # folds into the next reply
         except Exception as ex:
             logger.debug(f"thread render skipped an entry: {ex}")
+    if pending_work is not None:
+        # a turn that worked but never spoke: the work line stands alone
+        _render_work(state, pending_work, live=False)
 
 
 # ---------------------------------------------------------------------------

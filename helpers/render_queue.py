@@ -99,13 +99,12 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
     slips = {label: _slip_write(label) for label, _j, _a in jobs}
 
     def _announce(text: str, image: str | None = None):
+        # STARTING AND FINISHING A RENDER IS NOT CONVERSATION: every
+        # drawing-board report is a daybook receipt; the docket chip
+        # carries the live count
         try:
-            if image:
-                from gui.thread import thread_aside
-                thread_aside(state, text, bench='the drawing board', image=image)
-            else:
-                from gui.thread import thread_reply
-                thread_reply(state, text)
+            from gui.thread import thread_aside
+            thread_aside(state, text, bench='the drawing board', image=image)
         except Exception as e:
             logger.debug(f"render-queue announce skipped: {e}")
 

@@ -83,3 +83,85 @@ def test_merge_lets_the_writers_fresh_copy_win():
     mine = [{"id": "m", "ts": 5.0, "t": "room", "name": "Joey"}]
     merged = merge_threads(disk, mine)
     assert len(merged) == 1 and merged[0]["name"] == "Joey"
+
+
+def test_render_thread_keeps_the_chat_pure(user=None):
+    """THE CHAT IS THE CONVERSATION: projecting the thread renders balloons
+    and captions — never asides (the daybook holds those)."""
+    entries = [
+        {"id": "1", "ts": 1, "t": "user", "text": "hello"},
+        {"id": "2", "ts": 2, "t": "aside", "text": "🗑 struck a thing", "bench": "b", "image": None},
+        {"id": "3", "ts": 3, "t": "work", "status": "done",
+         "receipts": [{"line": "did", "quiet": False, "answer": None, "image": None}]},
+        {"id": "4", "ts": 4, "t": "reply", "text": "hi there"},
+    ]
+    # the projection logic itself: asides are skipped, work folds into reply
+    import gui.thread as th
+    rendered = []
+    orig_aside, orig_work = th._render_aside, th._render_work
+    th._render_aside = lambda *a, **k: rendered.append("aside")
+    th._render_work = lambda s, e, live: rendered.append(f"work-{e['id']}")
+    try:
+        from types import SimpleNamespace
+        import contextlib
+
+        class _FakeUI:
+            def __getattr__(self, name):
+                def make(*a, **k):
+                    class _El:
+                        def classes(self, *a, **k): return self
+                        def style(self, *a, **k): return self
+                        def props(self, *a, **k): return self
+                        def __enter__(self): return self
+                        def __exit__(self, *a): return False
+                    return _El()
+                return make
+        orig_ui, th.ui = th.ui, _FakeUI()
+        orig_ccm = None
+        import gui.avatars as av
+        orig_ccm = av.comic_chat_message
+        av.comic_chat_message = lambda **k: th.ui.element("div")
+        th._render_entries(SimpleNamespace(history=None), entries)
+    finally:
+        th._render_aside, th._render_work = orig_aside, orig_work
+        th.ui = orig_ui
+        av.comic_chat_message = orig_ccm
+    assert "aside" not in rendered, "asides never render in the chat"
+    assert "work-3" in rendered, "the turn's work folds into the reply balloon"
+
+
+def test_begin_turn_orders_work_before_reply():
+    """begin_turn appends work THEN reply — so a reload folds the work line
+    inside the reply balloon (the projection reads them in order)."""
+    from types import SimpleNamespace
+    import gui.thread as th
+
+    class _FakeUI:
+        def __getattr__(self, name):
+            def make(*a, **k):
+                class _El:
+                    def classes(self, *a, **k): return self
+                    def style(self, *a, **k): return self
+                    def props(self, *a, **k): return self
+                    def clear(self): pass
+                    def delete(self): pass
+                    def __enter__(self): return self
+                    def __exit__(self, *a): return False
+                    content = ""
+                return _El()
+            return make
+    import gui.avatars as av
+    orig_ui, th.ui = th.ui, _FakeUI()
+    orig_ccm = av.comic_chat_message
+    av.comic_chat_message = lambda **k: th.ui.element("div")
+    try:
+        state = SimpleNamespace(thread=[], history=th.ui.element("div"))
+        work, refresh, reply, md = th.begin_turn(state)
+        kinds = [e["t"] for e in state.thread]
+        assert kinds == ["work", "reply"]
+        # a turn that touched nothing leaves NO work line
+        work["_close"]("done")
+        assert [e["t"] for e in state.thread] == ["reply"]
+    finally:
+        th.ui = orig_ui
+        av.comic_chat_message = orig_ccm

@@ -1064,6 +1064,41 @@ def build_page(selection_override: list[SelectionItem] | None = None):
             .tooltip('The wastebasket — everything struck, ready to bring back') \
             .on('click', lambda _: open_wastebasket())
 
+        # THE DAYBOOK: the chat is the conversation — what HAPPENED lives
+        # here: every receipt of the day, newest first, undo and all
+        def open_daybook():
+            import time as _time
+            from gui.thread import _render_aside
+            asides = [e for e in (getattr(state, 'thread', None) or [])
+                      if e.get('t') == 'aside']
+            undos = getattr(state, '_daybook_undos', None) or {}
+            with ui.dialog() as dlg, ui.card().classes('soft-card') \
+                    .style('min-width: 520px; max-width: 760px; max-height: 84vh; '
+                           'display: flex; flex-direction: column;'):
+                ui.label('The daybook').classes('caption-box caption-box-sm')
+                ui.label("Everything the studio did at your hand — the conversation "
+                         "stays a conversation; the receipts live here.") \
+                    .classes('text-xs text-gray-500')
+                if not asides:
+                    ui.label('A clean page — nothing done yet today.').classes('text-sm q-mt-sm')
+                with ui.element('div').classes('w-full q-mt-sm') \
+                        .style('overflow-y: auto; min-height: 0; flex: 1;'):
+                    now = _time.time()
+                    for e in reversed(asides[-80:]):
+                        age = now - (e.get('ts') or now)
+                        stamp = (f"{int(age // 3600)}h ago" if age >= 3600
+                                 else f"{int(age // 60)}m ago" if age >= 60 else "just now")
+                        with ui.row().classes('w-full items-start').style('gap: 8px; flex-wrap: nowrap;'):
+                            ui.label(stamp).classes('text-xs text-gray-500') \
+                                .style('width: 64px; flex-shrink: 0; margin-top: 10px;')
+                            with ui.column().classes('w-full').style('gap: 0;'):
+                                _render_aside(state, e, undo=undos.get(e.get('id')))
+            dlg.open()
+
+        daybook_btn = ui.button(icon='receipt_long').props('flat round dense') \
+            .tooltip("The daybook — today's receipts, every undo") \
+            .on('click', lambda _: open_daybook())
+
         # THE SPEND METER: renders cost real money — the header tells the
         # truth quietly (today's count and a rough dollar estimate)
         spend_label = ui.label('').classes('text-xs text-gray-500 cursor-pointer') \

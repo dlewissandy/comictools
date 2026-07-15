@@ -305,12 +305,11 @@ async def send(state: APPState):
         messages = state.get_messages()
     messages.append({"role": "user", "content": question})
 
-    # THE DIALOG: the author's balloon, one WORK line for the whole turn,
-    # then the Editor's balloon — never a log of agent chatter
-    from gui.thread import thread_user, thread_work, begin_reply, finalize_reply
+    # THE DIALOG: the author's balloon, then ONE reply balloon whose work
+    # line rides inside it — the chat is conversation, never an action log
+    from gui.thread import thread_user, begin_turn, finalize_reply
     thread_user(state, question)
-    work, refresh_work = thread_work(state)
-    reply_entry, response_markdown = begin_reply(state)
+    work, refresh_work, reply_entry, response_markdown = begin_turn(state)
 
     import itertools, random
     verbs = itertools.cycle(random.sample([
