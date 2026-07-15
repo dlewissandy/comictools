@@ -81,11 +81,13 @@ def grove(storage, issue_state):
     return scene
 
 
-def test_setting_keeps_slug_id_and_props(storage, issue_state):
+def test_setting_keeps_slug_id_and_carries_no_props(storage, issue_state):
+    """PROPS RIDE THE GLASS: a setting is created without any prop list —
+    its description carries the furnishings; props are table acetates."""
     _invoke(creator.create_setting, issue_state, series_id=WL, name="Clock Tower",
-            description="d", interior=True, props=[{"name": "great bell", "description": "cracked bronze bell"}])
+            description="a clock tower housing a cracked bronze great bell", interior=True)
     loc = storage.read_object(Setting, {"series_id": WL, "setting_id": "clock-tower"})
-    assert loc is not None and loc.props[0].name == "great bell"
+    assert loc is not None and not hasattr(loc, "props")
 
 
 def test_scene_stores_production_details(storage, grove):
