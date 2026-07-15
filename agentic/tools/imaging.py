@@ -2454,6 +2454,16 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
     state: APPState = wrapper.context
     storage: GenericStorage = state.storage
 
+    # THE SHAPE IS READ FRESH: the render matches the page cell the layout
+    # gives this panel — restitch first, or an aspect changed since the book
+    # last painted would render at a STALE shape (money spent on the wrong
+    # frame).  Hand-designed layouts are never touched by this.
+    try:
+        from helpers.stitcher import remember_stitch
+        remember_stitch(storage, series_id, issue_id)
+    except Exception as _ex:
+        logger.debug(f"pre-render restitch skipped: {_ex}")
+
     panel: Panel = storage.read_object(cls=Panel, primary_key={
         "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
     if panel is None:

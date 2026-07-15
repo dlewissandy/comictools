@@ -178,3 +178,34 @@ def test_prop_edit_names_its_own_stale_art(storage):
                       description="a gilt-edged tarot deck, cards frayed at the corners"))
     assert "stale" in out.lower() and "vintage-four-color" in out
     assert "Re-dressed" not in out
+
+
+def test_render_reads_the_layout_shape_fresh(storage, mock_imaging, monkeypatch):
+    """THE SHAPE IS READ FRESH: an aspect changed since the book last
+    painted must reach the render — the render restitches first, so the
+    pages it reads are CURRENT (a further restitch changes nothing)."""
+    from helpers.stitcher import remember_stitch
+    from schema import FrameLayout, Page
+    st = _Stub(storage)
+    panel = storage.read_all_objects(Panel, {"series_id": WL, "issue_id": CARN, "scene_id": SC})[0]
+
+    def page_sig():
+        return [(pg.page_number, [(c.panel_id, c.x, c.y, c.w, c.h) for c in (pg.cells or [])])
+                for pg in storage.read_all_objects(Page, {"series_id": WL, "issue_id": CARN},
+                                                   order_by="page_number")]
+
+    # the book last stitched BEFORE the flip — the stored pages go stale
+    remember_stitch(storage, WL, CARN)
+    panel.aspect = (FrameLayout.PORTRAIT if panel.aspect != FrameLayout.PORTRAIT
+                    else FrameLayout.LANDSCAPE)
+    panel.size = "1x"
+    storage.update_object(data=panel)
+
+    _mock_breakdown(monkeypatch)
+    _invoke(imaging.generate_panel_image, st, series_id=WL, issue_id=CARN,
+            scene_id=SC, panel_id=panel.panel_id)
+
+    after_render = page_sig()
+    remember_stitch(storage, WL, CARN)      # ground truth, post-flip
+    assert after_render == page_sig(), \
+        "the render left the pages CURRENT — it restitched before reading the shape"
