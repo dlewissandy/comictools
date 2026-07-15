@@ -204,7 +204,7 @@ Here's what's in front of you:
 - On the left, the **stack** — every layer in the panel, each with an **eye** you can toggle to lift its acetate off the table.
 - On the right, the **rough** — a live penciller's mock-up, assembled from the parts in real time, so you see the shot *before* you spend a cent rendering it.
 
-To stage the shot, open the **Assets** drawer from the header (it appears whenever you're on a panel or cover). It's a contact sheet of everything reusable in your house — characters, settings, props, styles. **Click a tile and it lands on the table:** click Vera and she steps onto the stage; click Vera's office and the master background drops in behind her.
+To stage the shot, use the bench's own pickers — the **lay a new acetate** row on the light table offers a figure, a background, and a prop door, each showing your house's assets as cards. **Click a card and it lands on the table:** click Vera and she steps onto the stage; click Vera's office and the master background drops in behind her. Need something from another series? Every picker has a *Borrow from another series…* door that hands the import to the Editor.
 
 Now block the shot with your hands:
 

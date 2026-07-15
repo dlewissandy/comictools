@@ -21,14 +21,21 @@ def test_boards_with_cast_can_ink_a_missing_sheet():
         assert "create_styled_image_for_character_variant" in _names(kind), kind
 
 
-def test_drawer_tiles_can_keep_their_import_promise():
-    """Drawer tiles say 'Import it into this series first' — every context
-    the drawer opens on (issue, panel, cover, insert) must import what the
-    drawer offers (characters, settings; issue and panel also props/outfits)."""
+def test_the_borrow_door_keeps_its_promise():
+    """THE DRAWER RETIRED: the pickers' 'Borrow from another series…' door
+    prefills an import ask — every bench context must hold the import
+    tools that ask names."""
     for kind in ("issue", "panel", "cover", "insert"):
         assert {"import_character", "import_setting"} <= _names(kind), kind
     for kind in ("issue", "panel"):
         assert {"import_prop", "import_outfit"} <= _names(kind), kind
+
+
+def test_pickers_offer_the_borrow_door():
+    """All three bench pickers carry the borrow footer."""
+    src = open("gui/light_table.py").read()
+    assert src.count("Borrow from another series…") == 3
+    assert "gui/drawer" not in open("main.py").read(), "the drawer is retired"
 
 
 def test_an_uploaded_picture_can_reach_a_panel():

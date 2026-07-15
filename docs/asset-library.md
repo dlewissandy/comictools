@@ -103,3 +103,8 @@ series, issue, and scene agents.  The /library route stays as a dormant deep lin
   the character has no reference sheet for — import should report it (same
   missing-reference discipline as rendering).
 - Name collisions on import (slug ids): suffix vs. prompt the user.
+
+
+## Revision (2026-07-15): the drawer retires
+
+The catalog drawer is gone — every job it did has a sharper owner: the bench pickers lay assets (each with a *Borrow from another series…* door that hands the import to the conversation), the Library room browses every house, and Cmd-K jumps to anything by name.

@@ -911,18 +911,6 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     state.change_selection(selection)   # update the selection to force the redraw of the breadcrumbs
     state.refresh_details()             # Redraw the details based on the current selection
 
-    # The asset catalog drawer: it lays assets ON a light table (a panel,
-    # cover or insert bench) or stages them for the open book — so the
-    # button only appears where the drawer can actually act.
-    from gui.drawer import build_asset_drawer
-    toggle_assets = build_asset_drawer(state)
-    with breadcrumbs.parent_slot.parent:  # the header row
-        assets_btn = ui.button('Assets', icon='collections_bookmark', on_click=lambda _: toggle_assets()) \
-            .props('unelevated no-caps').tooltip('Browse the studio asset catalog')
-    assets_btn.move(breadcrumbs.parent_slot.parent, target_index=0)  # primary: leftmost
-    state.assets_btn = assets_btn
-    state.update_assets_button()
-
     # The command palette: Cmd/Ctrl-K jumps to any object by name.
     from gui.palette import build_palette
     open_palette = build_palette(state)

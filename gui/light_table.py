@@ -3323,6 +3323,21 @@ def light_table(state: APPState, panel, scene, setting,
                                     dlg.close()
                                     lay_figure_on_table(state, panel, ch.character_id, v.id, ch.name)
                                 card.on('click', lambda _, ch=ch, v=v: lay(ch, v))
+
+                    def _borrow(kind_word):
+                        # BORROW FROM ANOTHER SERIES: the conversation is the
+                        # import verb — the Librarian copies it in, then it
+                        # appears right here in this picker
+                        dlg.close()
+                        state.user_input.value = (f"Import the {kind_word} ___ from another "
+                                                  f"series into this one")
+                        try:
+                            state.user_input.run_method('focus')
+                        except Exception:
+                            pass
+                    ui.button('Borrow from another series…', icon='local_library') \
+                        .props('flat dense no-caps').classes('q-mt-sm') \
+                        .on('click', lambda _: _borrow('character'))
                 dlg.open()
 
             def pick_background():
@@ -3388,6 +3403,19 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.button('Build the set & ink its master', icon='construction') \
                         .props('unelevated dense no-caps').classes('q-mt-sm') \
                         .on('click', lambda _: build_set())
+
+                    def _borrow_setting(_=None):
+                        # the conversation is the import verb
+                        dlg.close()
+                        state.user_input.value = ("Import the setting ___ from another "
+                                                  "series into this one")
+                        try:
+                            state.user_input.run_method('focus')
+                        except Exception:
+                            pass
+                    ui.button('Borrow from another series…', icon='local_library') \
+                        .props('flat dense no-caps').classes('q-mt-sm') \
+                        .on('click', _borrow_setting)
                 dlg.open()
 
             def pick_prop():
@@ -3450,6 +3478,19 @@ def light_table(state: APPState, panel, scene, setting,
                     ui.button('Conjure & ink its reference', icon='auto_fix_high') \
                         .props('unelevated dense no-caps').classes('q-mt-sm') \
                         .on('click', lambda _: conjure())
+
+                    def _borrow_prop(_=None):
+                        # the conversation is the import verb
+                        dlg.close()
+                        state.user_input.value = ("Import the prop ___ from another "
+                                                  "series into this one")
+                        try:
+                            state.user_input.run_method('focus')
+                        except Exception:
+                            pass
+                    ui.button('Borrow from another series…', icon='local_library') \
+                        .props('flat dense no-caps').classes('q-mt-sm') \
+                        .on('click', _borrow_prop)
                 dlg.open()
 
             with ui.row().classes('light-layer w-full items-center flex-nowrap').style('gap: 2px;'):

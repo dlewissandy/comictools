@@ -293,21 +293,6 @@ class APPState:
         self.refresh_details()
         self._sync_url()
         self._refresh_coauthor()
-        self.update_assets_button()
-
-    def update_assets_button(self):
-        """The Assets drawer lays assets on a light table or stages them for
-        the open book — its button only shows where it can actually act
-        (an issue, or a panel/cover/insert bench)."""
-        btn = getattr(self, 'assets_btn', None)
-        if btn is None:
-            return
-        kinds = {'issue', 'panel', 'cover', 'insert'}
-        try:
-            here = self.selection[-1].kind.value if self.selection else ''
-            btn.set_visibility(here in kinds)
-        except Exception:
-            btn.set_visibility(True)
 
     @staticmethod
     def migrate_style_threads(conversations: dict, pid: str | None) -> dict:

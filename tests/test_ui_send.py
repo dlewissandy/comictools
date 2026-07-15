@@ -139,51 +139,6 @@ async def test_one_thread_follows_the_author(user: User, api_alive) -> None:
 
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
-async def test_asset_catalog_drawer(user: User) -> None:
-    """The Assets button lives where the drawer can act — the open book and
-    the benches — and stays hidden everywhere else."""
-    main.LocalStorage = _TmpStorage
-    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
-               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open("/")
-    hidden = [e for e in user.client.elements.values()
-              if e.__class__.__name__ == "Button" and getattr(e, "text", "") == "Assets"]
-    assert hidden and not hidden[0].visible, "no drawer door on the lobby"
-
-    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
-                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
-                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
-               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open(_url_for([{"name": "Series", "id": None, "kind": "all-series"},
-                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
-                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}]))
-    # read the book as PROOFS (bound images) so the drawer's filter assertions
-    # aren't confounded by panel BEAT text behind it (a beat mentions the very
-    # 'cracked crystal ball' prop this test filters on)
-    user.find(marker="detail-proofs").click()
-    user.find("Assets").click()
-    await user.should_see("in the studio")           # header with total count
-    await user.should_see("Fortune Teller Tent")     # a setting tile
-
-    # filter by type: styles shows the house styles, hides the props.  Target
-    # the drawer's KIND toggle by its option labels; set.pop() over all toggles
-    # is non-deterministic — other toggles share the page.
-    kind_toggle = next(t for t in user.client.elements.values()
-                       if t.__class__.__name__ == "Toggle" and t.value == "all")
-    kind_toggle.set_value("style")
-    # styles wear their HOUSE's name — 'studio-wide' is the retired claim
-    await user.should_see("DND NERDS")
-    await user.should_not_see("cracked crystal ball")
-    # props: drawn from the settings' prop lists
-    kind_toggle.set_value("prop")
-    await user.should_see("cracked crystal ball")
-    # variants: wardrobe per character, e.g. Brassic's gnome disguise
-    kind_toggle.set_value("variant")
-    await user.should_see("Gnome Disguise")
-
-
-@pytest.mark.module_under_test(main)
-@pytest.mark.asyncio
 async def test_inline_scalar_edit_affordance(user: User) -> None:
     """Issue scalars are click-to-edit in place (tooltip advertises it)."""
     main.LocalStorage = _TmpStorage
@@ -297,29 +252,6 @@ async def test_issue_production_dashboard(user: User) -> None:
     # a broken-down story steps back at beats detail; the dial brings it up
     user.find(marker="detail-stories").click()
     await user.should_see("THE SCRIPT")
-
-
-@pytest.mark.module_under_test(main)
-@pytest.mark.asyncio
-async def test_drawer_scopes_to_current_series(user: User) -> None:
-    """Inside a series the catalog defaults to that series; the switch widens it."""
-    main.LocalStorage = _TmpStorage
-    json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"},
-                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
-                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}],
-               "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open(_url_for([{"name": "Series", "id": None, "kind": "all-series"},
-                             {"name": "WL", "id": "wonders-of-the-witchlight", "kind": "series"},
-                             {"name": "C", "id": "witchlight-carnival", "kind": "issue"}]))
-    user.find("Assets").click()
-    await user.should_see("Fortune Teller Tent")
-    await user.should_not_see("Squonk")   # Rugor's assets are out of scope
-
-    switches = [e for e in user.client.elements.values()
-                if e.__class__.__name__ == "Switch" and "only" in str(getattr(e, "text", ""))]
-    assert switches, "scope switch exists"
-    switches[-1].set_value(False)
-    await user.should_see("Squonk")       # the whole HOUSE — one publisher at a time
 
 
 @pytest.mark.module_under_test(main)
