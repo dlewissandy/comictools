@@ -71,24 +71,49 @@ def view_series(state: APPState):
             state.change_selection(new=[*state.selection, SelectionItem(
                 name=board.name, id=bid, kind=SelectedKind.ARTBOARD)])
 
-        # THE MASTHEAD IS JUST ANOTHER ASSET (the author's ruling): ONE tile,
-        # first on the wall, opening the mark bench — no special title-art
-        # interface.  The bench's own style swatch handles per-style lettering.
+        # Description callout — a text panel takes only the size its text needs.
+        desc = series.description or ""
+        desc_rows = max(2, min(6, 1 + (len(desc) + 269) // 270))
+        with packer.place_cell([(10, desc_rows)], fudge=False):
+            with ui.card().classes(TAILWIND_CARD + ' mosaic-card').style('overflow-y: auto;'):
+                markdown_field_editor(state, "Description", series.description)
+
+        # THE ISSUES HANG ON THE STUDIO WALL — the series room keeps only
+        # what the series OWNS: its masthead and its reusable assets.
+
+        # A cardwall for viewing and adding characters to the comic series.
+        # THE MASTHEAD IS JUST ANOTHER ASSET (the author's ruling): the
+        # FIRST tile in the assets list — no special title-art interface.
+        # The tile opens the mark board that actually HOLDS the art (the
+        # newest take wins); a bare series offers the issues' style.
+        from schema import ArtBoard
+        def _board_takes(b):
+            return [i for i in storage.list_images(b) if os.path.exists(i)]
+        _mboards = [(b, _board_takes(b)) for b in storage.read_all_objects(
+            ArtBoard, primary_key={"scope_id": series.series_id})
+            if b.board_kind == 'masthead']
+        _inked = [(b, t) for b, t in _mboards if t]
         titled = {sid: img for sid, img in (getattr(series, 'title_images', {}) or {}).items()
                   if img and os.path.exists(img)}
-        issue_styles = [i.style_id for i in storage.read_all_objects(
-            Issue, primary_key={"series_id": series.series_id}, order_by="issue_number")
-            if i.style_id]
-        mast_style = next((s for s in issue_styles if s in titled), None) \
-            or (issue_styles[0] if issue_styles else None) \
-            or next(iter(titled), None) or 'vintage-four-color'
+        if _inked:
+            _mb, _mtakes = max(_inked, key=lambda bt: max(os.path.getmtime(i) for i in bt[1]))
+            mast_style = _mb.style_id or 'vintage-four-color'
+            mast_img = (_mb.image if (_mb.image and os.path.exists(_mb.image))
+                        else max(_mtakes, key=os.path.getmtime))
+        else:
+            issue_styles = [i.style_id for i in storage.read_all_objects(
+                Issue, primary_key={"series_id": series.series_id}, order_by="issue_number")
+                if i.style_id]
+            mast_style = next((s for s in issue_styles if s in titled), None) \
+                or (issue_styles[0] if issue_styles else None) \
+                or next(iter(titled), None) or 'vintage-four-color'
+            mast_img = titled.get(mast_style) or next(iter(titled.values()), None)
         _st = storage.read_object(ComicStyle, primary_key={"style_id": mast_style})
         if _st is None:
             from types import SimpleNamespace
             _st = SimpleNamespace(style_id=mast_style,
                                   name=mast_style.replace('-', ' '))
-        mast_img = titled.get(mast_style) or next(iter(titled.values()), None)
-        with packer.place_cell([(3, 2), (4, 8/3)], fudge=False):
+        with packer.place_cell([(3, 2)], fudge=False):
             with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative cursor-pointer'
                                    + ('' if mast_img else ' ghost-card')) as mcard:
                 ui.label('Masthead').classes(HEADER_CLASSES[3] + ' panel-hover-caption')
@@ -101,17 +126,7 @@ def view_series(state: APPState):
             mcard.tooltip('The series wordmark — open the mark bench '
                           '(from text, a dropped image, or a rough)')
             mcard.on('click', lambda _: open_mark_bench(_st))
-        # Description callout — a text panel takes only the size its text needs.
-        desc = series.description or ""
-        desc_rows = max(2, min(6, 1 + (len(desc) + 269) // 270))
-        with packer.place_cell([(10, desc_rows)], fudge=False):
-            with ui.card().classes(TAILWIND_CARD + ' mosaic-card').style('overflow-y: auto;'):
-                markdown_field_editor(state, "Description", series.description)
 
-        # THE ISSUES HANG ON THE STUDIO WALL — the series room keeps only
-        # what the series OWNS: its masthead and its reusable assets.
-
-        # A cardwall for viewing and adding characters to the comic series.
         # (the 'redraw the cast in one hand' door is shelved until house
         # artists land — the author's call; it returns with that feature)
         characters = storage.read_all_objects(CharacterModel, primary_key={"series_id": series.series_id})

@@ -1664,7 +1664,42 @@ def takes_row(state, board, featured: str | None):
         state._auto_split_board = board.id
         rework_take_on_table(state, board, img)
 
+    def _rehome(path):
+        """A locator recorded against another root (a stale 'data/…' from
+        before the houses) re-roots onto THIS storage's mount."""
+        if not path or os.path.exists(path):
+            return path
+        if path.startswith("data/"):
+            cand = os.path.join(str(storage.base_path), path.split("data/", 1)[1])
+            if os.path.exists(cand):
+                return cand
+        return path
+
     takes = [img for img in storage.list_images(board) if os.path.exists(img)]
+    if is_artboard(board):
+        # THE MARK'S WHOLE HISTORY HANGS HERE: the mark is ONE asset, so
+        # takes filed under sibling style-boards or the owner's legacy
+        # homes (publisher images for a logo, series title art for a
+        # masthead) all hang on this one wall
+        from schema import ArtBoard as _AB, Series as _Ser, Publisher as _Pub
+        extra: list[str] = []
+        for sib in storage.read_all_objects(_AB, primary_key={"scope_id": board.scope_id}):
+            if sib.board_id != board.board_id and sib.board_kind == board.board_kind:
+                extra += storage.list_images(sib)
+        if board.board_kind == 'logo':
+            _owner = storage.read_object(cls=_Pub, primary_key={"publisher_id": board.scope_id})
+            if _owner is not None:
+                extra += storage.list_images(_owner)
+                extra.append(_owner.image)
+        else:
+            _owner = storage.read_object(cls=_Ser, primary_key={"series_id": board.scope_id})
+            if _owner is not None:
+                extra += storage.list_images(_owner)
+                extra += list((_owner.title_images or {}).values())
+        for img in extra:
+            img = _rehome(img)
+            if img and os.path.exists(img) and img not in takes:
+                takes.append(img)
     with ui.row().classes('w-full items-center').style('gap: 10px;'):
         header("Takes", 4)
         wastebasket_chip(state, board)

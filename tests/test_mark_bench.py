@@ -97,3 +97,25 @@ def test_the_mark_bench_hangs_its_takes(storage, mock_imaging):
     imaging.render_artboard_body(state, WL, "masthead-takes-pin")
     takes = [t for t in storage.list_images(b) if os.path.exists(t)]
     assert takes, "the render lands in the very folder the takes wall lists"
+
+
+def test_the_marks_whole_history_hangs_on_one_wall():
+    """Author report: takes rendered through the older flows (publisher
+    images for a logo, series title art / sibling style-boards for a
+    masthead) must still hang on the mark bench's takes wall."""
+    src = open("gui/light_table.py").read()
+    wall = src.split("def takes_row", 1)[1]
+    assert "THE MARK'S WHOLE HISTORY" in wall
+    for needle in ("list_images(_owner)", "title_images", "_rehome"):
+        assert needle in wall, f"takes wall must gather {needle}"
+
+
+def test_the_series_tile_opens_the_board_with_the_art():
+    """Author report: the masthead tile opened a fresh empty board while
+    the takes sat on a sibling — the tile must prefer the board that
+    actually HOLDS takes, and sit in the assets list, not a page banner."""
+    src = open("gui/series.py").read()
+    assert "_inked" in src and "getmtime" in src
+    # the tile rides the assets flow, placed with the walls (the masthead
+    # block sits AFTER the description cell in source order)
+    assert src.index("Description callout") < src.index("MASTHEAD IS JUST ANOTHER ASSET")
