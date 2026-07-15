@@ -305,6 +305,50 @@ def view_lobby(state: APPState):
                                 .tooltip('No logo yet — describe one and the house gets its mark') \
                                 .on('click.stop', _ink_logo)
                         ui.label(pub.name.title()).classes('text-xs text-center w-full text-bold')
+
+                        # THE SYNC GLYPH: every house is a git repo — one
+                        # transparent button commits (with a slate message
+                        # naming what was inked), pulls and pushes.  A badge
+                        # counts what's waiting.
+                        _slug_g = _reg.house_of_publisher(pub.publisher_id) if _reg.registered() else None
+                        _house_g = next((h for h in _reg.registered()
+                                         if h['slug'] == _slug_g), None) if _slug_g else None
+                        if _house_g is not None:
+                            from helpers.house_git import repo_state
+                            _gs = repo_state(_house_g['path'])
+                            if _gs is not None:
+                                _waiting = _gs['dirty'] + _gs['ahead'] + _gs['behind']
+                                _tip = (f"Sync the house — commit, pull & push "
+                                        f"({_gs['dirty']} changed"
+                                        + (f", {_gs['ahead']} to push" if _gs['ahead'] else "")
+                                        + (f", {_gs['behind']} to pull" if _gs['behind'] else "")
+                                        + ")") if _waiting else \
+                                    'Sync the house — everything is committed' \
+                                    + (' and pushed' if _gs['remote'] else ' (no remote yet)')
+                                _sbtn = ui.button(icon='sync') \
+                                    .props('flat round dense size=xs') \
+                                    .classes('absolute bottom-1 right-1 z-10 '
+                                             'bg-white/70 dark:bg-black/50') \
+                                    .tooltip(_tip)
+                                if _waiting:
+                                    with _sbtn:
+                                        ui.badge(str(_waiting), color='orange') \
+                                            .props('floating rounded')
+
+                                async def _sync_house(_=None, p=_house_g['path'],
+                                                      name=pub.name, btn=_sbtn):
+                                    import asyncio
+                                    from helpers.house_git import sync_house
+                                    btn.props('loading')
+                                    try:
+                                        receipts = await asyncio.to_thread(sync_house, p)
+                                    finally:
+                                        btn.props(remove='loading')
+                                    from gui.thread import thread_aside
+                                    for r in receipts:
+                                        thread_aside(state, f"{r} · {name}")
+                                    state.refresh_details()
+                                _sbtn.on('click.stop', _sync_house)
                     hc.tooltip(f"The {pub.name} house — its room holds the series wall and the style rack")
                     hc.on('click', lambda _, p=pub: _goto([
                         SelectionItem(name=p.name, id=p.publisher_id, kind=SelectedKind.PUBLISHER)]))

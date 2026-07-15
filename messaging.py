@@ -196,9 +196,11 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
     return stream.to_input_list()
 
 
-def _trim_thread(items: list, max_items: int = 80) -> list:
+def _trim_thread(items: list, max_items: int = 140) -> list:
     """Cap a thread without splitting a tool call from its output: trim at
-    the nearest whole user turn."""
+    the nearest whole user turn.  (140: a tool-heavy render session was
+    forgetting its own morning at 80 — the author called it 'dumber than
+    dirt', and half of that was amnesia.)"""
     if len(items) <= max_items:
         return items
     start = len(items) - max_items

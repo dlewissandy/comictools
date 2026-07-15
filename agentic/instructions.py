@@ -425,40 +425,71 @@ SPEAK_ONLY_DONE_WORK = """
 """
 
 
+_ROSTER_CACHE = {"t": 0.0, "text": ""}
+
+
+def _wall_roster(state) -> str:
+    """THE WALL RIDES EVERY TURN: every house, series and issue with its
+    REAL id — the Editor resolves names itself from ANY room and can never
+    invent a bench that doesn't exist.  Cached briefly; a turn is chatty
+    but the wall barely moves."""
+    import time as _t
+    if _t.monotonic() - _ROSTER_CACHE["t"] < 10:
+        return _ROSTER_CACHE["text"]
+    try:
+        from storage import registry as _registry
+        from schema import Publisher as _P, Series as _S, Issue as _I
+        lines = []
+        _handed = getattr(state, '_storage', state.storage)
+        if _registry.registered() and str(getattr(_handed, 'base_path', '')) == _registry.DATA_DIR:
+            _houses = _registry.mounted_storages()
+        else:
+            _houses = [(None, _handed)]
+        for _slug, _st in _houses:
+            for _pub in _st.read_all_objects(_P):
+                lines.append(f"HOUSE {_pub.name} (publisher_id={_pub.publisher_id})")
+                for _sr in _st.read_all_objects(_S):
+                    if _sr.publisher_id != _pub.publisher_id:
+                        continue
+                    lines.append(f"  SERIES {_sr.name} (series_id={_sr.series_id})")
+                    for _is in _st.read_all_objects(_I, {"series_id": _sr.series_id}):
+                        lines.append(f"    ISSUE {_is.issue_number}: {_is.name} "
+                                     f"(issue_id={_is.issue_id})")
+        text = ("# THE STUDIO WALL (real ids — resolve every name the author says "
+                "against THIS list, from ANY room; never invent an id, and when a "
+                "name matches nothing here, ask one short question):\n"
+                + "\n".join(lines)) if lines else ""
+    except Exception as e:
+        logger.debug(f"wall roster skipped: {e}")
+        text = ""
+    _ROSTER_CACHE["t"] = _t.monotonic()
+    _ROSTER_CACHE["text"] = text
+    return text
+
+
+def _trail_block(selection) -> str:
+    """WHERE THE AUTHOR STANDS, legibly: the room chain with names AND ids
+    — these are the ids 'this'/'here' asks refer to."""
+    if not selection:
+        return ""
+    bits = []
+    for it in selection:
+        bits.append(f"{it.kind.value}: {it.name!r}"
+                    + (f" (id={it.id})" if it.id else ""))
+    return ("# WHERE THE AUTHOR STANDS (the open room and its chain — "
+            "'this panel', 'here', 'the current issue' mean THESE ids):\n  "
+            + "\n  ".join(bits))
+
+
 def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -> str:
 
     state: APPState = wrapper.context
     selection: list[SelectionItem] = state.selection
 
-    
+
     if selection and selection[0].kind.value == "lobby" and len(selection) == 1:
-        # THE FRONT DESK SEES THE WHOLE WALL: every house, series and issue
-        # with its REAL id — the Editor resolves names itself and can never
-        # invent a bench that doesn't exist
-        try:
-            from storage import registry as _registry
-            from schema import Publisher as _P, Series as _S, Issue as _I
-            lines = []
-            _handed = getattr(state, '_storage', state.storage)
-            if _registry.registered() and str(getattr(_handed, 'base_path', '')) == _registry.DATA_DIR:
-                _houses = _registry.mounted_storages()
-            else:
-                _houses = [(None, state.storage)]
-            for _slug, _st in _houses:
-                for _pub in _st.read_all_objects(_P):
-                    lines.append(f"HOUSE {_pub.name} (publisher_id={_pub.publisher_id})")
-                    for _sr in _st.read_all_objects(_S):
-                        if _sr.publisher_id != _pub.publisher_id:
-                            continue
-                        lines.append(f"  SERIES {_sr.name} (series_id={_sr.series_id})")
-                        for _is in _st.read_all_objects(_I, {"series_id": _sr.series_id}):
-                            lines.append(f"    ISSUE {_is.issue_number}: {_is.name} "
-                                         f"(issue_id={_is.issue_id})")
-            details = ("# THE STUDIO WALL (real ids — resolve names against THIS, "
-                       "never invent):\n" + "\n".join(lines)) if lines else ""
-        except Exception as e:
-            logger.debug(f"lobby roster skipped: {e}")
-            details = ""
+        # the front desk adds nothing beyond the wall itself
+        details = ""
     elif len(selection) == 1:
         # One of the "all_*" is selected.   We can at least provide a list of identifiers
         try:
@@ -489,8 +520,9 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
         if context is None or len(context) == 0:
             details = ""
         else:
-            # Use the first context item to get the model dump
-            details = f"# SELECTION DETAILS:\n {context[0].model_dump()}"
+            # THE THING IN HAND: the object the author is actually working
+            # on (read_context returns innermost FIRST — [0] is the bench)
+            details = f"# THE OBJECT IN HAND (full record):\n {context[0].model_dump()}"
     
     if selection and selection[-1].kind.value in ["image-editor", "image-editor-choices"]:
         details = "\n".join([
@@ -510,9 +542,8 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
         dedent(_room.strip()),
         boilerplate_instructions(),
         dedent(SPEAK_ONLY_DONE_WORK),
-        dedent(SELECTION_INSTRUCTIONS.format(
-            wrapper=wrapper
-        ).strip()),
+        _trail_block(selection),
+        _wall_roster(state),
         details
     ])
 

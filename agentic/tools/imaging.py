@@ -630,7 +630,17 @@ async def create_character_style_example_image(
     wrapper: RunContextWrapper[APPState],
     style_id: str
 ) -> str:
+    """
+    Render the CHARACTER exemplar image for a comic style — the style's
+    reference figure drawing that character sheets are held to.  Use when a
+    style is missing its character example or the author asks to redo it.
 
+    Args:
+        style_id: The ID of the comic style to render the character exemplar for.
+
+    Returns:
+        A status message with the rendered image locator.
+    """
     return await asyncio.to_thread(_create_character_style_example_image_sync, wrapper, style_id)
 
 
