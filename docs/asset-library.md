@@ -84,7 +84,7 @@ series, issue, and scene agents.  The /library route stays as a dormant deep lin
    inline description kept for backward compat). Enables "the cracked crystal ball"
    to exist once and dress three settings — and to be imported like anything else.
 4. **Origin provenance** on Character/Setting/Prop: `origin: {series_id, asset_id,
-   imported_at} | None`, shown on the asset card ("from Wonders of the Witchlight").
+   imported_at} | None`, shown on the asset card ("from The Lighthouse Post").
 5. **Coauthor phrasing throughout**: "add Brassic to this series", "bring the
    fortune-teller tent into Dustfall", "what settings does DND Nerds have?" all work
    from the relevant views.

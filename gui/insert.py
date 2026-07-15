@@ -134,7 +134,7 @@ def view_insert(state: APPState):
                     ('layers', 'Rework this page on the table — it becomes the background layer',
                      lambda _: rework_take_on_table(state, insert, featured)),
                     ('brush', 'Render the page', 'proof'),
-                    ('delete', 'Tear up this take (the receipt can bring it back)',
+                    ('delete', 'Tear up this take (it waits in the torn-up pile)',
                      lambda _: tear_up_take(state, insert, featured)),
                 ])
 

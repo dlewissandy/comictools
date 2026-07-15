@@ -367,6 +367,8 @@ class APPState:
                     if opener:
                         ui.label(opener).classes('comic-label-sm italic') \
                             .style('opacity: .75; white-space: normal;')
+                    if not chips:
+                        return   # no dangling NEXT: label over an empty rack
                     with ui.row().classes('w-full items-center').style('gap: 6px;'):
                         ui.label('NEXT:').classes('comic-label-sm').style('opacity: .6;')
                         for chip in chips[:4]:
@@ -418,7 +420,6 @@ class APPState:
         from gui.setting import view_setting
         from gui.character import view_character, view_character_reference
         from gui.issue import view_issue
-        from gui.scene import view_scene
         from gui.panel import view_panel
         from gui.cover import view_cover
         from gui.publisher import view_publisher
@@ -476,7 +477,24 @@ class APPState:
             case "issue":
                 return view_issue(self)
             case "scene":
-                return view_scene(self)
+                # scenes have no room of their own (they ride the open book)
+                # — change_selection rewrites scene tails before dispatch, so
+                # this arm only fires on a stale/persisted selection: walk to
+                # the issue's manuscript page, aimed at this scene
+                iidx = next((i for i in range(len(self.selection) - 1, -1, -1)
+                             if self.selection[i].kind == SelectedKind.ISSUE), None)
+                if iidx is None:
+                    from gui.home import view_lobby
+                    return view_lobby(self)
+                iid = self.selection[iidx].id
+                if getattr(self, '_book_detail', None) is None:
+                    self._book_detail = {}
+                if getattr(self, '_book_anchor', None) is None:
+                    self._book_anchor = {}
+                self._book_detail[iid] = 'scenes'
+                self._book_anchor[iid] = f'scene-{self.selection[-1].id}'
+                self._selection = self.selection[:iidx + 1]
+                return view_issue(self)
             case "artboard":
                 from gui.light_table import view_artboard
                 return view_artboard(self)

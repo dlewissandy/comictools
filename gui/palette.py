@@ -98,6 +98,11 @@ def build_palette(state):
 
     def _go(sel):
         dialog.close()
+        # THE TWO ROOMS RULING: the Reading Room opens in its own tab —
+        # the palette must never navigate the studio tab into the reader
+        if sel and sel[-1].kind.value == 'library':
+            ui.run_javascript("window.open('/library', '_blank');")
+            return
         state.change_selection(new=sel)
 
     async def _ask(term: str):

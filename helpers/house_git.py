@@ -79,7 +79,7 @@ def _noun_for(relpath: str) -> tuple[str, str]:
 
 def nice_commit_message(path: str) -> str:
     """Write the slate from the porcelain: 'STUDIO SYNC: 3 panels, the
-    front cover, a masthead mark — Joey; Wonders of the Witchlight'."""
+    front cover, a masthead mark — Harbor Tales; The Lighthouse Post'."""
     st = _git(path, "status", "--porcelain", "-uall")
     counts: dict[tuple[str, str], set[str]] = {}
     serieses: set[str] = set()

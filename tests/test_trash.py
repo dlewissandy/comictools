@@ -75,3 +75,27 @@ def test_a_copied_basket_never_restores_into_the_source_tree(tmp_path):
     assert restore_last(str(base)) is None
     assert restore_entry(str(base), "1700000000000-deadbeef") is None
     assert (entry / "payload" / "thing.json").exists(), "the payload stays put"
+
+
+def test_swap_entry_trades_places(tmp_path):
+    """THE WAY BACK for pre-overwrite backups: swap_entry returns the old
+    version and files the CURRENT one in the wastebasket in its place."""
+    import os
+    from storage.trash import soft_backup, swap_entry, list_entries
+    base = str(tmp_path)
+    art = os.path.join(base, "series", "x", "art.png")
+    os.makedirs(os.path.dirname(art), exist_ok=True)
+    open(art, "wb").write(b"OLD")
+    entry_dir = soft_backup(base, art, note="before the heal")
+    open(art, "wb").write(b"NEW")
+
+    entry = os.path.basename(entry_dir)
+    restored = swap_entry(base, entry)
+    assert restored == art
+    assert open(art, "rb").read() == b"OLD", "the pre-edit art is back"
+    swapped = [e for e in list_entries(base) if e["original_path"] == art]
+    assert swapped, "the newer version waits in the wastebasket now"
+    # and the newer version's payload is intact for its own swap back
+    from storage.trash import TRASH_DIR
+    payload = os.path.join(base, TRASH_DIR, swapped[0]["entry"], "payload")
+    assert open(payload, "rb").read() == b"NEW"

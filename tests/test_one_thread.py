@@ -87,7 +87,7 @@ def test_merge_lets_the_writers_fresh_copy_win():
 
 def test_render_thread_keeps_the_chat_pure(user=None):
     """THE CHAT IS THE CONVERSATION: projecting the thread renders balloons
-    and captions — never asides (the daybook holds those)."""
+    and captions — never asides (asides are toast-only receipts)."""
     entries = [
         {"id": "1", "ts": 1, "t": "user", "text": "hello"},
         {"id": "2", "ts": 2, "t": "aside", "text": "🗑 struck a thing", "bench": "b", "image": None},

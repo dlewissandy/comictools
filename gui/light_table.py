@@ -916,6 +916,8 @@ def board_label(board) -> str:
         return f"the {board.location.value.replace('-', ' ')} cover"
     if is_insert(board):
         return f"the '{board.name}' {board.kind}"
+    if is_artboard(board):
+        return f"the {board.name} mark"
     return f"panel {board.panel_number}"
 
 
@@ -1131,7 +1133,8 @@ def read_board(storage, a: dict):
 # ---------------------------------------------------------------------------
 def table_receipt(state, text: str, undo=None, bench: str = 'the light table'):
     """A receipt slip in the one thread — the paper trail of GUI verbs.
-    When `undo` is given the slip carries an UNDO chip (live-only)."""
+    (Receipts are quiet toasts; the wastebasket and the torn-up pile
+    are the ways back.)"""
     try:
         from gui.thread import thread_aside
         thread_aside(state, text, undo=undo, bench=bench)
@@ -1178,7 +1181,8 @@ def pose_figure_bg(state, board, character_id: str, variant_id: str,
                   f"the pose lands when it's ready.", type='warning')
         return
     pending.add(pkey)
-    kw = ({"cover_id": board.cover_id} if is_cover(board)
+    kw = ({"board_id": board.board_id} if is_artboard(board)
+          else {"cover_id": board.cover_id} if is_cover(board)
           else {"insert_id": board.insert_id} if is_insert(board)
           else {"scene_id": board.scene_id, "panel_id": board.panel_id})
 
@@ -1220,7 +1224,8 @@ def pose_element_bg(state, board, key: str, pose_direction: str | None = None,
                   f"the pose lands when it's ready.", type='warning')
         return
     pending.add(pkey)
-    kw = ({"cover_id": board.cover_id} if is_cover(board)
+    kw = ({"board_id": board.board_id} if is_artboard(board)
+          else {"cover_id": board.cover_id} if is_cover(board)
           else {"insert_id": board.insert_id} if is_insert(board)
           else {"scene_id": board.scene_id, "panel_id": board.panel_id})
 
@@ -1255,7 +1260,8 @@ def dress_setting_bg(state, board, direction: str | None = None, style_id: str |
                   "the dressing lands when it's ready.", type='warning')
         return
     pending.add(pkey)
-    kw = ({"cover_id": board.cover_id} if is_cover(board)
+    kw = ({"board_id": board.board_id} if is_artboard(board)
+          else {"cover_id": board.cover_id} if is_cover(board)
           else {"insert_id": board.insert_id} if is_insert(board)
           else {"scene_id": board.scene_id, "panel_id": board.panel_id})
 
@@ -1499,10 +1505,10 @@ def take_shape(img: str, board_aspect) -> tuple[int, int]:
 
 
 def tear_up_take(state, board, img: str):
-    """Tear up one of the board's takes.  Into the wastebasket, not gone:
-    dot-prefixed files vanish from the takes wall and the receipt's UNDO
-    chip brings them back (unique names so tearing up a same-named take
-    never clobbers an older wastebasket copy)."""
+    """Tear up one of the board's takes.  Into the torn-up pile, not gone:
+    dot-prefixed files vanish from the takes wall and the torn-up-pile
+    chip above the takes brings them back (unique names so tearing up a
+    same-named take never clobbers an older copy)."""
     from uuid import uuid4
     storage = state.storage
     fresh_board(storage, board)
@@ -1531,7 +1537,7 @@ def tear_up_take(state, board, img: str):
             b = storage.read_object(cls=type(board), primary_key=board.primary_key) or board
             b.image = saved_locator if dest == img else dest
             storage.update_object(b)
-    table_receipt(state, '🗑 tore up a take — the receipt can bring it back', undo=undo)
+    table_receipt(state, '🗑 tore up a take — it waits in the torn-up pile above the takes', undo=undo)
     state.refresh_details()
 
 
@@ -2227,7 +2233,8 @@ def light_table(state: APPState, panel, scene, setting,
                 dlg.close()
                 ui.notify(f"Splitting {len(chosen)} element(s) — {len(chosen) + 1} renders, "
                           f"the acetates land shortly.", type='info')
-                kw = ({"cover_id": panel.cover_id} if cover_mode
+                kw = ({"board_id": panel.board_id} if artboard_mode
+                      else {"cover_id": panel.cover_id} if cover_mode
                       else {"insert_id": panel.insert_id} if insert_mode
                       else {"scene_id": panel.scene_id, "panel_id": panel.panel_id})
                 enqueue_renders(state, [(
@@ -3853,7 +3860,7 @@ def light_table(state: APPState, panel, scene, setting,
                         state.refresh_details()
                     ui.button(icon='close').props('flat round dense size=sm') \
                         .tooltip('Clear the board — remove everything from the table '
-                                 '(only the print stays; undoable)') \
+                                 '(only the print stays)') \
                         .on('click', lambda _: clear_board())
 
             # or just drop an image straight onto the table as a reference —
@@ -3913,7 +3920,7 @@ def light_table(state: APPState, panel, scene, setting,
                     def as_reference():
                         import io as _io
                         data = flatten_bytes()
-                        bid = panel.cover_id if cover_mode else panel.insert_id if insert_mode else panel.panel_id
+                        bid = panel.id   # every board kind answers .id
                         storage.upload_reference_image(panel, f"flattened-{bid[:6]}.png",
                                                        _io.BytesIO(data), 'image/png')
                         _receipt('🗜 flattened the table onto a reference acetate')

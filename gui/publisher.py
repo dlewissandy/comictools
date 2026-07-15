@@ -136,8 +136,3 @@ def view_publisher(state: APPState):
             )
             style_packer.finalize()
 
-def view_pick_publisher(state: APPState):
-    """RETIRED: series never pick publishers (the repo IS the publisher)."""
-    from gui.home import view_lobby
-    return view_lobby(state)
-

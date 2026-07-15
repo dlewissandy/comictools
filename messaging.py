@@ -191,7 +191,7 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
                 await handle_message_output_event(state, event, work)
             else:
                 msg = f"Unhandled item type: {item.type} while using tools"
-                logger.error(item.type)
+                logger.error(msg)
                 
     return stream.to_input_list()
 
@@ -292,6 +292,11 @@ async def send(state: APPState):
                 thread_reply(state, _ack)
             state.write()
             return
+
+    # A BARE ENTER SAYS NOTHING: never post an empty balloon or burn a
+    # billed agent turn on whitespace
+    if not (question or '').strip():
+        return
 
     # Capture image editor selection if we're in that view
     try:

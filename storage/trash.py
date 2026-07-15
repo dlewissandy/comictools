@@ -140,6 +140,36 @@ def restore_entry(base_path: str, entry: str) -> str | None:
     return original
 
 
+def swap_entry(base_path: str, entry: str) -> str | None:
+    """SWAP an OCCUPIED wastebasket entry back into place: the current
+    occupant goes to the wastebasket (a fresh entry) and the old version
+    returns — the way back for pre-overwrite backups ('Paste it down',
+    re-created assets).  Returns the restored path, or None."""
+    entry_dir = os.path.join(base_path, TRASH_DIR, entry)
+    manifest_path = os.path.join(entry_dir, "manifest.json")
+    if not os.path.isfile(manifest_path):
+        return None
+    manifest = json.load(open(manifest_path))
+    original = manifest["original_path"]
+    if not _restores_inside(base_path, original):
+        logger.warning(f"cannot swap {original}: it would land outside this basket's base")
+        return None
+    if os.path.exists(original):
+        # the counter-backup: the CURRENT version keeps its own way back
+        soft_backup(base_path, original,
+                    note=f"the newer version of {os.path.basename(original)}, "
+                         f"swapped aside for the older one")
+        if os.path.isdir(original):
+            shutil.rmtree(original)
+        else:
+            os.remove(original)
+    os.makedirs(os.path.dirname(original), exist_ok=True)
+    shutil.move(os.path.join(entry_dir, "payload"), original)
+    shutil.rmtree(entry_dir, ignore_errors=True)
+    logger.info(f"swapped {original} back from the wastebasket")
+    return original
+
+
 def purge(base_path: str, older_than_days: float = 30) -> int:
     """Empty wastebasket entries older than the given age.  Returns the
     number of entries destroyed — the ONLY place the studio truly deletes."""

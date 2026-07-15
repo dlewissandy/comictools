@@ -107,7 +107,6 @@ def found_house_dialog(state: APPState):
                 # live — take it, say so, and create it at founding
                 chosen['dir'] = d.rstrip('/')
                 chosen['existing'] = False
-                chosen['create'] = True
                 _describe()
                 status.set_text(f"{chosen['dir']} doesn't exist yet — "
                                 f"it will be created when you found the house.")
@@ -154,12 +153,6 @@ def found_house_dialog(state: APPState):
             go_btn = ui.button('Found the house', icon='gavel').props('unelevated dense no-caps')
             go_btn.on('click', lambda _: go())
     dlg.open()
-
-
-def view_all_publishers(state: APPState):
-    """RETIRED ROOM: the studio wall is the one catalog — stale trails land
-    on the front door."""
-    return view_lobby(state)
 
 
 def _last_bench(storage):
@@ -452,14 +445,6 @@ def view_lobby(state: APPState):
             with gh:
                 ui.label('+ found a house').classes('text-xs text-center w-full').style('opacity: .55;')
             gh.on('click', lambda _: found_house_dialog(state))
-
-
-def view_all_series(state: APPState):
-    """RETIRED ROOM: the studio wall is the one catalog — stale trails land
-    on the front door."""
-    return view_lobby(state)
-
-
 
 
 def adopt_demo_house(state):

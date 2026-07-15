@@ -62,19 +62,6 @@ def thread_user(state, text: str) -> dict:
     return entry
 
 
-def begin_reply(state) -> tuple[dict, ui.markdown]:
-    """Open the Editor's balloon for a streaming reply.  The caller streams
-    into the returned markdown and MUST set entry['text'] when the turn
-    closes (finalize_reply does both)."""
-    from gui.avatars import comic_chat_message
-    entry = _append(state, {"t": "reply", "text": ""})
-    with state.history:
-        with comic_chat_message(name=EDITOR, sent=False).classes("w-full"):
-            md = ui.markdown("").classes("w-full")
-    _scroll(state)
-    return entry, md
-
-
 def finalize_reply(state, entry: dict, md: ui.markdown):
     """The words on screen become the words of record."""
     entry["text"] = md.content or ""
@@ -145,46 +132,6 @@ def thread_room_marker(state, key: str, name: str, role: str) -> dict:
     except Exception as ex:
         logger.debug(f"room marker render skipped: {ex}")
     return entry
-
-
-def thread_work(state) -> tuple[dict, callable]:
-    """One WORK entry per agent turn: a single line that breathes while the
-    studio works and folds to a receipt drawer when it's done."""
-    entry = _append(state, {"t": "work", "status": "running",
-                            "started": time.time(), "ended": None,
-                            "receipts": []})
-    with state.history:
-        container = ui.element("div").classes("w-full")
-
-    def refresh():
-        try:
-            container.clear()
-            with container:
-                _render_work(state, entry, live=True)
-            _scroll(state)
-        except Exception as ex:
-            logger.debug(f"work line refresh skipped: {ex}")
-
-    refresh()
-
-    def close(status: str = "done"):
-        entry["status"] = status
-        entry["ended"] = time.time()
-        if not entry["receipts"]:
-            # a turn that touched nothing leaves no line at all
-            try:
-                state.thread.remove(entry)
-            except ValueError:
-                pass
-            try:
-                container.delete()
-            except Exception:
-                pass
-            return
-        refresh()
-
-    entry["_close"] = close          # popped before persistence
-    return entry, refresh
 
 
 def begin_turn(state):
@@ -480,7 +427,7 @@ def _render_entries(state, entries):
             elif t == "room":
                 _render_room(state, e)
             elif t == "aside":
-                continue                       # the DAYBOOK renders these
+                continue     # toast-only receipts — the chat stays a conversation
             elif t == "work":
                 if e.get("status") == "running":
                     _render_work(state, e, live=False)   # interrupted note

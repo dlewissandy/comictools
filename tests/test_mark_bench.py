@@ -119,3 +119,29 @@ def test_the_series_tile_opens_the_board_with_the_art():
     # the tile rides the assets flow, placed with the walls (the masthead
     # block sits AFTER the description cell in source order)
     assert src.index("Description callout") < src.index("MASTHEAD IS JUST ANOTHER ASSET")
+
+
+def test_every_layer_verb_speaks_artboard(storage, mock_imaging):
+    """The cleanup docket's worst find: every layer verb on the mark bench
+    (pose figure / pose prop / dress setting / explode) built panel keys an
+    ArtBoard doesn't have and crashed.  The kw builders and the imaging
+    bodies must all speak board_id."""
+    src = open("gui/light_table.py").read()
+    assert src.count('{"board_id": board.board_id} if is_artboard(board)') == 3, \
+        "all three board-level kw builders carry the artboard arm"
+    assert '{"board_id": panel.board_id} if artboard_mode' in src, \
+        "the split flow carries it too"
+    from gui.light_table import board_label
+    from schema import ArtBoard
+    b = ArtBoard(board_id="verb-pin", scope_id=WL, board_kind="masthead",
+                 name="verb pin")
+    storage.create_object(data=b, overwrite=True)
+    assert "mark" in board_label(b), "board_label knows marks (Flatten opens)"
+
+    # the imaging bodies resolve an artboard end-to-end
+    import agentic.tools.imaging as imaging
+    from types import SimpleNamespace
+    state = SimpleNamespace(storage=storage, is_dirty=False)
+    out = imaging.dress_setting_acetate_body(
+        state, WL, "", direction="warm dusk light", board_id="verb-pin")
+    assert "not found" not in out.lower() or "art board" not in out.lower(), out

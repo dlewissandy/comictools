@@ -434,6 +434,7 @@ def init_layout(logger):
                      --ink: #181410; --caption: #f9df7b; --caption-ink: #181410; }
         .book-page .text-gray-500 { color: #6b7280 !important; }
         .book-page--recto { grid-column: 2; }
+        .book-page--ghost-faint { opacity: .55; }
         .book-page--ghost { border: 2px dashed var(--ink); background: transparent;
                             box-shadow: none; cursor: pointer;
                             display: flex; flex-direction: column;
@@ -1048,8 +1049,20 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                                 .tooltip(rel)
                             ui.label(age).classes('text-xs text-gray-500').style('flex-shrink: 0;')
                             if en['occupied']:
-                                ui.label('superseded').classes('text-xs text-gray-500') \
-                                    .tooltip('An older copy — the current version holds its place')
+                                def swap_back(entry=en['entry'], rel=rel, base=en['base']):
+                                    from storage.trash import swap_entry
+                                    restored = swap_entry(base, entry)
+                                    if restored:
+                                        ui.notify(f"Swapped {rel} back — the newer version "
+                                                  f"waits in the wastebasket now.", type='positive')
+                                        dlg.close()
+                                        state.refresh_details()
+                                    else:
+                                        ui.notify('Could not swap it back.', type='warning')
+                                ui.button(icon='swap_horiz').props('flat round dense size=sm') \
+                                    .tooltip('Swap it back — the current version goes to the '
+                                             'wastebasket in its place') \
+                                    .on('click', lambda _, f=swap_back: f())
                             else:
                                 def bring_back(entry=en['entry'], rel=rel, base=en['base']):
                                     restored = restore_entry(base, entry)

@@ -55,8 +55,8 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                 return (opener, chips[:4])
 
             case "library":
-                return ("I keep the studio's collection — every character, wardrobe and setting across all series.  Ask me to find something or import it into a series.",
-                        ["What characters do we have?", "What settings do we have?"])
+                # the library redirects straight to the Reading Room — no chat
+                return (None, [])
 
             case "series":
                 series_id = sel[-1].id
@@ -166,6 +166,12 @@ def opening_and_chips(state) -> tuple[str | None, list[str]]:
                             f"compose it on the light table or say the word and I'll render it.",
                             ["Render this page", "Work on the words with me", "Move it in the book"])
                 return (None, ["Re-render this page", "Rework it on the table", "Move it in the book"])
+
+            case "artboard":
+                # THE LETTERER'S BENCH: a masthead or logo mark on the table
+                return (None, ["Write the lettering brief with me",
+                               "Proof the mark",
+                               "Explode a take into layers"])
 
             case "image-editor":
                 return ("The acetate's on the bench.  Drag a marquee over what needs "

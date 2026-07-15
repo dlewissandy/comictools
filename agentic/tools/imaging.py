@@ -1683,119 +1683,6 @@ def _prepare_outpaint_assets(image_path: str, padding: dict) -> tuple[str, str, 
     return base_tmp.name, mask_tmp.name, (new_width, new_height)
 
 
-def _update_parent_selection(
-    state: APPState,
-    storage: GenericStorage,
-    original_locator: str,
-    new_locator: str,
-) -> str | None:
-    selection = state.selection
-    series_id = _find_selection_id(selection, SelectedKind.SERIES)
-    issue_id = _find_selection_id(selection, SelectedKind.ISSUE)
-    scene_id = _find_selection_id(selection, SelectedKind.SCENE)
-    panel_id = _find_selection_id(selection, SelectedKind.PANEL)
-    cover_id = _find_selection_id(selection, SelectedKind.COVER)
-    publisher_id = _find_selection_id(selection, SelectedKind.PUBLISHER)
-    style_id = _find_selection_id(selection, SelectedKind.STYLE)
-    character_id = _find_selection_id(selection, SelectedKind.CHARACTER)
-    variant_id = _find_selection_id(selection, SelectedKind.VARIANT)
-    styled_variant_style_id = _find_selection_id(selection, SelectedKind.STYLED_VARIANT)
-    reference_image_id = _find_selection_id(selection, SelectedKind.REFERENCE_IMAGE)
-
-    if panel_id and scene_id and issue_id and series_id:
-        panel = storage.read_object(Panel, primary_key={
-            "series_id": series_id,
-            "issue_id": issue_id,
-            "scene_id": scene_id,
-            "panel_id": panel_id,
-        })
-        if panel:
-            panel.image = new_locator
-            storage.update_object(panel)
-            state.is_dirty = True
-            return "panel"
-
-    if cover_id and issue_id and series_id:
-        cover = storage.read_object(Cover, primary_key={
-            "series_id": series_id,
-            "issue_id": issue_id,
-            "cover_id": cover_id,
-        })
-        if cover:
-            cover.image = new_locator
-            storage.update_object(cover)
-            state.is_dirty = True
-            return "cover"
-
-    if publisher_id:
-        publisher = storage.read_object(Publisher, primary_key={"publisher_id": publisher_id})
-        if publisher:
-            publisher.image = new_locator
-            storage.update_object(publisher)
-            state.is_dirty = True
-            return "publisher"
-
-    if styled_variant_style_id and variant_id and character_id and series_id:
-        variant = storage.read_object(CharacterVariant, primary_key={
-            "series_id": series_id,
-            "character_id": character_id,
-            "variant_id": variant_id,
-        })
-        if variant:
-            variant.images[styled_variant_style_id] = new_locator
-            storage.update_object(variant)
-            state.is_dirty = True
-            return "styled-variant"
-
-    if style_id:
-        style = storage.read_object(ComicStyle, primary_key={"style_id": style_id})
-        if style:
-            if not isinstance(style.image, dict):
-                style.image = {}
-            key = None
-            for k, v in style.image.items():
-                if v == original_locator:
-                    key = k
-                    break
-            if key is None:
-                key = next(iter(style.image.keys()), "art")
-            style.image[key] = new_locator
-            storage.update_object(style)
-            state.is_dirty = True
-            return "style"
-
-    if reference_image_id:
-        if panel_id and scene_id and issue_id and series_id:
-            panel = storage.read_object(Panel, primary_key={
-                "series_id": series_id,
-                "issue_id": issue_id,
-                "scene_id": scene_id,
-                "panel_id": panel_id,
-            })
-            if panel:
-                ref = next((r for r in panel.reference_images if r.id == reference_image_id or r.image == original_locator), None)
-                if ref:
-                    ref.image = new_locator
-                    storage.update_object(panel)
-                    state.is_dirty = True
-                    return "panel-reference"
-        if cover_id and issue_id and series_id:
-            cover = storage.read_object(Cover, primary_key={
-                "series_id": series_id,
-                "issue_id": issue_id,
-                "cover_id": cover_id,
-            })
-            if cover:
-                ref = next((r for r in cover.reference_images if r.id == reference_image_id or r.image == original_locator), None)
-                if ref:
-                    ref.image = new_locator
-                    storage.update_object(cover)
-                    state.is_dirty = True
-                    return "cover-reference"
-
-    return None
-
-
 def _has_real_alpha(path: str) -> bool:
     """True when the image actually uses transparency — an acetate, not a
     print.  Heals of acetates must come back clear, not on a slab."""
@@ -3278,7 +3165,7 @@ def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id:
                                  panel_id: str | None = None, character_id: str = "", variant_id: str = "",
                                  pose_direction: str | None = None,
                                  cover_id: str | None = None,
-                                 insert_id: str | None = None) -> str:
+                                 insert_id: str | None = None, board_id: str | None = None) -> str:
     """Render a transparent posed figure for a board (a panel, a cover, or a
     full-page insert) and remember it there.  Callable directly from the GUI
     (background job) or via the tool."""
@@ -3288,7 +3175,17 @@ def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id:
     from storage import registry as _reg
     # the key names its own house — read/write where the object LIVES
     storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
-    if cover_id:
+    if board_id:
+        # a mark composes on the same table — resolve its board (the scope
+        # may be a PUBLISHER id, so try that house too)
+        storage = _reg.storage_for_key({"publisher_id": series_id}, storage)
+        from schema import ArtBoard as _ArtBoard
+        panel = storage.read_object(cls=_ArtBoard, primary_key={
+            "scope_id": series_id, "board_id": board_id})
+        if panel is None:
+            return f"Art board '{board_id}' not found."
+        scene = None
+    elif cover_id:
         panel = storage.read_object(cls=Cover, primary_key={
             "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
         if panel is None:
@@ -3390,7 +3287,7 @@ This is a cut-out acetate to be layered over a background."""
 def pose_element_acetate_body(state, series_id: str, issue_id: str, key: str,
                               pose_direction: str | None = None,
                               scene_id: str | None = None, panel_id: str | None = None,
-                              cover_id: str | None = None, insert_id: str | None = None,
+                              cover_id: str | None = None, insert_id: str | None = None, board_id: str | None = None,
                               style_id: str | None = None) -> str:
     """POSE A PROP: re-render an element cut-out (a prop, an object) in a new
     orientation or state as a transparent acetate — the prop twin of posing a
@@ -3407,7 +3304,16 @@ def pose_element_acetate_body(state, series_id: str, issue_id: str, key: str,
     # the key names its own house — read/write where the object LIVES
     storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
-    if cover_id:
+    if board_id:
+        # a mark composes on the same table — resolve its board (the scope
+        # may be a PUBLISHER id, so try that house too)
+        storage = _reg.storage_for_key({"publisher_id": series_id}, storage)
+        from schema import ArtBoard as _ArtBoard
+        board = storage.read_object(cls=_ArtBoard, primary_key={
+            "scope_id": series_id, "board_id": board_id})
+        if board is None:
+            return f"Art board '{board_id}' not found."
+    elif cover_id:
         board = storage.read_object(cls=Cover, primary_key={
             "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
     elif insert_id:
@@ -3477,7 +3383,7 @@ as directed.  This is a cut-out acetate to be layered over a background."""
 def dress_setting_acetate_body(state, series_id: str, issue_id: str,
                                direction: str | None = None,
                                scene_id: str | None = None, panel_id: str | None = None,
-                               cover_id: str | None = None, insert_id: str | None = None,
+                               cover_id: str | None = None, insert_id: str | None = None, board_id: str | None = None,
                                style_id: str | None = None) -> str:
     """DRESS THE SETTING: re-render the board's background plate under new light,
     time of day, weather, or camera angle — the setting twin of posing a figure or
@@ -3492,7 +3398,16 @@ def dress_setting_acetate_body(state, series_id: str, issue_id: str,
     # the key names its own house — read/write where the object LIVES
     storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
-    if cover_id:
+    if board_id:
+        # a mark composes on the same table — resolve its board (the scope
+        # may be a PUBLISHER id, so try that house too)
+        storage = _reg.storage_for_key({"publisher_id": series_id}, storage)
+        from schema import ArtBoard as _ArtBoard
+        board = storage.read_object(cls=_ArtBoard, primary_key={
+            "scope_id": series_id, "board_id": board_id})
+        if board is None:
+            return f"Art board '{board_id}' not found."
+    elif cover_id:
         board = storage.read_object(cls=Cover, primary_key={
             "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
     elif insert_id:
@@ -3856,7 +3771,7 @@ def _resolve_layer_source(panel, scene, storage, series_id: str, layer: str):
 def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None = None,
                      panel_id: str | None = None, layer: str = 'background',
                      entities: list | None = None, cover_id: str | None = None,
-                     insert_id: str | None = None) -> str:
+                     insert_id: str | None = None, board_id: str | None = None) -> str:
     """Split one layer of a board (a panel, a cover, or a full-page insert)
     into its constituent elements.
 
@@ -3872,7 +3787,17 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None 
     from storage import registry as _reg
     # the key names its own house — read/write where the object LIVES
     storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
-    if cover_id:
+    if board_id:
+        # a mark composes on the same table — resolve its board (the scope
+        # may be a PUBLISHER id, so try that house too)
+        storage = _reg.storage_for_key({"publisher_id": series_id}, storage)
+        from schema import ArtBoard as _ArtBoard
+        panel = storage.read_object(cls=_ArtBoard, primary_key={
+            "scope_id": series_id, "board_id": board_id})
+        if panel is None:
+            return f"Art board '{board_id}' not found."
+        scene = None
+    elif cover_id:
         panel = storage.read_object(cls=Cover, primary_key={
             "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
         if panel is None:

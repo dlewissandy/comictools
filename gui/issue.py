@@ -480,17 +480,21 @@ def view_issue(state: APPState):
             sh.tooltip(f"The {location.replace('-', ' ')} cover — open its light table")
             sh.on('click', lambda _: goto(SelectedKind.COVER, c.cover_id, f"{location} cover",
                                           anchor=f'cover-{location}'))
-        elif location in ('front', 'back'):
-            with ui.element('div').classes(classes + ' book-page--ghost') as sh:
-                ui.label(f'+ {location} cover').classes('page-ghost-cta')
+        else:
+            # EVERY SLOT GETS A DOOR — the inside covers too (they were
+            # invisible: no way anywhere to create one)
+            faint = '' if location in ('front', 'back') else ' book-page--ghost-faint'
+            with ui.element('div').classes(classes + ' book-page--ghost' + faint) as sh:
+                ui.label(f'+ {location.replace("-", " ")} cover').classes('page-ghost-cta')
             # the production dashboard's cover doors aim here even before
             # the cover exists — a ghost sheet still answers its anchor
             sh._props['data-banchor'] = f'cover-{location}'
-            sh.tooltip('Every book needs one')
+            sh.tooltip('The indicia prints here unless you give it art'
+                       if location == 'inside-front' else 'Every book needs one'
+                       if location in ('front', 'back') else 'An extra canvas, if you want one')
             sh.on('click', lambda _, loc=location: post_user_message(
                 state, f"I would like to create a {loc} cover for this issue."))
             return True
-        return c is not None
 
     def footer_btn(icon, tip, handler):
         ui.button(icon=icon).props('flat round dense size=sm').tooltip(tip) \

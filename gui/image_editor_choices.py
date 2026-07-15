@@ -123,7 +123,7 @@ def view_image_editor_choices(state: APPState):
                 ui.button("Paste it down", icon="check").classes("w-1/2") \
                     .props("no-caps") \
                     .tooltip("Repaint the acetate with this take — the original goes "
-                             "to the wastebasket first, with a way back") \
+                             "to the wastebasket first (swap it back from there any time)") \
                     .on("click", lambda _: _apply(state))
             ui.button("Leave the bench", icon="logout").classes("w-1/2") \
                 .props("flat no-caps") \
@@ -152,13 +152,12 @@ def _apply(state: APPState):
         return
 
     # THE ORIGINAL GOES TO THE WASTEBASKET FIRST: applying an edit must
-    # never be the only copy's last moment (dot-prefixed files are invisible
-    # to listings; the receipt's UNDO chip restores the pre-edit art).
+    # never be the only copy's last moment — the wastebasket's 'swap it
+    # back' door restores the pre-edit art any time.
     from storage.trash import soft_backup
     _base = str(getattr(getattr(state, "storage", None), "base_path", "data"))
-    backup_entry = soft_backup(_base, original,
-                               note=f"the art before a heal was applied — {os.path.basename(original)}")
-    backup = os.path.join(backup_entry, "payload")
+    soft_backup(_base, original,
+                note=f"the art before a heal was applied — {os.path.basename(original)}")
     try:
         # CLEAR ACETATE: healing a transparent image must never paste an
         # opaque card into the layered composite — outside the healed
@@ -212,15 +211,9 @@ def _apply(state: APPState):
     state.image_editor_image = original
     state.is_dirty = True
 
-    def undo(backup=backup, original=original):
-        # the CURRENT art goes to the wastebasket in turn — an old receipt's
-        # undo must never be the newest artwork's last moment
-        from storage.trash import soft_backup as _sb
-        _sb(_base, original, note=f"the healed art an undo replaced — {os.path.basename(original)}")
-        shutil.copyfile(backup, original)
     from gui.light_table import table_receipt
     table_receipt(state, "🖌 pasted the take down — the acetate was repainted in place.  "
-                         "The other takes wait in the wastebasket.", undo=undo)
+                         "The pre-edit art waits in the wastebasket (swap it back any time).")
 
     # Return to editor view
     new_sel = [s for s in state.selection if s.kind != SelectedKind.IMAGE_EDITOR_CHOICES]

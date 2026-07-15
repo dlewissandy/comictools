@@ -7,7 +7,6 @@ Comic Studio explores what happens when AI isn't a tool you operate but a peer y
 The AI is another voice in the room — not a sycophant that agrees with everything, not a steamroller that takes over. It's a collaborator that can brainstorm story ideas, draft dialogue, generate character art, and push back on creative choices when something isn't working. The creator stays in control, but the AI has a real seat at the table.
 
 <p align="center">
-  <img src="docs/screenshots/cover-witchlight.jpg" width="300" alt="Wonders of the Witchlight - AI-generated comic cover" />
   <img src="docs/screenshots/cover-example.png" width="300" alt="Joey: Triumphs and Tumbles - AI-generated comic cover" />
 </p>
 <p align="center"><em>Fully AI-generated comic covers, created through conversation — not forms.</em></p>

@@ -1,5 +1,5 @@
 import os
-from schema import Series, Issue, CharacterModel, Publisher, Setting, PropAsset, Outfit
+from schema import Series, Issue, CharacterModel, Setting, PropAsset, Outfit
 from gui.elements import (
     header, view_all_instances, markdown_field_editor, crud_button, post_user_message, CrudButtonKind)
 from nicegui import ui
@@ -18,11 +18,12 @@ def view_series(state: APPState):
     details = state.details
     details.clear()
 
-    # Create safe accessors for the publisher's name, id and image filepath.
-    pub = None if series.publisher_id is None else storage.read_object(cls=Publisher, primary_key={"publisher_id": series.publisher_id})
-    get_name = lambda i, x : None if pub is None else pub.name
-    get_id = lambda : None if pub is None else pub.id
-    get_image_filepath = lambda : None if pub is None else pub.image_filepath()
+    # a struck or mistyped series id lands softly, never a dead-end crash
+    if series is None:
+        with details:
+            ui.markdown(f"Series with ID {selection[-1].id if selection else '?'} "
+                        f"not found — it may have been struck.")
+        return
 
     with details:
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):

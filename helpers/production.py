@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 # THE EIGHT STAGES, in production order.  key -> (label, dial detail)
 STAGE_ORDER = [
     ("scripted", "stories scripted", "stories"),
-    ("scenes", "scenes created", "scenes"),
+    ("scenes", "scenes created", "stories"),
     ("beats", "beats created", "beats"),
     ("layout", "layout completed", "beats"),
     ("roughed", "panels roughed", "beats"),
@@ -210,7 +210,7 @@ def production_board(storage, series_id: str, issue_id: str) -> ProductionBoard:
     stages.append(Stage("scenes", "scenes created",
                         done=sum(1 for s in scripted_stories if s.scenes_created),
                         total=len(scripted_stories),
-                        anchor=(br.anchor if br else None), detail="scenes"))
+                        anchor=(br.anchor if br else None), detail="stories"))
 
     bl = _first_beatless()
     stages.append(Stage("beats", "beats created",

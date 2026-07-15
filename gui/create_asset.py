@@ -543,6 +543,4 @@ def handle_asset_drop(state: APPState, args: dict):
 
 
 # ---------------------------------------------------------------------------
-# ONE HAND FOR THE CAST: re-ink every character in a chosen style so they're
-# drawn by a single artist.  The seed of a future named-"artist" feature.
-# ---------------------------------------------------------------------------
+

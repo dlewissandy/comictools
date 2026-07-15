@@ -163,7 +163,7 @@ def test_racks_scroll_not_overflow():
         at = src.index(title)
         window = src[max(0, at - 300):at]
         assert "studio_dialog" in window, f"{title} still hand-rolls its shell"
-    assert "studio_dialog" in open("gui/scene.py").read()
+    # (gui/scene.py is retired — scenes ride the open book, no room of their own)
 
 
 def test_one_editor_holds_every_rooms_tools():
