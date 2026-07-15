@@ -10,7 +10,7 @@ def test_round_trip_deep_panel(storage):
              "scene", "b3cc50eb-5a57-463c-ba10-927d941c9779",
              "panel", "667ca06e-8b94-4d98-ab88-f996d6f3c8f9"]
     sel = selection_from_path(storage, parts)
-    assert [s.kind for s in sel] == [SelectedKind.ALL_PUBLISHERS, SelectedKind.PUBLISHER,
+    assert [s.kind for s in sel] == [SelectedKind.LOBBY, SelectedKind.PUBLISHER,
                                      SelectedKind.SERIES, SelectedKind.ISSUE,
                                      SelectedKind.SCENE, SelectedKind.PANEL]
     assert sel[2].name == "Wonders of the Witchlight"  # names resolved for breadcrumbs

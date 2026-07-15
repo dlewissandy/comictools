@@ -256,10 +256,8 @@ def create_comic_series(wrapper: RunContextWrapper[APPState], series_title: str,
         logger.info(f"The title '{series_title}' is available.")
     series = Series(series_id=series_id, name=series_title, description=description, publisher_id=pub_id)
     new_id = storage.create_object(data=series)
-    # THE ONE TRAIL: the new series opens on the same canonical trail every
-    # UI door builds — never appended to whatever room the chat was in
-    from gui.routes import series_ancestry
-    state.change_selection(new=series_ancestry(state.storage, new_id))
+    # STAY PUT: creating never redirects — the wall repaints where the
+    # author stands; select_series exists for an explicit 'open it'
     state.is_dirty = True
     return series
 
@@ -311,8 +309,8 @@ def create_style(
         image=None
     )
     style_id = storage.create_object(style)
-    from gui.routes import style_ancestry
-    state.change_selection(new=style_ancestry(state.storage, style_id))
+    # STAY PUT: creating never redirects
+    state.is_dirty = True
     return style
 
 
@@ -385,8 +383,7 @@ def create_style_from_image(wrapper: RunContextWrapper[APPState],
         logger.warning(f"keeping the style's art exemplar failed: {e}")
 
     state.is_dirty = True
-    from gui.routes import style_ancestry
-    state.change_selection(new=style_ancestry(storage, final_id))
+    # STAY PUT: creating never redirects
     return (f"Created the '{name}' style from the art — the image is its art exemplar, "
             f"and its art/character/bubble styles were read off the picture.  Nothing else "
             f"rendered; example art inks on demand.")

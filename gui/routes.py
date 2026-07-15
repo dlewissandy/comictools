@@ -125,7 +125,7 @@ def series_ancestry(storage: GenericStorage, sid: str) -> list[SelectionItem]:
     from storage import registry as _reg
     st = _storage_holding(storage, Series, {"series_id": sid},
                           getattr(_reg, 'house_of_series', None), sid)
-    sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
+    sel = [SelectionItem(name="Studio", id=None, kind=SelectedKind.LOBBY)]
     try:
         series_obj = st.read_object(cls=Series, primary_key={"series_id": sid})
         if series_obj is not None and series_obj.publisher_id:
@@ -142,7 +142,7 @@ def house_ancestry(storage: GenericStorage) -> list[SelectionItem]:
     repo holds exactly one).  Over the inert root this is just Publishers
     — the wall.  The trail every house-owned thing hangs from."""
     from schema import Publisher
-    sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
+    sel = [SelectionItem(name="Studio", id=None, kind=SelectedKind.LOBBY)]
     try:
         pubs = storage.read_all_objects(Publisher)
         if pubs:
@@ -194,7 +194,7 @@ def selection_from_path(storage: GenericStorage, parts: list[str]) -> list[Selec
         return [SelectionItem(name="Library", id=None, kind=SelectedKind.LIBRARY)]
 
     if parts[0] == "publishers":
-        sel = [SelectionItem(name="Publishers", id=None, kind=SelectedKind.ALL_PUBLISHERS)]
+        sel = [SelectionItem(name="Studio", id=None, kind=SelectedKind.LOBBY)]
         if len(parts) == 1:
             return sel
         from storage import registry as _reg

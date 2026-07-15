@@ -177,3 +177,23 @@ def test_one_editor_holds_every_rooms_tools():
     # and the one agent IS the one that answers
     src = open("messaging.py").read()
     assert 'agents.get("the Editor")' in src
+
+
+def test_creating_never_redirects():
+    """STAY PUT: no create/generate/update tool body navigates — the
+    select_* tools are the only navigators, used on explicit asks only."""
+    import re
+    for path in ("agentic/tools/creator.py", "agentic/tools/updater.py",
+                 "agentic/tools/imaging.py", "agentic/tools/assets.py",
+                 "agentic/tools/library.py"):
+        src = open(path).read()
+        hits = [m for m in re.finditer(r"change_selection", src)]
+        allowed = []
+        if path == "agentic/tools/imaging.py":
+            # the healing-bench choices flow opens ITS OWN sheet (the author
+            # is already in the editor and asked for the edit) — the one
+            # sanctioned exception, guarded by its own bench check
+            allowed = [m for m in hits
+                       if "image_editor" in src[max(0, m.start() - 800):m.start()]]
+        assert len(hits) == len(allowed), f"{path} navigates outside the bench flow"
+    assert "STAY WHERE THE AUTHOR STANDS" in open("agentic/instructions.py").read()

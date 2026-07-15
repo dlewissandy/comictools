@@ -37,7 +37,7 @@ def test_select_series_walks_the_one_trail(storage):
     out = str(_invoke(select_series, state, series_id=WL))
     assert "Selected comic series" in out
     kinds = [i.kind.value for i in state.trail]
-    assert kinds == ["all-publishers", "publisher", "series"], kinds
+    assert kinds == ["lobby", "publisher", "series"], kinds
     assert state.trail[-1].id == WL and state.trail[-1].name
 
 
@@ -71,10 +71,10 @@ def test_select_issue_and_character_walk_the_one_trail(storage):
     out = str(_invoke(select_issue, state, series_id=WL, issue_id="witchlight-carnival"))
     assert "Opened the issue" in out
     assert [i.kind.value for i in state.trail] == \
-        ["all-publishers", "publisher", "series", "issue"]
+        ["lobby", "publisher", "series", "issue"]
     assert state.trail[-1].name and state.trail[-1].name != "witchlight-carnival"
 
     out = str(_invoke(select_character, state, series_id=WL, character_id="ezra"))
     assert "Opened the character: Ezra" in out
     assert [i.kind.value for i in state.trail] == \
-        ["all-publishers", "publisher", "series", "character"]
+        ["lobby", "publisher", "series", "character"]

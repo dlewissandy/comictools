@@ -411,11 +411,20 @@ async def test_colophon_prints_all_credits_and_each_line_is_a_pencil(user: User,
     await user.should_see("COLOPHON")
     for role in ("CREATIVE MINDS", "PUBLICATION DATE", "PRICE"):
         await user.should_see(role)
-    await user.should_see("Summer 2024")             # publication date, set in fixture
-    await user.should_see("unset — pencil it in")    # creative minds / price are unset
-    # the per-story credits print in the dashboard — the issue's own script
-    # carries the issue-wide writer as its byline
-    await user.should_see("Mud, scribe of the Earth")
+    # DATA-DRIVEN: set values print, unset ones ghost — never hardcode the
+    # author's live fixture, they edit it while we work
+    from schema import Issue
+    iss = _TmpStorage().read_object(Issue, {"series_id": "wonders-of-the-witchlight",
+                                            "issue_id": "witchlight-carnival"})
+    fields = [iss.creative_minds, iss.publication_date,
+              (f"${iss.price:.2f}" if iss.price is not None else None)]
+    for v in fields:
+        if v:
+            await user.should_see(str(v))
+    if any(v is None or v == "" for v in fields):
+        await user.should_see("unset — pencil it in")
+    if iss.writer:
+        await user.should_see(iss.writer)
 
     lines = [e for e in user.client.elements.values()
              if 'credit-line' in getattr(e, "_classes", [])]
@@ -629,19 +638,19 @@ def test_style_trail_runs_through_the_house():
     st = storage.read_all_objects(ComicStyle)[0]
 
     trail = style_ancestry(storage, st.style_id)
-    assert [i.kind.value for i in trail] == ["all-publishers", "publisher", "style"]
+    assert [i.kind.value for i in trail] == ["lobby", "publisher", "style"]
     assert trail[1].id == pub.publisher_id and trail[2].name == st.name
 
     url = selection_to_url(trail)
     assert url == f"/publishers/{pub.publisher_id}/style/{st.style_id}"
     assert [i.kind.value for i in selection_from_path(storage, url.strip("/").split("/"))] \
-        == ["all-publishers", "publisher", "style"]
+        == ["lobby", "publisher", "style"]
     # the OLD address still finds the style — through the house
     legacy = selection_from_path(storage, ["styles", st.style_id])
-    assert [i.kind.value for i in legacy] == ["all-publishers", "publisher", "style"]
+    assert [i.kind.value for i in legacy] == ["lobby", "publisher", "style"]
     # and the retired room's address lands on the house itself
     room = selection_from_path(storage, ["styles"])
-    assert [i.kind.value for i in room] == ["all-publishers", "publisher"]
+    assert [i.kind.value for i in room] == ["lobby", "publisher"]
 
 
 def test_palette_styles_wear_their_house():
@@ -654,7 +663,7 @@ def test_palette_styles_wear_their_house():
     style_rows = [(label, sub, sel) for _i, label, sub, sel in entries if sub.startswith("style ·")]
     assert style_rows, "styles are still jumpable"
     for _label, _sub, sel in style_rows:
-        assert [i.kind.value for i in sel] == ["all-publishers", "publisher", "style"]
+        assert [i.kind.value for i in sel] == ["lobby", "publisher", "style"]
 
 
 def test_non_canonical_style_trails_still_share():
@@ -698,7 +707,7 @@ def test_striking_a_style_walks_home_to_the_house():
     out = str(_asyncio.run(delete_style.on_invoke_tool(
         SimpleNamespace(context=state), json.dumps({"style_id": st.style_id}))))
     assert out.startswith("Deleted"), out
-    assert moves and [i.kind.value for i in moves[-1]] == ["all-publishers", "publisher"], \
+    assert moves and [i.kind.value for i in moves[-1]] == ["lobby", "publisher"], \
         "the room walks up to the house, not the wall"
     assert storage.read_object(ComicStyle, {"style_id": st.style_id}) is None
 
