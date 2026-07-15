@@ -445,7 +445,9 @@ class APPState:
                 from gui.home import view_lobby
                 return view_lobby(self)
             case "all-publishers":
-                return view_all_publishers(self)
+                # THE RETIRED WALL: the studio wall shows every house now
+                from gui.home import view_lobby
+                return view_lobby(self)
             case "all-styles":
                 # THE RETIRED ROOM: styles live in the house — a stale
                 # persisted trail lands on the wall instead
@@ -559,9 +561,10 @@ def breadcrumb_selector(state: APPState):
                                            split=True, auto_close=True)
     # styles live IN the house (each repo edits its own copies), so the
     # rack is on the publisher's page — no global Styles room
+    # TWO ROOMS: make in the Studio, read in the Reading Room —
+    # the publishers wall and the asset library folded into the wall
     rooms = (("Studio", SelectedKind.LOBBY),
-             ("Publishers", SelectedKind.ALL_PUBLISHERS),
-             ("Library", SelectedKind.LIBRARY))
+             ("Reading Room", SelectedKind.LIBRARY))
     with primary_selection:
         for label, kind in rooms:
             here = selection[0].kind == kind

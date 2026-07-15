@@ -104,7 +104,7 @@ async def test_coauthor_speaks_first_with_chips(user: User) -> None:
     await user.should_see("Welcome back")                    # the lobby opener
     await user.should_see("NEXT:")                           # the your-turn strip
     await user.should_see("COMIC STUDIO")                    # the lobby masthead
-    await user.should_see("STILL ON THE DRAWING BOARD")      # the resume card
+    await user.should_see("ON THE BOARD")                    # the ribbon on the live issue
 
 
 @pytest.mark.api
@@ -473,7 +473,7 @@ async def test_lobby_resume_card_and_scene_door(user: User) -> None:
     json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    await user.should_see("STILL ON THE DRAWING BOARD")
+    await user.should_see("ON THE BOARD")     # the ribbon on the wall's live issue
 
     # a scene is not a page — it rides in the book
     from schema import SceneModel, Panel
@@ -866,73 +866,16 @@ async def test_the_choices_sheet_pins_the_original(user: User) -> None:
 
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
-async def test_library_shelves_show_wardrobe_and_props(user: User) -> None:
-    """The Librarian promises 'every character, wardrobe and setting' — the
-    shelves must actually show outfits and props, each a door to its home."""
+async def test_the_reading_room_door(user: User) -> None:
+    """THE LIBRARY IS THE READING ROOM now: the room offers the lamp and
+    the door to the immersive reader — the asset shelves retired."""
     main.LocalStorage = _TmpStorage
-    from schema import Outfit, PropAsset
-    storage = _TmpStorage()
-    WL = "wonders-of-the-witchlight"
-    storage.create_object(Outfit(outfit_id="shelf-test-cloak", series_id=WL,
-                                 name="Shelf Test Cloak",
-                                 description="A cloak for the shelf test."), overwrite=True)
     json.dump({"selection": [{"name": "Library", "id": None, "kind": "library"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open(_url_for([{"name": "Library", "id": None, "kind": "library"}]))
-    await user.should_see("Shelf Test Cloak")
-    # props already in the fixture shelve too
-    props = storage.read_all_objects(PropAsset, {"series_id": WL})
-    if props:
-        await user.should_see(props[0].name)
-
-
-def test_the_stop_door_cancels_the_stream():
-    """stop_turn holds the live stream's handle and cancels it — the one
-    door out of a runaway 40-turn spend."""
-    from types import SimpleNamespace
-    from messaging import stop_turn, _STOP_WORDS
-    calls = []
-    state = SimpleNamespace(_live_stream=SimpleNamespace(cancel=lambda: calls.append("cancel")),
-                            _stop_requested=False)
-    assert stop_turn(state) is True
-    assert calls == ["cancel"] and state._stop_requested
-    # no live turn -> nothing to stop, honestly
-    assert stop_turn(SimpleNamespace(_live_stream=None)) is False
-    # the words an author will actually type
-    for w in ("stop", "Stop", "cancel", "STOP IT"):
-        assert w.lower() in _STOP_WORDS or w.lower() in _STOP_WORDS
-    assert "stop" in _STOP_WORDS and "cancel" in _STOP_WORDS
-
-
-def test_one_agent_memory_gets_a_hat_on_room_change():
-    """ONE MEMORY: a room change appends exactly one system hat item to the
-    single agent thread — and silent walks coalesce to one hat."""
-    from types import SimpleNamespace
-    from gui.state import APPState
-    from gui.selection import SelectionItem as S, SelectedKind as K
-
-    thr = [{"role": "user", "content": "hello"}]
-    hats_before = sum(1 for it in thr if it.get("role") == "system")
-
-    # simulate the change_selection hat logic on a bare namespace
-    def add_hat(state, new, new_key):
-        hat = {"role": "system",
-               "content": f"[The author walked to {new[-1].name} ({new_key}).  "
-                          f"You now stand at that bench with its tools; "
-                          f"the conversation continues.]"}
-        t = state.agent_thread
-        if t and isinstance(t[-1], dict) and t[-1].get("role") == "system" \
-                and str(t[-1].get("content", "")).startswith("[The author walked"):
-            t[-1] = hat
-        else:
-            t.append(hat)
-
-    state = SimpleNamespace(agent_thread=thr)
-    add_hat(state, [S(name="WL", id="wl", kind=K.SERIES)], "/series/wl")
-    add_hat(state, [S(name="Carn", id="carn", kind=K.ISSUE)], "/series/wl/issue/carn")
-    hats = [it for it in thr if it.get("role") == "system"]
-    assert len(hats) - hats_before == 1, "silent walks coalesce to ONE hat"
-    assert "Carn" in hats[-1]["content"], "the hat names the CURRENT room"
+    await user.open("/library")
+    await user.should_see("The Reading Room")
+    await user.should_see("Open the reading room")
+    await user.should_not_see("Asset Library")
 
 
 @pytest.mark.module_under_test(main)

@@ -29,67 +29,44 @@ def _asset_card(state: APPState, packer, title: str, subtitle: str, image: str |
 
 
 def view_library(state: APPState):
-    storage: GenericStorage = state.storage
-    S = SelectionItem
-
-    # THE COLLECTION SPANS THE RACK: every mounted house contributes, and
-    # each series' assets are read through its OWN house's storage
+    """THE READING ROOM's door: the room itself is the immersive reader —
+    walking here opens the book you left (or the first on the wall) with
+    the rack drawer for picking any other.  The asset-browser library
+    retired: series manage their own assets; the pickers borrow; Cmd-K
+    jumps."""
     from storage import registry as _reg
-    houses = (_reg.mounted_storages()
-              if str(getattr(storage, 'base_path', '')) == _reg.DATA_DIR and _reg.registered()
-              else [(None, storage)])
-    series_home: dict[str, GenericStorage] = {}
-    all_series: list[Series] = []
-    publishers = {}
-    for _slug, st in houses:
-        for sr in st.read_all_objects(Series):
-            all_series.append(sr)
-            series_home[sr.series_id] = st
-        publishers.update({p.publisher_id: p for p in st.read_all_objects(Publisher)})
-    all_series.sort(key=lambda x: x.name)
+    from schema import Issue as _Issue, Series as _Series
+    from gui.selection import SelectedKind
+    storage = state.storage
+
+    target = None
+    resume = getattr(state, 'resume_selection', None) or state.selection
+    sid = next((it.id for it in (resume or []) if it.kind == SelectedKind.SERIES), None)
+    iid = next((it.id for it in (resume or []) if it.kind == SelectedKind.ISSUE), None)
+    if sid and iid:
+        target = (sid, iid)
+    if target is None:
+        houses = (_reg.mounted_storages() if _reg.registered() else [(None, storage)])
+        for _slug, st in houses:
+            for sr in sorted(st.read_all_objects(_Series), key=lambda x: x.name):
+                issues = sorted(st.read_all_objects(_Issue, {"series_id": sr.series_id}),
+                                key=lambda i: i.issue_number or 0)
+                if issues:
+                    target = (sr.series_id, issues[0].issue_id)
+                    break
+            if target:
+                break
 
     with state.details:
-        header("Asset Library", 0)
-        ui.markdown("Every reusable asset in the studio.  To reuse one, tell me — "
-                    "*“import Mr. Witch into Dustfall”* — or click through to its home.")
+        header("The Reading Room", 0)
+        if target is None:
+            ui.label("Nothing to read yet — bind an issue first and it "
+                     "waits here under the lamp.").classes('text-sm q-mt-sm')
+            return
+        ui.label("Lights down.  The book opens full-bleed; the rack drawer "
+                 "on the right picks any other issue.").classes('text-sm q-mt-sm')
+        ui.button('Open the reading room', icon='menu_book').props('rounded size=lg') \
+            .classes('q-mt-md') \
+            .on('click', lambda _, t=target: ui.navigate.to(
+                f'/series/{t[0]}/issue/{t[1]}/read'))
 
-        for series in all_series:
-            storage = series_home.get(series.series_id, state.storage)
-            pub = publishers.get(series.publisher_id)
-            pub_name = pub.name.title() if pub else "Independent"
-            characters = storage.read_all_objects(CharacterModel, {"series_id": series.series_id})
-            settings = storage.read_all_objects(Setting, {"series_id": series.series_id})
-            outfits = storage.read_all_objects(Outfit, {"series_id": series.series_id})
-            props = storage.read_all_objects(PropAsset, {"series_id": series.series_id})
-            if not characters and not settings and not outfits and not props:
-                continue
-
-            with ui.expansion(value=True).classes('w-full section-flat') as exp:
-                with exp.add_slot('header'):
-                    header(f"{series.name}", 2)
-                    ui.label(f"published by {pub_name}").classes('text-sm text-gray-500 self-center q-ml-md')
-                base = [S(name="Series", id=None, kind=SelectedKind.ALL_SERIES),
-                        S(name=series.name, id=series.series_id, kind=SelectedKind.SERIES)]
-                with ruled_page() as packer:
-                    for c in characters:
-                        img = storage.find_character_image(series_id=series.series_id, character_id=c.character_id)
-                        origin = f" · from {c.origin.series_id}" if c.origin else ""
-                        _asset_card(state, packer, c.name, f"character{origin}", img,
-                                    base + [S(name=c.name, id=c.character_id, kind=SelectedKind.CHARACTER)])
-                    for s in settings:
-                        img = next((i for i in (s.images or {}).values() if i and os.path.exists(i)), None)
-                        origin = f" · from {s.origin.series_id}" if s.origin else ""
-                        _asset_card(state, packer, s.name, f"setting{origin}", img,
-                                    base + [S(name=s.name, id=s.setting_id, kind=SelectedKind.SETTING)])
-                    # THE PROMISED WARDROBE: outfits and props are shelved
-                    # beside the characters who wear and hold them
-                    for o in outfits:
-                        img = next((i for i in (o.images or {}).values() if i and os.path.exists(i)), None)
-                        origin = f" · from {o.origin.series_id}" if o.origin else ""
-                        _asset_card(state, packer, o.name or o.outfit_id, f"outfit{origin}", img,
-                                    base + [S(name=o.name or o.outfit_id, id=o.outfit_id, kind=SelectedKind.OUTFIT)])
-                    for pr in props:
-                        img = next((i for i in (pr.images or {}).values() if i and os.path.exists(i)), None)
-                        origin = f" · from {pr.origin.series_id}" if pr.origin else ""
-                        _asset_card(state, packer, pr.name, f"prop{origin}", img,
-                                    base + [S(name=pr.name, id=pr.prop_id, kind=SelectedKind.PROP)])

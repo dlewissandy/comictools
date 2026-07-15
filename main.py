@@ -333,6 +333,13 @@ def init_layout(logger):
                            width: max-content; line-height: 1.3;
                            white-space: normal; }
         /* RECEIPTS ARE PAPER SLIPS: stamped with the bench they came from */
+        /* THE STUDIO WALL: ribbons and ghost doors */
+        .board-ribbon { position: absolute; top: 6px; left: -4px; z-index: 5;
+                        background: #fcd838; color: var(--ink, #1a1512);
+                        font-size: 8px; font-weight: 800; letter-spacing: .05em;
+                        padding: 1px 6px; border: 1.5px solid var(--ink, #1a1512);
+                        transform: rotate(-6deg); }
+        .ghost-tile { border-style: dashed !important; background: transparent !important; }
         /* THE TRADE DRESS on the glass: bands and badges stand OFF the art */
         .rough-dress { background: var(--paper, #faf6ec); border: 2px solid var(--ink, #1a1512);
                        box-shadow: 3px 3px 0 var(--ink, #1a1512); font-weight: 700;
@@ -1385,6 +1392,37 @@ def read_issue_page(series_id: str, issue_id: str):
     if issue is None:
         ui.markdown(f"Issue `{issue_id}` not found.").style('color: #e8e2d8;')
         return
+
+    # THE RACK: a right-hand drawer listing every house's series and issues —
+    # pick another book without leaving the reading room
+    from storage import registry as _rr
+    from schema import Series as _Ser, Publisher as _Pub
+    with ui.right_drawer(value=False, fixed=True).props('bordered overlay width=300') \
+            .style('background: #2a2521; color: #e8e2d8;') as rack:
+        ui.label('THE RACK').classes('caption-box caption-box-sm')
+        for _slug, _st in (_rr.mounted_storages() if _rr.registered()
+                           else [(None, storage)]):
+            for _p2 in _st.read_all_objects(_Pub):
+                ui.label(_p2.name.upper()).classes('text-xs text-bold q-mt-sm') \
+                    .style('opacity: .7; letter-spacing: .06em;')
+                for _sr in sorted([x for x in _st.read_all_objects(_Ser)
+                                   if x.publisher_id == _p2.publisher_id],
+                                  key=lambda x: x.name):
+                    ui.label(_sr.name.title()).classes('text-sm q-ml-sm').style('opacity: .85;')
+                    for _is in sorted(_st.read_all_objects(Issue, {"series_id": _sr.series_id}),
+                                      key=lambda i: i.issue_number or 0):
+                        _here = (_sr.series_id == series_id and _is.issue_id == issue_id)
+                        lbl = ui.label(f"№ {_is.issue_number} — {_is.name}") \
+                            .classes('text-sm q-ml-md cursor-pointer') \
+                            .style('opacity: 1; color: #fcd838;' if _here else 'opacity: .75;')
+                        if not _here:
+                            lbl.on('click', lambda _, s2=_sr.series_id, i2=_is.issue_id:
+                                   ui.navigate.to(f'/series/{s2}/issue/{i2}/read'))
+    ui.button(icon='auto_stories').props('flat round') \
+        .style('position: fixed; top: 48px; right: 10px; z-index: 30; color: #e8e2d8;') \
+        .tooltip('The rack — pick another book') \
+        .on('click', lambda _: rack.toggle())
+
     sheets, missing = reader_sheets(storage, series_id, issue_id)
     _labels_js = json.dumps([l for l, _p in sheets])
     ui.add_body_html("""<script>

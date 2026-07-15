@@ -24,8 +24,7 @@ def _index(storage):
     entries = []
     # THE ROOT ROOMS themselves are jumpable
     for icon, label, kind in (("🏠", "Studio", K.LOBBY),
-                              ("🏢", "Publishers", K.ALL_PUBLISHERS),
-                              ("🗄️", "Library", K.LIBRARY)):
+                              ("📖", "Reading Room", K.LIBRARY)):
         entries.append((icon, label, "room", [S(name=label, id=None, kind=kind)]))
     from storage import registry as _reg
     if str(getattr(storage, 'base_path', '')) == _reg.DATA_DIR and _reg.registered():

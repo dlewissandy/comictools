@@ -98,15 +98,30 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
     pending.extend(label for label, _j, _a in jobs)
     slips = {label: _slip_write(label) for label, _j, _a in jobs}
 
-    def _announce(text: str, image: str | None = None):
-        # STARTING AND FINISHING A RENDER IS NOT CONVERSATION: every
-        # drawing-board report is a daybook receipt; the docket chip
-        # carries the live count
+    # ONE BOARD LINE per batch: progress breathes in place (▰▰▱), each
+    # landed piece becomes a receipt row with its thumbnail, and the line
+    # folds when the batch closes — never a bubble or panel per piece
+    _line, _update = None, None
+    try:
+        from gui.thread import thread_board_line
+        _title = (f"the drawing board — {len(jobs)} piece{'s' if len(jobs) != 1 else ''}"
+                  if len(jobs) != 1 else "the drawing board")
+        _line, _update = thread_board_line(state, _title, len(jobs))
+    except Exception as e:
+        logger.debug(f"board line skipped: {e}")
+
+    def _piece(line_text: str, answer: str | None = None, image: str | None = None,
+               current: str | None = None):
+        if _line is None:
+            return
         try:
-            from gui.thread import thread_aside
-            thread_aside(state, text, bench='the drawing board', image=image)
+            if line_text:
+                _line["receipts"].append({"line": line_text, "quiet": False,
+                                          "answer": (answer or "")[:300] or None,
+                                          "image": image})
+            _update(current)
         except Exception as e:
-            logger.debug(f"render-queue announce skipped: {e}")
+            logger.debug(f"board line update skipped: {e}")
 
     def _image_in(note: str) -> str | None:
         """Pull a rendered image path out of a job's status note, if present."""
@@ -116,7 +131,7 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
     async def run():
         done, failed = 0, 0
         for i, (label, job, after) in enumerate(jobs, start=1):
-            _announce(f"⏳ **{label}** — on the drawing board… ({i}/{len(jobs)})")
+            _piece("", current=label)
             try:
                 result = await asyncio.to_thread(job)
                 note = str(result)
@@ -125,7 +140,7 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                 if re.search(r"^(cannot|no |nothing to|unknown |missing |not found|failed)",
                              note[:120], re.I):
                     failed += 1
-                    _announce(f"⚠️ **{label}** — didn't make it: {note} ({i}/{len(jobs)})")
+                    _piece(f"⚠️ **{label}** — didn't make it", answer=note)
                     continue
                 done += 1
                 if after is not None:
@@ -140,7 +155,7 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                 extra = ""
                 if "NOTE:" in note:
                     extra = "  ⚠️ " + note.split("NOTE:", 1)[1].strip()
-                _announce(f"🎨 **{label}** — done ({i}/{len(jobs)}).{extra}", image=_image_in(note))
+                _piece(f"🎨 **{label}**{extra}", image=_image_in(note))
             except Exception as e:
                 failed += 1
                 logger.error(f"render job '{label}' failed: {e}")
@@ -153,9 +168,8 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                             state._quota_warned = True
                         except Exception:
                             pass
-                        _announce(f"🛑 **The studio is out of ink** — {e}  "
-                                  f"The rest of this batch is set aside; ask me to "
-                                  f"re-run it once the account is topped up.")
+                        _piece(f"🛑 **The studio is out of ink** — the rest of "
+                               f"this batch is set aside", answer=str(e))
                     failed += len(jobs) - i
                     for skipped_label, _j, _a in jobs[i:]:
                         try:
@@ -164,7 +178,7 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                             pass
                         _slip_burn(slips.get(skipped_label, ""))
                     break
-                _announce(f"⚠️ **{label}** — failed: {e}")
+                _piece(f"⚠️ **{label}** — failed", answer=str(e))
             finally:
                 _slip_burn(slips.get(label, ""))
                 try:
@@ -177,8 +191,12 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
                     state.refresh_details()
                 except Exception as e:
                     logger.debug(f"render-queue refresh skipped: {e}")
-        summary = f"That's the batch: {done} rendered" + (f", {failed} failed" if failed else "") + "."
-        _announce(f"🖼️ {summary}")
+        # the folded line IS the summary — no extra bubble
+        if _line is not None:
+            try:
+                _line["_close"]("done" if failed < max(len(jobs), 1) else "failed")
+            except Exception as e:
+                logger.debug(f"board line close skipped: {e}")
 
     task = asyncio.create_task(run())
     state._render_task = task

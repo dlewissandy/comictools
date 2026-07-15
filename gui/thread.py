@@ -245,6 +245,55 @@ def begin_turn(state):
     return work, refresh, reply, md
 
 
+def thread_board_line(state, title: str, total: int):
+    """ONE line per drawing-board batch: progress that updates IN PLACE
+    while pieces ink — never a bubble per piece — folding into a receipt
+    drawer (thumbnails and all) when the batch closes."""
+    entry = _append(state, {"t": "work", "board": True, "title": title,
+                            "status": "running", "started": time.time(),
+                            "ended": None, "total": total, "receipts": []})
+    try:
+        with state.history:
+            container = ui.element("div").classes("w-full")
+    except Exception:
+        container = None
+
+    def refresh(current: str | None = None):
+        if current is not None:
+            entry["_current"] = current
+        if container is None:
+            return
+        try:
+            container.clear()
+            with container:
+                _render_work(state, entry, live=True)
+            _scroll(state)
+        except Exception as ex:
+            logger.debug(f"board line refresh skipped: {ex}")
+
+    refresh()
+
+    def close(status: str = "done"):
+        entry["status"] = status
+        entry["ended"] = time.time()
+        entry.pop("_current", None)
+        if not entry["receipts"]:
+            try:
+                state.thread.remove(entry)
+            except ValueError:
+                pass
+            if container is not None:
+                try:
+                    container.delete()
+                except Exception:
+                    pass
+            return
+        refresh()
+
+    entry["_close"] = close
+    return entry, refresh
+
+
 # ---------------------------------------------------------------------------
 # renderers (shared by live appends and full reload projection)
 # ---------------------------------------------------------------------------
@@ -279,9 +328,17 @@ def _work_summary(entry) -> str:
     receipts = entry.get("receipts") or []
     steps = len(receipts)
     inked = sum(1 for r in receipts if r.get("image"))
-    bits = [f"worked — {steps} step{'s' if steps != 1 else ''}"]
-    if inked:
-        bits.append(f"{inked} piece{'s' if inked != 1 else ''} inked")
+    if entry.get("board"):
+        total = entry.get("total") or steps
+        failed = sum(1 for r in receipts if (r.get("line") or "").startswith("⚠"))
+        bits = [entry.get("title") or "the drawing board",
+                f"inked {inked} of {total}"]
+        if failed:
+            bits.append(f"{failed} didn't make it")
+    else:
+        bits = [f"worked — {steps} step{'s' if steps != 1 else ''}"]
+        if inked:
+            bits.append(f"{inked} piece{'s' if inked != 1 else ''} inked")
     status = entry.get("status")
     if status == "stopped":
         bits.append("stopped at your word")
@@ -293,6 +350,22 @@ def _work_summary(entry) -> str:
 def _render_work(state, entry, live: bool):
     status = entry.get("status")
     if live and status == "running":
+        if entry.get("board"):
+            # THE BOARD LINE: one slim bar breathing in place — ▰▰▱▱▱
+            total = max(entry.get("total") or 1, 1)
+            done = len(entry.get("receipts") or [])
+            bar = "▰" * done + "▱" * max(total - done, 0)
+            with ui.row().classes("w-full items-center").style("gap: 8px; padding: 0 12px;"):
+                ui.spinner("dots", size="1.2em")
+                ui.label(f"{entry.get('title') or 'the drawing board'} — {bar} "
+                         f"{min(done + 1, total)} of {total}") \
+                    .classes("text-xs text-gray-500 italic")
+                cur = entry.get("_current")
+                if cur:
+                    ui.label(cur).classes("text-xs text-gray-500") \
+                        .style("overflow: hidden; text-overflow: ellipsis; "
+                               "white-space: nowrap; max-width: 40%;")
+            return
         with ui.row().classes("w-full items-center").style("gap: 8px; padding: 0 12px;"):
             ui.spinner("dots", size="1.2em")
             lbl = ui.label("thinking…").classes("text-xs text-gray-500 italic")

@@ -242,83 +242,122 @@ def view_lobby(state: APPState):
                     .on('click', lambda _: found_house_dialog(state))
             return
 
-        # DOOR 1 — THE BENCH YOU LEFT (dominant): the stashed selection,
-        # falling back to the last-touched issue
+        # THE STUDIO WALL: the whole catalog at one glance — every house's
+        # logo, every series' masthead, every issue's face; each tile a door,
+        # each row ending in a ghost door; the issue you left wears the
+        # drawing-board ribbon right on its tile.
+        from schema import Series as _Series
         resume_sel = getattr(state, 'resume_selection', None)
-        series_id = issue = bench_storage = None
+        live_issue = None
         if resume_sel:
-            sid = next((it.id for it in resume_sel if it.kind == SelectedKind.SERIES), None)
-            iid = next((it.id for it in resume_sel if it.kind == SelectedKind.ISSUE), None)
-            if sid:
-                series_id = sid
-                slug = _reg.house_of_series(sid) if _reg.registered() else None
-                bench_storage = _reg.storage_for(slug) if slug else storage
-                if iid:
-                    issue = bench_storage.read_object(cls=Issue, primary_key={
-                        "series_id": sid, "issue_id": iid})
-        if issue is None:
-            series_id, issue, bench_storage = _last_bench(storage)
-            resume_sel = None
-        if issue is not None:
-            series = bench_storage.read_object(cls=Series, primary_key={"series_id": series_id})
-            cover = bench_storage.find_series_image(series_id=series_id)
-            try:
-                from helpers.ledger import issue_ledger
-                led = issue_ledger(bench_storage, series_id, issue.issue_id)
-                summary = led.summary()
-                first_todo = led.todos[0].text if led.todos else None
-            except Exception:
-                summary, first_todo = None, None
+            live_issue = next((it.id for it in resume_sel
+                               if it.kind == SelectedKind.ISSUE), None)
+        if live_issue is None:
+            _sid, _iss, _bst = _last_bench(storage)
+            live_issue = _iss.issue_id if _iss is not None else None
 
-            def resume(_=None, rs=resume_sel, sid=series_id, iss=issue, ser=series):
-                if rs:
-                    state.change_selection(new=rs)
-                else:
-                    state.change_selection(new=[
-                        SelectionItem(name="Studio", id=None, kind=SelectedKind.LOBBY),
-                        SelectionItem(name=(ser.name if ser else sid), id=sid,
-                                      kind=SelectedKind.SERIES),
-                        SelectionItem(name=iss.name, id=iss.issue_id, kind=SelectedKind.ISSUE)])
-            card = ui.element('div').classes('resume-card cursor-pointer q-mt-md')
-            with card:
-                if cover and os.path.exists(cover):
-                    ui.image(source=cover).classes('resume-card__art').props('fit=cover')
-                with ui.column().style('gap: 2px; min-width: 0;'):
-                    ui.label('STILL ON THE DRAWING BOARD').classes('caption-box caption-box-sm')
-                    ui.label(f"{(series.name if series else series_id).title()} — "
-                             f"issue {issue.issue_number}: {issue.name}") \
-                        .classes('text-lg font-bold').style('line-height: 1.2;')
-                    if summary:
-                        badge = summary + (f" — next: {first_todo}" if first_todo else "")
-                        ui.label(badge).classes('text-xs text-gray-500 italic')
-            card.tooltip('Pick up exactly where you left off')
-            card.on('click', resume)
-
-        # DOOR 2 — THE RACK: every house on one strip; each logo a door
-        from gui.elements import caption_action, CrudButtonKind as _CK
-        caption_action('The publishing houses', _CK.READ,
-                       lambda _: state.change_selection(new=[SelectionItem(
-                           name='Publishers', id=None, kind=SelectedKind.ALL_PUBLISHERS)]), 3)
-        with ui.row().classes('w-full q-mt-xs').style('gap: 10px;'):
+        def _house_rows():
+            rows = []
             for pub in pubs:
-                logo = house_logo(pub)
-                with ui.card().classes('soft-card p-2 cursor-pointer') \
-                        .style('width: 130px;') as pc:
-                    if logo and os.path.exists(logo):
-                        ui.image(source=logo).style('height: 72px;').props('fit=contain')
-                    ui.label(pub.name.title()).classes('text-xs text-center w-full')
-                pc.tooltip(f'Open the {pub.name} house')
-                pc.on('click', lambda _, p=pub: state.change_selection(new=[
-                    SelectionItem(name='Publishers', id=None, kind=SelectedKind.ALL_PUBLISHERS),
-                    SelectionItem(name=p.name, id=p.publisher_id, kind=SelectedKind.PUBLISHER)]))
+                slug = _reg.house_of_publisher(pub.publisher_id) if _reg.registered() else None
+                st = _reg.storage_for(slug) if slug else storage
+                series = sorted([x for x in st.read_all_objects(_Series)
+                                 if x.publisher_id == pub.publisher_id],
+                                key=lambda x: x.name)
+                rows.append((pub, st, series))
+            return rows
 
-        # DOOR 3 — THE LIBRARY
-        with ui.row().classes('items-center q-mt-md cursor-pointer').style('gap: 8px;') as lib:
-            ui.icon('local_library').classes('text-xl')
-            ui.label('The Library — every reusable character, setting, prop and '
-                     'wardrobe across the houses').classes('text-sm')
-        lib.on('click', lambda _: state.change_selection(new=[SelectionItem(
-            name='Library', id=None, kind=SelectedKind.LIBRARY)]))
+        def _goto(sel_items):
+            state.change_selection(new=[SelectionItem(name='Studio', id=None,
+                                                      kind=SelectedKind.LOBBY)] + sel_items)
+
+        with ui.column().classes('w-full q-mt-md studio-wall').style('gap: 14px;'):
+            for pub, st, series_list in _house_rows():
+                with ui.row().classes('w-full flex-nowrap items-start').style('gap: 10px;'):
+                    # THE HOUSE CELL: the logo, spanning its series rows
+                    logo = house_logo(pub)
+                    with ui.card().classes('soft-card p-2 cursor-pointer') \
+                            .style('width: 128px; flex-shrink: 0;') as hc:
+                        if logo and os.path.exists(logo):
+                            ui.image(source=logo).style('height: 84px;').props('fit=contain')
+                        ui.label(pub.name.title()).classes('text-xs text-center w-full text-bold')
+                    hc.tooltip(f"The {pub.name} house — its room holds the series wall and the style rack")
+                    hc.on('click', lambda _, p=pub: _goto([
+                        SelectionItem(name=p.name, id=p.publisher_id, kind=SelectedKind.PUBLISHER)]))
+
+                    with ui.column().classes('w-full').style('gap: 10px; min-width: 0;'):
+                        for ser in series_list:
+                            with ui.row().classes('w-full flex-nowrap items-center').style('gap: 8px;'):
+                                # THE SERIES CELL: the masthead wordmark
+                                mast = next((i for i in (ser.title_images or {}).values()
+                                             if i and os.path.exists(i)), None)
+                                with ui.card().classes('soft-card p-1 cursor-pointer') \
+                                        .style('width: 210px; flex-shrink: 0;') as sc:
+                                    if mast:
+                                        ui.image(source=mast).style('height: 56px;').props('fit=contain')
+                                    else:
+                                        ui.label(ser.name.upper()).classes('comic-title-sm') \
+                                            .style('font-size: 1.1rem; line-height: 1.15;')
+                                sc.tooltip(f'{ser.name} — the series room')
+                                sc.on('click', lambda _, p=pub, x=ser: _goto([
+                                    SelectionItem(name=p.name, id=p.publisher_id, kind=SelectedKind.PUBLISHER),
+                                    SelectionItem(name=x.name, id=x.series_id, kind=SelectedKind.SERIES)]))
+
+                                # THE ISSUE TILES
+                                issues = sorted(st.read_all_objects(Issue, {"series_id": ser.series_id}),
+                                                key=lambda i: i.issue_number or 0)
+                                for iss in issues:
+                                    face = st.find_issue_image(series_id=ser.series_id,
+                                                               issue_id=iss.issue_id)
+                                    with ui.card().classes('soft-card p-1 cursor-pointer relative') \
+                                            .style('width: 74px; flex-shrink: 0;') as ic:
+                                        if face and os.path.exists(face):
+                                            ui.image(source=face).style('height: 96px;').props('fit=cover')
+                                        else:
+                                            ui.label(f"№ {iss.issue_number}").classes('text-xs text-center w-full') \
+                                                .style('height: 96px; display: flex; align-items: center; justify-content: center;')
+                                        if iss.issue_id == live_issue:
+                                            ui.label('ON THE BOARD').classes('board-ribbon')
+                                    _tip = f"Issue {iss.issue_number}: {iss.name}"
+                                    if iss.issue_id == live_issue:
+                                        try:
+                                            from helpers.ledger import issue_ledger
+                                            _tip += " — " + issue_ledger(st, ser.series_id, iss.issue_id).summary()
+                                        except Exception:
+                                            pass
+                                    ic.tooltip(_tip)
+                                    ic.on('click', lambda _, p=pub, x=ser, i=iss: _goto([
+                                        SelectionItem(name=p.name, id=p.publisher_id, kind=SelectedKind.PUBLISHER),
+                                        SelectionItem(name=x.name, id=x.series_id, kind=SelectedKind.SERIES),
+                                        SelectionItem(name=i.name, id=i.issue_id, kind=SelectedKind.ISSUE)]))
+
+                                # ghost door: the next issue
+                                gi = ui.card().classes('soft-card p-1 cursor-pointer ghost-tile') \
+                                    .style('width: 74px; flex-shrink: 0;')
+                                with gi:
+                                    ui.label('+').classes('text-xl text-center w-full') \
+                                        .style('height: 96px; display: flex; align-items: center; justify-content: center; opacity: .45;')
+                                gi.tooltip(f'Start the next issue of {ser.name}')
+                                gi.on('click', lambda _, x=ser: (
+                                    state.user_input.__setattr__('value',
+                                        f"Create the next issue of {x.name}: "),
+                                    state.user_input.run_method('focus')))
+                        if not series_list:
+                            gs = ui.card().classes('soft-card p-2 cursor-pointer ghost-tile') \
+                                .style('width: 210px;')
+                            with gs:
+                                ui.label('first series…').classes('text-sm').style('opacity: .55;')
+                            gs.tooltip(f'Found the first series of {pub.name}')
+                            gs.on('click', lambda _, p=pub: (
+                                state.user_input.__setattr__('value',
+                                    f"Create a new series for {p.name}: "),
+                                state.user_input.run_method('focus')))
+
+            # the wall closes with the founding door
+            gh = ui.card().classes('soft-card p-2 cursor-pointer ghost-tile').style('width: 128px;')
+            with gh:
+                ui.label('+ found a house').classes('text-xs text-center w-full').style('opacity: .55;')
+            gh.on('click', lambda _: found_house_dialog(state))
 
 
 def view_all_series(state: APPState):
