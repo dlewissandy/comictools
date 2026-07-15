@@ -165,6 +165,18 @@ def issue_ledger(storage, series_id: str, issue_id: str) -> Ledger:
         items=[] if front_ok else ['the front cover is not inked'],
         anchor='cover-front'))
 
+    # THE BACK COVER: a book closes as well as opens (inside covers stay
+    # optional — the binder ghosts them without debt)
+    back = cover_at.get('back')
+    back_ok = back is not None and rendered(back)
+    lines.append(LedgerLine(
+        key='back-cover', ok=back_ok,
+        text='the back cover closes the book' if back_ok
+        else ('the back cover is a bare board' if back is not None else 'no back cover yet'),
+        count=0 if back_ok else 1,
+        items=[] if back_ok else ['the back cover is not inked'],
+        anchor='cover-back'))
+
     # THE INSERTS: a typeset insert prints as gray words, not art
     if inserts:
         unrendered_ins = [i for i in inserts if not rendered(i)]

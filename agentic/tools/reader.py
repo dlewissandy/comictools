@@ -46,6 +46,21 @@ def read_all(
 
     CONTEXT_ERROR_MSG = f"Cannot find {cls.__name__} instances."
 
+    # THE KEY NAMES ITS OWN GROUND: an explicit parent_key whose series/
+    # publisher/style id resolves to a registered house reads THAT house,
+    # from anywhere — the wall's status asks name real ids the author may
+    # not be standing in.
+    if parent_key is not None:
+        from storage import registry as _reg
+        _keyed_home = _reg.storage_for_key(parent_key, None)
+        if _keyed_home is not None:
+            objs = _keyed_home.read_all_objects(cls=cls, primary_key=parent_key)
+            if order_by is None:
+                return objs
+            if callable(order_by):
+                return sorted(objs, key=order_by)
+            return sorted(objs, key=lambda obj: getattr(obj, order_by))
+
     if len(context) == 0 and cls.__name__ not in ["Series", "Publisher", "ComicStyle"]:
         logger.error(CONTEXT_ERROR_MSG)
         raise ValueError(CONTEXT_ERROR_MSG)
@@ -98,7 +113,18 @@ def read_one(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], pk: dic
 
     pk_keys = list(pk.keys())
 
-    if len(pk_keys)==1 and pk_keys[0] in TOP_LEVEL_IDS:
+    # THE KEY NAMES ITS OWN GROUND: a pk whose series/publisher/style id
+    # resolves to a registered house is grounded no matter where the author
+    # stands — status asks from the wall must read the TRUE house, never
+    # the one the author happens to be browsing.  An id no house claims
+    # falls through to the context discipline below (hallucinated ids
+    # still get caught).
+    from storage import registry as _reg
+    _keyed_home = _reg.storage_for_key(pk, None)
+    if _keyed_home is not None:
+        storage = _keyed_home
+        logger.debug(f"Keyed read — {pk} names its own house")
+    elif len(pk_keys)==1 and pk_keys[0] in TOP_LEVEL_IDS:
         # Special case: Top level ids can be retrieved regardless of the current context.
         logger.debug("Finding top level object with key = {pk}")
     elif len(context) == 0:
@@ -141,17 +167,6 @@ def read_one(wrapper: RunContextWrapper[APPState], cls: type[BaseModel], pk: dic
     else:
         logger.error(CONTEXT_ERROR_MSG)
         raise ValueError(CONTEXT_ERROR_MSG)
-
-    # a top-level id names its OWN house — resolve the mount before reading
-    if len(pk_keys) == 1 and pk_keys[0] in TOP_LEVEL_IDS:
-        from storage import registry as _reg
-        if _reg.registered() and str(storage.base_path) == _reg.DATA_DIR:
-            _find = {"series_id": _reg.house_of_series,
-                     "publisher_id": _reg.house_of_publisher,
-                     "style_id": _reg.house_of_style}[pk_keys[0]]
-            _slug = _find(pk[pk_keys[0]])
-            if _slug:
-                storage = _reg.storage_for(_slug)
 
     obj = storage.read_object(cls=cls, primary_key=pk)
     if obj is None:

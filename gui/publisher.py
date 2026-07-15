@@ -1,12 +1,10 @@
 import os
 from loguru import logger
-from typing import BinaryIO
 from nicegui import ui
-from gui.elements import header, crud_button, markdown_field_editor, full_width_image_selector_grid, view_all_instances, view_attributes, Attribute, CrudButtonKind
+from gui.elements import header, crud_button, markdown_field_editor, view_all_instances, CrudButtonKind
 from gui.messaging import post_user_message
 from gui.state import APPState
-from storage.generic import GenericStorage
-from schema import Publisher, Series
+from schema import Publisher
 
 
 def view_publisher(state: APPState):
@@ -31,31 +29,6 @@ def view_publisher(state: APPState):
         header(f"Publisher {publisher_id} not found", 0)
         return
     
-    def set_image(image_id: str):
-        """
-        Set the image for the publisher.
-        
-        Args:
-            image_id: The ID of the image to set.
-        """
-        publisher.image = image_id
-        storage.update_object(data=publisher)
-
-    def upload_image(name: str, data: BinaryIO, mime_type: str):
-        """
-        Upload an image for the publisher.
-        
-        Args:
-            name: The name of the image.
-            data: The binary data of the image.
-            mime_type: The MIME type of the image.
-        """
-        # Create a new image in the storage
-        file_locator = storage.upload_image(obj=publisher, name=name, data=data, mime_type=mime_type)
-        # Set the image for the publisher
-        publisher.image = file_locator
-        storage.update_object(data=publisher)
-
     with details:
         # The title for the viewer is the Publisher name
         with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
@@ -102,35 +75,6 @@ def view_publisher(state: APPState):
         from gui.elements import caption_action, CrudButtonKind as _CK
         from gui.elements import PagePacker
 
-        # THE STYLE RACK: the house's styles — its OWN copies, edit them to
-        # your heart's content.  Nothing outside this repo is ever used.
-        def _new_style():
-            from gui.create_asset import create_style_dialog
-            create_style_dialog(state)
-        from schema import ComicStyle
-        style_packer = PagePacker(12)
-        with ui.element('div').classes('mosaic-host'), ui.element('div').classes('comic-mosaic w-full'):
-            view_all_instances(
-                state=state,
-                get_instances=lambda: storage.read_all_objects(ComicStyle, order_by="name"),
-                get_image_locator=lambda st: st.image.get('art') if isinstance(st.image, dict) else None,
-                kind="style",
-                aspect_ratio="1/1",
-                packer=style_packer, variants=[(3, 3)],
-                # a style's art is abstract — its NAME must be readable
-                # without hovering
-                card_overlay=lambda st: ui.label(st.name.title())
-                    .classes('caption-box caption-box-sm')
-                    .style('position: absolute; bottom: 6px; left: 6px; z-index: 6;'),
-                overlap_caption=lambda: caption_action("House Styles", _CK.CREATE,
-                    lambda _: _new_style(), 3)
-            )
-            style_packer.finalize()
-
-        # THE LOGO'S DOORS, like any asset: the current mark large with its
-        # heal/rework tools, then describe (the pencil), render, or upload
-        from gui.elements import art_tools
-
         def open_logo_bench(_=None):
             from schema import ArtBoard
             from gui.selection import SelectionItem, SelectedKind
@@ -149,41 +93,49 @@ def view_publisher(state: APPState):
             state.change_selection(new=[*state.selection, SelectionItem(
                 name=board.name, id=bid, kind=SelectedKind.ARTBOARD)])
 
-        ui.button('Compose the logo on the light table', icon='layers') \
-            .props('flat dense no-caps') \
-            .tooltip('The mark bench: from text, from layers, or from a dropped image') \
-            .on('click', open_logo_bench)
-
-        if publisher.image and os.path.exists(publisher.image):
-            with ui.card().classes('soft-card p-2 relative').style('max-width: 320px;'):
-                ui.image(source=publisher.image).style('max-height: 160px;').props('fit=contain')
-                art_tools(state, publisher.image,
-                          on_reink=open_logo_bench,
-                          reink_tip='Re-ink on the mark bench (text, image or rough)',
-                          heal_name=f'the {publisher.name} logo')
-
-        with view_attributes(
-            state=state, 
-            caption="Logo",
-            attributes=[
-                Attribute(caption="description", get_value=lambda: publisher.logo)
-            ], 
-            expanded=True, 
-            individual_icons = False,
-            header_size = 2
-            ):
-
-            # Below that we have a series of full width rows for selecting the
-            # preferred image for the publisher's logo.
-            full_width_image_selector_grid(
+        # THE STYLE RACK: the house's styles — its OWN copies, edit them to
+        # your heart's content.  Nothing outside this repo is ever used.
+        def _new_style():
+            from gui.create_asset import create_style_dialog
+            create_style_dialog(state)
+        from schema import ComicStyle
+        style_packer = PagePacker(12)
+        with ui.element('div').classes('mosaic-host'), ui.element('div').classes('comic-mosaic w-full'):
+            # THE LOGO IS JUST ANOTHER HOUSE ASSET (the author's ruling):
+            # the first tile on the wall — click opens its light table
+            _logo_img = publisher.image if (publisher.image and os.path.exists(publisher.image)) else None
+            with style_packer.place_cell([(3, 3)], fudge=False):
+                with ui.card().classes('soft-card mosaic-card relative cursor-pointer'
+                                       + ('' if _logo_img else ' ghost-card')) as _lcard:
+                    ui.label('Logo').classes('caption-box caption-box-sm') \
+                        .style('position: absolute; bottom: 6px; left: 6px; z-index: 6;')
+                    if _logo_img:
+                        ui.image(source=_logo_img).props('fit=contain') \
+                            .classes('absolute inset-0 w-full h-full')
+                    else:
+                        with ui.column().classes('absolute inset-0 items-center justify-center'):
+                            ui.label('bare — draw it on the light table') \
+                                .classes('text-xs text-gray-500')
+                _lcard.tooltip('The mark of the house — open its light table '
+                               '(from text, a dropped image, or a rough)')
+                _lcard.on('click', lambda _: open_logo_bench())
+            view_all_instances(
                 state=state,
-                image_kind_name="logo image",
-                get_images=lambda: storage.list_images(publisher),
-                get_selection=lambda : publisher.image,
-                set_selection=set_image,
-                upload_image=upload_image
-            )        
-                
+                get_instances=lambda: storage.read_all_objects(ComicStyle, order_by="name"),
+                get_image_locator=lambda st: st.image.get('art') if isinstance(st.image, dict) else None,
+                kind="style",
+                aspect_ratio="1/1",
+                packer=style_packer, variants=[(3, 3)],
+                # a style's art is abstract — its NAME must be readable
+                # without hovering
+                card_overlay=lambda st: ui.label(st.name.title())
+                    .classes('caption-box caption-box-sm')
+                    .style('position: absolute; bottom: 6px; left: 6px; z-index: 6;'),
+                overlap_caption=lambda: caption_action("House Styles", _CK.CREATE,
+                    lambda _: _new_style(), 3)
+            )
+            style_packer.finalize()
+
 def view_pick_publisher(state: APPState):
     """RETIRED: series never pick publishers (the repo IS the publisher)."""
     from gui.home import view_lobby

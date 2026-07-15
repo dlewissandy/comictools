@@ -135,7 +135,9 @@ def delete_scene(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
     try:
         from schema import Insert
         state = wrapper.context
-        storage = state.storage
+        from storage import registry as _reg
+        # the key names its own house — read/write where the object LIVES
+        storage = _reg.storage_for_key({"series_id": series_id}, state.storage)
         sibs = sorted(storage.read_all_objects(SceneModel, {"series_id": series_id, "issue_id": issue_id}),
                       key=lambda s: s.scene_number)
         old_numbers = [s.scene_number for s in sibs]
@@ -173,7 +175,9 @@ def delete_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
     try:
         from schema import Page
         state = wrapper.context
-        storage = state.storage
+        from storage import registry as _reg
+        # the key names its own house — read/write where the object LIVES
+        storage = _reg.storage_for_key({"series_id": series_id}, state.storage)
         for page in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id}):
             new_rows = [[r for r in row if r.panel_id != panel_id] for row in page.rows]
             new_rows = [row for row in new_rows if row]
@@ -342,7 +346,9 @@ def delete_styled_image(wrapper: RunContextWrapper[APPState],
     import os
     from schema import CharacterVariant
     state: APPState = wrapper.context
-    storage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     variant = storage.read_object(cls=CharacterVariant, primary_key={
         "series_id": series_id, "character_id": character_id,
         "variant_id": variant_id})

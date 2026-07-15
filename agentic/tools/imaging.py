@@ -130,7 +130,9 @@ def _generate_publisher_logo_reference_image_sync(
         A locator for the generated image.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"publisher_id": publisher_id}, state.storage)
 
     primary_key = {"publisher_id": publisher_id}
     publisher = storage.read_object(cls=Publisher, primary_key=primary_key)
@@ -180,7 +182,9 @@ def delete_publisher_logo_reference_image(
         A message indicating the result of the deletion.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"publisher_id": publisher_id}, state.storage)
 
     primary_key = {"publisher_id": publisher_id}
     publisher = storage.read_object(cls=Publisher, primary_key=primary_key)
@@ -354,7 +358,9 @@ def _table_layout_brief(board, storage=None) -> str:
 
 def _generate_cover_image_body(wrapper, series_id: str, issue_id: str, cover_id: str, text_layout_instructions: Optional[str] = None) -> str:
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     # Read the context (series, issue, style, characters) from the storage
     series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
@@ -591,7 +597,9 @@ def delete_cover_image(wrapper: RunContextWrapper, series_id: str, issue_id: str
     """
 
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     issue = storage.read_object(cls=Issue, primary_key={ "series_id": series_id, "issue_id": issue_id})
     if not issue:
@@ -631,7 +639,9 @@ def _create_character_style_example_image_sync(
     style_id: str
 ) -> str:
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"style_id": style_id}, state.storage)
 
     style = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
     if not style:
@@ -696,7 +706,9 @@ def create_styled_image_body(state, series_id: str, character_id: str,
     class _W:  # minimal wrapper shim for generate_object_image
         context = state
     wrapper = _W()
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     # Read the series
     series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
@@ -1093,7 +1105,9 @@ def _create_art_style_example_image_sync(
         A message indicating the result of the operation.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"style_id": style_id}, state.storage)
     style = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
     if not style:
         return f"Cannot create art style image.   Style with ID {style_id} not found."
@@ -1180,7 +1194,9 @@ def _create_dialog_style_example_image_sync(
         A message indicating the result of the operation.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"style_id": style_id}, state.storage)
 
     pk = { "style_id": style_id }
     style = storage.read_object(cls=ComicStyle, primary_key=pk)
@@ -1276,7 +1292,9 @@ def delete_art_style_example(wrapper: RunContextWrapper[APPState],
         A status message indicating the result of the operation.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"style_id": style_id}, state.storage)
     pk = { "style_id": style_id  }
     style = storage.read_object(ComicStyle, primary_key = pk)
     # if there is no style selected, return an error message
@@ -1314,7 +1332,9 @@ def delete_character_style_example(
         A status message indicating the result of the operation.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"style_id": style_id}, state.storage)
     pk = { "style_id": style_id  }
     style = storage.read_object(ComicStyle, primary_key = pk)
     # if there is no style selected, return an error message
@@ -1354,7 +1374,9 @@ def delete_dialog_style_example(
         A status message indicating the result of the operation.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"style_id": style_id}, state.storage)
     pk = { "style_id": style_id  }
     style = storage.read_object(ComicStyle, primary_key = pk)
     # if there is no style selected, return an error message
@@ -1984,7 +2006,9 @@ def generate_series_title_art_body(state, series_id: str, style_id: str,
     lettering direction ('drippy horror letters', 'chrome sci-fi')."""
     from helpers.generator import invoke_edit_image_api, invoke_generate_image_api
 
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
     if series is None:
         return f"Series '{series_id}' not found."
@@ -2082,7 +2106,9 @@ def generate_setting_background_body(state, series_id: str, setting_id: str, sty
     class _W:  # minimal wrapper shim for generate_object_image
         context = state
     wrapper = _W()
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     if isinstance(aspect, str):
         aspect = FrameLayout(aspect)
     aspect = aspect or FrameLayout.LANDSCAPE
@@ -2150,7 +2176,9 @@ def generate_setting_shot_body(state, series_id: str, setting_id: str, shot_id: 
     class _W:
         context = state
     wrapper = _W()
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     if isinstance(aspect, str):
         aspect = FrameLayout(aspect)
     aspect = aspect or FrameLayout.LANDSCAPE
@@ -2285,7 +2313,9 @@ def reframe_setting_master(state, series_id: str, setting_id: str, style_id: str
     from PIL import Image
     from schema import Setting, FrameLayout
     from helpers.masters import master_key
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     if not (source_img and os.path.exists(source_img)):
         return None
     setting = storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": setting_id})
@@ -2452,7 +2482,9 @@ def _generate_panel_image_sync(
 
 def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id: str, panel_id: str) -> str:
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     # THE SHAPE IS READ FRESH: the render matches the page cell the layout
     # gives this panel — restitch first, or an aspect changed since the book
@@ -2772,7 +2804,9 @@ def _export_issue_pdf_sync(wrapper: RunContextWrapper[APPState], series_id: str,
     """
     from helpers.binder import bind_issue_pdf
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     issue: Issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
     if issue is None:
@@ -2842,7 +2876,9 @@ def _export_issue_cbz_sync(wrapper: RunContextWrapper[APPState], series_id: str,
     """
     from helpers.binder import bind_issue_cbz
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     issue: Issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
     if issue is None:
@@ -2886,7 +2922,13 @@ def preflight_issue(wrapper: RunContextWrapper[APPState], series_id: str, issue_
     # and the Editor's opener all quote helpers/ledger.py — one truth
     from helpers.ledger import issue_ledger
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    # THE SERIES NAMES ITS HOUSE: a status ask can point at any series on
+    # the wall — the ledger must read the house that HOLDS it, never the
+    # one the author happens to be standing in (a wrong mount reads an
+    # empty issue and reports lies: 'no script', 'no cover')
+    from storage import registry as _reg
+    storage: GenericStorage = _reg.storage_for_key(
+        {"series_id": series_id}, state.storage)
     ledger = issue_ledger(storage, series_id, issue_id)
 
     report = [("[ok] " if line.ok else "[--] ") + line.text for line in ledger.lines]
@@ -2923,7 +2965,9 @@ def layout_issue_pages(wrapper: RunContextWrapper[APPState], series_id: str, iss
     """
     from schema import Page, PanelRef
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     # panel_id -> scene_id map for the whole issue
     scene_of: dict[str, str] = {}
@@ -3014,7 +3058,9 @@ def _stitch_issue_pages_sync(wrapper: RunContextWrapper[APPState], series_id: st
     """
     from helpers.stitcher import apply_stitch
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     new_pages, _old = apply_stitch(storage, series_id, issue_id)
     if not new_pages:
         return "Nothing to stitch yet — break the scenes into panels first."
@@ -3184,7 +3230,9 @@ def render_missing_panels(wrapper: RunContextWrapper[APPState], series_id: str, 
     from functools import partial
     from helpers.render_queue import enqueue_renders
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     scenes = ([storage.read_object(SceneModel, {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})]
               if scene_id else
@@ -3227,7 +3275,9 @@ def generate_figure_acetate_body(state, series_id: str, issue_id: str, scene_id:
     from storage.filepath import obj_to_imagepath
     from helpers.generator import invoke_edit_image_api
 
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     if cover_id:
         panel = storage.read_object(cls=Cover, primary_key={
             "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
@@ -3343,7 +3393,9 @@ def pose_element_acetate_body(state, series_id: str, issue_id: str, key: str,
     from helpers.generator import invoke_edit_image_api
     from storage.filepath import obj_to_imagepath
     from agentic.tools.normalization import normalize_id
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     if cover_id:
         board = storage.read_object(cls=Cover, primary_key={
@@ -3426,7 +3478,9 @@ def dress_setting_acetate_body(state, series_id: str, issue_id: str,
     from storage.filepath import obj_to_imagepath
     from helpers.stitcher import laid_aspect as _laid_aspect
     from schema import SceneModel as _Scene
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     if cover_id:
         board = storage.read_object(cls=Cover, primary_key={
@@ -3639,7 +3693,9 @@ def breakdown_brief(state, series_id: str, description: str, is_cover: bool) -> 
     import re as _re
 
     import openai
-    storage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     roster = series_cast_roster(storage, series_id)
     settings = [{"setting_id": s.setting_id, "name": s.name}
                 for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id})]
@@ -3718,7 +3774,9 @@ def assess_brief(state, series_id: str, description: str, is_cover: bool) -> dic
 
     import openai
     try:
-        storage = state.storage
+        from storage import registry as _reg
+        # the key names its own house — read/write where the object LIVES
+        storage = _reg.storage_for_key({"series_id": series_id}, state.storage)
         roster = series_cast_roster(storage, series_id)
         roster_txt = ", ".join(c.get("name") or c["character_id"] for c in roster[:30]) or "(none yet)"
         openai.api_key = os.getenv('OPENAI_API_KEY')
@@ -3801,7 +3859,9 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None 
     from storage.filepath import obj_to_imagepath
     from helpers.generator import invoke_edit_image_api
 
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     if cover_id:
         panel = storage.read_object(cls=Cover, primary_key={
             "series_id": series_id, "issue_id": issue_id, "cover_id": cover_id})
@@ -4148,7 +4208,9 @@ def generate_insert_art_body(state, series_id: str, issue_id: str, insert_id: st
     from helpers.generator import invoke_edit_image_api, invoke_generate_image_api
     from schema import Insert
 
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     insert = storage.read_object(cls=Insert, primary_key={
         "series_id": series_id, "issue_id": issue_id, "insert_id": insert_id})
     if insert is None:
@@ -4260,7 +4322,9 @@ def generate_character_exemplar_body(state, series_id: str, character_id: str,
     It lands in the variant's uploads, where it anchors every styled
     reference sheet that follows."""
     from helpers.generator import invoke_edit_image_api, invoke_generate_image_api
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     variant = storage.read_object(cls=CharacterVariant, primary_key={
         "series_id": series_id, "character_id": character_id, "variant_id": variant_id})
     if variant is None:

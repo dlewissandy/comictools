@@ -35,9 +35,6 @@ def view_series(state: APPState):
         from gui.constants import TAILWIND_CARD
         def _cap(text, msg):
             return lambda: caption_action(text, _CK.CREATE, lambda _, m=msg: post_user_message(state, m), 3)
-        def _ink_cast():
-            from gui.create_asset import ink_cast_dialog
-            ink_cast_dialog(state, series.series_id)
         def _create_cap(text, asset_kind):
             # THE CREATE DOOR: three paths (describe / from an image / copy),
             # the same for every reusable asset
@@ -74,45 +71,36 @@ def view_series(state: APPState):
             state.change_selection(new=[*state.selection, SelectionItem(
                 name=board.name, id=bid, kind=SelectedKind.ARTBOARD)])
 
+        # THE MASTHEAD IS JUST ANOTHER ASSET (the author's ruling): ONE tile,
+        # first on the wall, opening the mark bench — no special title-art
+        # interface.  The bench's own style swatch handles per-style lettering.
         titled = {sid: img for sid, img in (getattr(series, 'title_images', {}) or {}).items()
                   if img and os.path.exists(img)}
-        used_styles = {i.style_id for i in storage.read_all_objects(Issue, primary_key={"series_id": series.series_id})
-                       if i.style_id} | set(titled.keys())
-        title_entries = [(st, titled.get(st.style_id))
-                         for st in storage.read_all_objects(ComicStyle, order_by='name')
-                         if st.style_id in used_styles]
-        for ti, (st, timg) in enumerate(title_entries):
-            with packer.place_cell([(3, 2), (4, 8/3), (6, 4)], fudge=False):
-                with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative'
-                                       + ('' if timg else ' ghost-card')):
-                    if ti == 0:
-                        with ui.element('div').classes('panel-caption'):
-                            _cap("Title Art", "I would like new title art (the series masthead) for this series.")()
-                    ui.label(st.name.title()).classes(HEADER_CLASSES[3] + ' panel-hover-caption')
-                    if timg:
-                        ui.image(source=timg).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
-                        from gui.elements import art_tools
-                        art_tools(state, timg,
-                                  on_reink=lambda st=st: open_mark_bench(st),
-                                  reink_tip='Re-letter on the mark bench',
-                                  heal_name=f'{series.name} masthead')
-                        ui.button(icon='layers').props('flat round dense size=xs') \
-                            .classes('absolute bottom-1 left-1 z-10 bg-white/70 dark:bg-black/50') \
-                            .tooltip('Open the mark bench — rework this masthead '
-                                     '(text, image or rough)') \
-                            .on('click', lambda _, st=st: open_mark_bench(st))
-                    else:
-                        art = st.image.get('art') if isinstance(st.image, dict) else st.image
-                        if art and os.path.exists(art):
-                            ui.image(source=art).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
-                        with ui.column().classes('absolute inset-0 items-center justify-center z-10'):
-                            # ONE TOOL, MANY USES: the lightboard is the one
-                            # door — text, image and rough all live there
-                            ui.button(f'Letter it in {st.name.title()}', icon='brush') \
-                                .props('unelevated dense no-caps size=sm') \
-                                .tooltip('Open the mark bench — render from text, '
-                                         'from a dropped image, or from a rough') \
-                                .on('click', lambda _, st=st: open_mark_bench(st))
+        issue_styles = [i.style_id for i in storage.read_all_objects(
+            Issue, primary_key={"series_id": series.series_id}, order_by="issue_number")
+            if i.style_id]
+        mast_style = next((s for s in issue_styles if s in titled), None) \
+            or (issue_styles[0] if issue_styles else None) \
+            or next(iter(titled), None) or 'vintage-four-color'
+        _st = storage.read_object(ComicStyle, primary_key={"style_id": mast_style})
+        if _st is None:
+            from types import SimpleNamespace
+            _st = SimpleNamespace(style_id=mast_style,
+                                  name=mast_style.replace('-', ' '))
+        mast_img = titled.get(mast_style) or next(iter(titled.values()), None)
+        with packer.place_cell([(3, 2), (4, 8/3)], fudge=False):
+            with ui.card().classes(TAILWIND_CARD + ' mosaic-card relative cursor-pointer'
+                                   + ('' if mast_img else ' ghost-card')) as mcard:
+                ui.label('Masthead').classes(HEADER_CLASSES[3] + ' panel-hover-caption')
+                if mast_img:
+                    ui.image(source=mast_img).props('fit=contain')
+                else:
+                    with ui.column().classes('absolute inset-0 items-center justify-center'):
+                        ui.label('bare — letter it on the mark bench') \
+                            .classes('text-xs text-gray-500')
+            mcard.tooltip('The series wordmark — open the mark bench '
+                          '(from text, a dropped image, or a rough)')
+            mcard.on('click', lambda _: open_mark_bench(_st))
         # Description callout — a text panel takes only the size its text needs.
         desc = series.description or ""
         desc_rows = max(2, min(6, 1 + (len(desc) + 269) // 270))
@@ -124,18 +112,9 @@ def view_series(state: APPState):
         # what the series OWNS: its masthead and its reusable assets.
 
         # A cardwall for viewing and adding characters to the comic series.
+        # (the 'redraw the cast in one hand' door is shelved until house
+        # artists land — the author's call; it returns with that feature)
         characters = storage.read_all_objects(CharacterModel, primary_key={"series_id": series.series_id})
-        if len(characters) > 1:
-            # ONE HAND FOR THE CAST: redraw every character in a single style
-            # so they don't look drawn by different artists
-            with packer.place_cell([(12, 1)], fudge=False):
-                with ui.row().classes('w-full items-center').style('gap: 8px;'):
-                    ui.label('Cast').classes('comic-label-sm')
-                    ui.button('Redraw the cast in one hand', icon='brush') \
-                        .props('flat dense no-caps') \
-                        .tooltip('Re-ink every character in one style so the whole '
-                                 'cast is drawn by a single artist') \
-                        .on('click', lambda _: _ink_cast())
         if characters:
             with view_all_instances(
                 state=state, 

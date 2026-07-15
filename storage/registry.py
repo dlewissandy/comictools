@@ -150,6 +150,24 @@ def house_of_series(series_id: str) -> str | None:
     return None
 
 
+def storage_for_key(pk: dict, fallback=None):
+    """THE KEY NAMES ITS OWN HOUSE: a primary key carrying a series,
+    publisher or style id resolves to the mount that actually holds it —
+    regardless of where the author happens to be standing.  Returns
+    `fallback` when no registered house claims the id (an unknown or
+    hallucinated id stays subject to the caller's own discipline)."""
+    finders = (("series_id", house_of_series),
+               ("publisher_id", house_of_publisher),
+               ("style_id", house_of_style))
+    if registered():
+        for key, find in finders:
+            if (pk or {}).get(key):
+                slug = find(pk[key])
+                if slug:
+                    return storage_for(slug)
+    return fallback
+
+
 def house_of_style(style_id: str) -> str | None:
     """The slug of a house holding the named style.  FIRST HIT — bare
     style ids are ambiguous by design (default styles are copies sharing

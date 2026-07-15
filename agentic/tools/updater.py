@@ -48,7 +48,12 @@ def update_attribute(wrapper: RunContextWrapper[APPState],
         A status message indicating the result of the update.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    # THE KEY NAMES ITS OWN HOUSE: an update keyed by series/publisher/
+    # style id must land in the repo that HOLDS the object — never the one
+    # the author happens to be standing in (a wrong mount either fails the
+    # lookup or, worse, writes a phantom copy into the wrong house)
+    from storage import registry as _reg
+    storage: GenericStorage = _reg.storage_for_key(primary_key, state.storage)
     obj: BaseModel = storage.read_object(cls=cls, primary_key=primary_key)
     if obj is None:
         return f"{cls.__name__} with ID '{primary_key}' not found."
@@ -118,7 +123,9 @@ def update_cover_style(wrapper: RunContextWrapper[APPState], series_id: str, iss
         A message indicating the result of the update operation.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     style: ComicStyle | None = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
     if style is None:
@@ -686,7 +693,9 @@ def update_dialog_style(
     # (e.g. "sound-effect" -> "sound_effect"), so we cannot treat it as a plain
     # dict.  Update the specific nested bubble style field directly.
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"style_id": style_id}, state.storage)
     style: ComicStyle = storage.read_object(cls=ComicStyle, primary_key={"style_id": style_id})
     if style is None:
         return f"ComicStyle with ID '{style_id}' not found."
@@ -948,7 +957,9 @@ def move_scene(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: s
         A status message indicating the result of the reorder.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     pk = {"series_id": series_id, "issue_id": issue_id}
     scenes: list = storage.read_all_objects(cls=SceneModel, primary_key=pk, order_by="scene_number")
     ordered = _reorder(scenes, "scene_number", "scene_id", scene_id, new_position)
@@ -978,7 +989,9 @@ def move_panel(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: s
         A status message indicating the result of the reorder.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
     panels: list = storage.read_all_objects(cls=Panel, primary_key=pk, order_by="panel_number")
     ordered = _reorder(panels, "panel_number", "panel_id", panel_id, new_position)
@@ -1017,7 +1030,9 @@ def update_scene_setting(wrapper: RunContextWrapper[APPState],
         A status message indicating the result of the update.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
     scene: SceneModel = storage.read_object(cls=SceneModel, primary_key=pk)
     if scene is None:
@@ -1093,7 +1108,9 @@ def update_scene_cast(wrapper: RunContextWrapper[APPState],
         A status message indicating the result of the update.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
     scene: SceneModel = storage.read_object(cls=SceneModel, primary_key=pk)
     if scene is None:
@@ -1183,7 +1200,9 @@ def update_cover_setting(wrapper: RunContextWrapper[APPState], series_id: str, i
         A message indicating the result of the update operation.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     if setting_id is not None:
         if storage.read_object(cls=Setting, primary_key={"series_id": series_id, "setting_id": setting_id}) is None:
             return f"Setting '{setting_id}' not found in series '{series_id}'.  Create it first."
@@ -1216,7 +1235,9 @@ def update_panel_cast(wrapper: RunContextWrapper[APPState],
     """
     from schema import Panel
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id}
     panel: Panel = storage.read_object(cls=Panel, primary_key=pk)
     if panel is None:
@@ -1253,7 +1274,9 @@ def update_panel_dialogue(wrapper: RunContextWrapper[APPState],
     """
     from schema import Panel
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id}
     panel: Panel = storage.read_object(cls=Panel, primary_key=pk)
     if panel is None:
@@ -1414,7 +1437,9 @@ def attach_panel_reference(wrapper: RunContextWrapper[APPState],
     from schema.reference_image import ReferenceImage
     from schema.enums import Relation
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     panel = storage.read_object(cls=Panel, primary_key={
         "series_id": series_id, "issue_id": issue_id,
         "scene_id": scene_id, "panel_id": panel_id})

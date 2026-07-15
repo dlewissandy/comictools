@@ -162,3 +162,42 @@ def test_character_card_prefers_the_base_look_by_any_base_name(storage):
     base_art = _mk("aaa-uuid", "Vera Base")    # a '… base' name, non-'base' id
     pick = storage.find_character_image(series_id=S, character_id="vera")
     assert pick == base_art, "the card wears the base look, not the costume"
+
+
+def test_ledger_counts_the_back_cover(storage):
+    """A book closes as well as opens: the ledger always carries a
+    back-cover line (inside covers stay optional)."""
+    from helpers.ledger import issue_ledger
+    led = issue_ledger(storage, "wonders-of-the-witchlight", "witchlight-carnival")
+    keys = [l.key for l in led.lines]
+    assert 'back-cover' in keys
+    back = next(l for l in led.lines if l.key == 'back-cover')
+    assert back.anchor == 'cover-back'
+
+
+def test_the_key_names_its_own_house():
+    """THE LEDGER IS THE TRUTH from anywhere: a series id resolves to the
+    house that HOLDS it — never the house the author stands in.  (The
+    author hit this live: preflight for a dnd-nerds series read from the
+    i-do-it mount and reported 'no script, no cover' about a 4000-word,
+    42-panel-inked issue.)"""
+    from storage import registry
+
+    # unknown ids fall back — the caller's own discipline still applies
+    assert registry.storage_for_key({"series_id": "no-such-series"}, "FB") == "FB"
+    assert registry.storage_for_key({}, "FB") == "FB"
+
+    # with a real registry, a known series resolves to its own mount
+    import pytest
+    if not registry.registered():
+        pytest.skip("no registry on this machine")
+    slug = registry.house_of_series("wonders-of-the-witchlight")
+    if slug is None:
+        pytest.skip("fixture series not in any registered house")
+    st = registry.storage_for_key({"series_id": "wonders-of-the-witchlight"}, None)
+    assert st is not None and slug in str(st.base_path)
+
+    # and the preflight tool actually uses it
+    src = open("agentic/tools/imaging.py").read()
+    body = src.split("def preflight_issue", 1)[1][:1600]
+    assert "storage_for_key" in body, "preflight must read the series' OWN house"

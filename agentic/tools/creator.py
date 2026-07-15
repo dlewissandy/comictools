@@ -430,7 +430,9 @@ def create_variant(wrapper: RunContextWrapper[APPState],
         The newly created CharacterVariant object.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     series: Series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
     if series is None:
@@ -498,7 +500,9 @@ def create_variant_from_image(wrapper: RunContextWrapper[APPState],
     from helpers.generator import invoke_generate_api
 
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     series: Series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
     if series is None:
@@ -723,7 +727,9 @@ def create_issue(wrapper: RunContextWrapper[APPState], series_id: str, title: st
         A confirmation message indicating the issue was created successfully.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     series_id = normalize_id(series_id)
     series = storage.read_object(cls=Series,primary_key = {"series_id": series_id})
     if series is None:
@@ -775,7 +781,9 @@ def create_character(wrapper: RunContextWrapper[APPState], series_id: str, chara
         A confirmation message indicating the character was created successfully.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     # Normalize the identifiers
     series = storage.read_object(cls=Series,primary_key = {"series_id": series_id})
     if not series:
@@ -805,7 +813,9 @@ def create_cover_body(
     """Create a cover on an issue — callable from the GUI or via the tool."""
     characters = characters or []
     try:
-        storage: GenericStorage = state.storage
+        from storage import registry as _reg
+        # the key names its own house — read/write where the object LIVES
+        storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
         # Normalize the identifiers
         series_id = normalize_id(series_id)
@@ -1064,7 +1074,9 @@ def create_setting(wrapper: RunContextWrapper[APPState],
         The newly created Setting object, or an error message.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     series: Series = storage.read_object(cls=Series, primary_key={"series_id": series_id})
     if series is None:
@@ -1126,7 +1138,9 @@ def create_scene_panels(wrapper: RunContextWrapper[APPState],
         A status message summarizing the created panels.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     scene: SceneModel = storage.read_object(cls=SceneModel, primary_key={
         "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})
@@ -1186,7 +1200,9 @@ def mark_breakdown_current(wrapper: RunContextWrapper[APPState], series_id: str,
         issue_id: The issue whose breakdown is now current.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     import hashlib as _hl
     from schema import Story
     issue = storage.read_object(Issue, {"series_id": series_id, "issue_id": issue_id})
@@ -1220,7 +1236,9 @@ def create_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
     """
     from schema import Story
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     existing = storage.read_all_objects(Story, {"series_id": series_id, "issue_id": issue_id})
     story = Story(story_id=normalize_id(title), issue_id=issue_id, series_id=series_id,
                   story_number=max((s.story_number for s in existing), default=0) + 1,
@@ -1293,7 +1311,9 @@ def derive_character(wrapper: RunContextWrapper[APPState], series_id: str,
     import os
     from schema import CharacterVariant as _CV
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     src_ch = storage.read_object(cls=CharacterModel, primary_key={
         "series_id": series_id, "character_id": source_character_id})
     if src_ch is None:

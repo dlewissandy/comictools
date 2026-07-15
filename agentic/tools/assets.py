@@ -69,7 +69,9 @@ def update_prop_description(wrapper: RunContextWrapper[APPState], series_id: str
     """
     from agentic.tools.updater import update_attribute
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     prop = storage.read_object(PropAsset, {"series_id": series_id, "prop_id": prop_id})
     result = update_attribute(wrapper, PropAsset, {"series_id": series_id, "prop_id": prop_id}, "description", description)
     if prop is None:
@@ -206,7 +208,9 @@ def create_outfit_from_image(wrapper: RunContextWrapper[APPState], series_id: st
     import os, io
     from helpers.generator import invoke_generate_api
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     if storage.read_object(cls=Series, primary_key={"series_id": series_id}) is None:
         return f"Series '{series_id}' not found."
     if not os.path.isfile(image_locator):
@@ -265,7 +269,9 @@ def update_outfit_description(wrapper: RunContextWrapper[APPState], series_id: s
     """
     from agentic.tools.updater import update_attribute
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     _before = storage.read_object(Outfit, {"series_id": series_id, "outfit_id": outfit_id})
     _old_desc = (_before.description if _before is not None else None)
     result = update_attribute(wrapper, Outfit, {"series_id": series_id, "outfit_id": outfit_id}, "description", description)
@@ -329,7 +335,9 @@ def swap_variant_outfit(wrapper: RunContextWrapper[APPState], series_id: str,
         outfit_id: The Outfit asset to wear (create_outfit or import it first).
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     variant = storage.read_object(CharacterVariant, {"series_id": series_id,
         "character_id": character_id, "variant_id": variant_id})
     if variant is None:
@@ -380,7 +388,9 @@ def compose_character_variant(wrapper: RunContextWrapper[APPState],
         A status message.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
 
     base = storage.read_object(CharacterVariant, {"series_id": series_id, "character_id": character_id, "variant_id": base_variant_id})
     if base is None and base_variant_id == "base":
@@ -449,7 +459,9 @@ def extract_outfit_from_variant(wrapper: RunContextWrapper[APPState],
         A status message.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     variant = storage.read_object(CharacterVariant, {"series_id": series_id, "character_id": character_id, "variant_id": variant_id})
     if variant is None:
         return f"Variant '{variant_id}' of '{character_id}' not found."
@@ -496,7 +508,9 @@ def dedupe_props(wrapper: RunContextWrapper[APPState], series_id: str,
         The duplicate report, or a summary of the merge.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    from storage import registry as _reg
+    # the key names its own house — read/write where the object LIVES
+    storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
     props = storage.read_all_objects(PropAsset, {"series_id": series_id})
     groups: dict[str, list] = {}
     for p in props:
