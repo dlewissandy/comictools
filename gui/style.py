@@ -39,35 +39,31 @@ def view_style(state: APPState):
         with ui.row().classes('w-full flex-nowrap items-center').style('padding: 0; margin: 0;'):
             header(style.name.title(), 0)
 
-            # RENAME, right where the name is: one field, saved on the spot
-            def rename_dialog(_=None):
-                with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 420px;'):
-                    ui.label('Rename this style').classes('caption-box caption-box-sm')
-                    field = ui.input(value=style.name).classes('w-full q-mt-sm') \
-                        .props('outlined dense autofocus')
+            # RENAME rides the conversation box (the author's ruling: no
+            # modals for text entry) — Enter saves on the spot
+            def rename_via_conversation(_=None):
+                prefix = f"Rename the {style.name} style to: "
 
-                    def save():
-                        new_name = (field.value or '').strip()
-                        if not new_name:
-                            ui.notify('A style needs a name.', type='warning')
-                            return
-                        old_name, style.name = style.name, new_name
-                        storage.update_object(style)
-                        dlg.close()
-                        # the coauthor hears about it — a silent rename would
-                        # leave the Art Director speaking the old name
-                        from gui.light_table import table_receipt
-                        table_receipt(state, f"🏷 renamed the **{old_name}** style "
-                                             f"to **{new_name}**")
-                        from gui.selection import SelectionItem
-                        state.change_selection(new=[*state.selection[:-1],
-                            SelectionItem(name=new_name, id=style.style_id,
-                                          kind=state.selection[-1].kind)])
-                    field.on('keydown.enter', lambda _: save())
-                    ui.button('Save', icon='save').props('unelevated dense no-caps') \
-                        .classes('q-mt-sm').on('click', lambda _: save())
-                dlg.open()
-            crud_button(kind=CrudButtonKind.UPDATE, action=rename_dialog, size=1)
+                def _do(new_name):
+                    if not new_name:
+                        ui.notify('A style needs a name.', type='warning')
+                        return
+                    old_name, style.name = style.name, new_name
+                    storage.update_object(style)
+                    from gui.light_table import table_receipt
+                    table_receipt(state, f"🏷 renamed the **{old_name}** style "
+                                         f"to **{new_name}**")
+                    from gui.selection import SelectionItem
+                    state.change_selection(new=[*state.selection[:-1],
+                        SelectionItem(name=new_name, id=style.style_id,
+                                      kind=state.selection[-1].kind)])
+                state.user_input.value = prefix
+                state._input_intercept = (prefix, _do, None)
+                try:
+                    state.user_input.run_method('focus')
+                except Exception:
+                    pass
+            crud_button(kind=CrudButtonKind.UPDATE, action=rename_via_conversation, size=1)
             ui.space()
 
             # STRIKE, not a chat errand: the style goes to the wastebasket

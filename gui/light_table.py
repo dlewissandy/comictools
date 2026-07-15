@@ -2064,20 +2064,27 @@ def light_table(state: APPState, panel, scene, setting,
     # the same code; only the title, the placeholder, and the button differ.
     def acetate_direction_dialog(title, placeholder, on_go, *,
                                  go_label='Pose', go_icon='accessibility_new', on_script=None):
-        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 460px;'):
-            ui.label(title).classes('caption-box caption-box-sm')
-            direction = ui.textarea(placeholder=placeholder).classes('w-full').props('outlined autofocus')
-            with ui.row().classes('w-full justify-end').style('gap: 8px;'):
-                if on_script is not None:
-                    ui.button('Let the script decide').props('flat dense') \
-                        .on('click', lambda _: (dlg.close(), on_script()))
+        # THE CONVERSATION IS THE MODAL (the author's ruling): a prompt that
+        # only wants words is not a dialog box.  The framed ask lands in the
+        # conversation box, focused; Enter runs the work DIRECTLY (a one-shot
+        # intercept — no agent round-trip) and the thread carries the words.
+        # An empty direction lets the script decide, exactly as before.
+        prefix = f"{title}: "
+        state.user_input.value = prefix
 
-                def go():
-                    text = (direction.value or '').strip()
-                    dlg.close()
-                    on_go(text or None)
-                ui.button(go_label, icon=go_icon).props('unelevated dense').on('click', lambda _: go())
-        dlg.open()
+        def _run(direction, on_go=on_go, on_script=on_script):
+            if direction is None and on_script is not None:
+                on_script()
+            else:
+                on_go(direction)
+        state._input_intercept = (prefix, _run, None)
+        try:
+            state.user_input.run_method('focus')
+        except Exception:
+            pass
+        ui.notify(placeholder[:120] + ('  (Enter alone lets the script decide.)'
+                                       if on_script is not None else ''),
+                  type='info', position='bottom', timeout=4000)
 
     def pose_dialog(character_id: str, variant_id: str):
         name = _char_names.get(character_id) or character_id.replace('-', ' ').title()
@@ -2531,36 +2538,33 @@ def light_table(state: APPState, panel, scene, setting,
                                                          for k in panel.layer_groups[g]]
 
                         def rename_element(key=f["key"], nm=f["name"]):
-                            with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 360px;'):
-                                ui.label('Rename this layer').classes('caption-box caption-box-sm')
-                                inp = ui.input(value=nm).classes('w-full q-mt-sm') \
-                                    .props('outlined dense autofocus')
+                            # THE CONVERSATION IS THE MODAL: the new name is
+                            # typed in the box; Enter renames directly
+                            prefix = f"Rename the {nm} layer to: "
 
-                                def go():
-                                    import re as _re
-                                    fresh_board(storage, panel)
-                                    new = (inp.value or '').strip()
-                                    slug = _re.sub(r'[^a-z0-9]+', '-', new.lower()).strip('-')[:40]
-                                    if not slug:
-                                        ui.notify('Give the layer a name.', type='warning')
-                                        return
-                                    new_key = f'element/{slug}'
-                                    if new_key == key:
-                                        dlg.close()
-                                        return
-                                    if new_key in (panel.figure_images or {}):
-                                        ui.notify('Another layer already has that name.', type='warning')
-                                        return
-                                    _move_key(key, new_key)
-                                    storage.update_object(panel)
-                                    _receipt(f"🏷 renamed the **{nm}** layer to **{new}**")
-                                    dlg.close()
-                                    state.refresh_details()
-                                inp.on('keydown.enter', lambda _: go())
-                                with ui.row().classes('w-full justify-end'):
-                                    ui.button('Rename', icon='drive_file_rename_outline') \
-                                        .props('unelevated dense').on('click', lambda _: go())
-                            dlg.open()
+                            def _do(new, key=key, nm=nm):
+                                import re as _re
+                                if not new:
+                                    ui.notify('Give the layer a name.', type='warning')
+                                    return
+                                fresh_board(storage, panel)
+                                slug = _re.sub(r'[^a-z0-9]+', '-', new.lower()).strip('-')[:40]
+                                new_key = f'element/{slug}'
+                                if not slug or new_key == key:
+                                    return
+                                if new_key in (panel.figure_images or {}):
+                                    ui.notify('Another layer already has that name.', type='warning')
+                                    return
+                                _move_key(key, new_key)
+                                storage.update_object(panel)
+                                _receipt(f"🏷 renamed the **{nm}** layer to **{new}**")
+                                state.refresh_details()
+                            state.user_input.value = prefix
+                            state._input_intercept = (prefix, _do, None)
+                            try:
+                                state.user_input.run_method('focus')
+                            except Exception:
+                                pass
                         name_label.on('click', lambda _, k=f["key"], n=f["name"]: rename_element(k, n))
 
                         def identify_element(key=f["key"], nm=f["name"]):
@@ -2919,30 +2923,28 @@ def light_table(state: APPState, panel, scene, setting,
                         .tooltip('Rename this group')
 
                     def rename_group(gname=gname):
-                        with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 360px;'):
-                            ui.label('Rename this group').classes('caption-box caption-box-sm')
-                            inp = ui.input(value=gname).classes('w-full q-mt-sm') \
-                                .props('outlined dense autofocus')
+                        # THE CONVERSATION IS THE MODAL: type the new name,
+                        # Enter renames directly
+                        prefix = f"Rename the {gname} group to: "
 
-                            def go():
-                                new = (inp.value or '').strip()
-                                if not new or new == gname:
-                                    dlg.close()
-                                    return
-                                if new in (panel.layer_groups or {}):
-                                    ui.notify('Another group already has that name.', type='warning')
-                                    return
-                                panel.layer_groups = {(new if k == gname else k): v
-                                                      for k, v in (panel.layer_groups or {}).items()}
-                                storage.update_object(panel)
-                                _receipt(f"🏷 renamed the **{gname}** group to **{new}**")
-                                dlg.close()
-                                state.refresh_details()
-                            inp.on('keydown.enter', lambda _: go())
-                            with ui.row().classes('w-full justify-end'):
-                                ui.button('Rename', icon='drive_file_rename_outline') \
-                                    .props('unelevated dense').on('click', lambda _: go())
-                        dlg.open()
+                        def _do(new, gname=gname):
+                            if not new or new == gname:
+                                return
+                            if new in (panel.layer_groups or {}):
+                                ui.notify('Another group already has that name.', type='warning')
+                                return
+                            fresh_board(storage, panel)
+                            panel.layer_groups = {(new if k == gname else k): v
+                                                  for k, v in (panel.layer_groups or {}).items()}
+                            storage.update_object(panel)
+                            _receipt(f"🏷 renamed the **{gname}** group to **{new}**")
+                            state.refresh_details()
+                        state.user_input.value = prefix
+                        state._input_intercept = (prefix, _do, None)
+                        try:
+                            state.user_input.run_method('focus')
+                        except Exception:
+                            pass
                     glabel.on('click', lambda _, g=gname: rename_group(g))
                     ui.space()
 

@@ -179,3 +179,48 @@ def test_root_is_the_lobby():
     # the retired all-series root still prints / so old trails re-home
     assert selection_to_url([SelectionItem(name="Series", id=None,
                                            kind=SelectedKind.ALL_SERIES)]) == "/"
+
+
+def test_the_conversation_is_the_modal():
+    """A bench prompt that only wants words rides the conversation box:
+    the one-shot intercept runs the work directly, carries the words in
+    the thread, and stands down if the author changed the subject."""
+    import asyncio
+    from types import SimpleNamespace
+    from messaging import send
+
+    ran = []
+
+    def make_state(value, intercept):
+        return SimpleNamespace(
+            _sending=False,
+            user_input=SimpleNamespace(value=value, run_method=lambda *a: None,
+                                       update=lambda: None, _props={}),
+            _input_intercept=intercept,
+            thread=[], history=None,
+            write=lambda: None, selection=[],
+        )
+
+    # Enter with a direction → the handler runs with the words
+    st = make_state("Pose Ezra: arms crossed, smirking",
+                    ("Pose Ezra: ", lambda d: ran.append(d), None))
+    asyncio.run(send(state=st))
+    assert ran == ["arms crossed, smirking"]
+    assert [e["t"] for e in st.thread] == ["user"], "the words ride the thread"
+    assert st._input_intercept is None, "one shot only"
+
+    # Enter alone → None (the script decides)
+    ran.clear()
+    st = make_state("Pose Ezra: ", ("Pose Ezra: ", lambda d: ran.append(d), None))
+    asyncio.run(send(state=st))
+    assert ran == [None]
+
+    # the author erased the prefix and asked something else → stand down
+    ran.clear()
+    st = make_state("what styles do we have?",
+                    ("Pose Ezra: ", lambda d: ran.append(d), None))
+    try:
+        asyncio.run(send(state=st))
+    except Exception:
+        pass   # it fell through toward the real agent path — that's the point
+    assert ran == [] and st._input_intercept is None

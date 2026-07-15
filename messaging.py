@@ -276,6 +276,32 @@ async def send(state: APPState):
     question = text_input.value
     text_input.value = ''
 
+    # THE CONVERSATION IS THE MODAL: a bench prompt that only wants words
+    # (pose a figure, direct an acetate) prefills the box and arms a ONE-
+    # SHOT intercept — Enter runs the work directly, the thread carries
+    # the words, and no dialog box ever appears.  An erased prefix means
+    # the author changed the subject: the intercept stands down.
+    ic = getattr(state, '_input_intercept', None)
+    if ic is not None:
+        state._input_intercept = None
+        _prefix, _handler, _ack = ic
+        if question.startswith(_prefix):
+            from gui.thread import thread_user, thread_reply
+            thread_user(state, question)
+            _direction = question[len(_prefix):].strip() or None
+            try:
+                _handler(_direction)
+            except Exception as _ex:
+                logger.error(f"intercepted ask failed: {_ex}")
+                thread_reply(state, f"That didn't take — {str(_ex)[:160]}.  "
+                                    f"Say it again and I'll retry.")
+                state.write()
+                return
+            if _ack:
+                thread_reply(state, _ack)
+            state.write()
+            return
+
     # Capture image editor selection if we're in that view
     try:
         if state.selection and state.selection[-1].kind.value == "image-editor" and state.image_editor_dom_id:

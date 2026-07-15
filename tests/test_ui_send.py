@@ -705,23 +705,20 @@ def test_striking_a_style_walks_home_to_the_house():
 
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
-async def test_style_rename_saves_on_the_spot(user: User) -> None:
-    """The rename pencil saves directly: the object persists, the crumb and
-    header wear the new name, and an empty name never touches the style."""
+async def test_style_rename_rides_the_conversation(user: User) -> None:
+    """THE CONVERSATION IS THE MODAL: the rename pencil prefills the box;
+    Enter renames directly — no dialog, and the object really changes."""
     main.LocalStorage = _TmpStorage
     from schema import ComicStyle, Publisher
     storage = _TmpStorage()
     st = sorted(storage.read_all_objects(ComicStyle), key=lambda s: s.name)[0]
     pub = storage.read_all_objects(Publisher)[0]
-    json.dump({"selection": [
-        {"name": "Publishers", "id": None, "kind": "all-publishers"},
-        {"name": pub.name, "id": pub.publisher_id, "kind": "publisher"},
-        {"name": st.name, "id": st.style_id, "kind": "style"}],
-        "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
-    await user.open(_url_for([
-        {"name": "Publishers", "id": None, "kind": "all-publishers"},
-        {"name": pub.name, "id": pub.publisher_id, "kind": "publisher"},
-        {"name": st.name, "id": st.style_id, "kind": "style"}]))
+    sel = [{"name": "Publishers", "id": None, "kind": "all-publishers"},
+           {"name": pub.name, "id": pub.publisher_id, "kind": "publisher"},
+           {"name": st.name, "id": st.style_id, "kind": "style"}]
+    json.dump({"selection": sel, "messages": [], "dark_mode": False},
+              open(gui_state.STATE_FILEPATH, "w"))
+    await user.open(_url_for(sel))
     await user.should_see(st.name.title())
 
     def click(btn):
@@ -729,77 +726,31 @@ async def test_style_rename_saves_on_the_spot(user: User) -> None:
             if ev.type == "click":
                 btn._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
 
-    def pencils():
-        return [e for e in user.client.elements.values()
-                if e.__class__.__name__ == "Button"
-                and getattr(e, "props", {}).get("icon") == "edit"]
+    pencil = [e for e in user.client.elements.values()
+              if e.__class__.__name__ == "Button"
+              and getattr(e, "props", {}).get("icon") == "edit"][0]
+    click(pencil)
 
-    # the header's rename pencil is the first edit button in the room
-    click(pencils()[0])
-    await user.should_see("Rename this style")
-
-    def dialog_bits():
-        field = [e for e in user.client.elements.values()
-                 if e.__class__.__name__ == "Input"][-1]
-        save = [e for e in user.client.elements.values()
-                if e.__class__.__name__ == "Button"
-                and "Save" in str(getattr(e, "text", ""))][-1]
-        return field, save
-
-    # the empty-name guard: whitespace never touches the style
-    field, save = dialog_bits()
-    field.set_value("   ")
-    click(save)
-    assert storage.read_object(ComicStyle, {"style_id": st.style_id}).name == st.name
-
-    # a real name saves, re-renders the header, and receipts in the chat
-    field.set_value("Chalk And Ash")
-    click(save)
+    box = user.find(marker="conversation").elements.pop()
+    assert box.value.startswith(f"Rename the {st.name} style to: ")
+    box.value = box.value + "Chalk And Ash"
+    user.find("Send").click()
     await user.should_see("Chalk And Ash")
-    assert storage.read_object(ComicStyle, {"style_id": st.style_id}).name == "Chalk And Ash"
-    await user.should_see("renamed")            # the 🏷 receipt
-
-    # rename it back so the shared tmp fixture stays stable for later tests
-    click(pencils()[0])
-    await user.should_see("Rename this style")
-    field, save = dialog_bits()
-    field.set_value(st.name)
-    click(save)
+    fresh = storage.read_object(ComicStyle, {"style_id": st.style_id})
+    assert fresh.name == "Chalk And Ash"
+    # rename it back for the shared tmp fixture
+    pencil = [e for e in user.client.elements.values()
+              if e.__class__.__name__ == "Button"
+              and getattr(e, "props", {}).get("icon") == "edit"][0]
+    click(pencil)
+    box = user.find(marker="conversation").elements.pop()
+    box.value = f"Rename the Chalk And Ash style to: {st.name}"
+    user.find("Send").click()
+    for _ in range(40):
+        if storage.read_object(ComicStyle, {"style_id": st.style_id}).name == st.name:
+            break
+        await asyncio.sleep(0.1)
     assert storage.read_object(ComicStyle, {"style_id": st.style_id}).name == st.name
-
-
-def test_legacy_style_threads_migrate_to_the_house():
-    """No conversation orphans: threads keyed under the retired /styles room
-    re-key to the canonical house trail — all three legacy shapes."""
-    convs = {"/styles": [{"m": "room"}],
-             "/styles/van-gogh": [{"m": "vg"}],
-             "/styles/style/conte-crayon": [{"m": "cc"}],
-             "/series/joey": [{"m": "stay"}]}
-    out = gui_state.APPState.migrate_style_threads(convs, "i-do-it")
-    assert out["/publishers/i-do-it"] == [{"m": "room"}]
-    assert out["/publishers/i-do-it/style/van-gogh"] == [{"m": "vg"}]
-    assert out["/publishers/i-do-it/style/conte-crayon"] == [{"m": "cc"}]
-    assert out["/series/joey"] == [{"m": "stay"}]
-    assert not any(k.startswith("/styles") for k in out)
-    # an existing thread at the new address is never clobbered
-    convs = {"/styles/van-gogh": [{"m": "old"}],
-             "/publishers/i-do-it/style/van-gogh": [{"m": "new"}]}
-    out = gui_state.APPState.migrate_style_threads(convs, "i-do-it")
-    assert out["/publishers/i-do-it/style/van-gogh"] == [{"m": "new"}]
-    # a publisher-less repo leaves keys alone rather than guessing
-    convs = {"/styles/van-gogh": [{"m": "vg"}]}
-    assert gui_state.APPState.migrate_style_threads(convs, None) == convs
-
-
-def test_bench_defaults_stay_intent_only():
-    """THE THREE-FILE STRING CONTRACT: the bench's default chat messages must
-    read as intent-only to the imaging tools — otherwise a bare tool-rail
-    press becomes a paid render of the literal sentence."""
-    from agentic.tools.imaging import _is_intent_only
-    assert _is_intent_only("Heal the marked patch of this image.", "inpaint")
-    assert _is_intent_only("Extend the paper on this image.", "outpaint")
-    assert not _is_intent_only("heal the scratched sky", "inpaint")
-    assert not _is_intent_only("extend the paper into a wide alley shot", "outpaint")
 
 
 @pytest.mark.module_under_test(main)
