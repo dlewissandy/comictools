@@ -917,7 +917,6 @@ def create_scene_body(state: APPState,
         time_of_day: Optional[str] = None,
         mood: Optional[str] = None,
         cast: Optional[list[CharacterRef]] = None,
-        props: Optional[list[Prop]] = None,
         blocking: Optional[str] = None,
         story_id: Optional[str] = None,
     ) -> str:
@@ -972,7 +971,6 @@ def create_scene_body(state: APPState,
         time_of_day=time_of_day,
         mood=mood,
         cast=_resolved_cast,
-        props=props or [],
         blocking=blocking,
     )
     storage.create_object(data=scene)
@@ -1003,7 +1001,6 @@ def create_scene(wrapper: RunContextWrapper[APPState],
         time_of_day: Optional[str] = None,
         mood: Optional[str] = None,
         cast: Optional[list[CharacterRef]] = None,
-        props: Optional[list[Prop]] = None,
         blocking: Optional[str] = None,
         story_id: Optional[str] = None,
     ) -> str:
@@ -1011,7 +1008,7 @@ def create_scene(wrapper: RunContextWrapper[APPState],
     Create a new scene for the currently selected comic book issue.
 
     A scene is specified like a page of a comic script: it has a setting (setting + time of day),
-    a cast with wardrobe (character variants), props, and blocking notes.   Providing these
+    a cast with wardrobe (character variants) and blocking notes.   Providing these
     up front lets the panels be composed from consistent reference objects later.
 
     When the user asks for "a new scene" WITHOUT details, do not interrogate them:
@@ -1030,7 +1027,6 @@ def create_scene(wrapper: RunContextWrapper[APPState],
         time_of_day (str, optional): Slugline time, e.g. 'day', 'night', 'dusk'.
         mood (str, optional): The emotional tone and lighting mood of the scene.
         cast (list[CharacterRef], optional): The characters in the scene with the variant (wardrobe) worn.
-        props (list[Prop], optional): Scene-specific props beyond the setting's standing props.
         blocking (str, optional): How the characters are staged and move through the setting.
         story_id (str, optional): Which of the issue's stories this scene belongs to.  When
             breaking a specific story into scenes, pass its story_id so the scene files under
@@ -1040,7 +1036,7 @@ def create_scene(wrapper: RunContextWrapper[APPState],
         A status message indicating the result of the scene creation.
     """
     return create_scene_body(wrapper.context, name, story, insertion_location,
-                             setting_id, time_of_day, mood, cast, props, blocking,
+                             setting_id, time_of_day, mood, cast, blocking,
                              story_id=story_id)
 
 
@@ -1050,11 +1046,11 @@ def create_setting(wrapper: RunContextWrapper[APPState],
         name: str,
         description: str,
         interior: bool,
-        props: Optional[list[Prop]] = None,
     ) -> Setting | str:
     """
     Create a new setting (a recurring place where scenes take place) for a series.
-    Settings are dressed with props and later rendered as style-keyed master backgrounds
+    A setting's description CARRIES its furnishings (props are laid on the light
+    table, never stored on the setting); it renders as style-keyed master backgrounds
     that multiple panels share, so the setting stays visually consistent across the issue.
 
     Before creating a setting, check the existing ones (read_all_settings) so sets are
@@ -1066,7 +1062,6 @@ def create_setting(wrapper: RunContextWrapper[APPState],
         description: A detailed visual description: architecture, layout, lighting, era,
             palette.   Detailed enough that different artists would draw the same place.
         interior: True for interior (INT.) settings, False for exterior (EXT.).
-        props: The props that dress the setting, each with a name and a visual description.
 
     Returns:
         The newly created Setting object, or an error message.
@@ -1084,7 +1079,6 @@ def create_setting(wrapper: RunContextWrapper[APPState],
         name=name,
         description=description,
         interior=interior,
-        props=props or [],
         images={},
     )
     # creator() verifies the key is free; overwrite=True preserves the slug id so

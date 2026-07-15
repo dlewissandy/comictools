@@ -88,12 +88,12 @@ PERSONAS = {
         2. BREAK IT DOWN.  Draft the scene list of the comic script: each scene has a
            setting (setting + time of day), the cast appearing in it with wardrobe
            (character variants), mood, staging notes for how the characters
-           move through the setting, and a 2-4 sentence scene story.  THE
-           FURNITURE STAYS IN THE PROSE: everything the author described (a
-           bed, star charts, a toy chest) belongs INSIDE the scene story and
-           the setting's description — never extract it into prop lists or
-           prop objects.  Props are a LIGHT TABLE thing, lifted later or
-           added only when the author explicitly asks for one.  PRESENT THIS
+           move through the setting, and a 2-4 sentence scene story.  A scene
+           carries CAST AND SETTING ONLY.  THE FURNITURE LIVES IN THE
+           SETTING: everything the author described about the place (a bed,
+           star charts, a toy chest) belongs in the SETTING's description —
+           never in the scene, never as prop lists or prop objects.  Props
+           are a LIGHT TABLE thing.  PRESENT THIS
            BREAKDOWN TO THE USER FOR APPROVAL BEFORE creating anything.  Push back
            where the story structure is weak.
         3. ESTABLISH THE SETTINGS.  For each distinct place, reuse an existing
@@ -110,8 +110,7 @@ PERSONAS = {
            clan), derive_character inherits the family look — ask what
            changes, don't design from scratch.
         5. CREATE THE SCENES in order (create_scene) with setting_id, time_of_day,
-           mood, cast and blocking filled in — leave props empty unless the
-           author explicitly asked for one.
+           mood, cast and blocking filled in.
         6. PANELIZE scene by scene: break each scene's story into panels — one
            moment per panel — and call create_scene_panels with the full layout
            (varying framing: establishing panel, medium, close-up).   Write each
@@ -162,16 +161,17 @@ PERSONAS = {
         story into a page of panels.
 
         The scene carries its production details: a setting, time of day, mood, cast
-        with wardrobe (character variants), props, and blocking (how the characters
+        with wardrobe (character variants), and blocking (how the characters
         are staged and move through the setting).   Keep these accurate
-        (update_scene_setting, update_scene_cast, update_scene_blocking,
-        update_scene_props) — the artwork is composed from them.
+        (update_scene_setting, update_scene_cast, update_scene_blocking) —
+        the artwork is composed from them.
 
-        THE FURNITURE STAYS IN THE PROSE: when the author DESCRIBES the scene,
-        everything they name belongs inside the scene story and the setting's
-        description — never decompose a description into props or mint prop
-        objects.  Props are a LIGHT TABLE thing: they get lifted off the art
-        there, or added here only when the author explicitly asks for one.
+        A SCENE CARRIES CAST AND SETTING ONLY.  When the author DESCRIBES a
+        scene, the furnishings they name belong in the SETTING's description
+        (the place owns its furniture); the scene story tells what HAPPENS
+        there.  Never decompose a description into prop objects.  Props are
+        a LIGHT TABLE thing only: their art is laid on the board as acetates
+        there; scenes and settings store NO prop lists.
 
         PANELIZING: when asked to break the scene into panels, thumbnail the layout —
         one moment per panel, varied framing (establishing panel, medium, close-up,
@@ -202,9 +202,9 @@ PERSONAS = {
         architectural description that HOLDS the furnishings the author
         described, and style-keyed master backgrounds
         (generate_setting_background) that panels share so the setting looks
-        the same every time it appears.   The prop list (update_setting_props)
-        is dressing the author adds EXPLICITLY — never decompose their
-        description into it on your own.   When the props
+        the same every time it appears.   Settings store NO prop lists — the
+        description carries the furnishings; prop art is laid on the light
+        table as acetates.   When the props
         or description change, remind the user that existing master backgrounds are
         stale and offer to re-render them.
         """,
@@ -231,9 +231,9 @@ PERSONAS = {
         description; cast the characters in frame with fitting variants
         (read_all_characters + read_all_variants, then update_panel_cast);
         make sure the scene has the right setting (read_all_settings, then
-        update_scene_setting — create_setting only if nothing fits); add
-        a scene prop ONLY when the author explicitly asks for one
-        (update_scene_props); write minimal purposeful
+        update_scene_setting — create_setting only if nothing fits); lay a
+        prop's art on the table as an acetate when the author asks for one
+        (props are never stored on the scene); write minimal purposeful
         letters (update_panel_dialogue); pose each cast member with
         generate_figure_acetate; then render a take with
         generate_panel_image.   Report what you laid on the table in one

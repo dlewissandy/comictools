@@ -1128,35 +1128,6 @@ def update_scene_blocking(wrapper: RunContextWrapper[APPState],
     return update_attribute(wrapper=wrapper, cls=SceneModel, primary_key=pk, attribute="blocking", value=blocking)
 
 
-@function_tool
-def update_scene_props(wrapper: RunContextWrapper[APPState],
-        series_id: str, issue_id: str, scene_id: str,
-        props: list[Prop]) -> str:
-    """
-    Set the scene-specific props (beyond the setting's standing props).
-    Replaces the scene's existing prop list.
-
-    Args:
-        series_id (str): The ID of the comic series.
-        issue_id (str): The ID of the issue the scene belongs to.
-        scene_id (str): The ID of the scene.
-        props (list[Prop]): The scene-specific props.
-
-    Returns:
-        A status message indicating the result of the update.
-    """
-    state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
-    pk = {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}
-    scene: SceneModel = storage.read_object(cls=SceneModel, primary_key=pk)
-    if scene is None:
-        return f"Scene with ID '{scene_id}' not found."
-    scene.props = props
-    storage.update_object(data=scene)
-    state.is_dirty = True
-    return f"Props of scene '{scene.name}' set to: " + ", ".join(p.name for p in props)
-
-
 # -------------------------------------------------------------------------
 # LOCATION (SET) UPDATES
 # -------------------------------------------------------------------------
@@ -1192,41 +1163,6 @@ def update_setting_description(wrapper: RunContextWrapper[APPState],
                    f"are now STALE — re-ink them (generate_setting_background); "
                    f"the setting room badges them.")
     return result
-
-
-@function_tool
-def update_setting_props(wrapper: RunContextWrapper[APPState],
-        series_id: str, setting_id: str, props: list[Prop]) -> str:
-    """
-    Set the props that dress a setting (set).  Replaces the existing prop list.
-    NOTE: after changing the props, existing master backgrounds for the
-    setting are stale and should be re-rendered.
-
-    Args:
-        series_id (str): The ID of the series the setting belongs to.
-        setting_id (str): The ID of the setting.
-        props (list[Prop]): The props that dress the setting.
-
-    Returns:
-        A status message indicating the result of the update.
-    """
-    from schema import Setting
-    state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
-    pk = {"series_id": series_id, "setting_id": setting_id}
-    setting: Setting = storage.read_object(cls=Setting, primary_key=pk)
-    if setting is None:
-        return f"Setting '{setting_id}' not found in series '{series_id}'."
-    setting.props = props
-    storage.update_object(data=setting)
-    state.is_dirty = True
-    stale = ", ".join(setting.images.keys()) if setting.images else None
-    if setting.images:
-        # PERSIST the flag we're about to claim — the badge must light
-        setting.images_stale = sorted(set((setting.images_stale or []) + list(setting.images.keys())))
-        storage.update_object(data=setting)
-    note = f"  Background masters for style(s) {stale} are now stale and should be re-inked." if stale else ""
-    return f"Props of setting '{setting.name}' set to: " + ", ".join(p.name for p in props) + note
 
 
 @function_tool

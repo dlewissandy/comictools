@@ -72,12 +72,12 @@ def test_scene_props_do_not_auto_stamp(storage, mock_imaging, monkeypatch):
     scene = storage.read_object(SceneModel, {"series_id": WL, "issue_id": CARN, "scene_id": SC})
     _invoke(imaging.generate_prop_reference, st, series_id=WL,
             prop_id="cracked-crystal-ball", style_id=scene.style_id)
-    scene.props = [Prop(name="Cracked Crystal Ball",
-                        description="a fissured glass orb on a brass claw stand")]
-    storage.update_object(data=scene)
+    # THE RULING HARDENED: scenes no longer store prop lists at all — the
+    # model has no `props` field to stamp from
+    assert not hasattr(scene, "props"), "scenes must not carry a prop list"
     panel = storage.read_all_objects(Panel, {"series_id": WL, "issue_id": CARN, "scene_id": SC})[0]
-    # the panel's board is BARE and its brief NAMES nothing — the scene prop
-    # must not ride the render
+    # the panel's board is BARE and its brief NAMES nothing — no prop
+    # may ride the render
     panel.figure_images = {}
     panel.figure_blocking = {}
     panel.character_references = []
@@ -95,9 +95,6 @@ def test_from_brief_render_draws_only_what_the_brief_names(storage, mock_imaging
     — no master background, no cast — even though the scene has both.  This is
     the muddy-smear-on-white case that used to render a whole populated page."""
     st = _Stub(storage)
-    scene = storage.read_object(SceneModel, {"series_id": WL, "issue_id": CARN, "scene_id": SC})
-    scene.props = [Prop(name="Some Prop", description="d")]
-    storage.update_object(data=scene)
     panel = storage.read_all_objects(Panel, {"series_id": WL, "issue_id": CARN, "scene_id": SC})[0]
     panel.character_references = []
     panel.figure_images = {}; panel.figure_blocking = {}
@@ -165,19 +162,19 @@ def test_from_brief_render_uses_named_cast_on_model(storage, mock_imaging, tmp_d
     assert "Grix" in prompt
 
 
-def test_prop_edit_reaches_the_sets(storage):
+def test_prop_edit_names_its_own_stale_art(storage):
+    """Settings keep NO prop lists — a prop edit touches only the prop, and
+    the result names the prop's own now-stale reference art."""
     st = _Stub(storage)
     _invoke(assets.create_prop, st, series_id=WL, name="Fortune Cards",
             description="a worn tarot deck")
     setting = storage.read_all_objects(Setting, {"series_id": WL})[0]
-    setting.props = [*(setting.props or []),
-                     Prop(name="Fortune Cards", description="a worn tarot deck")]
-    setting.images = {"vintage-four-color": "data/nowhere.jpg"}
-    storage.update_object(data=setting)
+    assert not hasattr(setting, "props"), "settings must not carry a prop list"
+    prop = storage.read_object(PropAsset, {"series_id": WL, "prop_id": "fortune-cards"})
+    prop.images = {"vintage-four-color": "data/nowhere.jpg"}
+    storage.update_object(data=prop)
     out = str(_invoke(assets.update_prop_description, st, series_id=WL,
                       prop_id="fortune-cards",
                       description="a gilt-edged tarot deck, cards frayed at the corners"))
-    assert "Re-dressed the set" in out and "STALE" in out and "vintage-four-color" in out
-    fresh = storage.read_object(Setting, {"series_id": WL, "setting_id": setting.setting_id})
-    snap = next(p for p in fresh.props if p.name == "Fortune Cards")
-    assert "gilt-edged" in snap.description, "the embedded snapshot re-synced"
+    assert "stale" in out.lower() and "vintage-four-color" in out
+    assert "Re-dressed" not in out

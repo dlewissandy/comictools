@@ -58,9 +58,9 @@ def read_all_props(wrapper: RunContextWrapper[APPState], series_id: str) -> list
 @function_tool
 def update_prop_description(wrapper: RunContextWrapper[APPState], series_id: str, prop_id: str, description: str) -> str:
     """
-    Update a prop's visual description.  Every SETTING and SCENE carrying an
-    embedded snapshot of this prop is re-dressed too (render prompts read the
-    snapshots), and the result names the now-stale reference art and masters.
+    Update a prop's visual description.  The result names the prop's own
+    now-stale reference art (props live nowhere else — their art is laid on
+    the light table as acetates; scenes and settings keep no prop lists).
 
     Args:
         series_id: The series that owns the prop.
@@ -74,49 +74,10 @@ def update_prop_description(wrapper: RunContextWrapper[APPState], series_id: str
     result = update_attribute(wrapper, PropAsset, {"series_id": series_id, "prop_id": prop_id}, "description", description)
     if prop is None:
         return result
-
-    # RE-DRESS THE SETS: settings and scenes embed Prop(name, description)
-    # snapshots — the master-background prompt reads THOSE, so an edit that
-    # never reaches them draws the old prop forever
-    touched_settings, touched_scenes = [], []
-    from schema import Setting, SceneModel, Issue
-    key = (prop.name or "").strip().lower()
-    for st_obj in storage.read_all_objects(Setting, {"series_id": series_id}):
-        hit = False
-        for snap in (st_obj.props or []):
-            if (snap.name or "").strip().lower() == key:
-                snap.description = description
-                hit = True
-        if hit:
-            if st_obj.images:
-                st_obj.images_stale = sorted(set((st_obj.images_stale or [])
-                                                 + list(st_obj.images.keys())))
-            storage.update_object(data=st_obj)
-            touched_settings.append(st_obj)
-    for issue in storage.read_all_objects(Issue, {"series_id": series_id}):
-        for sc in storage.read_all_objects(SceneModel, {"series_id": series_id,
-                                                        "issue_id": issue.issue_id}):
-            hit = False
-            for snap in (sc.props or []):
-                if (snap.name or "").strip().lower() == key:
-                    snap.description = description
-                    hit = True
-            if hit:
-                storage.update_object(data=sc)
-                touched_scenes.append(sc.name or sc.scene_id)
-    if touched_settings:
-        stale = sorted({sid for st_obj in touched_settings
-                        for sid in (st_obj.images or {})})
-        result += (f"  Re-dressed the set{'s' if len(touched_settings) != 1 else ''} "
-                   f"{', '.join(st.name for st in touched_settings)} — "
-                   + (f"their masters in {', '.join(stale)} are now STALE "
-                      f"(generate_setting_background)." if stale else "no masters affected yet."))
-    if touched_scenes:
-        result += f"  Scene props re-synced: {', '.join(touched_scenes)}."
     stale_refs = sorted((prop.images or {}).keys())
     if stale_refs:
-        result += (f"  The prop's own reference art in {', '.join(stale_refs)} "
-                   f"is stale too (generate_prop_reference).")
+        result += (f"  The prop's reference art in {', '.join(stale_refs)} "
+                   f"is stale now (generate_prop_reference).")
     return result
 
 

@@ -1969,7 +1969,7 @@ def outpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str
 # MASTER BACKGROUNDS AND PANEL RENDERING
 #
 # A setting's master background is inked once per style (the empty setting,
-# dressed with its props).  Panels are then composed ON TOP of that background
+# as described).  Panels are then composed ON TOP of that background
 # with the cast's styled reference sheets, so the setting stays visually
 # consistent across every panel that takes place there.
 # -------------------------------------------------------------------------
@@ -2094,7 +2094,6 @@ def generate_setting_background_body(state, series_id: str, setting_id: str, sty
     if style is None:
         return f"Style '{style_id}' not found."
 
-    prop_lines = "\n".join(f"* **{p.name}**: {p.description}" for p in setting.props)
     interior_or_exterior = "an interior" if setting.interior else "an exterior"
     view_line = {"landscape": "a wide establishing view",
                  "portrait": "a tall establishing view (portrait orientation, as for a cover)",
@@ -2102,17 +2101,15 @@ def generate_setting_background_body(state, series_id: str, setting_id: str, sty
 
     prompt = f"""Render a comic book master background of {interior_or_exterior} setting: "{setting.name}".
 
-This is an EMPTY SETTING: render the setting fully dressed with its props but with
-absolutely NO characters, people, or creatures in it.   Compose it as {view_line}
+This is an EMPTY SETTING: render the place exactly as described — its furniture
+and dressing live in the description below — with absolutely NO characters,
+people, or creatures in it.   Compose it as {view_line}
 with generous negative space where characters can later be
 placed.   The rendering must strictly follow the comic style below so that
 panels composed on top of this background match the rest of the issue.
 
 # Setting
 {setting.description}
-
-# Props
-{prop_lines if prop_lines else "* (no props)"}
 
 {format_comic_style(style, include_bubble_styles=False, include_character_style=False, heading_level=1)}
 """
@@ -2168,7 +2165,6 @@ def generate_setting_shot_body(state, series_id: str, setting_id: str, shot_id: 
     if style is None:
         return f"Style '{style_id}' not found."
 
-    prop_lines = "\n".join(f"* **{p.name}**: {p.description}" for p in setting.props)
     interior_or_exterior = "an interior" if setting.interior else "an exterior"
     orient_line = {"landscape": "landscape orientation", "portrait": "portrait orientation",
                    "square": "square orientation"}[aspect.value]
@@ -2186,14 +2182,15 @@ def generate_setting_shot_body(state, series_id: str, setting_id: str, shot_id: 
     direction = ", ".join(x for x in [shot.angle.strip(), shot.time_of_day.strip()] if x) \
         or shot.name
     anchor_line = ("The attached reference image is this setting's establishing MASTER.  "
-                   "Render the SAME place — identical architecture, identical dressing and "
-                   "props, identical palette — but RE-FRAMED as the shot below.\n\n"
+                   "Render the SAME place — identical architecture, identical dressing, "
+                   "identical palette — but RE-FRAMED as the shot below.\n\n"
                    if master_img else "")
 
     prompt = f"""Render a comic book background — a reusable SHOT of {interior_or_exterior} setting: "{setting.name}".
 
-{anchor_line}This is an EMPTY SETTING: render it fully dressed with its props but with
-absolutely NO characters, people, or creatures.   Compose it in {orient_line} with
+{anchor_line}This is an EMPTY SETTING: render the place exactly as described — its
+furniture and dressing live in the description — with absolutely NO characters,
+people, or creatures.   Compose it in {orient_line} with
 generous negative space where characters can later be placed.
 
 # The shot (re-frame the master as this)
@@ -2203,9 +2200,6 @@ generous negative space where characters can later be placed.
 
 # Setting
 {setting.description}
-
-# Props
-{prop_lines if prop_lines else "* (no props)"}
 
 {format_comic_style(style, include_bubble_styles=False, include_character_style=False, heading_level=1)}
 """
@@ -2319,7 +2313,7 @@ async def generate_setting_background(
 ) -> str:
     """
     Render the master background for a setting in a given comic style: the empty
-    setting, dressed with its props, with NO characters.   The master background is
+    setting, furnished exactly as described, with NO characters.   The master background is
     stored on the setting keyed by style and is reused as the shared background for
     every panel that takes place there — ink the setting once, reuse it across pages.
 
@@ -2350,7 +2344,7 @@ def _generate_setting_background_sync(
 ) -> str:
     """
     Render the master background for a setting in a given comic style: the empty
-    setting, dressed with its props, with NO characters.   The master background is
+    setting, furnished exactly as described, with NO characters.   The master background is
     stored on the setting keyed by style and is reused as the shared background for
     every panel that takes place there — ink the setting once, reuse it across pages.
 
@@ -3465,13 +3459,13 @@ def dress_setting_acetate_body(state, series_id: str, issue_id: str,
     style_block = format_comic_style(style, include_bubble_styles=False,
                                      include_character_style=False, heading_level=1) if style else ""
     prompt = f"""The attached image is the master background of a comic setting.
-Re-render THIS exact place — same architecture, same props, same layout and palette
-identity — under new conditions.
+Re-render THIS exact place — same architecture, same furniture and dressing, same
+layout and palette identity — under new conditions.
 
 CONDITIONS (follow exactly): {cond}
 
-Keep it an EMPTY setting: fully dressed with its props but NO characters, people, or
-creatures, with generous negative space where figures are later placed.  A full-frame
+Keep it an EMPTY setting: the same furniture and dressing, but NO characters, people,
+or creatures, with generous negative space where figures are later placed.  A full-frame
 background — no transparency, no frame, no text — in the style below.
 
 {style_block}"""

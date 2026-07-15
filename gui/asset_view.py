@@ -39,18 +39,25 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
     from schema import CharacterVariant, Issue, SceneModel, Setting
     used_in = []
     if key_name == "prop_id":
-        nm = asset.name
-        for s in storage.read_all_objects(Setting, primary_key={"series_id": series_id}):
-            if any(p.name == nm for p in (s.props or [])):
-                used_in.append((f"setting · {s.name}",
-                                [("setting", s.setting_id, s.name)]))
+        # props live on light tables (element acetates) and in wardrobe
+        # compositions — scenes and settings keep no prop lists
+        from agentic.tools.normalization import normalize_id as _nid
+        import re as _re
         for iss in storage.read_all_objects(Issue, primary_key={"series_id": series_id}):
             for sc in storage.read_all_objects(SceneModel, primary_key={
                     "series_id": series_id, "issue_id": iss.issue_id}):
-                if any(p.name == nm for p in (getattr(sc, 'props', None) or [])):
-                    used_in.append((f"{iss.name} · {sc.name}",
-                                    [("issue", iss.issue_id, iss.name),
-                                     ("scene", sc.scene_id, sc.name)]))
+                from schema import Panel as _Panel
+                for pnl in storage.read_all_objects(_Panel, primary_key={
+                        "series_id": series_id, "issue_id": iss.issue_id,
+                        "scene_id": sc.scene_id}):
+                    hit = any(_re.sub(r'-\d+$', '', k.split('/', 1)[1]) == asset_id
+                              for k in (pnl.figure_images or {})
+                              if k.startswith('element/'))
+                    if hit:
+                        used_in.append((f"{iss.name} · {sc.name} · panel {pnl.panel_number}",
+                                        [("issue", iss.issue_id, iss.name),
+                                         ("scene", sc.scene_id, sc.name),
+                                         ("panel", pnl.panel_id, pnl.name)]))
         from schema import CharacterModel
         for ch in storage.read_all_objects(CharacterModel, primary_key={"series_id": series_id}):
             for v in storage.read_all_objects(CharacterVariant, primary_key={

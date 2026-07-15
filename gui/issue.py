@@ -682,16 +682,6 @@ def view_issue(state: APPState):
                 SelectionItem(name=setting_obj.name, id=setting_obj.setting_id,
                               kind=SelectedKind.SETTING)])
 
-        def _visit_prop(key):
-            asset = next((a for a in storage.read_all_objects(PropAsset, {"series_id": series_id})
-                          if (a.name or "").strip().lower() == key.strip().lower()), None)
-            if asset is None:
-                ui.notify(f"'{key}' lives only in this scene — extract it into a prop "
-                          f"asset to give it a room of its own.", type='info')
-                return
-            state.change_selection(new=[*_series_base(),
-                SelectionItem(name=asset.name, id=asset.prop_id, kind=SelectedKind.PROP)])
-
         def _save():
             storage.update_object(data=sc)
 
@@ -700,10 +690,6 @@ def view_issue(state: APPState):
 
         def _remove_cast(key):
             sc.cast = [c for c in sc.cast if f"{c.character_id}/{c.variant_id}" != key]
-            _save()
-
-        def _remove_prop(key):
-            sc.props = [p for p in sc.props if p.name != key]
             _save()
 
         def _todo(label, fix_message):
@@ -810,8 +796,6 @@ def view_issue(state: APPState):
             removable_chips_inline(state,
                 [(f"{c.character_id}/{c.variant_id}", _cast_label(c)) for c in (sc.cast or [])],
                 _remove_cast, icon='theater_comedy', visit=_visit_character)
-            removable_chips_inline(state, [(p.name, p.name) for p in (sc.props or [])],
-                                   _remove_prop, icon='category', visit=_visit_prop)
 
     def scene_sheet(sc, folio=None):
         """A scene holding its place as a manuscript page."""
@@ -1068,35 +1052,38 @@ def view_issue(state: APPState):
 
     with details:
         # ---- the masthead stays put over the table ------------------------
-        with ui.row().classes('book-masthead w-full flex-nowrap items-center').style('gap: 12px;') as _mast:
+        # THE TITLE RULES THE MASTHEAD: the issue's name reads on its own
+        # line, ABOVE the swatch and the dial — like a real masthead
+        with ui.column().classes('book-masthead w-full').style('gap: 4px;') as _mast:
             _mast._props['data-banchor'] = 'masthead-top' 
             header(f"ISSUE {issue.issue_number}: {issue.name}", 0)
-            from gui.light_table import style_swatch
-            style_swatch(state, issue, shared_with='the whole issue')
-            # THE DETAIL DIAL: read the book at five altitudes — scripts,
-            # scenes, beats (the text), roughs (the composed pencils), proofs
-            # (the bound book).  The production truth lives on the colophon now.
-            with ui.row().classes('items-center flex-nowrap').style('gap: 4px;'):
-                for key, label, hint in (('stories', 'SCRIPTS', 'the written scripts'),
-                                         ('scenes', 'SCENES', 'scene manuscript pages'),
-                                         ('beats', 'BEATS', 'the beat of every panel, laid out'),
-                                         ('roughs', 'ROUGHS', 'the composed rough of every panel that has one'),
-                                         ('proofs', 'PROOFS', 'the inked panels; the rest as placeholders')):
-                    chip = ui.element('div').classes('dial-chip' + (' dial-chip--on' if detail == key else ''))
-                    chip.mark(f'detail-{key}')
-                    with chip:
-                        ui.label(label)
-                    chip.tooltip(f'Read the book as {hint}')
-                    chip.on('click', lambda _, k=key: set_detail(k))
-            ui.space()
-            ui.button(icon='tune').props('flat round dense') \
-                .tooltip('Layout feel — density, verticality, irregularity, variety') \
-                .on('click', lambda _: open_layout_feel())
-            ui.button('Read', icon='menu_book').props('rounded') \
-                .tooltip('Read the issue front to back') \
-                .on('click', lambda _: ui.run_javascript(
-                    f"window.open('/series/{series_id}/issue/{issue_id}/read', '_blank');"))
-            crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current issue."))
+            with ui.row().classes('w-full flex-nowrap items-center').style('gap: 12px;'):
+                from gui.light_table import style_swatch
+                style_swatch(state, issue, shared_with='the whole issue')
+                # THE DETAIL DIAL: read the book at five altitudes — scripts,
+                # scenes, beats (the text), roughs (the composed pencils), proofs
+                # (the bound book).  The production truth lives on the colophon now.
+                with ui.row().classes('items-center flex-nowrap').style('gap: 4px;'):
+                    for key, label, hint in (('stories', 'SCRIPTS', 'the written scripts'),
+                                             ('scenes', 'SCENES', 'scene manuscript pages'),
+                                             ('beats', 'BEATS', 'the beat of every panel, laid out'),
+                                             ('roughs', 'ROUGHS', 'the composed rough of every panel that has one'),
+                                             ('proofs', 'PROOFS', 'the inked panels; the rest as placeholders')):
+                        chip = ui.element('div').classes('dial-chip' + (' dial-chip--on' if detail == key else ''))
+                        chip.mark(f'detail-{key}')
+                        with chip:
+                            ui.label(label)
+                        chip.tooltip(f'Read the book as {hint}')
+                        chip.on('click', lambda _, k=key: set_detail(k))
+                ui.space()
+                ui.button(icon='tune').props('flat round dense') \
+                    .tooltip('Layout feel — density, verticality, irregularity, variety') \
+                    .on('click', lambda _: open_layout_feel())
+                ui.button('Read', icon='menu_book').props('rounded') \
+                    .tooltip('Read the issue front to back') \
+                    .on('click', lambda _: ui.run_javascript(
+                        f"window.open('/series/{series_id}/issue/{issue_id}/read', '_blank');"))
+                crud_button(kind=CrudButtonKind.DELETE, action=lambda _: post_user_message(state, "I would like to delete the current issue."))
 
         # ---- THE OPEN BOOK ------------------------------------------------
         # THE BOOK sizes itself to the bookroom (the details pane is a CSS

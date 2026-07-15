@@ -237,13 +237,10 @@ def build_asset_drawer(state):
                             "series_id": sid, "prop_id": aid})
                         if pa is None:
                             return False
-                        if hasattr(cur_scene, "props"):
-                            lt.lay_prop_on_table(state, cur_scene, pa)
-                        else:
-                            # a cover: the prop's art itself lands as an acetate
-                            if not lt.lay_prop_acetate(state, cur_panel, pa,
-                                                       getattr(cur_scene, 'style_id', None)):
-                                return False
+                        # PROPS RIDE THE GLASS: the art lands as an acetate
+                        if not lt.lay_prop_acetate(state, cur_panel, pa,
+                                                   getattr(cur_scene, 'style_id', None)):
+                            return False
                     elif kind == "style":
                         if cur_scene is None:
                             return False

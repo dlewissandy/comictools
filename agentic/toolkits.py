@@ -81,9 +81,7 @@ from agentic.tools.updater import (
     update_panel_cast,
     update_panel_dialogue,
     update_scene_blocking,
-    update_scene_props,
     update_setting_description,
-    update_setting_props,
     update_cover_setting,
 )
 from agentic.tools.imaging import generate_setting_background, generate_series_title_art, generate_panel_image, generate_figure_acetate, split_layer, export_issue_pdf, export_issue_cbz, preflight_issue, layout_issue_pages, stitch_issue_pages, render_missing_panels, ink_cast_in_one_hand
@@ -352,8 +350,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_panel_cast,
         update_panel_dialogue,
         update_scene_setting,
-        update_scene_props,
-        # Delete
+            # Delete
         undo_last_delete,
         delete_panel,
         # Imaging
@@ -417,8 +414,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_scene_setting,
         update_scene_cast,
         update_scene_blocking,
-        update_scene_props,
-        # Reorder
+            # Reorder
         move_panel,
         # Delete
         undo_last_delete,
@@ -484,8 +480,7 @@ TOOLKITS: dict[str,list[Tool]] = {
         update_series_name,
         update_series_description,
         update_setting_description,
-        update_setting_props,
-
+    
         # Delete
         undo_last_delete,
         delete_series,
@@ -614,7 +609,6 @@ TOOLKITS["setting"] = [
     read_all_styles,
     # Update
     update_setting_description,
-    update_setting_props,
     # Delete
     delete_setting,
     # Imaging

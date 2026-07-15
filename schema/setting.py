@@ -42,7 +42,7 @@ class SettingShot(BaseModel):
 class Setting(BaseModel):
     """
     A setting is a recurring place where scenes and panels take place.   It belongs to a
-    series, is dressed with props, and can be rendered as a style-keyed master
+    series and can be rendered as a style-keyed master
     background that multiple panels share so the setting stays visually consistent.
     """
     setting_id: str = Field(..., description="A unique identifier for the setting.  This is usually the setting name in lowercase with spaces replaced by dashes.")
@@ -50,7 +50,6 @@ class Setting(BaseModel):
     name: str = Field(..., description="A short (1-5 word) name for the setting, e.g. 'The Rusty Nail Saloon'")
     description: str = Field(..., description="A detailed visual description of the setting: architecture, layout, lighting, mood, era, and palette.   Detailed enough that different artists would draw the same place.")
     interior: bool = Field(True, description="True for interior settings, False for exterior settings.")
-    props: list[Prop] = Field(default_factory=list, description="The props that dress this setting.  Default to empty list.")
     origin: Optional[AssetOrigin] = Field(None, description="Provenance if this setting was imported from another series' collection.  Default to None.")
     images: dict[str, str] = Field(default_factory=dict, description="Master backgrounds keyed by style (landscape) or 'style_id/orientation' (portrait, square): maps the key to the rendered background's filepath.  Default to empty dict.")
     images_stale: list[str] = Field(default_factory=list, description="Master keys whose art predates the latest setting/prop edit — re-render to clear.  Default to empty list.")

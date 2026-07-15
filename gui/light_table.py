@@ -1311,17 +1311,6 @@ def lay_background_on_table(state, scene, panel, setting, shot=None):
     state.refresh_details()
 
 
-def lay_prop_on_table(state, scene, prop_asset):
-    if any(p.name == prop_asset.name for p in (scene.props or [])):
-        table_receipt(state, f"🎪 **{prop_asset.name}** is already on the table")
-    else:
-        scene.props = (scene.props or []) + [Prop(name=prop_asset.name,
-                                                  description=prop_asset.description)]
-        state.storage.update_object(scene)
-        table_receipt(state, f"🎪 laid the **{prop_asset.name}** prop on the table")
-    state.refresh_details()
-
-
 def lay_prop_acetate(state, board, prop_asset, style_id: str | None = None) -> bool:
     """Lay a prop's reference art on the board as an element acetate — covers
     have no scene props, so the art itself goes on the table."""
@@ -2718,16 +2707,6 @@ def light_table(state: APPState, panel, scene, setting,
                                 if not panel.layer_groups[gname]:
                                     panel.layer_groups.pop(gname)
                             storage.update_object(panel)
-                            # if this element IS a scene prop, remove it from the
-                            # scene too — otherwise the auto-lay re-lays it
-                            saved_prop = None
-                            if scene is not None and _slug_d is not None:
-                                fs = storage.read_object(type(scene), scene.primary_key) or scene
-                                saved_prop = next((q for q in (fs.props or [])
-                                                   if _nid_d(q.name) == _slug_d), None)
-                                if saved_prop is not None:
-                                    fs.props = [q for q in fs.props if _nid_d(q.name) != _slug_d]
-                                    storage.update_object(fs)
 
                             def undo():
                                 p = _fresh()
@@ -2737,11 +2716,6 @@ def light_table(state: APPState, panel, scene, setting,
                                     p.figure_blocking[key] = saved_blk
                                 p.layer_groups = saved_groups
                                 storage.update_object(p)
-                                if saved_prop is not None and scene is not None:
-                                    fs2 = storage.read_object(type(scene), scene.primary_key) or scene
-                                    if not any(_nid_d(q.name) == _slug_d for q in (fs2.props or [])):
-                                        fs2.props = (fs2.props or []) + [saved_prop]
-                                        storage.update_object(fs2)
                             _receipt(f"✂️ removed **{nm}** from the table", undo=undo)
                             state.refresh_details()
                         ui.button(icon='close').props('flat round dense size=xs') \
@@ -3161,10 +3135,6 @@ def light_table(state: APPState, panel, scene, setting,
                     prop = PropAsset(prop_id=normalize_id(name), series_id=series_id,
                                      name=name, description=description or name)
                     storage.create_object(data=prop)
-                if not cover_mode and scene is not None \
-                        and not any(p.name == name for p in (scene.props or [])):
-                    scene.props = (scene.props or []) + [Prop(name=name, description=description or name)]
-                    storage.update_object(scene)
                 style_id = getattr(scene, 'style_id', None) or 'vintage-four-color'
 
                 def job(prop_id=prop.prop_id, style_id=style_id):
@@ -3472,16 +3442,10 @@ def light_table(state: APPState, panel, scene, setting,
 
                             def lay(pa=pa):
                                 dlg.close()
-                                if cover_mode or insert_mode:
-                                    # covers and inserts have no scene props:
-                                    # the art itself lands as an acetate
-                                    lay_prop_acetate(state, panel, pa, getattr(scene, 'style_id', None))
-                                else:
-                                    # the prop joins the scene's record (the
-                                    # render prompt reads it) AND its art
-                                    # lands as a blockable acetate
-                                    lay_prop_on_table(state, scene, pa)
-                                    lay_prop_acetate(state, panel, pa, getattr(scene, 'style_id', None))
+                                # PROPS RIDE THE GLASS: the prop's art lands
+                                # as a blockable acetate — no record is kept on
+                                # the scene or the setting
+                                lay_prop_acetate(state, panel, pa, getattr(scene, 'style_id', None))
                             card.on('click', lambda _, pa=pa: lay(pa))
 
                     # CONJURE A NEW PROP from a prompt, right on the board —
