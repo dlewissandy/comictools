@@ -229,6 +229,11 @@ def view_lobby(state: APPState):
                 ui.button('Found your publishing house', icon='home_work') \
                     .props('unelevated no-caps size=lg') \
                     .on('click', lambda _: found_house_dialog(state))
+                ui.button('Adopt the demo house', icon='auto_stories') \
+                    .props('outline no-caps size=lg') \
+                    .tooltip('Foglamp Press and its one small series — a living '
+                             'example to walk through and make your own') \
+                    .on('click', lambda _: adopt_demo_house(state))
             return
 
         # THE STUDIO WALL: the whole catalog at one glance — every house's
@@ -393,3 +398,75 @@ def view_all_series(state: APPState):
     return view_lobby(state)
 
 
+
+
+def adopt_demo_house(state):
+    """THE DEMO HOUSE: Foglamp Press — a lighthouse keeper's one-sheet
+    newspaper, told as a small comic.  Original work, founded like any
+    real house (git repo, default styles), yours to walk through and
+    remake.  STAY PUT: the wall repaints; nothing redirects."""
+    import os as _os
+    from storage import registry as _reg
+    from schema import Series, Issue
+
+    target = _os.path.expanduser("~/git/foglamp-press-comics")
+    if _os.path.isdir(_os.path.join(target, "publishers")):
+        ui.notify("The demo house already stands at ~/git/foglamp-press-comics — "
+                  "it hangs on the wall.", type="info")
+        return
+    try:
+        slug = _reg.found_house("Foglamp Press", target)
+    except Exception as ex:
+        ui.notify(f"Couldn't found the demo house: {ex}", type="warning")
+        return
+    st = _reg.storage_for(slug)
+    from schema import Publisher as _Pub
+    pubs = st.read_all_objects(_Pub)
+    if pubs:
+        pub = pubs[0]
+        pub.description = ("Foglamp Press prints small, warm stories from the "
+                           "edge of the map — comics about keepers, harbors and "
+                           "the news that only matters when the fog rolls in.")
+        pub.logo = ("A round lamp lens glowing through stylized fog, ringed by "
+                    "the words FOGLAMP PRESS in sturdy maritime lettering — "
+                    "two colors, bold outline, readable at a stamp's size.")
+        st.update_object(pub)
+        pub_id = pub.publisher_id
+    else:
+        pub_id = slug
+    series = Series(series_id="the-lighthouse-post", name="The Lighthouse Post",
+                    description=("Edda Lumen keeps the last staffed lighthouse on "
+                                 "the Gannet Shoals — and prints the town's only "
+                                 "newspaper on the lamp-room's old press.  One "
+                                 "sheet, once a week, and somehow always exactly "
+                                 "the news the fog is about to make matter."),
+                    publisher_id=pub_id)
+    st.create_object(data=series, overwrite=True)
+    issue = Issue(issue_id="the-fog-edition", name="The Fog Edition",
+                  series_id="the-lighthouse-post",
+                  style_id="vintage-four-color", issue_number=1,
+                  story=("Edda Lumen climbs the lamp room before dawn and finds the "
+                         "great lens cold — the first time in forty years.  She prints "
+                         "a single headline: LIGHT OUT, FOG DUE, READ FAST.  The town "
+                         "ignores the paper, as always, until the fog arrives at noon "
+                         "like a dropped curtain.  Deliveries stop.  The ferry idles.  "
+                         "One by one, townsfolk appear at the lighthouse door holding "
+                         "the paper, asking what page two says.  There is no page two — "
+                         "so Edda hands each visitor a lamp part and a job.  By dusk the "
+                         "lens burns again, lit by everyone who finally read the news.  "
+                         "The next edition runs two pages; nobody skips it."),
+                  publication_date=None, price=None, writer="Edda Lumen (as told to the keeper's cat)",
+                  artist=None, colorist=None, creative_minds=None)
+    st.create_object(data=issue, overwrite=True)
+    from gui.thread import thread_aside, thread_reply
+    thread_aside(state, "🏮 adopted **Foglamp Press** — the demo house stands at "
+                        "~/git/foglamp-press-comics", bench="the front desk")
+    thread_reply(state, "Foglamp Press hangs on the wall now — one small series, "
+                        "one foggy issue, all yours.  Open **The Fog Edition** and "
+                        "we can break its script into scenes together, or start "
+                        "your own house alongside it.")
+    state.refresh_details()
+    try:
+        state.render_your_turn()
+    except Exception:
+        pass
