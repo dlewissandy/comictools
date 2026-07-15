@@ -587,20 +587,28 @@ if (!window._roughDragInit) {
     if (!target || !target.closest) return null;
     let zone = target.closest('.q-uploader');
     if (zone) return zone;
-    const host = target.closest('.q-card, .mosaic-card, .create-drop');
+    const host = target.closest('.q-card, .mosaic-card, .create-drop, .table-drop-zone');
     return host ? host.querySelector('.q-uploader') : null;
+  };
+  // the visible outline goes on the element the user sees: the uploader
+  // when it's the face of the zone, the host row when the uploader hides
+  const dropFaceFor = (target) => {
+    const zone = uploaderFor(target);
+    if (!zone) return null;
+    const host = zone.closest('.table-drop-zone');
+    return host || zone;
   };
   document.addEventListener('dragover', (e) => {
     const t = e.dataTransfer && e.dataTransfer.types;
     if (!(t && Array.prototype.includes.call(t, 'Files'))) return;
     e.preventDefault();
     document.querySelectorAll('.drop-ready').forEach(z => z.classList.remove('drop-ready'));
-    const zone = uploaderFor(e.target);
-    if (zone) zone.classList.add('drop-ready');
+    const face = dropFaceFor(e.target);
+    if (face) face.classList.add('drop-ready');
   });
   document.addEventListener('dragleave', (e) => {
-    const zone = uploaderFor(e.target);
-    if (zone) zone.classList.remove('drop-ready');
+    const face = dropFaceFor(e.target);
+    if (face) face.classList.remove('drop-ready');
   });
   document.addEventListener('drop', (e) => {
     if (!(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length)) return;
@@ -666,7 +674,11 @@ if (!window._roughDragInit) {
   document.addEventListener('click', (e) => {
     if (e.target.closest && e.target.closest('.caption-btn, .create-caption-btn, button')) return;
     const zone = e.target.closest && e.target.closest('.create-drop-zone');
-    if (zone) { const inp = zone.querySelector('.create-drop-input'); if (inp) inp.click(); }
+    if (zone) { const inp = zone.querySelector('.create-drop-input'); if (inp) inp.click(); return; }
+    // a q-uploader only browses from its own tiny header button — clicking
+    // anywhere on a drop card or the table's drop row must open the picker
+    const drop = e.target.closest && e.target.closest('.drop-card, .table-drop-zone');
+    if (drop) { const inp = drop.querySelector('.q-uploader input[type=file]'); if (inp) inp.click(); }
   });
   document.addEventListener('change', (e) => {
     const inp = e.target;
@@ -972,8 +984,9 @@ def fresh_board(storage, board):
 
 
 def current_board(state):
-    """The board (panel or cover) the user is looking at, else None."""
-    from schema import Panel, Cover
+    """The board the user is looking at — panel, cover, insert or a mark
+    (masthead/logo art board) — else None."""
+    from schema import Panel, Cover, Insert, ArtBoard
     sel = state.selection or []
     if not sel:
         return None
@@ -982,6 +995,8 @@ def current_board(state):
         k = item.kind.value
         if k == 'series':
             ids = {'series_id': item.id}
+        elif k == 'publisher':
+            ids = {'publisher_id': item.id}
         elif k == 'issue':
             ids['issue_id'] = item.id
         elif k == 'scene':
@@ -990,6 +1005,10 @@ def current_board(state):
             ids['panel_id'] = item.id
         elif k == 'cover':
             ids['cover_id'] = item.id
+        elif k == 'insert':
+            ids['insert_id'] = item.id
+        elif k == 'artboard':
+            ids['board_id'] = item.id
     last = sel[-1].kind.value
     if last == 'panel' and {'series_id', 'issue_id', 'scene_id', 'panel_id'} <= ids.keys():
         return state.storage.read_object(cls=Panel, primary_key={
@@ -997,6 +1016,16 @@ def current_board(state):
     if last == 'cover' and {'series_id', 'issue_id', 'cover_id'} <= ids.keys():
         return state.storage.read_object(cls=Cover, primary_key={
             k: ids[k] for k in ('series_id', 'issue_id', 'cover_id')})
+    if last == 'insert' and {'series_id', 'issue_id', 'insert_id'} <= ids.keys():
+        return state.storage.read_object(cls=Insert, primary_key={
+            k: ids[k] for k in ('series_id', 'issue_id', 'insert_id')})
+    if last == 'artboard' and 'board_id' in ids:
+        # a mark's scope is whoever owns it: the series (masthead) or the
+        # house (logo) standing just before it on the trail
+        scope = ids.get('series_id') or ids.get('publisher_id')
+        if scope:
+            return state.storage.read_object(cls=ArtBoard, primary_key={
+                'scope_id': scope, 'board_id': ids['board_id']})
     return None
 
 
@@ -3759,14 +3788,25 @@ def light_table(state: APPState, panel, scene, setting,
                                  '(only the print stays; undoable)') \
                         .on('click', lambda _: clear_board())
 
-            # or just drop an image straight onto the table as a reference
-            with ui.row().classes('light-layer w-full items-center justify-center relative overflow-hidden').style('min-height: 34px;'):
+            # or just drop an image straight onto the table as a reference —
+            # the ROW is the door: the page-level rescue feeds drops and
+            # clicks to the hidden uploader (a bare q-uploader overlay
+            # delivers neither in this app)
+            with ui.row().classes('light-layer w-full items-center justify-center table-drop-zone cursor-pointer').style('min-height: 34px;'):
                 def on_drop_reference(e):
-                    storage.upload_reference_image(panel, e.name, e.content, e.type)
+                    locator = storage.upload_reference_image(panel, e.name, e.content, e.type)
+
+                    def undo(path=locator):
+                        try:
+                            os.remove(path)
+                        except OSError:
+                            pass
+                    _receipt(f"📌 pinned **{e.name}** to the table as a reference", undo=undo)
                     state.refresh_details()
                 ui.upload(on_upload=on_drop_reference, auto_upload=True, max_files=1) \
-                    .classes('absolute inset-0 opacity-0 cursor-pointer z-10')
-                ui.label('…or drop a reference image on the table').classes('text-xs text-gray-500')
+                    .style('display: none;')
+                ui.label('…or drop a reference image on the table — click to browse') \
+                    .classes('text-xs text-gray-500')
 
             def flatten_bytes() -> bytes:
                 import io

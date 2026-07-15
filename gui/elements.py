@@ -698,7 +698,9 @@ def uploader_card(state: APPState, on_upload: Callable[[UploadEventArguments], N
     cell = (packer.place_cell(variants or [(3, 2)], fudge=True, max_w=6)
             if packer is not None else contextlib.nullcontext())
     with cell:
-        card = ui.card().classes(TAILWIND_CARD + ' relative')
+        # 'drop-card': the page-level click rescue opens the picker from
+        # anywhere on the card (the invisible uploader swallows clicks)
+        card = ui.card().classes(TAILWIND_CARD + ' relative drop-card')
         if overlap_caption is None:
             card.classes('overflow-hidden')
         if packer is not None:
