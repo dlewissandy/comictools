@@ -433,13 +433,8 @@ def render_object_cards(
                         except Exception as ex:
                             ui.notify(f"Couldn't remove {name}: {ex}", type='warning')
                             return
-                        try:
-                            with state.history:
-                                with comic_chat_message(name='You', sent=True).classes('w-full'):
-                                    ui.markdown(f"✂️ removed **{name}**")
-                            state.history.scroll_to(percent=100)
-                        except Exception:
-                            pass
+                        from gui.thread import thread_aside
+                        thread_aside(state, f"✂️ removed **{name}**")
                         state.refresh_details()
                     ui.button(icon='close').props('flat round dense size=xs') \
                         .classes('absolute top-0 right-0 z-10 bg-white/70 dark:bg-black/50') \
@@ -639,13 +634,8 @@ def _inline_editable(state: APPState, name: str, value: str, setter: Callable):
                     ui.notify(f"Couldn't set {name}: {e}", type='warning')
                     show_label()
                     return
-                try:
-                    with state.history:
-                        with comic_chat_message(name='You', sent=True).classes('w-full'):
-                            ui.markdown(f"✏️ set **{name}** to `{new_value}`")
-                    state.history.scroll_to(percent=100)
-                except Exception:
-                    pass
+                from gui.thread import thread_aside
+                thread_aside(state, f"✏️ set **{name}** to `{new_value}`")
                 state.refresh_details()
 
             box.on('keydown.enter', lambda _: save())
@@ -862,13 +852,8 @@ def removable_chips(state: APPState, caption: str, items: list[tuple[str, str]],
                 except Exception as e:
                     ui.notify(f"Couldn't remove {label}: {e}", type='warning')
                     return
-                try:
-                    with state.history:
-                        with comic_chat_message(name='You', sent=True).classes('w-full'):
-                            ui.markdown(f"✂️ removed **{label}** from {caption.lower()}")
-                    state.history.scroll_to(percent=100)
-                except Exception:
-                    pass
+                from gui.thread import thread_aside
+                thread_aside(state, f"✂️ removed **{label}** from {caption.lower()}")
                 state.refresh_details()
             chip = ui.chip(label, removable=True, icon=icon) \
                 .props('dense outline' + (' clickable' if visit else '')) \
@@ -893,10 +878,8 @@ def removable_chips_inline(state: APPState, items: list[tuple[str, str]],
                 ui.notify(f"Couldn't remove {label}: {e}", type='warning')
                 return
             try:
-                with state.history:
-                    with comic_chat_message(name='You', sent=True).classes('w-full'):
-                        ui.markdown(f"✂️ removed **{label}**")
-                state.history.scroll_to(percent=100)
+                from gui.thread import thread_aside
+                thread_aside(state, f"✂️ removed **{label}**")
             except Exception:
                 pass
             state.refresh_details()

@@ -98,25 +98,26 @@ def test_panel_face_is_brief_rough_or_print(storage):
         assert rough_signature(bare, scenes[bare.scene_id]) is None, "a bare table shows the brief"
 
 
-def test_state_write_merges_conversations(tmp_path, monkeypatch):
-    """THE STUDIO REMEMBERS from every window: writes merge conversations
-    by object key — one window can never clobber another's chats."""
+def test_state_write_merges_the_one_thread(tmp_path, monkeypatch):
+    """THE STUDIO REMEMBERS from every window: writes union the ONE thread
+    by entry id — two windows appending at once both survive."""
     import json as j
     import types
     import gui.state as gs
     monkeypatch.setattr(gs, 'STATE_FILEPATH', str(tmp_path / 'state.json'))
-    j.dump({"conversations": {"other-window": [{"name": "You", "text_html": "THEIRS"}]},
+    j.dump({"thread": [{"id": "theirs", "ts": 2.0, "t": "user", "text": "THEIRS"}],
             "selection": [], "dark_mode": True}, open(gs.STATE_FILEPATH, 'w'))
     dummy = types.SimpleNamespace(
-        conversations={"mine": [{"name": "You", "text_html": "MINE"}]},
-        selection=[], dark_mode=False,
-        get_transcript=lambda: [],
-        conversation_key=lambda sel: "home")
+        thread=[{"id": "mine", "ts": 1.0, "t": "user", "text": "MINE"}],
+        agent_thread=[], selection=[], dark_mode=False)
     gs.APPState.write(dummy)
     data = j.load(open(gs.STATE_FILEPATH))
-    assert data["conversations"]["other-window"][0]["text_html"] == "THEIRS"
-    assert data["conversations"]["mine"][0]["text_html"] == "MINE"
-    assert "home" in data["conversations"]
+    texts = [e["text"] for e in data["thread"]]
+    assert texts == ["MINE", "THEIRS"], "union by id, ordered by ts — both survive"
+    # idempotent: writing again never duplicates
+    gs.APPState.write(dummy)
+    data = j.load(open(gs.STATE_FILEPATH))
+    assert [e["text"] for e in data["thread"]] == ["MINE", "THEIRS"]
 
 
 def test_swatch_book_matches_the_catalog():

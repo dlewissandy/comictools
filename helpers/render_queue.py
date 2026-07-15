@@ -100,13 +100,12 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
 
     def _announce(text: str, image: str | None = None):
         try:
-            from gui.avatars import comic_chat_message
-            with state.history:
-                with comic_chat_message(name=role, sent=False).classes('w-full'):
-                    ui.markdown(text)
-                    if image:
-                        ui.image(source=image).classes('rounded-md q-mt-xs').style('max-width: 320px;')
-            state.history.scroll_to(percent=100)
+            if image:
+                from gui.thread import thread_aside
+                thread_aside(state, text, bench='the drawing board', image=image)
+            else:
+                from gui.thread import thread_reply
+                thread_reply(state, text)
         except Exception as e:
             logger.debug(f"render-queue announce skipped: {e}")
 

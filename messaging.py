@@ -7,6 +7,7 @@ are posed to a special "thoughts" container that can be expanded by the user to 
 
 import asyncio
 import json
+import os
 from agents import Runner, ItemHelpers
 from loguru import logger
 from nicegui import ui
@@ -14,46 +15,6 @@ from openai.types.responses import ResponseTextDeltaEvent
 from agents import AgentUpdatedStreamEvent, RunItemStreamEvent
 from gui.state import APPState
 
-
-
-ROLE_MAP = {
-    "you": "user",
-    "bot": "assistant",
-    "tool output": "assistant",
-    "tool call": "assistant",
-}
-
-def append_history(sender: str, content: ui.element, sent: bool = True):
-    """
-    Append a message to the chat history in the user interface.
-    """
-    from gui.avatars import comic_chat_message
-    with comic_chat_message(name=sender, sent=sent).classes('w-full') as message:
-        ui.markdown(content)
-    return message
-
-
-def thoughts_container(parent: ui.row) -> ui.expansion:
-    """
-    If there is a expansion in the parent, return it, otherwise create a new one.
-    """
-    # if we’ve already created it, reuse it
-    if hasattr(parent, "_thoughts_expand"):
-        return parent._thoughts_expand
-
-    # otherwise create it and stash it on the parent
-    with parent:
-        parent._thoughts_expand = (
-            ui.expansion("Thoughts", value=False)
-              .classes("w-full text-sm")
-        )
-    return parent._thoughts_expand
-
-def create_spinner() -> ui.spinner:
-    """
-    Create a spinner element for indicating loading or processing.
-    """
-    return 
 
 
 async def handle_text_delta_event(state: APPState,event: ResponseTextDeltaEvent, response_markdown: ui.markdown):
@@ -130,12 +91,11 @@ _LIFE_SIGNS = [
 ]
 
 
-async def handle_tool_call_event(state: APPState, event: RunItemStreamEvent, divider: ui.row):
-    """
-    The agent called a tool: show a human receipt.  Quiet (read-only) activity
-    goes inside the collapsed Thoughts expansion; actions surface as receipts.
-    The working ticker speaks the CURRENT tool, so a long turn shows life.
-    """
+async def handle_tool_call_event(state: APPState, event: RunItemStreamEvent,
+                                  work: dict, refresh_work):
+    """The agent called a tool: one receipt row lands in the turn's WORK
+    entry (quiet reads unhighlighted).  The working ticker speaks the
+    CURRENT tool, so a long turn shows life."""
     raw_item = event.item.raw_item
     line, quiet = _receipt_for(raw_item.name, raw_item.arguments)
     logger.debug(f"tool call: {raw_item.name}({raw_item.arguments})")
@@ -143,35 +103,27 @@ async def handle_tool_call_event(state: APPState, event: RunItemStreamEvent, div
         getattr(state, '_turn_receipts', []).append(f"called {raw_item.name}({str(raw_item.arguments)[:160]})")
     except Exception:
         pass
+    work["receipts"].append({"line": line, "quiet": quiet, "answer": None, "image": None})
     lbl = getattr(state, '_working_label', None)
     if lbl is not None:
         try:
-            import time as _time
             phrase = next((ph for v, ph in _LIFE_SIGNS if raw_item.name.startswith(v)),
                           raw_item.name.replace('_', ' ') + '…')
             lbl.set_text(phrase)
+            n = len(work["receipts"])
             # tool truth outranks decoration: hold the floor until the
             # tool actually answers (a render can run minutes)
             state._working_pin_until = float('inf')
         except Exception:
             pass
-    container = thoughts_container(divider) if quiet else divider
-    with container:
-        md = ui.markdown(line).classes("w-full text-sm" + ("" if quiet else " q-px-md"))
-        if not quiet:
-            # the transcript serializer keeps NAMED text — receipts must
-            # survive the archive, or 'the receipts above' points at nothing
-            md._props['name'] = 'the receipts'
-            md._props['sent'] = False
 
 
-async def handle_tool_output_event(state: APPState, event: RunItemStreamEvent, divider: ui.row):
-    """
-    A tool responded.  Our tools return human sentences: show short results as
-    receipt follow-ups; long/structured payloads stay in Thoughts.  Refresh the
-    details pane immediately after mutations so the user watches the coauthor
-    work instead of waiting for the end of the turn.
-    """
+async def handle_tool_output_event(state: APPState, event: RunItemStreamEvent,
+                                   work: dict, refresh_work):
+    """A tool answered: its human sentence rides its receipt row.  The
+    details pane refreshes immediately after mutations so the author
+    watches the coauthor work instead of waiting for the end of the turn."""
+    import re as _re
     output = str(event.item.output)
     import time as _time
     state._working_pin_until = _time.monotonic() + 1.0   # the floor opens again
@@ -180,14 +132,12 @@ async def handle_tool_output_event(state: APPState, event: RunItemStreamEvent, d
     except Exception:
         pass
     logger.debug(f"tool output: {output[:200]}")
-    is_short_sentence = len(output) < 300 and not output.lstrip().startswith(("{", "[", "<"))
-    if is_short_sentence and not output.startswith("An error"):
-        with thoughts_container(divider):
-            ui.markdown(output).classes("w-full text-sm")
-    else:
-        with thoughts_container(divider):
-            with ui.chat_message(name='Tool Output', sent=False).classes('w-full'):
-                ui.markdown(output[:1500])
+    if work["receipts"]:
+        r = work["receipts"][-1]
+        r["answer"] = output[:1500]
+        m = _re.search(r"[\w./-]+\.(?:jpg|jpeg|png)", output)
+        if m and os.path.exists(m.group(0)):
+            r["image"] = m.group(0)
     # live refresh: the coauthor's edits appear as they happen
     if state.is_dirty:
         try:
@@ -197,7 +147,7 @@ async def handle_tool_output_event(state: APPState, event: RunItemStreamEvent, d
             logger.debug(f"mid-turn refresh skipped: {e}")
 
 
-async def handle_message_output_event(state: APPState, event: RunItemStreamEvent, divider: ui.row):
+async def handle_message_output_event(state: APPState, event: RunItemStreamEvent, work: dict):
     """
     This event occurs after a tool output is received and the agent generates a message based on the tool ouput.
     Handle the event by updating the response markdown with the final message.
@@ -207,7 +157,7 @@ async def handle_message_output_event(state: APPState, event: RunItemStreamEvent
     thought = f"🧠 Using tool output to generate message"
     logger.debug(thought)
 
-async def handle_agent_events(state: APPState, messages: list[dict], response_markdown: ui.markdown, divider: ui.row):
+async def handle_agent_events(state: APPState, messages: list[dict], response_markdown: ui.markdown, work: dict, refresh_work):
     agents = state.agents
     selection = state.selection
     kind = "home" if not selection else selection[-1].kind
@@ -241,36 +191,20 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
             item = event.item
 
             if item.type == "tool_call_item":
-                await handle_tool_call_event(state, event, divider)
-                
+                await handle_tool_call_event(state, event, work, refresh_work)
+
             # Tool output
             elif item.type == "tool_call_output_item":
-                await handle_tool_output_event(state, event, divider)
+                await handle_tool_output_event(state, event, work, refresh_work)
 
             # Completed LLM message (post-tool or final)
             elif item.type == "message_output_item":
-                await handle_message_output_event(state, event, divider)
+                await handle_message_output_event(state, event, work)
             else:
                 msg = f"Unhandled item type: {item.type} while using tools"
                 logger.error(item.type)
                 
     return stream.to_input_list()
-
-
-def _thread_key(state_or_selection, selection=None):
-    """ONE MEMORY, ONE THREAD: agent memory keys by the SAME canonical
-    address the visible chat keys by — a bench session and its panel share
-    one mind, not a chat that remembers and a coauthor that denies."""
-    state = state_or_selection if selection is not None else None
-    sel = selection if selection is not None else state_or_selection
-    if not sel:
-        return ("home", None)
-    if state is not None:
-        try:
-            return ("conv", state.conversation_key(sel))
-        except Exception:
-            pass
-    return (sel[-1].kind.value, sel[-1].id)
 
 
 def _trim_thread(items: list, max_items: int = 80) -> list:
@@ -338,7 +272,6 @@ async def send(state: APPState):
         return
 
     # Dereference state variables
-    history = state.history
     text_input = state.user_input
     question = text_input.value
     text_input.value = ''
@@ -359,108 +292,105 @@ async def send(state: APPState):
     send_button.disable()
     state._sending = True
 
-    # THE COAUTHOR REMEMBERS: each object's conversation keeps its OWN
-    # agent thread — tool calls and results included — so the coauthor
-    # stops forgetting what it just did between turns.  A fresh object
-    # starts from the visible chat history as before.
-    threads = getattr(state, '_agent_threads', None)
-    if threads is None:
-        threads = {}
-        state._agent_threads = threads
-    tkey = _thread_key(state, state.selection)
-    if threads.get(tkey):
-        messages = _trim_thread(list(threads[tkey]))
+    # ONE MEMORY: the studio keeps a single agent thread beside the one
+    # visible conversation.  Room changes drop a hat note into it (see
+    # change_selection); a fresh studio seeds from the visible words.
+    thr = getattr(state, 'agent_thread', None)
+    if thr is None:
+        thr = []
+        state.agent_thread = thr
+    if thr:
+        messages = _trim_thread(list(thr))
     else:
-        messages = state.get_messages(role_map=ROLE_MAP)
+        messages = state.get_messages()
     messages.append({"role": "user", "content": question})
 
-    # Post the question to the message history
-    with state.history:
-        append_history('You', question, sent=True)
+    # THE DIALOG: the author's balloon, one WORK line for the whole turn,
+    # then the Editor's balloon — never a log of agent chatter
+    from gui.thread import thread_user, thread_work, begin_reply, finalize_reply
+    thread_user(state, question)
+    work, refresh_work = thread_work(state)
+    reply_entry, response_markdown = begin_reply(state)
 
-    # Create a container for internal thoughts
-        divider = ui.row().classes('w-full')
+    import itertools, random
+    verbs = itertools.cycle(random.sample([
+        'thumbnailing…', 'penciling…', 'inking…', 'coloring…',
+        'lettering…', 'checking the references…', 'flatting…'], 7))
+    import time as _time
 
-    # Initialize the UI elements for the response message handling
-        from gui.coauthor import coauthor_name
-        from gui.avatars import comic_chat_message
-        with comic_chat_message(name=coauthor_name(state.selection), sent=False).classes('w-full'):
-            with ui.column().classes('w-full'):
-                response_markdown = ui.markdown("").classes('w-full')
-                with ui.row().classes('items-center').style('gap: 8px;') as spinner:
-                    ui.spinner('dots', size="1.5em")
-                    working = ui.label('thinking…').classes('text-xs text-gray-500 italic')
-                import itertools, random
-                verbs = itertools.cycle(random.sample([
-                    'thumbnailing…', 'penciling…', 'inking…', 'coloring…',
-                    'lettering…', 'checking the references…', 'flatting…'], 7))
-                import time as _time
+    def _tick():
+        lbl = getattr(state, '_working_label', None)
+        if lbl is None:
+            return
+        if _time.monotonic() < getattr(state, '_working_pin_until', 0):
+            return          # a tool-truth phrase holds the floor
+        try:
+            lbl.set_text(next(verbs))
+        except Exception:
+            pass
+    ticker = ui.timer(2.4, _tick)
 
-                def _tick():
-                    if _time.monotonic() < getattr(state, '_working_pin_until', 0):
-                        return          # a tool-truth phrase holds the floor
-                    working.set_text(next(verbs))
-                ticker = ui.timer(2.4, _tick)
-    
-    history.scroll_to(percent=100)
-    
+    state.history.scroll_to(percent=100)
+
     # Stream the responses from the agent, updating the UI as we go —
     # and NEVER end a turn with a silent empty balloon: exhaustion and
     # failure speak plainly and offer a way to resume
-    state._working_label = working
     state._turn_receipts = []
     state._stop_requested = False
-    _reply_home = state.conversation_key(state.selection)
-    from gui.coauthor import coauthor_name as _cn
-    _reply_name = _cn(state.selection)
     _stop_btn = getattr(state, 'stop_button', None)
     if _stop_btn is not None:
         _stop_btn.set_visibility(True)
     try:
-        responses = await handle_agent_events(state, messages, response_markdown, divider)
+        responses = await handle_agent_events(state, messages, response_markdown, work, refresh_work)
         if getattr(state, '_stop_requested', False):
             # a cancelled stream usually ends CLEANLY — the stop note must
             # not depend on an exception, and never overwrite streamed text
-            stop_note = ("\n\n🛑 *Stopped at your word — the receipts above are "
-                         "what happened before the stop.  A render already on "
+            stop_note = ("\n\n🛑 *Stopped at your word — a render already on "
                          "the wire may still land on the board.*")
             response_markdown.set_content((response_markdown.content or '') + stop_note)
             _done = getattr(state, '_turn_receipts', None) or []
             _memo = ("Stopped by the author mid-turn." +
                      (("  What was done before the stop:\n" +
                        "\n".join(f"- {r}" for r in _done[:40])) if _done else ""))
-            threads[tkey] = messages + [{"role": "assistant", "content": _memo}]
+            state.agent_thread = messages + [{"role": "assistant", "content": _memo}]
+            work["_close"]("stopped")
         elif responses:
-            threads[tkey] = responses   # the thread survives to the next turn
+            state.agent_thread = responses   # the memory survives to the next turn
+            work["_close"]("done")
+        else:
+            work["_close"]("done")
         if not getattr(state, '_stop_requested', False) and not (response_markdown.content or '').strip():
             # the coauthor finished quietly — speak the work itself: our
             # tools answer in human sentences, so the receipts ARE a reply
             closing = closing_from_receipts(getattr(state, '_turn_receipts', None) or [])
             response_markdown.set_content(closing or (
-                "*(That finished without words — the receipts above are what "
-                "actually happened.  Say **go on** if there's more to do.)*"))
+                "*(That finished without words — open the worked line above "
+                "for what actually happened.  Say **go on** if there's more to do.)*"))
     except Exception as ex:
         from agents.exceptions import MaxTurnsExceeded
         if getattr(state, '_stop_requested', False):
-            note = ("🛑 Stopped at your word — the receipts above are what "
-                    "happened before the stop.  A render already on the wire "
+            note = ("🛑 Stopped at your word — a render already on the wire "
                     "may still land on the board.")
         elif isinstance(ex, MaxTurnsExceeded):
-            note = ("I ran out of steam mid-way — the receipts above are what "
-                    "actually happened; nothing beyond them was done.  Say "
+            note = ("I ran out of steam mid-way — the worked line above holds "
+                    "what actually happened; nothing beyond it was done.  Say "
                     "**go on** and I'll pick up where I left off.")
         else:
             logger.error(f"agent turn failed: {ex}")
             note = (f"That turn failed — {str(ex)[:200]}.  "
                     f"Say **try again** and I'll take another run at it.")
         response_markdown.set_content(note)
-        # the thread remembers the truth so "go on" resumes with REAL
+        # the memory remembers the truth so "go on" resumes with REAL
         # context: the receipts of every tool the failed run executed —
         # not an amnesiac note that redoes (and re-bills) the work
         _done = getattr(state, '_turn_receipts', None) or []
         _memo = note + (("\n\nWhat was already done this turn:\n"
                          + "\n".join(f"- {r}" for r in _done[:40])) if _done else "")
-        threads[tkey] = messages + [{"role": "assistant", "content": _memo}]
+        state.agent_thread = messages + [{"role": "assistant", "content": _memo}]
+        try:
+            work["_close"]("failed")
+        except Exception:
+            pass
     finally:
         state._working_label = None
         state._live_stream = None
@@ -470,28 +400,15 @@ async def send(state: APPState):
         # Now that we are done, clean up the ui and re-enable the send button
         # even if the agent run raised, so the user is never left stuck.
         ticker.cancel()
-        spinner.delete()
         send_button.enable()
         state._sending = False
-
-        # A REPLY IS NEVER SWALLOWED: if the author walked to another room
-        # mid-turn, the finished words land in the OLD room's stored thread
+        # the words on screen become the words of record — and the strip
+        # re-arms so the thread always ends with the next move
+        finalize_reply(state, reply_entry, response_markdown)
         try:
-            _now_home = state.conversation_key(state.selection)
-            if _now_home != _reply_home and (response_markdown.content or '').strip():
-                conv = state.conversations.setdefault(_reply_home, [])
-                # the walk-away archive kept the PARTIAL reply — replace it
-                # rather than stacking a duplicate under it
-                _final = response_markdown.content
-                while conv and not conv[-1].get('sent') \
-                        and conv[-1].get('name') == _reply_name \
-                        and _final.startswith((conv[-1].get('text_html') or '')[:120]):
-                    conv.pop()
-                conv.append({'name': _reply_name,
-                             'text_html': _final,
-                             'sent': False})
+            state.render_your_turn()
         except Exception as _ex:
-            logger.debug(f"re-homing the reply skipped: {_ex}")
+            logger.debug(f"your-turn refresh skipped: {_ex}")
 
     state.write()
     if state.is_dirty:

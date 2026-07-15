@@ -1070,31 +1070,11 @@ def read_board(storage, a: dict):
 # when a panel is open — the drawer IS part of the table).
 # ---------------------------------------------------------------------------
 def table_receipt(state, text: str, undo=None, bench: str = 'the light table'):
-    """A receipt panel in the chat history, spoken as the user — a paper
-    slip stamped with the bench it came from.  When `undo` is given, the
-    receipt carries an UNDO chip — destructive table actions always leave
-    a way back."""
+    """A receipt slip in the one thread — the paper trail of GUI verbs.
+    When `undo` is given the slip carries an UNDO chip (live-only)."""
     try:
-        from gui.avatars import comic_chat_message
-        with state.history:
-            with comic_chat_message(name='You', sent=True).classes('w-full'), \
-                    ui.element('div').classes('receipt-slip'):
-                if bench:
-                    ui.label(bench).classes('receipt-slip__stamp')
-                ui.markdown(text)
-                if undo is not None:
-                    btn = ui.button('Undo', icon='undo').props('outline dense size=sm').classes('q-mt-xs')
-
-                    def _run_undo(_=None, btn=btn):
-                        btn.disable()
-                        try:
-                            undo()
-                            ui.notify('Put back the way it was.', type='positive')
-                        except Exception as ex:
-                            ui.notify(f'Could not undo: {ex}', type='warning')
-                        state.refresh_details()
-                    btn.on('click', _run_undo)
-        state.history.scroll_to(percent=100)
+        from gui.thread import thread_aside
+        thread_aside(state, text, undo=undo, bench=bench)
     except Exception:
         pass
 

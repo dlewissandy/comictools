@@ -53,9 +53,6 @@ def attach_reference(state, e) -> None:
 
     locator = state.storage.upload_reference_image(obj=target, name=e.name, data=e.content, mime_type=e.type)
     kind = target.__class__.__name__.replace("Model", "").replace("Asset", "").lower()
-    with state.history:
-        with comic_chat_message(name='You', sent=True).classes('w-full'):
-            ui.markdown(f"📎 attached a reference image to this {kind}")
-            ui.image(source=locator).classes('rounded-md q-mt-xs').style('max-width: 280px;')
-    state.history.scroll_to(percent=100)
+    from gui.thread import thread_aside
+    thread_aside(state, f"📎 attached a reference image to this {kind}", image=locator)
     post_user_message(state, f"I attached a reference image for this {kind}: {locator}.  Use it as a visual reference here.")

@@ -50,10 +50,11 @@ class APPState:
         self.persist = persist
         self._url_synced = False
         self.suggestions_row = suggestions_row
-        # Per-object conversations: canonical-URL key -> serialized transcript.
-        # Navigating ARCHIVES the current thread and restores the target's —
-        # the coauthor remembers every conversation (UX critique #1).
-        self.conversations: dict[str, list] = {}
+        # THE ONE THREAD: a single conversation follows the author across
+        # every room — typed entries (user/reply/room/work/aside), the DOM
+        # rendered FROM it.  One agent memory rides beside it.
+        self.thread: list[dict] = []
+        self.agent_thread: list = []
 
         # Storage and logging must be initialized before agents
         self._storage = storage
@@ -192,46 +193,6 @@ class APPState:
         self.details.clear()
         return self.details
 
-    def get_transcript(self) -> list[TResponseInputItem]:
-        """
-        Serialize the messages from the GUI state into a list of dictionaries.
-        
-        Args:
-            state: The GUI elements containing the messages.
-        
-        Returns:
-            A list of openai messages.
-        """
-        def _get_transcript(elem: ui.element, name: str | None, sent = bool | None, indent:int= 0) -> list[dict]: 
-            name = name or elem.props.get( 'name', None)
-            sent = sent if sent is not None else elem.props.get('sent', None)
-
-            text_html = elem.props.get('text_html', None)
-            text_html = text_html if text_html is not None else elem.props.get('content', text_html)
-            text_html = text_html if text_html is not None else elem.props.get('innerHTML', text_html)
-            if text_html is not None and name is not None:
-                return [{
-                    'name': name,
-                    'text_html': text_html,
-                    'sent': sent if sent is not None else False,
-                }]
-            
-            if elem.default_slot.children is None:
-                return []
-            
-            if len(elem.default_slot.children) == 0:
-                return []
-            
-            result = []
-            for child in elem.default_slot.children:
-                result.extend(_get_transcript(child, name=name, sent=sent, indent=indent+2))
-            return result
-        
-        logger.trace("Serializing history")
-        result =  _get_transcript(self.history, None, None) 
-        logger.debug(f"Serialized history: {[{'name': msg.get('name', 'user'), 'text_html': elipsis(msg.get('text_html', ''))} for msg in result]}")
-        return result
-    
     def get_messages(self, role_map: dict[str,str] = {}) -> list[dict]:
         """
         Get the messages from the chat history in the GUI state.   This list can then be sent
@@ -244,53 +205,12 @@ class APPState:
             A list of dictionaries representing the messages in the chat history.
         """
         messages = []
-        for msg in self.get_transcript( ):
-            name = msg.get("name", "user").lower()
-            # Studio staff names (the Editor, the Penciller, ...) all speak as
-            # the assistant; only the user is "You".
-            role = role_map.get(name, "user" if name == "you" else "assistant")
-            content = msg.get("text_html", "")
-            messages.append({"role": role, "content": content})
+        for e in getattr(self, "thread", None) or []:
+            if e.get("t") == "user":
+                messages.append({"role": "user", "content": e.get("text") or ""})
+            elif e.get("t") == "reply":
+                messages.append({"role": "assistant", "content": e.get("text") or ""})
         return messages
-
-    def restore_history(self, messages: list[dict]):
-        """
-        Restore the chat history from the GUI state.
-        
-        Args:
-            state: The GUI elements containing the messages.
-        """
-        logger.trace("Restoring history")
-        logger.debug(f"Restoring history with messages: {messages}")
-        history: ui.scroll_area = self.history
-        parent_container = history
-        for message in messages:
-            if not isinstance(message, dict):
-                logger.warning(f"Skipping non-dict message: {message}")
-                continue
-
-            name = message.get('name', 'Unknown')
-            text_html = message.get('text_html', '')
-            sent = message.get('sent', False)
-
-            if name in ["Tool Call", "Tool Output"] and parent_container == history:
-                with history:
-                    parent_container = ui.expansion("Thoughts", value=False).classes('w-full').classes("text-sm")
-            elif name not in ["Tool Call", "Tool Output"] and parent_container != history:
-                parent_container = history
-
-            # add the message to the history — receipts restore as the
-            # quiet lines they were live, never a wall of avatar bubbles
-            with parent_container:
-                if name == 'the receipts':
-                    md = ui.html(text_html).classes('w-full text-sm q-px-md')
-                    md._props['name'] = 'the receipts'
-                    md._props['sent'] = False
-                else:
-                    comic_chat_message(name=name, sent=sent, text=text_html, text_html=True).classes('w-full')
-
-        # scroll to the bottom of the history
-        history.scroll_to(percent=1)
 
     def change_selection(self, new: list[SelectionItem], clear_history: bool = True):
         """
@@ -327,15 +247,29 @@ class APPState:
 
         self._selection = new
 
-        # Archive the outgoing object's conversation and restore the target's.
-        # Pickers/editors share their addressable ancestor's thread, so
-        # returning from a pick keeps the conversation naturally.
+        # THE ONE THREAD FOLLOWS THE AUTHOR: walking to another room leaves
+        # a slim scene caption in the conversation (coalescing — five silent
+        # walks leave one), and the agent memory gets a hat note so the
+        # coauthor knows whose bench it is standing at now.
         old_key = self.conversation_key(old)
         new_key = self.conversation_key(new)
         if clear_history and old_key != new_key:
-            self.conversations[old_key] = self.get_transcript()
-            self.clear_history()
-            self.restore_history(self.conversations.get(new_key, []))
+            from gui.thread import thread_room_marker
+            from gui.coauthor import coauthor_name
+            role = coauthor_name(new)
+            thread_room_marker(self, new_key,
+                               (new[-1].name if new else "the studio"), role)
+            hat = {"role": "system",
+                   "content": f"[The author walked to {new[-1].name if new else 'the studio'} "
+                              f"({new_key}).  You now stand at that bench with its tools; "
+                              f"the conversation continues.]"}
+            thr = getattr(self, "agent_thread", None)
+            if thr is not None:
+                if thr and isinstance(thr[-1], dict) and thr[-1].get("role") == "system" \
+                        and str(thr[-1].get("content", "")).startswith("[The author walked"):
+                    thr[-1] = hat          # silent walks coalesce here too
+                else:
+                    thr.append(hat)
 
         self.write()
 
@@ -412,27 +346,25 @@ class APPState:
         context-aware line, and refresh the suggestion chips above the input.
         Chips send real messages — conversation starters, not wired buttons.
         """
-        from gui.coauthor import opening_and_chips
+        from gui.coauthor import opening_and_chips, coauthor_name
         try:
             opener, chips = opening_and_chips(self)
         except Exception as e:
             logger.debug(f"coauthor refresh skipped: {e}")
             return
 
-        from gui.coauthor import coauthor_name
         role = coauthor_name(self.selection)
         try:
-            # the conversation box names who's on the other side of the table
-            self.user_input._props['placeholder'] = f"Talk to {role}…"
+            # the conversation box names the room, one voice answers
+            here = self.selection[-1].name if self.selection else "the studio"
+            self.user_input._props['placeholder'] = f"At {here} — talk to the Editor…"
             self.user_input.update()
         except Exception:
             pass
-        fresh = len(self.history.default_slot.children) == 0
-        if opener and fresh:
-            with self.history:
-                with comic_chat_message(name=role, sent=False).classes('w-full'):
-                    ui.markdown(opener)
 
+        # THE YOUR-TURN STRIP: the conversation always ends with the next
+        # move — the room's opener as a quiet line (never persisted) and
+        # a NEXT: row of chips.  It lives pinned under the history pane.
         if self.suggestions_row is not None:
             from messaging import send
             self.suggestions_row.clear()
@@ -450,10 +382,19 @@ class APPState:
                 await send(state=self)
 
             with self.suggestions_row:
-                ui.label(f"🖋 with {role}").classes('text-xs text-gray-500 italic self-center')
-                for chip in chips[:4]:
-                    ui.button(chip, on_click=lambda _, t=chip: _fire(t)) \
-                        .props('outline rounded dense no-caps size=sm')
+                with ui.column().classes('w-full').style('gap: 2px;'):
+                    if opener:
+                        ui.label(opener).classes('comic-label-sm italic') \
+                            .style('opacity: .75; white-space: normal;')
+                    with ui.row().classes('w-full items-center').style('gap: 6px;'):
+                        ui.label('NEXT:').classes('comic-label-sm').style('opacity: .6;')
+                        for chip in chips[:4]:
+                            ui.button(chip, on_click=lambda _, t=chip: _fire(t)) \
+                                .props('outline rounded dense no-caps size=sm')
+
+    def render_your_turn(self):
+        """The strip is the thread's standing last line — recompute it."""
+        self._refresh_coauthor()
 
     def _sync_url(self):
         """
@@ -591,8 +532,7 @@ class APPState:
             lock = threading.Lock()
             APPState._write_lock = lock
 
-        conversations = dict(self.conversations)
-        conversations[self.conversation_key(self.selection)] = self.get_transcript()
+        from gui.thread import persistable, merge_threads
         with lock:
             on_disk = {}
             try:
@@ -600,12 +540,13 @@ class APPState:
                     on_disk = json.load(f)
             except (OSError, ValueError):
                 pass
-            merged = dict(on_disk.get("conversations", {}))
-            merged.update(conversations)
+            merged = merge_threads(on_disk.get("thread", []),
+                                   persistable(getattr(self, "thread", None) or []))
             state_json = {
                 "selection": [item.model_dump() for item in self.selection],
-                "messages":  self.get_transcript(),   # legacy field
-                "conversations": merged,
+                "thread": merged,
+                "agent_thread": [it for it in (getattr(self, "agent_thread", None) or [])
+                                 if isinstance(it, dict)][-120:],
                 "dark_mode": self.dark_mode,
             }
             from uuid import uuid4

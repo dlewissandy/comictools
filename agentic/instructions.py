@@ -446,26 +446,6 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
             f"image: {state.image_editor_image}",
         ])
 
-    # Continuity hand-off: the child agent sees the tail of the parent
-    # object's conversation, so decisions made one level up carry down.
-    parent_context = ""
-    try:
-        conversations = getattr(state, "conversations", None)
-        conv_key = getattr(state, "conversation_key", None)
-        if conversations and conv_key and len(selection) > 1:
-            import re as _re
-            parent_msgs = conversations.get(conv_key(selection[:-1]), [])
-            tail = [m for m in parent_msgs if m.get("name") in ("You", "Bot")][-6:]
-            if tail:
-                lines = []
-                for m in tail:
-                    text = _re.sub(r"<[^>]+>", " ", m.get("text_html", ""))
-                    text = _re.sub(r"\s+", " ", text).strip()[:400]
-                    lines.append(f"* {m.get('name')}: {text}")
-                parent_context = "# RECENT DISCUSSION ON THE PARENT OBJECT (for continuity):\n" + "\n".join(lines)
-    except Exception as e:
-        logger.debug(f"parent-context handoff skipped: {e}")
-
     instructions = "\n".join([
         dedent(PERSONAS.get(agent.name, "").strip()),
         boilerplate_instructions(),
@@ -473,8 +453,7 @@ def instructions(wrapper: RunContextWrapper[APPState], agent: Agent[APPState]) -
         dedent(SELECTION_INSTRUCTIONS.format(
             wrapper=wrapper
         ).strip()),
-        details,
-        parent_context
+        details
     ])
 
     logger.debug(f"Instructions for agent {agent.name}:\n{instructions}")

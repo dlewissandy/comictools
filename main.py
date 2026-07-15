@@ -722,12 +722,18 @@ def init_layout(logger):
                 # open book sizes its pages to this pane, not the window
                 details = ui.scroll_area().classes("h-full w-full bookroom "+MIDDLE_STYLING_CLASSES).style('padding-left:12px; padding-right:12px;')
             with splitter.after:
-                history = ui.scroll_area().classes("h-full w-full "+MIDDLE_STYLING_CLASSES+" border").style('padding-left:12px; padding-right:12px;')
+                with ui.column().classes('h-full w-full').style('gap: 0;'):
+                    history = ui.scroll_area().classes("w-full "+MIDDLE_STYLING_CLASSES+" border") \
+                        .style('padding-left:12px; padding-right:12px; flex: 1; min-height: 0;')
+                    # THE YOUR-TURN STRIP: the thread's standing last line —
+                    # the room's opener and the NEXT: chips, pinned under
+                    # the conversation, never scrolled away
+                    suggestions_row = ui.row().classes('w-full') \
+                        .style('gap: 6px; min-height: 0; padding: 4px 12px;')
 
-    # Footer region has the suggestion chips and the user input field
+    # Footer region holds the user input field
     with footer:
         with ui.column().classes('w-full').style('gap: 2px;'):
-            suggestions_row = ui.row().classes('w-full').style('gap: 6px; min-height: 0;')
             input_row = ui.row().classes('w-full flex-nowrap items-center')
     if not os.getenv('OPENAI_API_KEY'):
         # VOLUNTEER THE TRUTH before the first message can fail in jargon
@@ -818,10 +824,8 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     conversations = state_data.get('conversations', {})
     if selection_override is None:
         selection = [SelectionItem(**item) for item in state_data.get('selection', DEFAULT_SELECTION)]
-        messages = None  # resolved from the conversation store below
     else:
         selection = selection_override
-        messages = None  # the object's own thread, same as the root
     dark_value = state_data.get('dark_mode', False)
     darkswitch.value = dark_value
 
@@ -855,13 +859,32 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     except Exception as _ex:
         logger.debug(f"legacy styles-thread migration skipped: {_ex}")
 
-    state.conversations = conversations
-    if messages is None:
-        # the selection's own thread; fall back to the legacy single history
-        messages = conversations.get(state.conversation_key(selection), state_data.get('messages', []))
+    # THE ONE THREAD: restore it; on first meeting an old per-room state
+    # file, flatten every conversation into the single thread (the room the
+    # author was in comes last) — after backing the old file up once.
+    from gui.thread import flatten_conversations, render_thread
+    if state_data.get('thread') is not None:
+        state.thread = list(state_data.get('thread') or [])
+    elif conversations or state_data.get('messages'):
+        bak = STATE_FILEPATH + '.pre-thread.bak'
+        try:
+            if os.path.exists(STATE_FILEPATH) and not os.path.exists(bak):
+                import shutil as _sh
+                _sh.copyfile(STATE_FILEPATH, bak)
+        except OSError as _ex:
+            logger.warning(f"pre-thread backup skipped: {_ex}")
+        convs = dict(conversations)
+        if not convs and state_data.get('messages'):
+            convs = {"/": state_data.get('messages')}
+        state.thread = flatten_conversations(
+            convs, state.conversation_key(selection), storage=state.storage)
+    else:
+        state.thread = []
+    state.agent_thread = [it for it in (state_data.get('agent_thread') or [])
+                          if isinstance(it, dict)]
 
     state.dark_mode = dark_value
-    state.restore_history(messages)
+    render_thread(state, state.thread)
     state.change_selection(selection)   # update the selection to force the redraw of the breadcrumbs
     state.refresh_details()             # Redraw the details based on the current selection
 
@@ -1105,13 +1128,10 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         if not labels:
             return
         try:
-            from gui.avatars import comic_chat_message
-            with state.history:
-                with comic_chat_message(name='the Editor', sent=False).classes('w-full'):
-                    ui.markdown("⚠️ The studio went down with work still on the drawing board:\n"
-                                + "\n".join(f"* {l}" for l in labels)
-                                + "\n\nSay the word and I'll run them again.")
-            state.history.scroll_to(percent=100)
+            from gui.thread import thread_reply
+            thread_reply(state, "⚠️ The studio went down with work still on the drawing board:\n"
+                         + "\n".join(f"* {l}" for l in labels)
+                         + "\n\nSay the word and I'll run them again.")
         except Exception as e:
             logger.debug(f"orphan-slip report skipped: {e}")
         else:
@@ -1192,10 +1212,9 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         # READ THE REPLY: the last thing the coauthor said — never the
         # author's own (usually empty) draft
         import re as _re
-        for msg in reversed(state.get_transcript()):
-            if not msg.get('sent') and msg.get('name') not in ('You', 'the receipts', 'Tool Output'):
-                text = _re.sub(r'<[^>]+>', ' ', msg.get('text_html') or '')
-                text = _re.sub(r'[#*_`>]', '', text).strip()
+        for e in reversed(getattr(state, 'thread', None) or []):
+            if e.get('t') == 'reply':
+                text = _re.sub(r'[#*_`>]', '', e.get('text') or '').strip()
                 if text:
                     await speak(text[:1200])
                     return

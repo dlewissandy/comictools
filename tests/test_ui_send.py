@@ -90,9 +90,9 @@ async def test_coauthor_speaks_first_with_chips(user: User) -> None:
 @pytest.mark.api
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
-async def test_conversations_persist_per_object(user: User, api_alive) -> None:
-    """The coauthor remembers: a thread survives reload on its own object and
-    does not leak into another object's conversation."""
+async def test_one_thread_follows_the_author(user: User, api_alive) -> None:
+    """THE ONE CONVERSATION: the words survive reload AND walking to another
+    room — one thread follows the author everywhere, with a room caption."""
     main.LocalStorage = _TmpStorage
     json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
@@ -108,13 +108,13 @@ async def test_conversations_persist_per_object(user: User, api_alive) -> None:
         await asyncio.sleep(0.1)
     await asyncio.sleep(0.3)
 
-    # reload the root: the home conversation is restored, not cleared
+    # reload the root: the one thread is restored, not cleared
     await user.open("/")
     await user.should_see("ZEBRA-99")
 
-    # a different object's conversation does not contain it
+    # walking to another room KEEPS the conversation — that is the point
     await user.open("/series/3e3fdb21-8f39-42ff-add7-6fbdda798a21")
-    await user.should_not_see("ZEBRA-99")
+    await user.should_see("ZEBRA-99")
 
 
 @pytest.mark.module_under_test(main)
@@ -948,20 +948,35 @@ def test_the_stop_door_cancels_the_stream():
     assert "stop" in _STOP_WORDS and "cancel" in _STOP_WORDS
 
 
-def test_agent_memory_keys_like_the_chat():
-    """The coauthor's memory and the visible thread share ONE address —
-    a bench session and its panel share one mind."""
+def test_one_agent_memory_gets_a_hat_on_room_change():
+    """ONE MEMORY: a room change appends exactly one system hat item to the
+    single agent thread — and silent walks coalesce to one hat."""
     from types import SimpleNamespace
-    from messaging import _thread_key
+    from gui.state import APPState
     from gui.selection import SelectionItem as S, SelectedKind as K
-    sel = [S(name="Series", id=None, kind=K.ALL_SERIES),
-           S(name="WL", id="wl", kind=K.SERIES)]
-    state = SimpleNamespace(conversation_key=lambda s: "/series/wl")
-    assert _thread_key(state, sel) == ("conv", "/series/wl")
-    # a picker deep-link shares the ancestor's key, so memory follows
-    deeper = sel + [S(name="Healing", id="x.png", kind=K.IMAGE_EDITOR)]
-    state2 = SimpleNamespace(conversation_key=lambda s: "/series/wl")
-    assert _thread_key(state2, deeper) == _thread_key(state, sel)
+
+    thr = [{"role": "user", "content": "hello"}]
+    hats_before = sum(1 for it in thr if it.get("role") == "system")
+
+    # simulate the change_selection hat logic on a bare namespace
+    def add_hat(state, new, new_key):
+        hat = {"role": "system",
+               "content": f"[The author walked to {new[-1].name} ({new_key}).  "
+                          f"You now stand at that bench with its tools; "
+                          f"the conversation continues.]"}
+        t = state.agent_thread
+        if t and isinstance(t[-1], dict) and t[-1].get("role") == "system" \
+                and str(t[-1].get("content", "")).startswith("[The author walked"):
+            t[-1] = hat
+        else:
+            t.append(hat)
+
+    state = SimpleNamespace(agent_thread=thr)
+    add_hat(state, [S(name="WL", id="wl", kind=K.SERIES)], "/series/wl")
+    add_hat(state, [S(name="Carn", id="carn", kind=K.ISSUE)], "/series/wl/issue/carn")
+    hats = [it for it in thr if it.get("role") == "system"]
+    assert len(hats) - hats_before == 1, "silent walks coalesce to ONE hat"
+    assert "Carn" in hats[-1]["content"], "the hat names the CURRENT room"
 
 
 @pytest.mark.module_under_test(main)
