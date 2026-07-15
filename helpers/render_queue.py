@@ -131,6 +131,22 @@ def enqueue_renders(state, jobs: list[tuple[str, callable]], role: str = "the Pe
     async def run():
         done, failed = 0, 0
         for i, (label, job, after) in enumerate(jobs, start=1):
+            # THE BATCH HOLDS FOR YOU: between pieces the line's HOLD
+            # waits (rework the roughs — each render reads its board
+            # FRESH at its turn), and STOP sets the rest aside
+            ctl = (_line or {}).get("_ctl") or {}
+            while ctl.get("hold") and not ctl.get("stop"):
+                await asyncio.sleep(0.4)
+            if ctl.get("stop"):
+                for skipped_label, _j, _a in jobs[i - 1:]:
+                    try:
+                        pending.remove(skipped_label)
+                    except ValueError:
+                        pass
+                    _slip_burn(slips.get(skipped_label, ""))
+                _piece(f"🛑 stopped at your word — {len(jobs) - i + 1} "
+                       f"piece{'s' if len(jobs) - i + 1 != 1 else ''} set aside")
+                break
             _piece("", current=label)
             try:
                 result = await asyncio.to_thread(job)

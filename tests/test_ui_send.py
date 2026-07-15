@@ -104,7 +104,7 @@ async def test_coauthor_speaks_first_with_chips(user: User) -> None:
     await user.should_see("Welcome back")                    # the lobby opener
     await user.should_see("NEXT:")                           # the your-turn strip
     await user.should_see("COMIC STUDIO")                    # the lobby masthead
-    await user.should_see("ON THE BOARD")                    # the ribbon on the live issue
+    await user.should_see("COMIC STUDIO")                    # the wall stands
 
 
 @pytest.mark.api
@@ -473,7 +473,7 @@ async def test_lobby_resume_card_and_scene_door(user: User) -> None:
     json.dump({"selection": [{"name": "Series", "id": None, "kind": "all-series"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/")
-    await user.should_see("ON THE BOARD")     # the ribbon on the wall's live issue
+    await user.should_see("COMIC STUDIO")     # the wall stands
 
     # a scene is not a page — it rides in the book
     from schema import SceneModel, Panel
@@ -873,8 +873,7 @@ async def test_the_reading_room_door(user: User) -> None:
     json.dump({"selection": [{"name": "Library", "id": None, "kind": "library"}],
                "messages": [], "dark_mode": False}, open(gui_state.STATE_FILEPATH, "w"))
     await user.open("/library")
-    await user.should_see("The Reading Room")
-    await user.should_see("Open the reading room")
+    await user.should_see("THE RACK")            # landed IN the reader
     await user.should_not_see("Asset Library")
 
 

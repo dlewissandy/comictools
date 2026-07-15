@@ -252,6 +252,7 @@ def thread_board_line(state, title: str, total: int):
     entry = _append(state, {"t": "work", "board": True, "title": title,
                             "status": "running", "started": time.time(),
                             "ended": None, "total": total, "receipts": []})
+    entry["_ctl"] = {"hold": False, "stop": False}
     try:
         with state.history:
             container = ui.element("div").classes("w-full")
@@ -271,6 +272,7 @@ def thread_board_line(state, title: str, total: int):
         except Exception as ex:
             logger.debug(f"board line refresh skipped: {ex}")
 
+    entry["_refresh"] = refresh
     refresh()
 
     def close(status: str = "done"):
@@ -351,20 +353,56 @@ def _render_work(state, entry, live: bool):
     status = entry.get("status")
     if live and status == "running":
         if entry.get("board"):
-            # THE BOARD LINE: one slim bar breathing in place — ▰▰▱▱▱
+            # THE BOARD LINE: one slim bar breathing in place — ▰▰▱▱▱ —
+            # with HOLD and STOP riding the line itself: hold finishes the
+            # piece in hand and waits (rework the roughs, then resume);
+            # stop sets the rest of the batch aside
             total = max(entry.get("total") or 1, 1)
             done = len(entry.get("receipts") or [])
             bar = "▰" * done + "▱" * max(total - done, 0)
+            ctl = entry.get("_ctl") or {}
+            held = bool(ctl.get("hold"))
             with ui.row().classes("w-full items-center").style("gap: 8px; padding: 0 12px;"):
-                ui.spinner("dots", size="1.2em")
-                ui.label(f"{entry.get('title') or 'the drawing board'} — {bar} "
-                         f"{min(done + 1, total)} of {total}") \
-                    .classes("text-xs text-gray-500 italic")
-                cur = entry.get("_current")
-                if cur:
-                    ui.label(cur).classes("text-xs text-gray-500") \
-                        .style("overflow: hidden; text-overflow: ellipsis; "
-                               "white-space: nowrap; max-width: 40%;")
+                if held:
+                    ui.icon("pan_tool").classes("text-sm text-amber-8")
+                    ui.label(f"{entry.get('title') or 'the drawing board'} — {bar} "
+                             f"HELD at {done} of {total} — rework away; "
+                             f"resume when ready") \
+                        .classes("text-xs text-amber-8 italic")
+                else:
+                    ui.spinner("dots", size="1.2em")
+                    ui.label(f"{entry.get('title') or 'the drawing board'} — {bar} "
+                             f"{min(done + 1, total)} of {total}") \
+                        .classes("text-xs text-gray-500 italic")
+                    cur = entry.get("_current")
+                    if cur:
+                        ui.label(cur).classes("text-xs text-gray-500") \
+                            .style("overflow: hidden; text-overflow: ellipsis; "
+                                   "white-space: nowrap; max-width: 32%;")
+                ui.space()
+                if ctl:
+                    def _toggle_hold(_=None, e=entry):
+                        c = e.get("_ctl") or {}
+                        c["hold"] = not c.get("hold")
+                        r = e.get("_refresh")
+                        if r:
+                            r()
+                    def _stop(_=None, e=entry):
+                        c = e.get("_ctl") or {}
+                        c["stop"] = True
+                        c["hold"] = False
+                        r = e.get("_refresh")
+                        if r:
+                            r()
+                    ui.button(icon="play_arrow" if held else "pan_tool") \
+                        .props("flat round dense size=xs") \
+                        .tooltip("Resume the batch" if held else
+                                 "Hold the batch — finishes the piece in hand, "
+                                 "then waits for you") \
+                        .on("click", _toggle_hold)
+                    ui.button(icon="stop").props("flat round dense size=xs") \
+                        .tooltip("Set the rest of this batch aside") \
+                        .on("click", _stop)
             return
         with ui.row().classes("w-full items-center").style("gap: 8px; padding: 0 12px;"):
             ui.spinner("dots", size="1.2em")
@@ -372,6 +410,19 @@ def _render_work(state, entry, live: bool):
             n = len(entry.get("receipts") or [])
             steps = ui.label(f"{n} step{'s' if n != 1 else ''}" if n else "") \
                 .classes("text-xs text-gray-500")
+            ui.space()
+
+            def _stop_this_turn(_=None):
+                # THE STOP RIDES THE BUBBLE: this turn, right here
+                try:
+                    from messaging import stop_turn
+                    if stop_turn(state):
+                        ui.notify("Stopping this turn now.", type="warning")
+                except Exception as ex:
+                    logger.debug(f"bubble stop skipped: {ex}")
+            ui.button(icon="stop").props("flat round dense size=xs") \
+                .tooltip("Stop this turn — the receipts stay; say go on to resume") \
+                .on("click", _stop_this_turn)
         # the life-signs ticker and tool-truth pinning write THIS label
         state._working_label = lbl
         return

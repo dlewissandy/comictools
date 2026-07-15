@@ -105,7 +105,7 @@ def test_attach_panel_reference_attaches(storage):
     import asyncio
     from agentic.tools.updater import attach_panel_reference
     wrapper = SimpleNamespace(context=SimpleNamespace(storage=storage, is_dirty=False))
-    out = asyncio.get_event_loop().run_until_complete(
+    out = asyncio.run(
         attach_panel_reference.on_invoke_tool(wrapper, json.dumps({
             "series_id": WL, "issue_id": CARN, "scene_id": panel.scene_id,
             "panel_id": panel.panel_id, "image_path": img, "relation": "left"})))

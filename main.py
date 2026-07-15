@@ -340,6 +340,7 @@ def init_layout(logger):
                         padding: 1px 6px; border: 1.5px solid var(--ink, #1a1512);
                         transform: rotate(-6deg); }
         .ghost-tile { border-style: dashed !important; background: transparent !important; }
+        .board-ribbon--pub { background: #b23a2e; color: #faf6ec; }
         /* THE TRADE DRESS on the glass: bands and badges stand OFF the art */
         .rough-dress { background: var(--paper, #faf6ec); border: 2px solid var(--ink, #1a1512);
                        box-shadow: 3px 3px 0 var(--ink, #1a1512); font-weight: 700;
@@ -1331,6 +1332,42 @@ def styles_page():
 def style_page(tail: str):
     _page_from_path('styles/' + tail)
 
+@ui.page('/read')
+def reading_room_wall():
+    """THE SPINNER RACK: every readable issue in the studio as a tile —
+    lights down, pick a book.  This is the Reading Room with no book in
+    hand; each tile opens its spread."""
+    from storage import registry as _rr
+    from schema import Series as _Ser, Publisher as _Pub, Issue as _Iss
+    ui.add_css(".spinner-rack-page { background: #211d1a !important; }")
+    ui.query('body').classes('spinner-rack-page')
+    ui.label('THE READING ROOM').classes('comic-title') \
+        .style('color: #e8e2d8; display: block; text-align: center; margin: 26px 0 4px;')
+    ui.label('pick a book').style('color: #8a8378; display: block; text-align: center; '
+                                  'font-size: 13px; margin-bottom: 18px;')
+    houses = (_rr.mounted_storages() if _rr.registered()
+              else [(None, LocalStorage(base_path="data"))])
+    any_book = False
+    with ui.row().classes('w-full justify-center').style('gap: 18px; padding: 0 6vw;'):
+        for _slug, _st in houses:
+            for _sr in sorted(_st.read_all_objects(_Ser), key=lambda x: x.name):
+                for _is in sorted(_st.read_all_objects(_Iss, {"series_id": _sr.series_id}),
+                                  key=lambda i: i.issue_number or 0):
+                    any_book = True
+                    face = _st.find_issue_image(series_id=_sr.series_id, issue_id=_is.issue_id)
+                    with ui.card().classes('cursor-pointer').style(
+                            'width: 168px; background: #2a2521; border: 1px solid #3a342e;') as tile:
+                        if face and os.path.exists(face):
+                            ui.image(source=face).style('height: 236px;').props('fit=cover')
+                        ui.label(f"{_sr.name} — № {_is.issue_number}") \
+                            .classes('text-xs text-center w-full').style('color: #e8e2d8;')
+                    tile.on('click', lambda _, s2=_sr.series_id, i2=_is.issue_id:
+                            ui.navigate.to(f'/series/{s2}/issue/{i2}/read'))
+    if not any_book:
+        ui.label('Nothing to read yet — make a comic first; it will wait here under the lamp.') \
+            .style('color: #8a8378; display: block; text-align: center; margin-top: 30px;')
+
+
 @ui.page('/series/{series_id}/issue/{issue_id}/read')
 def read_issue_page(series_id: str, issue_id: str):
     """
@@ -1393,13 +1430,18 @@ def read_issue_page(series_id: str, issue_id: str):
         ui.markdown(f"Issue `{issue_id}` not found.").style('color: #e8e2d8;')
         return
 
-    # THE RACK: a right-hand drawer listing every house's series and issues —
+    # THE RACK: a left-hand drawer listing every house's series and issues —
     # pick another book without leaving the reading room
     from storage import registry as _rr
     from schema import Series as _Ser, Publisher as _Pub
-    with ui.right_drawer(value=False, fixed=True).props('bordered overlay width=300') \
+    with ui.left_drawer(value=False, fixed=True).props('bordered overlay width=300') \
             .style('background: #2a2521; color: #e8e2d8;') as rack:
-        ui.label('THE RACK').classes('caption-box caption-box-sm')
+        with ui.row().classes('w-full items-center'):
+            ui.label('THE RACK').classes('caption-box caption-box-sm')
+            ui.space()
+            ui.button(icon='close').props('flat round dense size=sm') \
+                .style('color: #e8e2d8;') \
+                .on('click', lambda _: rack.hide())
         for _slug, _st in (_rr.mounted_storages() if _rr.registered()
                            else [(None, storage)]):
             for _p2 in _st.read_all_objects(_Pub):
@@ -1419,7 +1461,7 @@ def read_issue_page(series_id: str, issue_id: str):
                             lbl.on('click', lambda _, s2=_sr.series_id, i2=_is.issue_id:
                                    ui.navigate.to(f'/series/{s2}/issue/{i2}/read'))
     ui.button(icon='auto_stories').props('flat round') \
-        .style('position: fixed; top: 48px; right: 10px; z-index: 30; color: #e8e2d8;') \
+        .style('position: fixed; top: 48px; left: 10px; z-index: 2500; color: #e8e2d8;') \
         .tooltip('The rack — pick another book') \
         .on('click', lambda _: rack.toggle())
 

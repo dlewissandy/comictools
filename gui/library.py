@@ -57,16 +57,14 @@ def view_library(state: APPState):
             if target:
                 break
 
+    # NO LANDING PAGE: walking into the Reading Room IS opening it.
+    # With a book in hand, straight to its spread; with none anywhere,
+    # the spinner-rack wall of every readable issue (/read).
+    if target is not None:
+        ui.navigate.to(f'/series/{target[0]}/issue/{target[1]}/read')
+    else:
+        ui.navigate.to('/read')
     with state.details:
         header("The Reading Room", 0)
-        if target is None:
-            ui.label("Nothing to read yet — bind an issue first and it "
-                     "waits here under the lamp.").classes('text-sm q-mt-sm')
-            return
-        ui.label("Lights down.  The book opens full-bleed; the rack drawer "
-                 "on the right picks any other issue.").classes('text-sm q-mt-sm')
-        ui.button('Open the reading room', icon='menu_book').props('rounded size=lg') \
-            .classes('q-mt-md') \
-            .on('click', lambda _, t=target: ui.navigate.to(
-                f'/series/{t[0]}/issue/{t[1]}/read'))
+        ui.label("Lights down…").classes('text-sm q-mt-sm')
 

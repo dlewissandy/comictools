@@ -292,12 +292,18 @@ def view_lobby(state: APPState):
                                 mast = next((i for i in (ser.title_images or {}).values()
                                              if i and os.path.exists(i)), None)
                                 with ui.card().classes('soft-card p-1 cursor-pointer') \
-                                        .style('width: 210px; flex-shrink: 0;') as sc:
+                                        .style('width: 168px; flex-shrink: 0;') as sc:
+                                    # THE MASTHEAD CELL prints at 3x2, like a plate
                                     if mast:
-                                        ui.image(source=mast).style('height: 56px;').props('fit=contain')
+                                        ui.image(source=mast) \
+                                            .style('width: 100%; aspect-ratio: 3/2;') \
+                                            .props('fit=contain')
                                     else:
                                         ui.label(ser.name.upper()).classes('comic-title-sm') \
-                                            .style('font-size: 1.1rem; line-height: 1.15;')
+                                            .style('font-size: 1.05rem; line-height: 1.15; '
+                                                   'width: 100%; aspect-ratio: 3/2; display: flex; '
+                                                   'align-items: center; justify-content: center; '
+                                                   'text-align: center;')
                                 sc.tooltip(f'{ser.name} — the series room')
                                 sc.on('click', lambda _, p=pub, x=ser: _goto([
                                     SelectionItem(name=p.name, id=p.publisher_id, kind=SelectedKind.PUBLISHER),
@@ -316,13 +322,19 @@ def view_lobby(state: APPState):
                                         else:
                                             ui.label(f"№ {iss.issue_number}").classes('text-xs text-center w-full') \
                                                 .style('height: 96px; display: flex; align-items: center; justify-content: center;')
-                                        if iss.issue_id == live_issue:
-                                            ui.label('ON THE BOARD').classes('board-ribbon')
+                                        # THE BANNER SPEAKS PUBLICATION:
+                                        # a dated issue wears PUBLISHED —
+                                        # the wall is a catalog, not a desk
+                                        if iss.publication_date:
+                                            ui.label('PUBLISHED').classes('board-ribbon board-ribbon--pub')
                                     _tip = f"Issue {iss.issue_number}: {iss.name}"
-                                    if iss.issue_id == live_issue:
+                                    if iss.publication_date:
+                                        _tip += f" — published {iss.publication_date}"
+                                    elif iss.issue_id == live_issue:
                                         try:
                                             from helpers.ledger import issue_ledger
-                                            _tip += " — " + issue_ledger(st, ser.series_id, iss.issue_id).summary()
+                                            _tip += " — on the board: " + issue_ledger(
+                                                st, ser.series_id, iss.issue_id).summary()
                                         except Exception:
                                             pass
                                     ic.tooltip(_tip)
@@ -342,16 +354,19 @@ def view_lobby(state: APPState):
                                     state.user_input.__setattr__('value',
                                         f"Create the next issue of {x.name}: "),
                                     state.user_input.run_method('focus')))
-                        if not series_list:
-                            gs = ui.card().classes('soft-card p-2 cursor-pointer ghost-tile') \
-                                .style('width: 210px;')
-                            with gs:
-                                ui.label('first series…').classes('text-sm').style('opacity: .55;')
-                            gs.tooltip(f'Found the first series of {pub.name}')
-                            gs.on('click', lambda _, p=pub: (
-                                state.user_input.__setattr__('value',
-                                    f"Create a new series for {p.name}: "),
-                                state.user_input.run_method('focus')))
+                        # every house column ends in the new-series door
+                        gs = ui.card().classes('soft-card p-1 cursor-pointer ghost-tile') \
+                            .style('width: 168px;')
+                        with gs:
+                            ui.label('+ new series' if series_list else '+ first series') \
+                                .classes('text-sm') \
+                                .style('width: 100%; aspect-ratio: 3/2; display: flex; '
+                                       'align-items: center; justify-content: center; opacity: .55;')
+                        gs.tooltip(f'Start a new series at {pub.name}')
+                        gs.on('click', lambda _, p=pub: (
+                            state.user_input.__setattr__('value',
+                                f"Create a new series for {p.name}: "),
+                            state.user_input.run_method('focus')))
 
             # the wall closes with the founding door
             gh = ui.card().classes('soft-card p-2 cursor-pointer ghost-tile').style('width: 128px;')
