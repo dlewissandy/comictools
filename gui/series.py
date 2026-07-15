@@ -72,13 +72,6 @@ def view_series(state: APPState):
         mosaic = ui.element('div').classes('comic-mosaic cspan-12')
         mosaic.__enter__()
 
-        # Description callout — a text panel takes only the size its text needs.
-        desc = series.description or ""
-        desc_rows = max(2, min(6, 1 + (len(desc) + 269) // 270))
-        with packer.place_cell([(10, desc_rows)], fudge=False):
-            with ui.card().classes(TAILWIND_CARD + ' mosaic-card').style('overflow-y: auto;'):
-                markdown_field_editor(state, "Description", series.description)
-
         # THE TITLE ART: the series masthead, hand-lettered per style — the
         # reference every cover's title lettering is held to.  Ghost cards
         # letter the styles the series' issues use but don't have art for.
@@ -199,6 +192,13 @@ def view_series(state: APPState):
                                 .props('flat dense no-caps size=sm') \
                                 .tooltip('Lay it out in layers on the mark bench') \
                                 .on('click', lambda _, st=st: open_mark_bench(st))
+        # Description callout — a text panel takes only the size its text needs.
+        desc = series.description or ""
+        desc_rows = max(2, min(6, 1 + (len(desc) + 269) // 270))
+        with packer.place_cell([(10, desc_rows)], fudge=False):
+            with ui.card().classes(TAILWIND_CARD + ' mosaic-card').style('overflow-y: auto;'):
+                markdown_field_editor(state, "Description", series.description)
+
         # THE ISSUES HANG ON THE STUDIO WALL — the series room keeps only
         # what the series OWNS: its masthead and its reusable assets.
 
