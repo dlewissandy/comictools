@@ -97,25 +97,10 @@ def view_publisher(state: APPState):
         # and a button to save the changes
         markdown_field_editor(state, "Description", publisher.description)
 
-        # THE PUBLISHER'S LIST: its series, as panels.  Navigation to a series
-        # runs through its publisher.
-        from gui.elements import caption_action, comic_page, CrudButtonKind as _CK
-        from schema import Series
+        # THE HOUSE ROOM IS THE HOUSE'S OWN THINGS — description, logo,
+        # styles.  Its series hang on the studio wall (one home per door).
+        from gui.elements import caption_action, CrudButtonKind as _CK
         from gui.elements import PagePacker
-        packer = PagePacker(12)
-        with ui.element('div').classes('mosaic-host'), ui.element('div').classes('comic-mosaic w-full'):
-            view_all_instances(
-                state=state,
-                get_instances=lambda: [s for s in storage.read_all_objects(Series, order_by="name")
-                                       if s.publisher_id == publisher_id],
-                get_image_locator=lambda x: storage.find_series_image(series_id=x.series_id),
-                kind="series",
-                aspect_ratio="16/27",
-                packer=packer, variants=[(2, 3), (4, 6)],
-                overlap_caption=lambda: caption_action("Series", _CK.CREATE,
-                    lambda _: post_user_message(state, "I would like to create a new comic book series published by this publisher."), 3)
-            )
-            packer.finalize()
 
         # THE STYLE RACK: the house's styles — its OWN copies, edit them to
         # your heart's content.  Nothing outside this repo is ever used.
@@ -142,15 +127,25 @@ def view_publisher(state: APPState):
             )
             style_packer.finalize()
 
-        # Below that we have a full width row for editing the description of the
-        # publisher's logo
+        # THE LOGO'S DOORS, like any asset: the current mark large with its
+        # heal/rework tools, then describe (the pencil), render, or upload
+        from gui.elements import art_tools
+        if publisher.image and os.path.exists(publisher.image):
+            with ui.card().classes('soft-card p-2 relative').style('max-width: 320px;'):
+                ui.image(source=publisher.image).style('max-height: 160px;').props('fit=contain')
+                art_tools(state, publisher.image,
+                          on_reink=lambda: post_user_message(
+                              state, "Render a new logo for this publisher from its description."),
+                          reink_tip='Re-ink the logo from its description',
+                          heal_name=f'the {publisher.name} logo')
+
         with view_attributes(
             state=state, 
             caption="Logo",
             attributes=[
                 Attribute(caption="description", get_value=lambda: publisher.logo)
             ], 
-            expanded=False, 
+            expanded=True, 
             individual_icons = False,
             header_size = 2
             ):

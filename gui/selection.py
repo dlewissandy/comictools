@@ -111,6 +111,8 @@ def selection_to_context(
                 accum["image_id"] = id
                 context.append((ReferenceImage, {k:v for k, v in accum.items()}))
             
+            case SelectedKind.LOBBY.value:
+                continue
             case SelectedKind.ALL_PUBLISHERS.value: 
                 continue
             case SelectedKind.ALL_SERIES.value:
@@ -124,8 +126,11 @@ def selection_to_context(
             case SelectedKind.IMAGE_EDITOR_CHOICES.value:
                 continue
             case _:
-
-                raise ValueError(f"Unknown selection kind: {kind.value}")
+                # pickers, benches and future rooms carry no storage context
+                # of their own — they must NEVER kill an agent turn
+                from loguru import logger
+                logger.debug(f"selection_to_context: no context for kind {kind.value}")
+                continue
     return context
 
 

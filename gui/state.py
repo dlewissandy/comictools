@@ -569,7 +569,14 @@ def breadcrumb_selector(state: APPState):
         for label, kind in rooms:
             here = selection[0].kind == kind
             item = ui.item(("✓ " if here else "") + label)
-            if not here:
+            if here:
+                continue
+            if kind == SelectedKind.LIBRARY:
+                # the Reading Room is another SPACE — lights down, no chat —
+                # so it opens in its own tab and the studio stays put
+                item.on_click(lambda _: ui.run_javascript(
+                    "window.open('/library', '_blank');"))
+            else:
                 item.on_click(lambda _, k=kind, l=label: state.change_selection(
                     new=[SelectionItem(kind=k, name=l, id=None)]))
 

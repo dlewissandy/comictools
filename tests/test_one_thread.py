@@ -224,3 +224,15 @@ def test_the_conversation_is_the_modal():
     except Exception:
         pass   # it fell through toward the real agent path — that's the point
     assert ran == [] and st._input_intercept is None
+
+
+def test_every_selection_kind_walks_the_context():
+    """EVERY kind must pass through selection_to_context without raising —
+    the 'Unknown selection kind: lobby' failure class dies here."""
+    from gui.selection import SelectedKind, SelectionItem, selection_to_context
+    for kind in SelectedKind:
+        sel = [SelectionItem(name="x", id="some-id", kind=kind)]
+        try:
+            selection_to_context(sel)
+        except ValueError as ex:
+            raise AssertionError(f"{kind.value} raises: {ex}")

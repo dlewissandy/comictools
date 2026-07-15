@@ -276,10 +276,24 @@ def view_lobby(state: APPState):
                 with ui.row().classes('w-full flex-nowrap items-start').style('gap: 10px;'):
                     # THE HOUSE CELL: the logo, spanning its series rows
                     logo = house_logo(pub)
-                    with ui.card().classes('soft-card p-2 cursor-pointer') \
+                    with ui.card().classes('soft-card p-2 cursor-pointer relative') \
                             .style('width: 128px; flex-shrink: 0;') as hc:
                         if logo and os.path.exists(logo):
                             ui.image(source=logo).style('height: 84px;').props('fit=contain')
+                        else:
+                            # NO MARK YET: the wall itself offers the brush
+                            def _ink_logo(_=None, p=pub):
+                                _goto([SelectionItem(name=p.name, id=p.publisher_id,
+                                                     kind=SelectedKind.PUBLISHER)])
+                                state.user_input.value = f"Design the {p.name} logo: "
+                                try:
+                                    state.user_input.run_method('focus')
+                                except Exception:
+                                    pass
+                            ui.button(icon='brush').props('flat round dense size=sm') \
+                                .classes('absolute top-1 right-1 z-10') \
+                                .tooltip('No logo yet — describe one and the house gets its mark') \
+                                .on('click.stop', _ink_logo)
                         ui.label(pub.name.title()).classes('text-xs text-center w-full text-bold')
                     hc.tooltip(f"The {pub.name} house — its room holds the series wall and the style rack")
                     hc.on('click', lambda _, p=pub: _goto([
@@ -291,7 +305,7 @@ def view_lobby(state: APPState):
                                 # THE SERIES CELL: the masthead wordmark
                                 mast = next((i for i in (ser.title_images or {}).values()
                                              if i and os.path.exists(i)), None)
-                                with ui.card().classes('soft-card p-1 cursor-pointer') \
+                                with ui.card().classes('soft-card p-1 cursor-pointer relative') \
                                         .style('width: 168px; flex-shrink: 0;') as sc:
                                     # THE MASTHEAD CELL prints at 3x2, like a plate
                                     if mast:
@@ -299,6 +313,22 @@ def view_lobby(state: APPState):
                                             .style('width: 100%; aspect-ratio: 3/2;') \
                                             .props('fit=contain')
                                     else:
+                                        def _ink_mast(_=None, p=pub, x=ser):
+                                            _goto([
+                                                SelectionItem(name=p.name, id=p.publisher_id,
+                                                              kind=SelectedKind.PUBLISHER),
+                                                SelectionItem(name=x.name, id=x.series_id,
+                                                              kind=SelectedKind.SERIES)])
+                                            state.user_input.value = (
+                                                f"Letter the {x.name} masthead: ")
+                                            try:
+                                                state.user_input.run_method('focus')
+                                            except Exception:
+                                                pass
+                                        ui.button(icon='brush').props('flat round dense size=xs') \
+                                            .classes('absolute top-1 right-1 z-10') \
+                                            .tooltip('No masthead yet — describe the lettering') \
+                                            .on('click.stop', _ink_mast)
                                         ui.label(ser.name.upper()).classes('comic-title-sm') \
                                             .style('font-size: 1.05rem; line-height: 1.15; '
                                                    'width: 100%; aspect-ratio: 3/2; display: flex; '
@@ -359,9 +389,7 @@ def view_lobby(state: APPState):
                             .style('width: 168px;')
                         with gs:
                             ui.label('+ new series' if series_list else '+ first series') \
-                                .classes('text-sm') \
-                                .style('width: 100%; aspect-ratio: 3/2; display: flex; '
-                                       'align-items: center; justify-content: center; opacity: .55;')
+                                .classes('text-sm text-center w-full').style('opacity: .55;')
                         gs.tooltip(f'Start a new series at {pub.name}')
                         gs.on('click', lambda _, p=pub: (
                             state.user_input.__setattr__('value',

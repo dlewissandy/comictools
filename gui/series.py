@@ -79,20 +79,6 @@ def view_series(state: APPState):
             with ui.card().classes(TAILWIND_CARD + ' mosaic-card').style('overflow-y: auto;'):
                 markdown_field_editor(state, "Description", series.description)
 
-        # THE PUBLISHER'S MARK: series BELONG to their house — the mark is
-        # worn, never picked (the whole repo IS the publisher).  Shown only
-        # when the house has a logo; clicking walks up to the house.
-        pub_image = pub.image if pub else None
-        if pub_image and os.path.exists(pub_image):
-            with packer.place_cell([(2, 2)], fudge=False):
-                with ui.card().classes(TAILWIND_CARD + ' mosaic-card cursor-pointer') as pub_card:
-                    header("Publisher", 4)
-                    ui.image(source=pub_image)
-                pub_card.tooltip(f"Published by {pub.name} — open the house")
-                pub_card.on('click', lambda _: state.change_selection(new=[
-                    SelectionItem(name='Publishers', id=None, kind=SelectedKind.ALL_PUBLISHERS),
-                    SelectionItem(name=pub.name, id=pub.publisher_id, kind=SelectedKind.PUBLISHER)]))
-
         # THE TITLE ART: the series masthead, hand-lettered per style — the
         # reference every cover's title lettering is held to.  Ghost cards
         # letter the styles the series' issues use but don't have art for.
@@ -100,27 +86,51 @@ def view_series(state: APPState):
         from gui.elements import HEADER_CLASSES
 
         def ink_title(st):
-            # THE LETTERER TAKES DIRECTION: name the look before the render
+            # THE CONVERSATION IS THE MODAL: the lettering direction is
+            # typed in the box; Enter sends it straight to the Letterer
             from agentic.tools.imaging import generate_series_title_art_body
             from helpers.render_queue import enqueue_renders
-            with ui.dialog() as dlg, ui.card().classes('soft-card').style('min-width: 420px;'):
-                ui.label(f'Letter the masthead in {st.name.title()}').classes('caption-box caption-box-sm')
-                notes = ui.input(placeholder="lettering direction — 'circus poster woodtype', "
-                                             "'drippy horror letters', 'chrome sci-fi'…") \
-                    .props('outlined dense').classes('w-full q-mt-sm')
+            prefix = f"Letter the {series.name} masthead in {st.name}: "
 
-                def go():
+            def _go(direction, st=st):
+                enqueue_renders(state, [(
+                    f"title art — {series.name} in {st.name}",
+                    lambda n=direction: generate_series_title_art_body(
+                        state, series.series_id, st.style_id, n),
+                )], role='the Letterer')
+            state.user_input.value = prefix
+            state._input_intercept = (prefix, _go, None)
+            try:
+                state.user_input.run_method('focus')
+            except Exception:
+                pass
+            ui.notify("Describe the lettering — 'circus poster woodtype', 'drippy "
+                      "horror letters'…  (Enter alone lets the style decide.)",
+                      type='info', position='bottom', timeout=4000)
+
+        def masthead_from_image(st):
+            # FROM A REFERENCE IMAGE: the wordmark you drop BECOMES the
+            # masthead for that style — the same door every asset has
+            from gui.elements import studio_dialog
+            with studio_dialog(f'A wordmark for {st.name.title()}', min_w=420) as dlg:
+                ui.label('Drop the lettering image — it becomes the masthead '
+                         'this style holds covers to.').classes('text-sm q-mt-sm')
+
+                def on_upload(e, st=st):
+                    locator = storage.upload_image(obj=series, name=e.name,
+                                                   data=e.content, mime_type=e.type)
+                    fresh = storage.read_object(cls=Series,
+                                                primary_key={"series_id": series.series_id}) or series
+                    fresh.title_images = dict(fresh.title_images or {})
+                    fresh.title_images[st.style_id] = locator
+                    storage.update_object(fresh)
                     dlg.close()
-                    ui.notify(f"Lettering the {series.name.title()} masthead in {st.name.title()} — "
-                              f"it lands here when it's done.", type='info')
-                    enqueue_renders(state, [(
-                        f"title art — {series.name} in {st.name}",
-                        lambda n=(notes.value or '').strip() or None:
-                            generate_series_title_art_body(state, series.series_id, st.style_id, n),
-                    )], role='the Letterer')
-                with ui.row().classes('w-full justify-end q-mt-sm'):
-                    ui.button('Letter it', icon='brush').props('unelevated dense no-caps') \
-                        .on('click', lambda _: go())
+                    from gui.light_table import table_receipt
+                    table_receipt(state, f"🖼 the {st.name} masthead now wears your wordmark",
+                                  bench='the series room')
+                    state.refresh_details()
+                ui.upload(on_upload=on_upload, auto_upload=True).props('accept=image/*') \
+                    .classes('w-full q-mt-sm')
             dlg.open()
 
         titled = {sid: img for sid, img in (getattr(series, 'title_images', {}) or {}).items()
@@ -145,39 +155,26 @@ def view_series(state: APPState):
                                   on_reink=lambda st=st: ink_title(st),
                                   reink_tip='Re-letter the masthead — with fresh direction',
                                   heal_name=f'{series.name} masthead')
+                        ui.button(icon='add_photo_alternate').props('flat round dense size=xs') \
+                            .classes('absolute bottom-1 left-1 z-10 bg-white/70 dark:bg-black/50') \
+                            .tooltip('Swap in a wordmark image instead') \
+                            .on('click', lambda _, st=st: masthead_from_image(st))
                     else:
                         art = st.image.get('art') if isinstance(st.image, dict) else st.image
                         if art and os.path.exists(art):
                             ui.image(source=art).props('fit=contain').style('top-padding: 0; bottom-padding:0;')
-                        with ui.column().classes('absolute inset-0 items-center justify-center z-10'):
+                        with ui.column().classes('absolute inset-0 items-center justify-center z-10') \
+                                .style('gap: 6px;'):
                             ui.button(f'Letter it in {st.name.title()}', icon='brush') \
                                 .props('unelevated dense no-caps size=sm') \
-                                .tooltip('Letter the series masthead in this style') \
+                                .tooltip('Describe the lettering — the Letterer inks it') \
                                 .on('click', lambda _, st=st: ink_title(st))
-        if True:
-            def _issue_label(_i, issue):
-                from schema import SceneModel, Panel
-                done = total = 0
-                for sc in storage.read_all_objects(SceneModel, {"series_id": series.series_id, "issue_id": issue.issue_id}):
-                    for p in storage.read_all_objects(Panel, {"series_id": series.series_id, "issue_id": issue.issue_id, "scene_id": sc.scene_id}):
-                        total += 1
-                        if p.image and os.path.exists(p.image):
-                            done += 1
-                pulse = f"  ·  {done}/{total} 🎨" if total else "  ·  no panels"
-                return f"{issue.name}{pulse}"
-
-            view_all_instances(
-                state=state, 
-                get_instances=lambda: storage.read_all_objects(Issue, primary_key={"series_id": series.series_id}, order_by="issue_number"), 
-                get_image_locator=lambda x: storage.find_issue_image(series_id=series.series_id, issue_id=x.issue_id),
-                kind="issue",
-                get_name=_issue_label,
-                aspect_ratio="16/27",
-                # 4x6 preferred: a 4x6 cover shares its bottom rule with THREE
-                # 3x2 character rows exactly (span 6 = three span-2s + gutters)
-                packer=packer, variants=[(4, 6), (2, 3)],
-                overlap_caption=_cap("Issues", "I would like to create a new issue")
-                ).style('margin-top: 0px; margin-bottom: 0px')
+                            ui.button('From a wordmark image', icon='add_photo_alternate') \
+                                .props('flat dense no-caps size=sm') \
+                                .tooltip('Drop lettering art — it becomes this masthead') \
+                                .on('click', lambda _, st=st: masthead_from_image(st))
+        # THE ISSUES HANG ON THE STUDIO WALL — the series room keeps only
+        # what the series OWNS: its masthead and its reusable assets.
 
         # A cardwall for viewing and adding characters to the comic series.
         characters = storage.read_all_objects(CharacterModel, primary_key={"series_id": series.series_id})

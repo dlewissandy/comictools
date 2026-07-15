@@ -1568,7 +1568,8 @@ def read_issue_page(series_id: str, issue_id: str):
     </script>""")
     with ui.row().classes('w-full items-center flex-nowrap').style(
             'padding: 14px 20px 0; gap: 14px; position: relative; z-index: 25;'):
-        ui.label(f"{issue.name}").classes('text-2xl font-bold').style('color: #e8e2d8;')
+        ui.label(f"{issue.name}").classes('text-2xl font-bold') \
+            .style('color: #e8e2d8; margin-left: 52px;')   # clears the rack button
         # take the book with you: the bound exports, one click each
         exports_dir = os.path.join(str(storage.base_path), 'series', series_id, 'issues', issue_id, 'exports')
         import glob as _glob
