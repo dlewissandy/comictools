@@ -4,7 +4,6 @@ import json
 from loguru import logger
 from loguru._defaults import LOGURU_FORMAT
 from nicegui import ui, app
-from gui.speech import init_speech_support, start_listening, stop_listening, speak, cancel_speech
 from gui.state import APPState, STATE_FILEPATH, set_dark_mode
 from dotenv import load_dotenv
 from gui.selection import SelectionItem, SelectedKind
@@ -767,16 +766,9 @@ def init_layout(logger):
         user_input = ui.textarea(placeholder=placeholder) \
             .props('rounded outlined autogrow input-class=mx-3 '
                    'input-style="max-height: 160px; overflow-y: auto"') \
-            .classes('w-full self-center stt-input').style('flex-grow: 1; width: 100vh;') \
+            .classes('w-full self-center').style('flex-grow: 1; width: 100vh;') \
             .mark('conversation')
 
-        attach_upload = ui.upload(auto_upload=True, max_files=1).props('accept=image/*').classes('hidden')
-        attach_button = ui.button(icon='attach_file').props('flat round').classes('q-ml-sm').tooltip('Attach a reference image to what you are working on')
-        attach_button.on('click', lambda _: attach_upload.run_method('pickFiles'))
-        mic_button = ui.button(icon='mic').props('flat round').classes('q-ml-sm').tooltip('Dictate')
-        stop_mic_button = ui.button(icon='mic_off').props('flat round').tooltip('Stop dictating')
-        speak_button = ui.button(icon='volume_up').props('flat round').tooltip('Read aloud')
-        stop_speak_button = ui.button(icon='volume_off').props('flat round').tooltip('Mute')
         send_button = ui.button('Send', icon='send').props('rounded unelevated').classes('q-ml-sm')
 
         # THE STOP DOOR: visible only while a turn runs — one click ends it
@@ -792,12 +784,7 @@ def init_layout(logger):
         send_button,
         stop_button,
         suggestions_row,
-        attach_upload,
         darkswitch,
-        mic_button,
-        stop_mic_button,
-        speak_button,
-        stop_speak_button,
     )
 
 
@@ -822,12 +809,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
         send_button,
         stop_button,
         suggestions_row,
-        attach_upload,
         darkswitch,
-        mic_button,
-        stop_mic_button,
-        speak_button,
-        stop_speak_button,
     ) = init_layout(logger)
 
     # READ THE STATE DATA FROM FILE
@@ -928,12 +910,9 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     state.refresh_details()             # Redraw the details based on the current selection
 
     # The command palette: Cmd/Ctrl-K jumps to any object by name.
+    # (no header button — the author's call; the shortcut is the door)
     from gui.palette import build_palette
     open_palette = build_palette(state)
-    with breadcrumbs.parent_slot.parent:
-        palette_btn = ui.button(icon='search', on_click=lambda _: open_palette()) \
-            .props('flat round').tooltip('Jump to anything (Ctrl/Cmd-K)')
-    palette_btn.move(breadcrumbs.parent_slot.parent, target_index=1)
     ui.keyboard(on_key=lambda e: open_palette()
                 if e.key.name in ('k', 'K') and (e.modifiers.ctrl or e.modifiers.meta) and e.action.keydown and not e.action.repeat
                 else None, ignore=[])
@@ -1090,37 +1069,8 @@ def build_page(selection_override: list[SelectionItem] | None = None):
             .tooltip('The wastebasket — everything struck, ready to bring back') \
             .on('click', lambda _: open_wastebasket())
 
-        # THE DAYBOOK: the chat is the conversation — what HAPPENED lives
-        # here: every receipt of the day, newest first, undo and all
-        def open_daybook():
-            import time as _time
-            from gui.thread import _render_aside
-            asides = [e for e in (getattr(state, 'thread', None) or [])
-                      if e.get('t') == 'aside']
-            undos = getattr(state, '_daybook_undos', None) or {}
-            from gui.elements import studio_dialog
-            with studio_dialog('The daybook', min_w=520, max_w=760, scroll=True) as dlg:
-                ui.label("Everything the studio did at your hand — the conversation "
-                         "stays a conversation; the receipts live here.") \
-                    .classes('text-xs text-gray-500')
-                if not asides:
-                    ui.label('A clean page — nothing done yet today.').classes('text-sm q-mt-sm')
-                with ui.element('div').classes('w-full q-mt-sm'):
-                    now = _time.time()
-                    for e in reversed(asides[-80:]):
-                        age = now - (e.get('ts') or now)
-                        stamp = (f"{int(age // 3600)}h ago" if age >= 3600
-                                 else f"{int(age // 60)}m ago" if age >= 60 else "just now")
-                        with ui.row().classes('w-full items-start').style('gap: 8px; flex-wrap: nowrap;'):
-                            ui.label(stamp).classes('text-xs text-gray-500') \
-                                .style('width: 64px; flex-shrink: 0; margin-top: 10px;')
-                            with ui.column().classes('w-full').style('gap: 0;'):
-                                _render_aside(state, e, undo=undos.get(e.get('id')))
-            dlg.open()
-
-        daybook_btn = ui.button(icon='receipt_long').props('flat round dense') \
-            .tooltip("The daybook — today's receipts, every undo") \
-            .on('click', lambda _: open_daybook())
+        # (the daybook door is gone — the author's call; receipts persist
+        # in the thread and surface as quiet toasts)
 
         # THE SPEND METER: renders cost real money — the header tells the
         # truth quietly (today's count and a rough dollar estimate)
@@ -1233,9 +1183,6 @@ def build_page(selection_override: list[SelectionItem] | None = None):
     # Browser back/forward re-resolves the selection from the URL.
     ui.add_body_html("<script>window.addEventListener('popstate', () => location.reload());</script>")
 
-    # Enable browser speech capabilities
-    init_speech_support()
-
     # ENABLE THE EVENT HANDLERS
     darkswitch.bind_value_to(state, "dark_mode")
     # Enter sends only when it stands ALONE — Shift+Enter writes a newline
@@ -1250,34 +1197,8 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                                        and ui.notify('Stopping — receipts stay, nothing more happens.',
                                                      type='warning')))
 
-    from gui.messaging import attach_reference
-    attach_upload.on_upload(lambda e: attach_reference(state, e))
-
-    async def _listen(_=None):
-        # the mic shows it's LISTENING — not a dead button until the
-        # transcript pops in
-        mic_button.props('color=negative')
-        mic_button.icon = 'graphic_eq'
-        try:
-            await start_listening(user_input)
-        finally:
-            mic_button.props(remove='color=negative')
-            mic_button.icon = 'mic'
-    mic_button.on('click', _listen)
-    stop_mic_button.on('click', lambda _: stop_listening())
-    async def _speak_last_reply(_=None):
-        # READ THE REPLY: the last thing the coauthor said — never the
-        # author's own (usually empty) draft
-        import re as _re
-        for e in reversed(getattr(state, 'thread', None) or []):
-            if e.get('t') == 'reply':
-                text = _re.sub(r'[#*_`>]', '', e.get('text') or '').strip()
-                if text:
-                    await speak(text[:1200])
-                    return
-        ui.notify('Nothing to read yet — the coauthor hasn\'t spoken.', type='info')
-    speak_button.on('click', _speak_last_reply)
-    stop_speak_button.on('click', lambda _: cancel_speech())
+    # (the paperclip, mic and read-aloud controls are gone — the author's
+    # call; images land by drag/drop or paste, words by typing)
 
 
 # ---------------------------------------------------------

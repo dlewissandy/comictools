@@ -130,3 +130,20 @@ def test_wardrobe_swap_knows_inserts(storage):
     character room resolves insert hosts like panels and covers."""
     src = open("gui/character.py").read()
     assert '"insert"' in src and "insert_id" in src
+
+
+def test_the_header_and_box_stay_quiet():
+    """Author rulings (2026-07-15): no daybook door, no open-in-new, no
+    header search button, no paperclip/mic/read-aloud — the conversation
+    box is for words; images arrive by drop or paste."""
+    import os as _os
+    main_src = open("main.py").read()
+    for gone in ("open_daybook", "daybook_btn", "attach_file", "attach_upload",
+                 "mic_button", "speak_button", "init_speech_support",
+                 "palette_btn"):
+        assert gone not in main_src, f"'{gone}' should be gone from main.py"
+    assert not _os.path.exists("gui/speech.py"), "speech support is retired"
+    assert "open_in_new" not in open("gui/state.py").read(), \
+        "the open-in-new-window button is gone"
+    # the palette still stands behind Ctrl/Cmd-K
+    assert "ui.keyboard" in main_src and "build_palette" in main_src

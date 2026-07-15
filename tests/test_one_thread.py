@@ -98,8 +98,7 @@ def test_render_thread_keeps_the_chat_pure(user=None):
     # the projection logic itself: asides are skipped, work folds into reply
     import gui.thread as th
     rendered = []
-    orig_aside, orig_work = th._render_aside, th._render_work
-    th._render_aside = lambda *a, **k: rendered.append("aside")
+    orig_work = th._render_work
     th._render_work = lambda s, e, live: rendered.append(f"work-{e['id']}")
     try:
         from types import SimpleNamespace
@@ -123,11 +122,11 @@ def test_render_thread_keeps_the_chat_pure(user=None):
         av.comic_chat_message = lambda **k: th.ui.element("div")
         th._render_entries(SimpleNamespace(history=None), entries)
     finally:
-        th._render_aside, th._render_work = orig_aside, orig_work
+        th._render_work = orig_work
         th.ui = orig_ui
         av.comic_chat_message = orig_ccm
-    assert "aside" not in rendered, "asides never render in the chat"
-    assert "work-3" in rendered, "the turn's work folds into the reply balloon"
+    assert rendered == ["work-3"], \
+        "asides never render in the chat; the turn's work folds into the reply balloon"
 
 
 def test_begin_turn_orders_work_before_reply():

@@ -102,29 +102,18 @@ def thread_reply(state, text: str) -> dict:
 
 def thread_aside(state, text: str, *, undo=None, bench: str | None = None,
                  image: str | None = None) -> dict:
-    """A receipt in THE DAYBOOK — the chat is the conversation; what
-    HAPPENED lives behind the daybook door.  UNDO rides the live entry
-    (never persisted); a quiet toast points at the daybook."""
+    """A receipt of studio work: it persists in the thread and surfaces as
+    a quiet toast — the chat stays a conversation.  (The daybook door is
+    gone — the author's call.  `undo` is still accepted from callers; the
+    wastebasket remains the bring-it-back surface.)"""
     entry = _append(state, {"t": "aside", "text": text, "bench": bench,
                             "image": image})
-    if undo is not None:
-        undos = getattr(state, "_daybook_undos", None)
-        if undos is None:
-            undos = {}
-            state._daybook_undos = undos
-        undos[entry["id"]] = undo
     try:
         import re as _re
         plain = _re.sub(r"[*_`#]", "", text)
         ui.notify(plain[:120], type="info", position="bottom-right", timeout=2500)
     except Exception:
         pass
-    try:
-        refresh = getattr(state, "_daybook_refresh", None)
-        if refresh is not None:
-            refresh()
-    except Exception as ex:
-        logger.debug(f"daybook refresh skipped: {ex}")
     return entry
 
 
@@ -454,34 +443,9 @@ def _render_work(state, entry, live: bool):
                         .props("fit=contain").classes("q-pl-md q-my-xs")
 
 
-def _render_aside(state, entry, undo=None):
-    from gui.avatars import comic_chat_message
-    with comic_chat_message(name="You", sent=True).classes("w-full"), \
-            ui.element("div").classes("receipt-slip"):
-        if entry.get("bench"):
-            ui.label(entry["bench"]).classes("receipt-slip__stamp")
-        ui.markdown(entry.get("text") or "")
-        img = entry.get("image")
-        if img and os.path.exists(img):
-            ui.image(source=img).style("max-height: 80px; max-width: 120px;").props("fit=contain")
-        if undo is not None:
-            btn = ui.button("Undo", icon="undo").props("outline dense size=sm").classes("q-mt-xs")
-
-            def _run_undo(_=None, btn=btn):
-                btn.disable()
-                try:
-                    undo()
-                    ui.notify("Put back the way it was.", type="positive")
-                except Exception as ex:
-                    ui.notify(f"Could not undo: {ex}", type="warning")
-                state.refresh_details()
-            btn.on("click", _run_undo)
-
-
 def render_thread(state, entries: list[dict] | None = None, limit: int = 60):
     """Project the whole thread into the history pane (reload, new window).
     The last `limit` entries render; the rest wait behind 'earlier pages…'."""
-    from gui.avatars import comic_chat_message
     entries = entries if entries is not None else (getattr(state, "thread", None) or [])
     state.history.clear()
     older, recent = entries[:-limit] if len(entries) > limit else [], entries[-limit:]

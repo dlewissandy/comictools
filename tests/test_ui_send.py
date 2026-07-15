@@ -214,18 +214,29 @@ async def test_palette_and_chip_removal(user: User) -> None:
             chips[0]._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
     await user.should_see("removed")          # the ✂️ receipt in chat
 
-    # palette: open via the search button and find the tent by name
+    # THE HEADER STAYS QUIET (the author's ruling): no search button —
+    # Ctrl/Cmd-K is the palette's one door, and it still opens and finds
     search_btns = [e for e in user.client.elements.values()
                    if e.__class__.__name__ == "Button" and getattr(e, "props", {}).get("icon") == "search"]
-    assert search_btns, "palette button exists"
-    btn = search_btns[0]
-    for ev in btn._event_listeners.values():
-        if ev.type == "click":
-            btn._handle_event({"handler_id": ev.id, "listener_id": ev.id, "args": {}})
+    assert not search_btns, "the header search button is gone"
+    # the palette itself still stands behind the shortcut: its input (built
+    # at page build, hidden until opened) is present and functional
     palette_inputs = [e for e in user.client.elements.values()
-                      if e.__class__.__name__ == "Input" and "Jump to anything" in str(getattr(e, "props", {}).get("placeholder", ""))]
-    assert palette_inputs, "palette input exists"
-    palette_inputs[-1].set_value("fortune")
+                      if e.__class__.__name__ == "Input" and "Jump to anything"
+                      in str(getattr(e, "props", {}).get("placeholder", ""))]
+    assert palette_inputs, "the Ctrl-K palette is still built"
+    pal_input = palette_inputs[-1]
+    # press the shortcut: Ctrl-K through the page's keyboard element opens
+    # the palette (building its entries), exactly as a hand on keys would
+    from types import SimpleNamespace as _NS
+    kbs = [e for e in user.client.elements.values()
+           if e.__class__.__name__ == "Keyboard"]
+    assert kbs, "the Ctrl-K keyboard hook stands"
+    kbs[-1]._handle_key(_NS(args={
+        'action': 'keydown', 'repeat': False, 'altKey': False,
+        'ctrlKey': True, 'metaKey': False, 'shiftKey': False,
+        'key': 'k', 'code': 'KeyK', 'location': 0}))
+    pal_input.set_value("fortune")
     await user.should_see("setting · Wonders of the Witchlight")
 
 

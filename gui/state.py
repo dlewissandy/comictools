@@ -285,10 +285,6 @@ class APPState:
                 new_sel = self.selection[:i+2]
                 ui.button(item.name).props('rounded').on_click(lambda _, new_sel=new_sel: self.change_selection(new=new_sel))
             ui.space()
-            ui.button(icon='open_in_new') \
-                .props('flat round dense') \
-                .tooltip('Open this view in a new window') \
-                .on('click', lambda _: ui.run_javascript("window.open(window.location.href, '_blank');"))
 
         self.refresh_details()
         self._sync_url()
