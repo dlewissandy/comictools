@@ -411,7 +411,7 @@ def view_issue(state: APPState):
                 _el = insert_sheet(_loc_ins)
                 if _el is not None and location == 'inside-back':
                     _el.classes('book-col-1')
-                return True
+                return _el
         c = cover_at.get(location)
         # THE AUTHOR'S IMPOSITION: front+inside-front open the book as a
         # pair; inside-back+back close it — inside-back pins to column 1
@@ -430,6 +430,7 @@ def view_issue(state: APPState):
             sh.tooltip(f"The {location.replace('-', ' ')} cover — open its light table")
             sh.on('click', lambda _: goto(SelectedKind.COVER, c.cover_id, f"{location} cover",
                                           anchor=f'cover-{location}'))
+            return sh
         else:
             # EVERY SLOT GETS A DOOR — the inside covers too (they were
             # invisible: no way anywhere to create one)
@@ -443,6 +444,7 @@ def view_issue(state: APPState):
                 sh.tooltip('Every book needs one')
                 sh.on('click', lambda _, loc=location: post_user_message(
                     state, f"I would like to create a {loc} cover for this issue."))
+                return sh
             else:
                 # AN INSIDE SLOT offers both of its real lives: cover art,
                 # or a full-page insert (an ad, the mailbag) living there
@@ -460,7 +462,7 @@ def view_issue(state: APPState):
                             ui.menu_item(f'{lbl} here',
                                          on_click=lambda *_, k=k, loc=location:
                                          _make_insert(k, location=loc)).props('dense')
-            return True
+            return sh
 
     def footer_btn(icon, tip, handler):
         ui.button(icon=icon).props('flat round dense size=sm').tooltip(tip) \
@@ -598,16 +600,20 @@ def view_issue(state: APPState):
         receipt(f"📄 laid a bare {kind} page {where} — click it to compose")
         state.refresh_details()
 
-    def insert_door(after_n: int):
-        """THE PAGE TURN'S DOOR (the author's ruling: full pages belong to
-        inserts, never to the panel flow).  ZERO REAL ESTATE: a small
-        transparent round + riding the gutter between sheets — the same
-        hand as the panel-tool glyphs — not a slip that costs a row."""
-        with ui.element('div').classes('book-turn-seam'):
+    def insert_door(after_n: int, host=None):
+        """THE PAGE TURN'S DOOR (full pages belong to inserts, never the
+        panel flow).  It rides ON the preceding sheet — a small transparent
+        + at the page's bottom edge — so the grid never sees it and the
+        two-up pairing cannot shift (the seam-div approach broke pairing
+        twice: first as a cell, then as a full row)."""
+        if host is None:
+            return
+        with host:
             btn = ui.button(icon='add').props('flat round dense size=xs') \
                 .classes('book-turn-btn bg-white/70 dark:bg-black/50') \
-                .tooltip('A full page at this turn — poster, ad, pin-up, '
+                .tooltip('A full page after this one — poster, ad, pin-up, '
                          'or the mailbag')
+            btn.on('click.stop', lambda *_: None)
             with btn:
                 with ui.menu().props('auto-close'):
                     for k, lbl in _INSERT_KINDS:
@@ -865,11 +871,11 @@ def view_issue(state: APPState):
             if folio is not None:
                 ui.label(str(folio)).classes('page-folio')
         sh._props['data-banchor'] = f'scene-{sc.scene_id}'
-
+        return sh
     def slip_sheet(scs):
         """MANUSCRIPT SLIPS: a run of bare scenes clipped to one sheet as
         working paper — each slip carries its own cap, words and tools."""
-        with ui.element('div').classes('book-page book-page--script book-page--slips'):
+        with ui.element('div').classes('book-page book-page--script book-page--slips') as sh:
             for sc in scs:
                 text = sc.story or ''
                 wc = len(text.split())
@@ -918,7 +924,7 @@ def view_issue(state: APPState):
                         footer_btn('close', 'Tear this scene out…',
                                    lambda _, s=sc: post_user_message(
                                        state, f"I would like to delete scene '{s.name}'."))
-
+        return sh
     def open_layout_dialog(ordered_panel_ids):
         """THE LAYOUT SWATCH BOOK: every exact-fill layout for this page's
         panel count, as printer's swatches — pick one and the panels take
@@ -1074,7 +1080,7 @@ def view_issue(state: APPState):
             # the light board — just like BEATS and ROUGHS.  The bound spreads
             # live behind the 'Read' button.
             cover_sheet('front')
-            cover_sheet('inside-front')
+            _if_sheet = cover_sheet('inside-front')
 
             # THE STORIES: the issue's own script, then the backups, in order.
             # Once a story has been expanded into scenes it steps back — the
@@ -1099,17 +1105,18 @@ def view_issue(state: APPState):
                 if getattr(ins, 'location', None):
                     continue
                 inserts_by_anchor.setdefault(ins.after_scene_number, []).append(ins)
+            _door_host = _if_sheet if hasattr(_if_sheet, 'classes') else None
             for ins in inserts_by_anchor.get(0, []):
-                insert_sheet(ins)
-            insert_door(0)
+                _door_host = insert_sheet(ins)
+            insert_door(0, host=_door_host)
 
             if detail == 'scenes':
                 # every scene as a manuscript page, in order, inserts slotted in
                 for sc in scenes_all:
-                    scene_sheet(sc)
+                    _h = scene_sheet(sc)
                     for ins in inserts_by_anchor.get(sc.scene_number, []):
-                        insert_sheet(ins)
-                    insert_door(sc.scene_number)
+                        _h = insert_sheet(ins)
+                    insert_door(sc.scene_number, host=_h)
             elif detail in ('beats', 'roughs', 'proofs'):
                 # THE BOOK FLOWS CONTINUOUSLY: beats pack across page turns the
                 # way text reflows across lines — turning, resizing, or moving
@@ -1237,11 +1244,11 @@ def view_issue(state: APPState):
                     elif kind == 'slips':
                         # bare scenes hold their place but don't PRINT —
                         # no folio, so screen and book agree on page numbers
-                        slip_sheet(seg)
+                        _last_sheet = slip_sheet(seg)
                     elif kind == 'turn-door':
-                        insert_door(seg)
+                        insert_door(seg, host=_last_sheet)
                     else:
-                        insert_sheet(seg)
+                        _last_sheet = insert_sheet(seg)
 
             # inserts whose anchor no longer matches a scene must never
             # vanish out of reach — they wait at the back of the book

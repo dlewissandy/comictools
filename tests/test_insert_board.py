@@ -83,8 +83,10 @@ def test_the_book_offers_the_page_turn_door():
     and the inside-cover ghosts offer both lives (cover art, or an ad/
     mailbag insert living there)."""
     src = open("gui/issue.py").read()
-    assert "def insert_door(" in src and "book-turn-seam" in src
+    assert "def insert_door(" in src and "book-turn-btn" in src
     assert src.count("insert_door(") >= 4, "the door rides both altitudes"
+    assert "host=" in src.split("def insert_door", 1)[1][:400], \
+        "the door rides its HOST sheet, never the grid"
     assert "_make_insert(k, location=loc)" in src, \
         "inside slots offer the insert kinds"
     lt = open("gui/light_table.py").read()

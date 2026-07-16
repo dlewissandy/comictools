@@ -435,15 +435,11 @@ def init_layout(logger):
         .book-page .text-gray-500 { color: #6b7280 !important; }
         .book-col-1 { grid-column: 1; }
         .book-page--ghost-faint { opacity: .55; }
-        /* THE PAGE TURN'S DOOR: zero real estate — a small round + riding
-           the gutter between sheets; quiet until the hand comes near.
-           The seam SPANS the row (never a grid cell, which would shift the
-           verso/recto pairing) at zero height. */
-        .book-turn-seam { position: relative; grid-column: 1 / -1;
-                          width: 100%; height: 0;
-                          overflow: visible; z-index: 12; }
-        .book-turn-btn { position: absolute; left: 50%;
-                         transform: translate(-50%, -50%);
+        /* THE PAGE TURN'S DOOR: a small round + resting at the bottom
+           edge of the sheet it follows — never a grid element, so the
+           two-up pairing can never shift */
+        .book-turn-btn { position: absolute; left: 50%; bottom: 4px;
+                         transform: translateX(-50%); z-index: 12;
                          opacity: .35; transition: opacity .15s; }
         .book-turn-btn:hover { opacity: 1; }
         .book-page--ghost { border: 2px dashed var(--ink); background: transparent;
