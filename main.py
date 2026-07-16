@@ -436,8 +436,11 @@ def init_layout(logger):
         .book-page--recto { grid-column: 2; }
         .book-page--ghost-faint { opacity: .55; }
         /* THE PAGE TURN'S DOOR: zero real estate — a small round + riding
-           the gutter between sheets; quiet until the hand comes near */
-        .book-turn-seam { position: relative; width: 100%; height: 0;
+           the gutter between sheets; quiet until the hand comes near.
+           The seam SPANS the row (never a grid cell, which would shift the
+           verso/recto pairing) at zero height. */
+        .book-turn-seam { position: relative; grid-column: 1 / -1;
+                          width: 100%; height: 0;
                           overflow: visible; z-index: 12; }
         .book-turn-btn { position: absolute; left: 50%;
                          transform: translate(-50%, -50%);
