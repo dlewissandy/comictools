@@ -119,8 +119,11 @@ def mount_all() -> list[dict]:
 def _migrate_prose_once(slug: str, target: str) -> None:
     """Move a house's inline JSON prose into .md sidecars (idempotent).
     A marker in .git/ skips the walk on later boots; markerless houses
-    (bare dirs, git-file worktrees) just re-walk — the walk converges."""
-    marker = os.path.join(target, ".git", "comic-prose-v1")
+    (bare dirs, git-file worktrees) just re-walk — the walk converges.
+    v2 widened the map (asset canon: publisher/series/setting/character
+    descriptions, the logo brief, variant looks, props, outfits, scene
+    blocking), so v1-marked houses re-walk once and re-stamp."""
+    marker = os.path.join(target, ".git", "comic-prose-v2")
     if os.path.isfile(marker):
         return
     from storage.local import migrate_house_prose
@@ -131,6 +134,9 @@ def _migrate_prose_once(slug: str, target: str) -> None:
         if os.path.isdir(os.path.dirname(marker)):
             with open(marker, "w") as f:
                 f.write("1\n")
+            stale = os.path.join(target, ".git", "comic-prose-v1")
+            if os.path.isfile(stale):
+                os.remove(stale)
     except Exception as ex:
         logger.warning(f"{slug}: prose migration skipped: {ex}")
 

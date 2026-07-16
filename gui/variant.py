@@ -244,23 +244,33 @@ def view_character_variant(state:APPState):
                 for cap, val in _identity:
                     with ui.row().classes('w-full items-baseline').style('gap: 8px;'):
                         ui.label(cap).classes('comic-label-sm').style('min-width: 150px;')
-                        ui.label(str(val or '—')).classes('text-sm')
+                        if cap in ("Physical Appearance", "Behavior") and val:
+                            # canon prose reads as prose, not one flat line
+                            ui.markdown(str(val)).classes('text-sm markdown-content') \
+                                .style('flex: 1; min-width: 200px;')
+                        else:
+                            ui.label(str(val or '—')).classes('text-sm')
 
         _look_attrs = [Attribute(caption="What sets this look apart",
-                                 get_value=lambda: variant.description)]
+                                 get_value=lambda: variant.description, markdown=True)]
         if not variant.outfit_id:
             # a dressed look wears its OUTFIT's description; only an
             # outfit-less look edits attire directly here
-            _look_attrs.append(Attribute(caption="Attire", get_value=lambda: variant.attire))
+            _look_attrs.append(Attribute(caption="Attire", get_value=lambda: variant.attire,
+                                         markdown=True))
         if is_base:
-            _look_attrs = [Attribute(caption="General Description", get_value=lambda: variant.description),
+            _look_attrs = [Attribute(caption="General Description", get_value=lambda: variant.description,
+                                     markdown=True),
                            Attribute(caption="Race", get_value=lambda: variant.race),
                            Attribute(caption="Gender", get_value=lambda: variant.gender),
                            Attribute(caption="Age", get_value=lambda: variant.age),
                            Attribute(caption="Height", get_value=lambda: variant.height),
-                           Attribute(caption="Physical Appearance", get_value=lambda: variant.appearance),
-                           Attribute(caption="Attire", get_value=lambda: variant.attire),
-                           Attribute(caption="Behavior", get_value=lambda: variant.behavior)]
+                           Attribute(caption="Physical Appearance", get_value=lambda: variant.appearance,
+                                     markdown=True),
+                           Attribute(caption="Attire", get_value=lambda: variant.attire,
+                                     markdown=True),
+                           Attribute(caption="Behavior", get_value=lambda: variant.behavior,
+                                     markdown=True)]
 
         with view_attributes(state, caption=("The identity" if is_base else "This look"),
                              attributes=_look_attrs,

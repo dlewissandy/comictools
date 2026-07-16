@@ -58,6 +58,11 @@ def tmp_data():
     # basket would escape the sandbox into the real tree
     shutil.copytree(fixture_source(), os.path.join(tmp, "data"),
                     ignore=shutil.ignore_patterns(".trash"))
+    # a mounted house is ALWAYS migrated (mount_all walks it at boot) — the
+    # copy gets the same walk, so tests see production state even when the
+    # live house predates the newest prose ruling
+    from storage.local import migrate_house_prose
+    migrate_house_prose(os.path.join(tmp, "data"))
     yield os.path.join(tmp, "data")
     shutil.rmtree(tmp, ignore_errors=True)
 

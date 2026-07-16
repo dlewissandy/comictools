@@ -109,6 +109,45 @@ def test_migration_walks_the_wastebasket(tmp_path):
     assert json.load(open(os.path.join(d, "scene.json")))["story"] == ""
 
 
+def test_asset_canon_rides_sidecars_too(storage, tmp_data):
+    """v2 of the ruling: publisher/series/setting/character descriptions,
+    the logo brief, variant looks, props and outfits are prose like any
+    manuscript — and a never-begun optional brief stays None, so the UI
+    keeps offering 'add' rather than 'edit'."""
+    from schema import Publisher
+    pub = Publisher(publisher_id="foglamp-press", name="Foglamp Press",
+                    description="Small, warm stories from the edge of the map.",
+                    logo=None, image=None)
+    storage.create_object(pub, overwrite=True)
+
+    pub_dir = os.path.join(tmp_data, "publishers", "foglamp-press")
+    assert open(os.path.join(pub_dir, "description.md")).read() == pub.description
+    raw = json.load(open(os.path.join(pub_dir, "publisher.json")))
+    assert raw["description"] == "" and raw["logo"] is None, \
+        "'' marks moved words; null marks a brief never begun"
+    back = storage.read_object(Publisher, {"publisher_id": "foglamp-press"})
+    assert back.description == pub.description
+    assert back.logo is None
+
+
+def test_migration_covers_the_asset_canon(tmp_path):
+    from storage.local import migrate_house_prose
+    house = str(tmp_path / "house")
+    d = os.path.join(house, "publishers", "old-press")
+    os.makedirs(d)
+    with open(os.path.join(d, "publisher.json"), "w") as f:
+        json.dump({"publisher_id": "old-press", "name": "Old Press",
+                   "description": "Founded before the ruling.",
+                   "logo": "An owl pressing type, two colors.", "image": None},
+                  f, indent=2)
+
+    assert migrate_house_prose(house) == 1
+    assert open(os.path.join(d, "description.md")).read() == "Founded before the ruling."
+    assert open(os.path.join(d, "logo.md")).read() == "An owl pressing type, two colors."
+    raw = json.load(open(os.path.join(d, "publisher.json")))
+    assert raw["description"] == "" and raw["logo"] == ""
+
+
 def test_migration_zeroes_whitespace_only_prose_without_a_sidecar(tmp_path):
     from storage.local import migrate_house_prose
     house = str(tmp_path / "house")

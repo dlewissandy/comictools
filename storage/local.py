@@ -36,19 +36,30 @@ _WRITE_LOCK = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # THE PROSE LIVES IN MARKDOWN (the author's ruling): long-form text — the
-# scripts, scene manuscripts and render briefs — is stored as a sidecar
-# .md file beside the object's JSON, so external editors and git diffs see
-# prose, never escaped strings.  The JSON keeps the key as "" (a
-# placeholder); the sidecar is the ONLY source on read — no dual reads.
+# scripts, scene manuscripts, render briefs and asset canon — is stored as
+# a sidecar .md file beside the object's JSON, so external editors and git
+# diffs see prose, never escaped strings.  The JSON keeps the key as ""
+# (or null for an optional brief never begun); the sidecar is the ONLY
+# source of words on read — no dual reads.  Structured specs (style
+# definitions, shot lists nested inside setting.json) and one-line labels
+# (names, beats) stay in the record.
 # ---------------------------------------------------------------------------
 SIDECAR_FIELDS: dict[str, dict[str, str]] = {
-    "Issue":      {"story": "story.md"},
-    "Story":      {"text": "story.md"},
-    "SceneModel": {"story": "scene.md"},
-    "Panel":      {"description": "brief.md"},
-    "Cover":      {"description": "brief.md"},
-    "Insert":     {"description": "brief.md"},
-    "ArtBoard":   {"description": "brief.md"},
+    "Issue":            {"story": "story.md"},
+    "Story":            {"text": "story.md"},
+    "SceneModel":       {"story": "scene.md", "blocking": "blocking.md"},
+    "Panel":            {"description": "brief.md"},
+    "Cover":            {"description": "brief.md"},
+    "Insert":           {"description": "brief.md"},
+    "ArtBoard":         {"description": "brief.md"},
+    "Publisher":        {"description": "description.md", "logo": "logo.md"},
+    "Series":           {"description": "description.md"},
+    "Setting":          {"description": "description.md"},
+    "CharacterModel":   {"description": "description.md"},
+    "CharacterVariant": {"description": "description.md", "appearance": "appearance.md",
+                         "attire": "attire.md", "behavior": "behavior.md"},
+    "PropAsset":        {"description": "description.md"},
+    "Outfit":           {"description": "description.md"},
 }
 
 
@@ -60,7 +71,8 @@ def _write_sidecars(cls_name: str, obj_dir: str, payload: dict, base_path: str) 
     if not fields:
         return payload
     for field, fname in fields.items():
-        text = payload.get(field) or ""
+        raw = payload.get(field)
+        text = raw or ""
         path = os.path.join(obj_dir, fname)
         if text.strip():
             tmp = f"{path}.{uuid4().hex[:8]}.tmp"
@@ -69,12 +81,16 @@ def _write_sidecars(cls_name: str, obj_dir: str, payload: dict, base_path: str) 
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, path)
-        elif os.path.exists(path):
-            # emptied words are still words — they wait in the wastebasket
-            from storage.trash import soft_delete
-            soft_delete(str(base_path), path,
-                        note=f"the emptied {fname} of a {cls_name.lower()}")
-        payload[field] = ""
+            payload[field] = ""
+        else:
+            if os.path.exists(path):
+                # emptied words are still words — they wait in the wastebasket
+                from storage.trash import soft_delete
+                soft_delete(str(base_path), path,
+                            note=f"the emptied {fname} of a {cls_name.lower()}")
+            # a never-begun optional brief stays None (the UI offers 'add',
+            # not 'edit'); written-then-emptied keeps the '' placeholder
+            payload[field] = None if raw is None else ""
     return payload
 
 
@@ -92,7 +108,10 @@ def _read_sidecars(cls_name: str, obj_dir: str, payload: dict) -> dict:
             with open(path, encoding="utf-8") as f:
                 payload[field] = f.read()
         else:
-            payload[field] = ""
+            # no words; only the JSON's null-ness passes through (it is
+            # structure, not prose — it keeps optional briefs offering
+            # 'add' rather than 'edit')
+            payload[field] = None if payload.get(field) is None else ""
     return payload
 
 
@@ -117,7 +136,11 @@ def migrate_house_prose(base_path: str) -> int:
     NAME_TO_CLS = {"issue.json": "Issue", "story.json": "Story",
                    "scene.json": "SceneModel", "panel.json": "Panel",
                    "cover.json": "Cover", "insert.json": "Insert",
-                   "artboard.json": "ArtBoard"}
+                   "artboard.json": "ArtBoard", "publisher.json": "Publisher",
+                   "series.json": "Series", "setting.json": "Setting",
+                   "character.json": "CharacterModel",
+                   "variant.json": "CharacterVariant",
+                   "prop.json": "PropAsset", "outfit.json": "Outfit"}
     moved = 0
     base_path = str(base_path)
     for root, dirs, files in os.walk(base_path, followlinks=False):

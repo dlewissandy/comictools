@@ -91,17 +91,24 @@ One JSON file per object, with a fixed basename per class: `publisher.json`,
 `artboard.json`, `insert.json`, `panel.json`, `styled_variant.json`.
 
 **Prose lives in markdown, not JSON.** Long-form text is stored as a `.md` sidecar
-beside the object's JSON — `story.md` for an issue's script and a story's text,
-`scene.md` for a scene's manuscript, `brief.md` for the render brief of a panel, cover,
-insert, or artboard (the map is `SIDECAR_FIELDS` in `storage/local.py`). The JSON keeps
-the field as `""`; on read the sidecar is the ONLY source (a missing sidecar reads as
-empty), and on write the field leaves the payload for its sidecar — same atomic
-tmp-fsync-replace discipline, UTF-8. Emptying a prose field retires its sidecar to the
-wastebasket. This is the single supported way of storing prose: external editors and git
-diffs see manuscripts as manuscripts. A one-time idempotent migration
-(`migrate_house_prose`) runs when a house is mounted or adopted, converting any
-pre-ruling inline prose — including wastebasket payloads, so old deletes restore
-correctly — and stamps `.git/comic-prose-v1` so later boots skip the walk.
+beside the object's JSON (the map is `SIDECAR_FIELDS` in `storage/local.py`):
+`story.md` for an issue's script and a story's text; `scene.md` and `blocking.md` for a
+scene's manuscript and blocking notes; `brief.md` for the render brief of a panel,
+cover, insert, or artboard (mastheads and logos as marks); `description.md` for the
+canon of a publisher, series, setting, character, prop, or outfit; `logo.md` for the
+publisher's logo brief; and `description.md`/`appearance.md`/`attire.md`/`behavior.md`
+for a character variant's look. One-line labels (names, panel beats) and structured
+specs (style definitions, the shot lists nested inside `setting.json`) stay in the
+record. The JSON keeps the field as `""` (or `null` for an optional brief never begun);
+on read the sidecar is the ONLY source of words (a missing sidecar reads as empty), and
+on write the field leaves the payload for its sidecar — same atomic tmp-fsync-replace
+discipline, UTF-8. Emptying a prose field retires its sidecar to the wastebasket. This
+is the single supported way of storing prose: external editors and git diffs see
+manuscripts as manuscripts. A one-time idempotent migration (`migrate_house_prose`)
+runs when a house is mounted or adopted, converting any pre-ruling inline prose —
+including wastebasket payloads, so old deletes restore correctly — and stamps
+`.git/comic-prose-v2` so later boots skip the walk (v1-stamped houses re-walk once for
+the widened map).
 
 Generated art lands in an `images/` subfolder per object. `StyledVariant` images are
 style-keyed at `variants/{variant_id}/images/{style_id}`. Reference uploads land in an

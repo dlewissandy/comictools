@@ -166,11 +166,12 @@ def header(text: str, level: int = 1) -> None:
         raise ValueError("Header level must be between 0 and 5.")
      return ui.label(text).classes(HEADER_CLASSES[level]).style('margin-top: 0px; margin-bottom: 0px')
 
-def markdown(body: str) -> None:
+def markdown(body: str) -> ui.markdown:
     """Markdown content that wraps properly — the stylesheet rides in
-    main.py's one head include, not a per-call injection."""
+    main.py's one head include, not a per-call injection.  Returns the
+    markdown element so callers can chain .classes()/.style()."""
     with ui.element().classes('w-full q-pa-md'):
-        ui.markdown(body).classes('w-full markdown-content')
+        return ui.markdown(body).classes('w-full markdown-content')
 
 
 def full_width_image_selector_grid(
@@ -551,6 +552,7 @@ class Attribute(TypedDict, total=False):
     caption: str
     get_value: str | Callable
     set_value: Callable  # optional: enables inline editing of scalar fields
+    markdown: bool  # optional: prose renders as markdown, not a flat label
 
 
 def view_attributes(state: APPState, caption: str, attributes: list[Attribute], expanded: bool=False, individual_icons: bool = True, header_size: int=1):
@@ -582,7 +584,11 @@ def view_attributes(state: APPState, caption: str, attributes: list[Attribute], 
                     if value is None:
                         value = ""
                     setter = attr.get("set_value")
-                    if setter is None:
+                    if attr.get("markdown"):
+                        # prose reads as prose — canon and briefs render
+                        # their markdown instead of collapsing to one line
+                        markdown(value) if value else ui.label('—')
+                    elif setter is None:
                         ui.label(value)
                     else:
                         _inline_editable(state, attr_name, str(value), setter)

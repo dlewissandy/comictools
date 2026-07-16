@@ -152,7 +152,7 @@ To write, click the sheet's edit control. Editing in this studio does not open a
 
 Scripts longer than 200 words never scroll on the sheet — they clamp with a fade and a *"continues — open to read"* chip that opens the full text.
 
-Your words are markdown, and the sheets render them that way — headings, emphasis, and lists all print properly on the manuscript pages. On disk they live as plain `.md` files beside each object in the house repository (`story.md` for scripts and stories, `scene.md` for scene manuscripts, `brief.md` for render briefs), so you can write in any editor you love, and git diffs of your house read like a manuscript, not escaped JSON.
+Your words are markdown, and the sheets render them that way — headings, emphasis, and lists all print properly on the manuscript pages. On disk they live as plain `.md` files beside each object in the house repository: `story.md` for scripts and stories, `scene.md` for scene manuscripts, `brief.md` for render briefs (panels, covers, inserts, mastheads and logos), and `description.md` and friends for the canon of your publisher, series, settings, characters, wardrobe and props. Write in any editor you love — git diffs of your house read like a manuscript, not escaped JSON.
 
 Each story sheet ends in a foot chip that matches where the story stands:
 
