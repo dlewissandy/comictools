@@ -1,13 +1,13 @@
-Render a multi-angle character model of Rugor using the following information:
+Render a multi-angle character model of Edda Lumen using the following information:
 
 # Character Brief
-* **Name**: Rugor
-* **Race**: Troll
+* **Name**: Edda Lumen
+* **Race**: Human
 * **Gender**: Female
-* **Description**: Rugor is a fierce troll warrior, known for her strength and combat prowess. She is a protector of her tribe and a skilled fighter, often seen wielding a massive pole arm. Rugor is deeply connected to her heritage and the ancient traditions of her people.
-* **Attire**: Rugor wears a rugged suit of dark, weathered armor adorned with intricate carvings of ancient runes and tribal patterns. The armor is a mix of metal and hardened leather, providing both protection and flexibility. She has a heavy leather belt with various pouches and a sheath for her pole arm. Her boots are reinforced, reaching up to her knees, and are made from tough, scuffed leather.
-* **Behavior**: Rugor has a fierce, determined demeanor, often seen with a confident stance and an intense gaze. She's quick to react and exudes a sense of strength and resilience.
-* **Appearance**: Rugor has a robust, muscular build typical of her troll heritage, standing tall with broad shoulders. Her skin is a deep green with hints of gray, featuring intricate tribal tattoos that snake along her arms and across her chest. She has long, wild black hair tied back in a braid, with strands framing her face. Her tusks protrude prominently from her lower jaw, and her eyes are a piercing yellow, radiating intensity.
+* **Description**: Edda Lumen keeps the last staffed lighthouse on the Gannet Shoals and prints the town's only newspaper, The Lighthouse Post, on the lamp room's old press. Weather-wise and word-wise, she reads fog the way other people read headlines.
+* **Attire**: A thick cream cable-knit fisherman's sweater with the sleeves pushed to the elbows, dark waxed-canvas trousers, and a printer's apron faintly stained with ink. Tall rubber sea boots folded down at the top. For the gallery walk she throws on a heavy oilskin coat the color of storm water. A small brass lamp-lens pendant hangs at her neck; fingerless wool gloves; a folding type-stick rides in the apron's right pocket.
+* **Behavior**: Steady and economical in motion, with a proofreader's squint and a habit of standing exactly where the light falls. Quick, dry humor; slow to alarm; hands always faintly ink-smudged.
+* **Appearance**: A wiry woman in her early sixties, weathered tan skin with laugh lines and wind-chapped cheeks, sharp gray eyes, and silver hair braided and coiled at the nape of her neck with a pencil stuck through the coil. Small round brass-rimmed spectacles, usually pushed up onto her forehead. Average height, straight-backed, with strong forearms from working the press.
 
 # Artistic Style
 {style_description}
@@ -26,10 +26,10 @@ Render a multi-angle character model of Rugor using the following information:
     - Face closeup view - fear
     - face closeup view - sadness
     - face closeup view - surprise
-    - THE IMAGE LABEL: "Rugor"
+    - THE IMAGE LABEL: "Edda Lumen"
 * The facial closeup images should be BELOW the character model images, and
   should not overlap with the character model images.
-* ensure consistent appearance (color, accessories, clothing, weapons, physical
+* ensure consistent appearance (color, accessories, clothing, physical
   features, etc) across all views.  Pay special attention to the facial closeup
   images, ensuring that the characters facial features (eyes, eye color, ears,
-  teeth/tusks, hair, mouth, nose, etc) are consistent across all images.
+  teeth, hair, mouth, nose, etc) are consistent across all images.
