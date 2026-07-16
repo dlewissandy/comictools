@@ -16,24 +16,46 @@ _FIXTURE_SOURCE: str | None = None
 
 def fixture_source() -> str:
     """The test fixture is the DND NERDS house — pinned by slug and
-    resolved ONCE at collection time, BEFORE the registry sandbox blinds
-    the rack (data/ itself holds only mounts under mount-all)."""
+    resolved ONCE, while the real registry is still visible, then stashed
+    on the (shared) registry module.  pytest imports this file twice —
+    as 'conftest' and as 'tests.conftest' — with separate globals, and
+    the second copy loads AFTER the fence below blinds the rack; the
+    stash hands it the pin the first copy took."""
     global _FIXTURE_SOURCE
     if _FIXTURE_SOURCE is None:
+        from storage import registry
+        pinned = getattr(registry, "_TEST_FIXTURE_PIN", None)
+        if pinned:
+            _FIXTURE_SOURCE = pinned
+            return _FIXTURE_SOURCE
         _FIXTURE_SOURCE = os.path.join(REPO, "data")
         try:
-            from storage import registry
             for pub in registry.registered():
                 if pub["slug"] == "dnd-nerds-comics":
                     _FIXTURE_SOURCE = pub["path"]
                     break
         except Exception:
             pass
+        registry._TEST_FIXTURE_PIN = _FIXTURE_SOURCE
     return _FIXTURE_SOURCE
 
 
 # pin the source now, while the real registry is still visible
 fixture_source()
+
+# THE FENCE: from here on, no code in a test process can see the real
+# rack.  Collection itself imports app modules (test_ui_send imports
+# main, whose import runs mount_all — which mounts and MIGRATES every
+# registered house); with the registry blinded process-wide, that boot
+# walk finds an empty rack and a scratch data dir instead of the
+# author's live repos.  The per-test _sandbox_registry fixture layers
+# per-test paths on top; monkeypatch restores back to the fence, never
+# to the real rack.
+import tempfile as _tempfile
+from storage import registry as _registry
+_FENCE_DIR = _tempfile.mkdtemp(prefix="comic-tests-fence-")
+_registry.REGISTRY_PATH = os.path.join(_FENCE_DIR, "no-registry.json")
+_registry.DATA_DIR = os.path.join(_FENCE_DIR, "no-mounts")
 
 
 @pytest.fixture(autouse=True)
@@ -42,8 +64,8 @@ def _sandbox_registry(monkeypatch, tmp_path):
     house-resolution gate (state.storage, house_of_*, mounted_storages,
     fan-out views, agent tools) falls back to the storage it was handed —
     a leaked selection into a real series can never strike real data.
-    (fixture_source() above reads the real registry at COLLECTION time to
-    find the repo to COPY — that read-only path is unaffected.)"""
+    (The module-level fence above already blinds the whole process at
+    collection time; this keeps each test on its own scratch paths.)"""
     from storage import registry
     monkeypatch.setattr(registry, "REGISTRY_PATH", str(tmp_path / "no-registry.json"))
     monkeypatch.setattr(registry, "DATA_DIR", str(tmp_path / "no-mounts"))
