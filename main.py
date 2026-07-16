@@ -435,15 +435,16 @@ def init_layout(logger):
         .book-page .text-gray-500 { color: #6b7280 !important; }
         .book-col-1 { grid-column: 1; }
         .book-page--ghost-faint { opacity: .55; }
-        /* THE PAGE TURN'S BAR (the author's design): a slim dashed slot
-           riding the bottom edge of the sheet it follows — click it and a
-           dotted placeholder page appears right there.  Never a grid
-           element, so the two-up pairing can never shift. */
-        .book-turn-bar { position: absolute; left: 6%; right: 6%; bottom: 3px;
-                         height: 9px; border: 2px dashed var(--ink);
+        /* THE PAGE TURN'S BAR (the author's design): a VERTICAL dashed
+           slot standing in the gutter at the sheet's right edge — between
+           this page and the next.  Click it and a dotted placeholder page
+           appears right there.  Never a grid element, so the two-up
+           pairing can never shift. */
+        .book-turn-bar { position: absolute; top: 4%; bottom: 4%; right: 3px;
+                         width: 9px; border: 2px dashed var(--ink);
                          border-radius: 5px; opacity: .3; cursor: copy;
-                         z-index: 12; transition: opacity .15s, height .15s; }
-        .book-turn-bar:hover { opacity: .9; height: 13px; }
+                         z-index: 12; transition: opacity .15s, width .15s; }
+        .book-turn-bar:hover { opacity: .9; width: 13px; }
         .book-page--ghost { border: 2px dashed var(--ink); background: transparent;
                             box-shadow: none; cursor: pointer;
                             display: flex; flex-direction: column;
