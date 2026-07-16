@@ -665,7 +665,10 @@ def view_issue(state: APPState):
                            lambda _, i=ins: move_insert(i, -1))
                 footer_btn('chevron_right', 'Later in the book (next scene)',
                            lambda _, i=ins: move_insert(i, 1))
-                footer_btn('edit', 'Write the page — its words and what it shows',
+                footer_btn('edit', 'Edit this page on the lightboard',
+                           lambda _, i=ins: goto(SelectedKind.INSERT, i.insert_id,
+                                                 i.name, anchor=f'insert-{i.insert_id}'))
+                footer_btn('notes', 'Write the page — its words and what it shows',
                            lambda _, i=ins: edit_text_dialog(
                                f'{i.kind} — {i.name}', i.description,
                                lambda v, iid=i.insert_id: save_insert_description(iid, v),

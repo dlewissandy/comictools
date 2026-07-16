@@ -113,3 +113,12 @@ def test_the_locked_table_offers_the_edit_door():
     banner = src.split("The selected take is printed from this table", 1)[1][:1600]
     assert "Edit in layers" in banner
     assert "rework_take_on_table(state, panel, featured)" in banner
+
+
+def test_the_pages_edit_button_opens_the_lightboard():
+    """The author's ruling, verbatim: the edit button on the full page
+    takes you to the LIGHTBOARD page — never a words prompt."""
+    src = open("gui/issue.py").read()
+    foot = src.split("footer_btn('edit', 'Edit this page on the lightboard'", 1)
+    assert len(foot) == 2, "the page's edit button is the lightboard door"
+    assert "goto(SelectedKind.INSERT" in foot[1][:200]
