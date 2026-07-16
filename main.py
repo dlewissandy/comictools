@@ -1616,5 +1616,6 @@ def series_page(tail: str):
 # real routes still get the honest front-door notice via _page_from_path.
 
 
-ui.run(reload=False, port=int(os.environ.get('COMIC_STUDIO_PORT', '8080')))
+ui.run(title='Comic Studio', favicon='💥', reload=False,
+       port=int(os.environ.get('COMIC_STUDIO_PORT', '8080')))
 
