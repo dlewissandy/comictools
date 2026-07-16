@@ -266,6 +266,10 @@ async def send(state: APPState):
     text_input = state.user_input
     question = text_input.value
     text_input.value = ''
+    try:
+        text_input.classes(remove='input-tall')   # a tall edit closes with its send
+    except Exception:
+        pass
 
     # THE CONVERSATION IS THE MODAL: a bench prompt that only wants words
     # (pose a figure, direct an acetate) prefills the box and arms a ONE-

@@ -122,3 +122,45 @@ def test_the_pages_edit_button_opens_the_lightboard():
     foot = src.split("footer_btn('edit', 'Edit this page on the lightboard'", 1)
     assert len(foot) == 2, "the page's edit button is the lightboard door"
     assert "goto(SelectedKind.INSERT" in foot[1][:200]
+
+
+def test_page_renders_ride_the_queue():
+    """No render ever detours through the conversation: the insert branch
+    of proof_flow and the book's Ink-it both enqueue generate_insert_art."""
+    lt = open("gui/light_table.py").read()
+    ins_branch = lt.split("elif insert_mode:", 1)[1][:600]
+    assert "generate_insert_art_body" in ins_branch
+    assert "post_user_message" not in ins_branch
+    iss = open("gui/issue.py").read()
+    assert "Render the '" not in iss, "the conversational render ask is gone"
+    assert "enqueue_renders" in iss.split("def _ink_page", 1)[1][:600]
+
+
+def test_unproof_rides_every_stitch(storage):
+    """The reshape-unproofs rule fires on FULL restitches too, not only
+    single-page repacks."""
+    src = open("helpers/stitcher.py").read()
+    assert src.count("unproof_mismatched(storage, ") >= 2, \
+        "repack_page AND remember_stitch both run the rule"
+    body = src.split("def remember_stitch", 1)[1]
+    assert "unproof_mismatched" in body
+
+
+def test_located_pages_offer_the_eject_door():
+    """A page on a cover slot shows no scene arrows — it offers the one
+    honest move: back to the page turns."""
+    src = open("gui/issue.py").read()
+    block = src.split("a LOCATED page lives on a cover slot", 1)
+    assert len(block) == 2
+    assert "_eject" in block[1][:900]
+
+
+def test_the_editor_knows_the_new_machinery():
+    """create_insert speaks location and the generic 'page' kind;
+    update_insert can move a page onto or off a cover slot."""
+    cr = open("agentic/tools/creator.py").read()
+    ci = cr.split("def create_insert", 1)[1][:2400]
+    assert "location" in ci and "'page'" in ci
+    up = open("agentic/tools/updater.py").read()
+    ui_ = up.split("def update_insert", 1)[1][:3000]
+    assert "'inside-front'" in ui_ and "'turns'" in ui_

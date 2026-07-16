@@ -92,10 +92,19 @@ def mock_imaging(monkeypatch):
     import agentic.tools.imaging as imaging
     import helpers.generator as generator
     calls = []
-    def _jpeg():
-        buf = BytesIO(); Image.new("RGB", (16, 16), (60, 120, 200)).save(buf, "JPEG"); return buf.getvalue()
-    gen = lambda prompt, **kw: calls.append(("generate", prompt, [])) or _jpeg()
-    edit = lambda prompt, reference_images=None, **kw: calls.append(("edit", prompt, list(reference_images or []))) or _jpeg()
+    def _jpeg(**kw):
+        # honor the requested shape like the real generator does (the API
+        # takes size='WxH') — the unproof rule (a take drawn for another
+        # frame is unselected) would otherwise strip every square mock
+        # off non-square cells
+        try:
+            w, h = (int(x) for x in str(kw.get("size") or "1024x1024").lower().split("x"))
+        except (ValueError, TypeError):
+            w, h = 1024, 1024
+        w, h = max(8, w // 64), max(8, h // 64)
+        buf = BytesIO(); Image.new("RGB", (w, h), (60, 120, 200)).save(buf, "JPEG"); return buf.getvalue()
+    gen = lambda prompt, **kw: calls.append(("generate", prompt, [])) or _jpeg(**kw)
+    edit = lambda prompt, reference_images=None, **kw: calls.append(("edit", prompt, list(reference_images or []))) or _jpeg(**kw)
     # patch BOTH the imaging module's names and the source module — bodies
     # that import inside the function resolve helpers.generator at call time
     monkeypatch.setattr(imaging, "invoke_generate_image_api", gen)

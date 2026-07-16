@@ -445,6 +445,9 @@ def init_layout(logger):
                          border-radius: 5px; opacity: .3; cursor: copy;
                          z-index: 12; transition: opacity .15s, width .15s; }
         .book-turn-bar:hover { opacity: .9; width: 13px; }
+        /* LONG WORDS GET ROOM: when an edit lands a manuscript in the
+           conversation box, the box opens tall for that one edit */
+        .input-tall textarea { max-height: 45vh !important; }
         .book-page--ghost { border: 2px dashed var(--ink); background: transparent;
                             box-shadow: none; cursor: pointer;
                             display: flex; flex-direction: column;
@@ -1036,8 +1039,41 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                                 .on('click', lambda _: do_purge())
                 if not entries:
                     ui.label('Empty — nothing has been struck.').classes('text-sm text-gray-500 q-mt-sm')
-                with ui.column().classes('w-full q-mt-sm').style('gap: 4px; overflow-y: auto;'):
-                    for en in entries:
+                # FINDING THE THING YOU LOST: type a few letters and the
+                # pile narrows; day captions keep the timeline readable
+                if len(entries) > 8:
+                    _filter = ui.input(placeholder='Find it by name…') \
+                        .props('dense outlined clearable').classes('w-full q-mt-xs')
+                else:
+                    _filter = None
+                _rows_box = ui.column().classes('w-full q-mt-sm').style('gap: 4px; overflow-y: auto;')
+
+                def _day_of(en):
+                    return _time.strftime('%A, %b %-d', _time.localtime(en.get('deleted_at', 0)))
+
+                def _paint(term: str = ''):
+                    term = (term or '').strip().lower()
+                    _rows_box.clear()
+                    shown = [e for e in entries
+                             if not term or term in (e.get('note') or '').lower()
+                             or term in (e.get('original_path') or '').lower()]
+                    with _rows_box:
+                        if term and not shown:
+                            ui.label('Nothing in the pile matches.').classes('text-xs text-gray-500')
+                        _last_day = None
+                        for en in shown:
+                            _day = _day_of(en)
+                            if _day != _last_day:
+                                ui.label(_day.upper()).classes('comic-label-sm') \
+                                    .style('opacity: .6; padding-top: 6px;')
+                                _last_day = _day
+                            _entry_row(en)
+
+                if _filter is not None:
+                    _filter.on_value_change(lambda e: _paint(e.value))
+
+                def _entry_row(en):
+                    for _ in [0]:
                         rel = os.path.relpath(en['original_path'], en['base']) if en['original_path'] else '?'
                         age_h = (_time.time() - en['deleted_at']) / 3600
                         age = (f"{age_h * 60:.0f}m ago" if age_h < 1
@@ -1086,6 +1122,7 @@ def build_page(selection_override: list[SelectionItem] | None = None):
                                 ui.button(icon='restore_from_trash').props('flat round dense size=xs') \
                                     .tooltip('Bring it back exactly where it was') \
                                     .on('click', lambda _, e2=en['entry'], r2=rel, b2=en['base']: bring_back(e2, r2, b2))
+                _paint()
             dlg.open()
 
         ui.button(icon='delete_outline').props('flat round dense') \

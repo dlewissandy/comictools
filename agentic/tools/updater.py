@@ -1311,7 +1311,8 @@ def update_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
 @function_tool
 def update_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str,
                   insert_id: str, description: Optional[str],
-                  after_scene_number: Optional[int]) -> str:
+                  after_scene_number: Optional[int],
+                  location: Optional[str] = None) -> str:
     """
     Update a full-page insert — its description or its place in the book.
 
@@ -1322,6 +1323,9 @@ def update_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id
         description: The new description of what the page shows.  Optional.
         after_scene_number: Move the insert after this scene number
             (0 = right after the script pages).  Optional.
+        location: Move the page onto a cover slot — 'inside-front' or
+            'inside-back' — or pass 'turns' to move it OFF a cover slot and
+            back to the page turns.  Optional.
 
     Returns:
         A status message indicating the result of the update.
@@ -1343,6 +1347,21 @@ def update_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id
             _Scene, {"series_id": series_id, "issue_id": issue_id})), default=0)
         obj.after_scene_number = max(0, min(top, after_scene_number))
         state.storage.update_object(obj)
+    if location is not None:
+        if location not in ('inside-front', 'inside-back', 'turns'):
+            return "location must be 'inside-front', 'inside-back' or 'turns'."
+        state: APPState = wrapper.context
+        from storage import registry as _reg
+        storage = _reg.storage_for_key({"series_id": series_id}, state.storage)
+        obj = storage.read_object(cls=Insert, primary_key=pk)
+        if obj is None:
+            return f"Insert '{insert_id}' not found."
+        obj.location = None if location == 'turns' else location
+        storage.update_object(obj)
+        state.is_dirty = True
+        results.append(f"'{obj.name}' now prints "
+                       + ("at its page turn." if obj.location is None
+                          else f"on the {obj.location.replace('-', ' ')} cover slot."))
         state.is_dirty = True
         results.append(f"Insert moved after scene {obj.after_scene_number}.")
     return "  ".join(results) if results else "Nothing to update."

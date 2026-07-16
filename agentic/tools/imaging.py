@@ -3136,6 +3136,14 @@ def render_missing_panels(wrapper: RunContextWrapper[APPState], series_id: str, 
     from storage import registry as _reg
     # the key names its own house — read/write where the object LIVES
     storage: GenericStorage = _reg.storage_for_key({"series_id": series_id}, state.storage)
+    # SETTLE THE LAYOUT FIRST: the reflow may unproof takes drawn for
+    # another frame (the author's rule) — the QUOTE must count the
+    # post-reflow truth, never strand a panel unproofed mid-batch
+    from helpers.stitcher import remember_stitch as _remember
+    try:
+        _remember(storage, series_id, issue_id)
+    except Exception as _ex:
+        logger.debug(f"pre-quote stitch settle skipped: {_ex}")
 
     scenes = ([storage.read_object(SceneModel, {"series_id": series_id, "issue_id": issue_id, "scene_id": scene_id})]
               if scene_id else

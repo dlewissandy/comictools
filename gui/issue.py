@@ -147,6 +147,9 @@ def view_issue(state: APPState):
         # me' door, without the detour; develop_msg kept for callers).
         prefix = f"{title}: "
         state.user_input.value = prefix + (initial or '')
+        if len(initial or '') > 400:
+            # a manuscript needs room — the box opens tall for this edit
+            state.user_input.classes('input-tall')
 
         def _save(text):
             if text is None:
@@ -661,10 +664,26 @@ def view_issue(state: APPState):
             foot = ui.row().classes('script-foot insert-foot items-center flex-nowrap').style('gap: 2px;')
             foot.on('click.stop', lambda _: None)   # the foot's own clicks stay in the foot
             with foot:
-                footer_btn('chevron_left', 'Earlier in the book (previous scene)',
-                           lambda _, i=ins: move_insert(i, -1))
-                footer_btn('chevron_right', 'Later in the book (next scene)',
-                           lambda _, i=ins: move_insert(i, 1))
+                if getattr(ins, 'location', None):
+                    # a LOCATED page lives on a cover slot — scene arrows
+                    # mean nothing here; one door back to the page turns
+                    def _eject(i=ins):
+                        fresh = storage.read_object(Insert, i.primary_key)
+                        if fresh is None:
+                            return
+                        fresh.location = None
+                        fresh.after_scene_number = 0
+                        storage.update_object(fresh)
+                        receipt(f"↔️ moved **{fresh.name}** off the cover slot — "
+                                f"it rides the page turns now")
+                        state.refresh_details()
+                    footer_btn('logout', 'Move it off this cover slot — back to the page turns',
+                               lambda _, i=ins: _eject(i))
+                else:
+                    footer_btn('chevron_left', 'Earlier in the book (previous scene)',
+                               lambda _, i=ins: move_insert(i, -1))
+                    footer_btn('chevron_right', 'Later in the book (next scene)',
+                               lambda _, i=ins: move_insert(i, 1))
                 footer_btn('edit', 'Edit this page on the lightboard',
                            lambda _, i=ins: goto(SelectedKind.INSERT, i.insert_id,
                                                  i.name, anchor=f'insert-{i.insert_id}'))
@@ -674,9 +693,18 @@ def view_issue(state: APPState):
                                lambda v, iid=i.insert_id: save_insert_description(iid, v),
                                f"Let's work on the '{i.name}' insert together."))
                 if not rendered:
-                    footer_btn('brush', 'Ink it — render the page as full art',
-                               lambda _, i=ins: post_user_message(
-                                   state, f"Render the '{i.name}' insert."))
+                    def _ink_page(i=ins):
+                        # the page proofs through the QUEUE like every board
+                        from agentic.tools.imaging import generate_insert_art_body
+                        from helpers.render_queue import enqueue_renders
+                        enqueue_renders(state, [(
+                            f"inking the '{i.name}' page",
+                            lambda _i=i: generate_insert_art_body(
+                                state, series_id, issue_id, _i.insert_id),
+                            lambda _r: state.refresh_details(),
+                        )], role='the Production Artist')
+                    footer_btn('brush', 'Ink it — render the page as full art (rides the queue)',
+                               lambda _, i=ins: _ink_page(i))
                 ui.space()
                 def _strike_insert(i=ins):
                     from gui.strike import strike

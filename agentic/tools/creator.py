@@ -84,7 +84,13 @@ def creator(wrapper: RunContextWrapper, obj: BaseModel, overwrite: bool=False) -
         The created object or an error message if the object already exists.
     """
     state: APPState = wrapper.context
-    storage: GenericStorage = state.storage
+    # THE OBJECT NAMES ITS OWN HOUSE: a lobby ask can create into any
+    # series on the wall — resolve the mount from the object's own key
+    # (an unscoped state.storage would write a PHANTOM data/series/… dir).
+    # The carnival rule inside storage_for_key keeps fixtures untouched.
+    from storage import registry as _reg
+    storage: GenericStorage = _reg.storage_for_key(
+        getattr(obj, 'primary_key', None) or {}, state.storage)
 
     pk = obj.primary_key
 
@@ -1252,19 +1258,28 @@ def create_story(wrapper: RunContextWrapper[APPState], series_id: str, issue_id:
 @function_tool
 def create_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str,
                   name: str, kind: str, description: Optional[str],
-                  after_scene_number: Optional[int]) -> str:
+                  after_scene_number: Optional[int],
+                  location: Optional[str] = None) -> str:
     """
     Add a FULL-PAGE INSERT to the book: a poster, an ad, a pin-up, the
-    mailbag — a page that isn't story panels but belongs in the issue.
+    mailbag, or a generic full page — a page that isn't story panels but
+    belongs in the issue.  Full pages are ALWAYS inserts (the panel flow
+    never lays one).
 
     Args:
         series_id: The ID of the series.
         issue_id: The ID of the issue.
         name: A short name, e.g. 'Carnival poster'.
-        kind: 'poster', 'ad', 'pin-up', 'mailbag' or 'title-page'.  Default to 'poster'.
+        kind: 'poster', 'ad', 'pin-up', 'mailbag', 'title-page' or 'page'
+            (a generic full page the author shapes later).  Default 'poster'.
         description: What the page shows, in enough detail to render it.
         after_scene_number: The insert appears after this scene number
-            (0 = right after the script pages).  Default to 0.
+            (0 = right after the script pages).  Default to 0.  Ignored
+            when location is set.
+        location: Pin the page to a cover slot instead of a page turn:
+            'inside-front' or 'inside-back' (the classic homes for ads and
+            the mailbag; the indicia still prints over inside-front art).
+            Default None.
 
     Returns:
         A status message with the new insert's id.
@@ -1275,10 +1290,12 @@ def create_insert(wrapper: RunContextWrapper[APPState], series_id: str, issue_id
     top = max((s.scene_number for s in state.storage.read_all_objects(
         SceneModel, {"series_id": series_id, "issue_id": issue_id})), default=0)
     anchor = max(0, min(top, after_scene_number or 0))
+    if location not in (None, 'inside-front', 'inside-back'):
+        return "location must be 'inside-front', 'inside-back', or omitted."
     insert = Insert(insert_id=normalize_id(name), issue_id=issue_id, series_id=series_id,
                     kind=kind or "poster", name=normalize_name(name),
                     description=description or "",
-                    after_scene_number=anchor, image=None)
+                    after_scene_number=anchor, location=location, image=None)
     result = creator(wrapper=wrapper, obj=insert)
     if isinstance(result, str):
         return result

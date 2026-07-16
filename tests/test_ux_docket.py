@@ -234,3 +234,14 @@ def test_reshape_unselects_a_mismatched_proof(storage):
     fresh = storage.read_object(Panel, panel.primary_key)
     assert fresh.image is None, "the mismatched proof is unselected"
     assert stitcher.LAST_UNPROOFED, "the receipt names it"
+
+
+def test_the_object_names_its_own_house_on_create():
+    """The publish pass caught it live: creator() wrote a lobby-context
+    insert into a PHANTOM data/series/… dir at the unscoped root.  The
+    shared create helper now resolves the mount from the OBJECT's own
+    primary key (the carnival rule still protects fixtures)."""
+    src = open("agentic/tools/creator.py").read()
+    body = src.split("def creator(", 1)[1][:1200]
+    assert "storage_for_key(" in body, "creator resolves the object's house"
+    assert "primary_key" in body.split("storage_for_key(", 1)[1][:120]

@@ -440,6 +440,12 @@ def remember_stitch(storage, series_id: str, issue_id: str) -> None:
     for old in stored:
         if old.page_id not in fresh_ids:
             storage.delete_object(cls=Page, primary_key=old.primary_key, soft=False)
+    # the reflow may have FLEXED shapes — the author's rule applies here
+    # too: a proof drawn for another frame is unselected, quietly (the
+    # ledger and the book tell it; renders that follow use the laid shape)
+    LAST_UNPROOFED.clear()
+    for page in fresh:
+        unproof_mismatched(storage, page)
     logger.info(f"remembered the stitched layout for {issue_id} ({len(fresh)} pages)")
 
 
@@ -491,8 +497,43 @@ def unpin_page(storage, pm: Page) -> None:
     remember_stitch(storage, pm.series_id, pm.issue_id)
 
 
-# panels whose proof the LAST repack_page unselected (names, for receipts)
+# panels whose proof the last repack/stitch unselected (names, for receipts)
 LAST_UNPROOFED: list[str] = []
+
+def unproof_mismatched(storage, pm: Page) -> list[str]:
+    """THE AUTHOR'S RULING: a reshaped panel loses its selected proof — the
+    print must never quietly wear art drawn for another frame.  Scans one
+    page's cells, unselects any featured take whose drawn shape no longer
+    matches its laid cell, appends the names to LAST_UNPROOFED (receipts),
+    and returns them.  The takes stay on the wall."""
+    from schema import Panel
+    out: list[str] = []
+    for c in (pm.cells or []):
+        panel = storage.read_object(Panel, {"series_id": pm.series_id, "issue_id": pm.issue_id,
+                                            "scene_id": c.scene_id, "panel_id": c.panel_id})
+        if panel is None or not panel.image or not os.path.exists(panel.image):
+            continue
+        laid = ('landscape' if c.w > c.h + 1e-6 else
+                'portrait' if c.h > c.w + 1e-6 else 'square')
+        try:
+            from PIL import Image as _Img
+            with _Img.open(panel.image) as im:
+                w, h = im.size
+        except Exception:
+            continue
+        r = w / h if h else 1.0
+        drawn = 'landscape' if r > 1.15 else 'portrait' if r < 0.87 else 'square'
+        if drawn != laid:
+            panel.image = None
+            storage.update_object(panel)
+            nm = getattr(panel, 'name', None) or panel.panel_id
+            out.append(nm)
+            LAST_UNPROOFED.append(nm)
+            logger.info(f"unproofed '{nm}': take drawn {drawn}, page lays {laid}")
+    return out
+
+
+
 
 
 def repack_page(storage, pm: Page) -> Page:
@@ -519,29 +560,6 @@ def repack_page(storage, pm: Page) -> Page:
     pm.cells = [PanelCell(scene_id=k[0], panel_id=k[1], x=round(x, 3), y=round(y, 3),
                           w=round(w, 3), h=round(h, 3)) for k, x, y, w, h in cells_abs]
 
-    # THE AUTHOR'S RULING: a reshaped panel loses its selected proof — the
-    # print must never quietly wear art drawn for another frame.  An
-    # unproofed panel forces the decision (re-proof, or re-feature a take)
-    # and the ledger counts it honestly.  Callers read LAST_UNPROOFED for
-    # their receipts.  The takes themselves stay on the wall.
     LAST_UNPROOFED.clear()
-    for c in pm.cells:
-        panel = storage.read_object(Panel, {"series_id": pm.series_id, "issue_id": pm.issue_id,
-                                            "scene_id": c.scene_id, "panel_id": c.panel_id})
-        if panel is None or not panel.image or not os.path.exists(panel.image):
-            continue
-        laid = ('landscape' if c.w > c.h + 1e-6 else
-                'portrait' if c.h > c.w + 1e-6 else 'square')
-        try:
-            from PIL import Image as _Img
-            with _Img.open(panel.image) as im:
-                w, h = im.size
-        except Exception:
-            continue
-        r = w / h if h else 1.0
-        drawn = 'landscape' if r > 1.15 else 'portrait' if r < 0.87 else 'square'
-        if drawn != laid:
-            panel.image = None
-            storage.update_object(panel)
-            LAST_UNPROOFED.append(getattr(panel, 'name', None) or panel.panel_id)
+    unproof_mismatched(storage, pm)
     return pm

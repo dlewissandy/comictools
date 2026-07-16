@@ -1765,7 +1765,11 @@ def takes_row(state, board, featured: str | None):
         return path
 
     takes = [img for img in storage.list_images(board) if os.path.exists(img)]
+    take_style: dict[str, str] = {}
     if is_artboard(board):
+        for _t in takes:
+            if board.style_id:
+                take_style[_t] = board.style_id
         # THE MARK'S WHOLE HISTORY HANGS HERE: the mark is ONE asset, so
         # takes filed under sibling style-boards or the owner's legacy
         # homes (publisher images for a logo, series title art for a
@@ -1774,7 +1778,10 @@ def takes_row(state, board, featured: str | None):
         extra: list[str] = []
         for sib in storage.read_all_objects(_AB, primary_key={"scope_id": board.scope_id}):
             if sib.board_id != board.board_id and sib.board_kind == board.board_kind:
-                extra += storage.list_images(sib)
+                for _t in storage.list_images(sib):
+                    extra.append(_t)
+                    if sib.style_id:
+                        take_style[_t] = sib.style_id
         if board.board_kind == 'logo':
             _owner = storage.read_object(cls=_Pub, primary_key={"publisher_id": board.scope_id})
             if _owner is not None:
@@ -1799,6 +1806,12 @@ def takes_row(state, board, featured: str | None):
                     ui.image(source=img).props('fit=cover').classes('absolute inset-0 w-full h-full')
                     if img == featured:
                         ui.badge('✓', color='green').props('floating').classes('absolute top-0 right-0 z-10')
+                    if is_artboard(board):
+                        _sty = take_style.get(img)
+                        ui.label((_sty or 'earlier work').replace('-', ' ')) \
+                            .classes('caption-box caption-box-sm') \
+                            .style('position: absolute; bottom: 4px; left: 4px; '
+                                   'z-index: 10; font-size: .6rem; opacity: .85;')
                     ui.button(icon='delete').props('flat round dense size=xs') \
                         .classes('absolute top-1 left-1 z-10 bg-white/70 dark:bg-black/50') \
                         .tooltip('Tear up this take') \
@@ -2562,10 +2575,11 @@ def light_table(state: APPState, panel, scene, setting,
             def _job(_sid=panel.series_id, _iid=panel.issue_id, _cid=panel.cover_id):
                 return _generate_cover_image_body(types.SimpleNamespace(context=state), _sid, _iid, _cid)
         elif insert_mode:
-            # a full-page insert renders its take through the coauthor for now
-            post_user_message(state, f"Render a new take of this {noun} from the light table "
-                                     f"as it stands (don't rewrite the brief).")
-            return
+            # a full page proofs like everything else: through the QUEUE,
+            # one board line, HOLD/STOP — never a conversational detour
+            def _job(_sid=panel.series_id, _iid=panel.issue_id, _nid=panel.insert_id):
+                from agentic.tools.imaging import generate_insert_art_body
+                return generate_insert_art_body(state, _sid, _iid, _nid)
         else:
             def _job(_sid=panel.series_id, _iid=panel.issue_id,
                      _scid=panel.scene_id, _pid=panel.panel_id):
@@ -4019,6 +4033,8 @@ def light_table(state: APPState, panel, scene, setting,
                 # breaks a line, and an erased prefix stands down.
                 prefix = f"{description_label}: "
                 state.user_input.value = prefix + (panel.description or '')
+                if len(panel.description or '') > 400:
+                    state.user_input.classes('input-tall')
 
                 def _save_brief(text):
                     if text is None:
