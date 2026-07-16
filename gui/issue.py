@@ -594,16 +594,19 @@ def view_issue(state: APPState):
 
     def insert_door(after_n: int):
         """THE PAGE TURN'S DOOR (the author's ruling: full pages belong to
-        inserts, never to the panel flow) — a slim slip between scenes."""
-        with ui.element('div').classes('book-turn-door') as door:
-            ui.label('+ full page here')
-        door.tooltip('A full-page insert at this page turn — poster, ad, '
-                     'pin-up, or the mailbag')
-        with door:
-            with ui.menu().props('auto-close'):
-                for k, lbl in _INSERT_KINDS:
-                    ui.menu_item(lbl, on_click=lambda *_, k=k, n=after_n:
-                                 _make_insert(k, after_n=n)).props('dense')
+        inserts, never to the panel flow).  ZERO REAL ESTATE: a small
+        transparent round + riding the gutter between sheets — the same
+        hand as the panel-tool glyphs — not a slip that costs a row."""
+        with ui.element('div').classes('book-turn-seam'):
+            btn = ui.button(icon='add').props('flat round dense size=xs') \
+                .classes('book-turn-btn bg-white/70 dark:bg-black/50') \
+                .tooltip('A full page at this turn — poster, ad, pin-up, '
+                         'or the mailbag')
+            with btn:
+                with ui.menu().props('auto-close'):
+                    for k, lbl in _INSERT_KINDS:
+                        ui.menu_item(lbl, on_click=lambda *_, k=k, n=after_n:
+                                     _make_insert(k, after_n=n)).props('dense')
 
     def insert_sheet(ins):
         rendered = ins.image and os.path.exists(ins.image)
