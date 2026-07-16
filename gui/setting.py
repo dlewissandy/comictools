@@ -67,7 +67,7 @@ def view_setting(state: APPState):
                             {"series_id": series_id, "setting_id": setting.setting_id},
                             f"the setting '{setting.name}'"))
 
-        markdown_field_editor(state, "Description", setting.description)
+        markdown_field_editor(state, "Description", setting.description, reveal_obj=setting)
 
 
         # SET HERE: every scene that takes place in this setting — so the

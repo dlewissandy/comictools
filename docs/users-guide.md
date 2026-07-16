@@ -155,6 +155,8 @@ Scripts longer than 200 words never scroll on the sheet — they clamp with a fa
 
 Your words are markdown, and the sheets render them that way — headings, emphasis, and lists all print properly on the manuscript pages. On disk they live as plain `.md` files beside each object in the house repository: `story.md` for scripts and stories, `scene.md` for scene manuscripts, `brief.md` for render briefs (panels, covers, inserts, mastheads and logos), and `description.md` and friends for the canon of your publisher, series, settings, characters, wardrobe and props. Write in any editor you love — git diffs of your house read like a manuscript, not escaped JSON.
 
+And the studio walks you to the door: a **Reveal in Finder** control (Show in Explorer on Windows) stands on each scene's menu, each story sheet's foot, the light table's brief, every asset description, and the house card itself. One click opens the OS file manager at the real files, manuscript selected — hand the folder to your own editor or AI assistant and whatever they write there *is* the book; the studio reads it back on the next look. The window opens on the machine running the studio.
+
 Each story sheet ends in a foot chip that matches where the story stands:
 
 - Under 80 words: **develop it with me** — an Editor interview to grow the idea.

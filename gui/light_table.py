@@ -4061,9 +4061,14 @@ def light_table(state: APPState, panel, scene, setting,
                           type='info', position='bottom', timeout=4000)
 
             _has_brief = bool((panel.description or '').strip())
-            caption_action(description_label.title(),
-                           CrudButtonKind.UPDATE if _has_brief else CrudButtonKind.CREATE,
-                           lambda _: edit_brief_dialog(), 3)
+            _brief_cap = caption_action(description_label.title(),
+                                        CrudButtonKind.UPDATE if _has_brief else CrudButtonKind.CREATE,
+                                        lambda _: edit_brief_dialog(), 3)
+            with _brief_cap:
+                # the board's folder holds the brief, the takes and the
+                # figures — open the door for your own tools
+                from gui.elements import reveal_object_button
+                reveal_object_button(state, panel, size='sm')
             if _has_brief:
                 _brief_md(panel.description)
             else:

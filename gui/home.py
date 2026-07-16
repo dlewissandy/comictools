@@ -356,6 +356,16 @@ def view_lobby(state: APPState):
                         _house_g = next((h for h in _reg.registered()
                                          if h['slug'] == _slug_g), None) if _slug_g else None
                         if _house_g is not None:
+                            # THE FOLDER GLYPH: the house is a real folder
+                            # on disk — open it for your own tools
+                            from gui.elements import reveal_in_files, reveal_label
+                            ui.button(icon='folder_open') \
+                                .props('flat round dense size=xs') \
+                                .classes('absolute bottom-1 left-1 z-10 '
+                                         'bg-white/70 dark:bg-black/50') \
+                                .tooltip(f"{reveal_label()} — the house repository") \
+                                .on('click.stop', lambda _, p=_house_g['path']:
+                                    reveal_in_files(p))
                             from helpers.house_git import repo_state
                             _gs = repo_state(_house_g['path'])
                             if _gs is not None:

@@ -68,7 +68,7 @@ def view_publisher(state: APPState):
 
         # Below that we have a full width row for editing the publisher's description
         # and a button to save the changes
-        markdown_field_editor(state, "Description", publisher.description)
+        markdown_field_editor(state, "Description", publisher.description, reveal_obj=publisher)
 
         # THE HOUSE ROOM IS THE HOUSE'S OWN THINGS — description, logo,
         # styles.  Its series hang on the studio wall (one home per door).

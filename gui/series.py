@@ -77,7 +77,7 @@ def view_series(state: APPState):
         desc_rows = max(2, min(6, 1 + (len(desc) + 269) // 270))
         with packer.place_cell([(10, desc_rows)], fudge=False):
             with ui.card().classes(TAILWIND_CARD + ' mosaic-card').style('overflow-y: auto;'):
-                markdown_field_editor(state, "Description", series.description)
+                markdown_field_editor(state, "Description", series.description, reveal_obj=series)
 
         # THE ISSUES HANG ON THE STUDIO WALL — the series room keeps only
         # what the series OWNS: its masthead and its reusable assets.

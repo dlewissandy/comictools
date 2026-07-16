@@ -76,7 +76,7 @@ def view_character(state:APPState):
                                 {"series_id": series_id, "character_id": character_id},
                                 f"the character '{character.name}'"))
 
-        markdown_field_editor(state, "Description", character.description)
+        markdown_field_editor(state, "Description", character.description, reveal_obj=character)
 
         # APPEARS IN: every scene casting this character — the character's
         # footprint across the series at a glance (mirrors the setting page)

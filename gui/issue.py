@@ -282,6 +282,10 @@ def view_issue(state: APPState):
             ui.menu_item('Add a panel to this scene',
                          on_click=lambda _, s=sc: post_user_message(
                              state, f"Add another panel to scene '{s.name}'."))
+            from gui.elements import reveal_in_files, reveal_label, reveal_object_target
+            ui.menu_item(f"{reveal_label()} — the scene's files",
+                         on_click=lambda _, s=sc: reveal_in_files(
+                             reveal_object_target(storage, s)))
             ui.menu_item('Delete the scene…',
                          on_click=lambda _, s=sc: post_user_message(
                              state, f"I would like to delete scene '{s.name}'."))
@@ -540,6 +544,11 @@ def view_issue(state: APPState):
                                lambda v, sid=sid: save_story_text(sid, v),
                                f"Let's work on {sp} together — read it back "
                                f"to me and we'll edit it."))
+                from gui.elements import reveal_in_files as _reveal, reveal_label as _rlabel, \
+                    reveal_object_target as _rtarget
+                footer_btn('folder_open', f'{_rlabel()} — the manuscript on disk',
+                           lambda _, o=(story if story is not None else issue):
+                           _reveal(_rtarget(storage, o)))
                 if text and wc < 80:
                     ui.chip('develop it with me', icon='forum').props('dense outline clickable size=sm') \
                         .tooltip("It's thin — I'll interview you and we'll build it out") \

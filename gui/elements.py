@@ -142,7 +142,8 @@ def caption_action(text: str, kind: CrudButtonKind, action: Callable, level: int
     return box
 
 
-def markdown_field_editor(state: APPState, name: str, value: str | None, header_size: int = 2):
+def markdown_field_editor(state: APPState, name: str, value: str | None, header_size: int = 2,
+                          reveal_obj: Optional[BaseModel] = None):
     with ui.row().classes('w-full flex-nowrap').style('padding: 0; margin: 0;'):
         if value is not None:
             caption_action(name.title(), CrudButtonKind.UPDATE,
@@ -150,6 +151,9 @@ def markdown_field_editor(state: APPState, name: str, value: str | None, header_
         else:
             caption_action(name.title(), CrudButtonKind.CREATE,
                            lambda _: post_user_message(state, f"I would like to add a {name}."), header_size)
+        if reveal_obj is not None:
+            # the words live in a real .md on disk — open the door to them
+            reveal_object_button(state, reveal_obj)
 
     if value is not None and value !="":
         markdown(value)
@@ -172,6 +176,80 @@ def markdown(body: str) -> ui.markdown:
     markdown element so callers can chain .classes()/.style()."""
     with ui.element().classes('w-full q-pa-md'):
         return ui.markdown(body).classes('w-full markdown-content')
+
+
+# ---------------------------------------------------------------------------
+# REVEAL IN FINDER: the studio walks you to the door.  The real files ARE
+# the edit surface (one source of truth) — any object can open the OS file
+# manager at its own folder, manuscript selected, so your own editors and
+# assistants land with perfect locality.  The window opens on the machine
+# RUNNING the studio (local-first, single machine by design).
+# ---------------------------------------------------------------------------
+
+def reveal_command(path: str, platform: str, is_dir: bool) -> list[str]:
+    """The file-manager invocation for a platform — pure, so the promise
+    is testable without opening windows.  Files are revealed SELECTED
+    where the platform can; directories open directly."""
+    if platform == 'darwin':
+        return ['open', path] if is_dir else ['open', '-R', path]
+    if platform.startswith('win'):
+        norm = os.path.normpath(path)
+        return ['explorer', norm] if is_dir else ['explorer', f'/select,{norm}']
+    return ['xdg-open', path if is_dir else os.path.dirname(path)]
+
+
+def reveal_label() -> str:
+    import sys
+    if sys.platform == 'darwin':
+        return 'Reveal in Finder'
+    if sys.platform.startswith('win'):
+        return 'Show in Explorer'
+    return 'Open the folder'
+
+
+def reveal_in_files(target: str) -> None:
+    """Open the OS file manager at the artifact (resolved through the
+    data/<slug> mount, so what you see is the real house repository)."""
+    import subprocess
+    import sys
+    path = os.path.realpath(target)
+    if not os.path.exists(path):
+        ui.notify(f'Nothing on disk yet at {path}', type='warning')
+        return
+    try:
+        subprocess.Popen(reveal_command(path, sys.platform, os.path.isdir(path)))
+        ui.notify(f'{reveal_label()} — {os.path.basename(path)}',
+                  type='info', timeout=2500)
+    except Exception as ex:
+        ui.notify(f"Couldn't open the file manager: {ex}", type='warning')
+
+
+def reveal_object_target(storage, obj: BaseModel) -> str:
+    """The most inviting file for an object: its first prose sidecar when
+    one exists (the manuscript, the brief), else its record file."""
+    from storage.filepath import obj_to_filepath
+    from storage.local import SIDECAR_FIELDS
+    fp = obj_to_filepath(obj, base_path=storage.base_path)
+    for sname in (SIDECAR_FIELDS.get(obj.__class__.__name__) or {}).values():
+        sc = os.path.join(os.path.dirname(fp), sname)
+        if os.path.exists(sc):
+            return sc
+    return fp
+
+
+def reveal_object_button(state: APPState, obj: BaseModel, size: str = 'sm') -> None:
+    """A small folder glyph, located on the thing it reveals."""
+    def _go(_):
+        try:
+            from storage import registry as _reg
+            storage = _reg.storage_for_key(obj.primary_key, state.storage)
+            reveal_in_files(reveal_object_target(storage, obj))
+        except Exception as ex:
+            ui.notify(f"Couldn't reveal the files: {ex}", type='warning')
+    ui.button(icon='folder_open').props(f'flat round dense size={size}') \
+        .classes('caption-btn') \
+        .tooltip(f'{reveal_label()} — the real files, open in your own tools') \
+        .on('click.stop', _go)
 
 
 def full_width_image_selector_grid(

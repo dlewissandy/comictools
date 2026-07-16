@@ -124,7 +124,7 @@ def _view_asset(state: APPState, cls, key_name: str, kind_label: str, render_hin
             if len(used_in) > 12:
                 ui.label(f'…and {len(used_in) - 12} more').classes('text-xs text-gray-500')
 
-        markdown_field_editor(state, "Description", asset.description)
+        markdown_field_editor(state, "Description", asset.description, reveal_obj=asset)
 
         with ui.expansion(value=True).classes('w-full section-flat') as exp:
             with exp.add_slot('header'):
