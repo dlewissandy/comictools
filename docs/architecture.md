@@ -99,10 +99,10 @@ canon of a publisher, series, setting, character, prop, or outfit; `logo.md` for
 publisher's logo brief; and `description.md`/`appearance.md`/`attire.md`/`behavior.md`
 for a character variant's look. One-line labels (names, panel beats) and structured
 specs (style definitions, the shot lists nested inside `setting.json`) stay in the
-record. The JSON keeps the field as `""` (or `null` for an optional brief never begun);
-on read the sidecar is the ONLY source of words (a missing sidecar reads as empty), and
-on write the field leaves the payload for its sidecar — same atomic tmp-fsync-replace
-discipline, UTF-8. Emptying a prose field retires its sidecar to the wastebasket. This
+record. The JSON REFERENCES the sidecar — the field holds the `.md` filename (`""` when
+the words were emptied, `null` for an optional brief never begun); on read the sidecar
+is the ONLY source of words (a missing sidecar reads as empty), and on write the field
+leaves the payload for its sidecar — same atomic tmp-fsync-replace discipline, UTF-8. Emptying a prose field retires its sidecar to the wastebasket. This
 is the single supported way of storing prose: external editors and git diffs see
 manuscripts as manuscripts. A one-time idempotent migration (`migrate_house_prose`)
 runs when a house is mounted or adopted, converting any pre-ruling inline prose —

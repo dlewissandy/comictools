@@ -42,9 +42,9 @@ def test_update_does_not_leak_to_real_data(storage, tmp_data):
     assert open(real_file).read() == before, "write leaked into the real data directory"
     now_md = open(real_sidecar).read() if os.path.exists(real_sidecar) else None
     assert now_md == before_md, "prose leaked into the real house's sidecar"
-    # THE PROSE LIVES IN MARKDOWN: the JSON keeps '' — the words land in
-    # the scene.md sidecar beside it
-    assert json.load(open(os.path.join(tmp_data, SCENE_REL)))["story"] == ""
+    # THE PROSE LIVES IN MARKDOWN: the JSON references the sidecar — the
+    # words land in scene.md beside it
+    assert json.load(open(os.path.join(tmp_data, SCENE_REL)))["story"] == "scene.md"
     tmp_sidecar = os.path.join(os.path.dirname(os.path.join(tmp_data, SCENE_REL)), "scene.md")
     assert open(tmp_sidecar).read() == "ISOLATION_TEST_MARKER"
 

@@ -1,7 +1,9 @@
 """THE PROSE LIVES IN MARKDOWN: long-form text (scripts, scene manuscripts,
-render briefs) is stored as a .md sidecar beside the object's JSON.  The JSON
-keeps '' as a placeholder; the sidecar is the ONLY source on read.  There is
-no second supported way of storing prose."""
+render briefs, asset canon) is stored as a .md sidecar beside the object's
+JSON, and the JSON REFERENCES it — the field holds the sidecar's filename
+('' for emptied words, null for a brief never begun).  The sidecar is the
+ONLY source of words on read.  There is no second supported way of storing
+prose."""
 import json
 import os
 
@@ -24,8 +26,8 @@ def test_prose_round_trips_through_the_sidecar(storage, tmp_data):
     storage.update_object(scene)
 
     scene_dir = os.path.join(tmp_data, SCENE_DIR_REL)
-    assert json.load(open(os.path.join(scene_dir, "scene.json")))["story"] == "", \
-        "the JSON keeps only the '' placeholder"
+    assert json.load(open(os.path.join(scene_dir, "scene.json")))["story"] == "scene.md", \
+        "the JSON references the sidecar by name"
     assert open(os.path.join(scene_dir, "scene.md")).read() == scene.story, \
         "the words land in the sidecar, markdown intact"
     assert _read_scene(storage).story == scene.story, \
@@ -75,7 +77,7 @@ def test_migration_moves_inline_prose_and_converges(tmp_path):
 
     assert migrate_house_prose(house) == 1
     assert open(os.path.join(d, "scene.md")).read() == "The carnival wakes at dusk."
-    assert json.load(open(os.path.join(d, "scene.json")))["story"] == ""
+    assert json.load(open(os.path.join(d, "scene.json")))["story"] == "scene.md"
     # idempotent: the second walk finds nothing left to move
     assert migrate_house_prose(house) == 0
 
@@ -89,7 +91,7 @@ def test_migration_never_clobbers_an_existing_sidecar(tmp_path):
 
     migrate_house_prose(house)
     assert open(os.path.join(d, "scene.md")).read() == "the sidecar is already the truth"
-    assert json.load(open(os.path.join(d, "scene.json")))["story"] == ""
+    assert json.load(open(os.path.join(d, "scene.json")))["story"] == "scene.md"
 
 
 def test_migration_walks_the_wastebasket(tmp_path):
@@ -106,7 +108,7 @@ def test_migration_walks_the_wastebasket(tmp_path):
     restored = restore_last(house)
     assert restored == d
     assert open(os.path.join(d, "scene.md")).read() == "The carnival wakes at dusk."
-    assert json.load(open(os.path.join(d, "scene.json")))["story"] == ""
+    assert json.load(open(os.path.join(d, "scene.json")))["story"] == "scene.md"
 
 
 def test_asset_canon_rides_sidecars_too(storage, tmp_data):
@@ -123,8 +125,8 @@ def test_asset_canon_rides_sidecars_too(storage, tmp_data):
     pub_dir = os.path.join(tmp_data, "publishers", "foglamp-press")
     assert open(os.path.join(pub_dir, "description.md")).read() == pub.description
     raw = json.load(open(os.path.join(pub_dir, "publisher.json")))
-    assert raw["description"] == "" and raw["logo"] is None, \
-        "'' marks moved words; null marks a brief never begun"
+    assert raw["description"] == "description.md" and raw["logo"] is None, \
+        "the JSON references the sidecar; null marks a brief never begun"
     back = storage.read_object(Publisher, {"publisher_id": "foglamp-press"})
     assert back.description == pub.description
     assert back.logo is None
@@ -145,7 +147,7 @@ def test_migration_covers_the_asset_canon(tmp_path):
     assert open(os.path.join(d, "description.md")).read() == "Founded before the ruling."
     assert open(os.path.join(d, "logo.md")).read() == "An owl pressing type, two colors."
     raw = json.load(open(os.path.join(d, "publisher.json")))
-    assert raw["description"] == "" and raw["logo"] == ""
+    assert raw["description"] == "description.md" and raw["logo"] == "logo.md"
 
 
 def test_migration_zeroes_whitespace_only_prose_without_a_sidecar(tmp_path):

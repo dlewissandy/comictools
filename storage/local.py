@@ -38,11 +38,12 @@ _WRITE_LOCK = threading.Lock()
 # THE PROSE LIVES IN MARKDOWN (the author's ruling): long-form text — the
 # scripts, scene manuscripts, render briefs and asset canon — is stored as
 # a sidecar .md file beside the object's JSON, so external editors and git
-# diffs see prose, never escaped strings.  The JSON keeps the key as ""
-# (or null for an optional brief never begun); the sidecar is the ONLY
-# source of words on read — no dual reads.  Structured specs (style
-# definitions, shot lists nested inside setting.json) and one-line labels
-# (names, beats) stay in the record.
+# diffs see prose, never escaped strings.  The JSON REFERENCES the sidecar
+# — the field holds the .md filename ("" for emptied words, null for an
+# optional brief never begun); the sidecar is the ONLY source of words on
+# read — no dual reads.  Structured specs (style definitions, shot lists
+# nested inside setting.json) and one-line labels (names, beats) stay in
+# the record.
 # ---------------------------------------------------------------------------
 SIDECAR_FIELDS: dict[str, dict[str, str]] = {
     "Issue":            {"story": "story.md"},
@@ -81,7 +82,9 @@ def _write_sidecars(cls_name: str, obj_dir: str, payload: dict, base_path: str) 
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, path)
-            payload[field] = ""
+            # the JSON REFERENCES the sidecar: the field names the file
+            # that holds the words
+            payload[field] = fname
         else:
             if os.path.exists(path):
                 # emptied words are still words — they wait in the wastebasket
@@ -108,9 +111,9 @@ def _read_sidecars(cls_name: str, obj_dir: str, payload: dict) -> dict:
             with open(path, encoding="utf-8") as f:
                 payload[field] = f.read()
         else:
-            # no words; only the JSON's null-ness passes through (it is
-            # structure, not prose — it keeps optional briefs offering
-            # 'add' rather than 'edit')
+            # no words: a dangling reference or inline leftover reads as
+            # empty; only the JSON's null-ness passes through (structure,
+            # not prose — it keeps optional briefs offering 'add')
             payload[field] = None if payload.get(field) is None else ""
     return payload
 
@@ -159,20 +162,24 @@ def migrate_house_prose(base_path: str) -> int:
                 continue
             dirty = False
             for field, sname in SIDECAR_FIELDS[cls_name].items():
-                text = d.get(field) or ""
-                if not text:
-                    continue
+                raw = d.get(field)
                 sc = os.path.join(root, sname)
-                if text.strip() and not os.path.exists(sc):
+                has_sc = os.path.exists(sc)
+                if raw and raw.strip() and raw != sname and not has_sc:
+                    # pre-ruling inline words move to their sidecar
                     tmp = f"{sc}.{uuid4().hex[:8]}.tmp"
                     with open(tmp, "w", encoding="utf-8") as f:
-                        f.write(text)
+                        f.write(raw)
                         f.flush()
                         os.fsync(f.fileno())
                     os.replace(tmp, sc)
-                # the sidecar is the only read source from here on
-                d[field] = ""
-                dirty = True
+                    has_sc = True
+                # the JSON references the sidecar by name; '' marks emptied
+                # words (or a dangling reference), null a brief never begun
+                want = sname if has_sc else (None if raw is None else "")
+                if raw != want:
+                    d[field] = want
+                    dirty = True
             if dirty:
                 tmp = f"{p}.{uuid4().hex[:8]}.tmp"
                 with _WRITE_LOCK:
