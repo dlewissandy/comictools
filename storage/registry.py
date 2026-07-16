@@ -102,7 +102,37 @@ def mount_all() -> list[dict]:
         at = os.path.join(DATA_DIR, entry)
         if os.path.islink(at) and (entry not in want or not os.path.isdir(at)):
             os.remove(at)
+    # THE PROSE LIVES IN MARKDOWN: every mounted house is migrated once
+    # (inline JSON prose → .md sidecars) — so an adopted or cloned repo
+    # from before the ruling reads correctly.
+    for slug, target in want.items():
+        _migrate_prose_once(slug, target)
+    # a legacy single-root data/ (real files, not mounts) reads and writes
+    # through the same sidecar hooks — it gets the same walk.  Markerless
+    # (no .git of its own), so it re-walks each boot: instant once clean.
+    legacy_series = os.path.join(DATA_DIR, "series")
+    if os.path.isdir(legacy_series) and not os.path.islink(legacy_series):
+        _migrate_prose_once("data", DATA_DIR)
     return houses
+
+
+def _migrate_prose_once(slug: str, target: str) -> None:
+    """Move a house's inline JSON prose into .md sidecars (idempotent).
+    A marker in .git/ skips the walk on later boots; markerless houses
+    (bare dirs, git-file worktrees) just re-walk — the walk converges."""
+    marker = os.path.join(target, ".git", "comic-prose-v1")
+    if os.path.isfile(marker):
+        return
+    from storage.local import migrate_house_prose
+    try:
+        n = migrate_house_prose(target)
+        if n:
+            logger.info(f"{slug}: moved prose to markdown sidecars in {n} files")
+        if os.path.isdir(os.path.dirname(marker)):
+            with open(marker, "w") as f:
+                f.write("1\n")
+    except Exception as ex:
+        logger.warning(f"{slug}: prose migration skipped: {ex}")
 
 
 def storage_for(slug: str):
@@ -202,6 +232,10 @@ def register(path: str, slug: str | None = None) -> str:
         at = mount_path(slug)
         if not os.path.exists(at):
             _symlink(os.path.realpath(path), at)
+    # an adopted pre-ruling house must read correctly NOW, not after the
+    # next restart — a save through the sidecar-only path would otherwise
+    # zero its inline prose
+    _migrate_prose_once(slug, os.path.realpath(path))
     return slug
 
 

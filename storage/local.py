@@ -33,6 +33,135 @@ from storage.filepath import (
 _WRITE_LOCK = threading.Lock()
 
 
+
+# ---------------------------------------------------------------------------
+# THE PROSE LIVES IN MARKDOWN (the author's ruling): long-form text — the
+# scripts, scene manuscripts and render briefs — is stored as a sidecar
+# .md file beside the object's JSON, so external editors and git diffs see
+# prose, never escaped strings.  The JSON keeps the key as "" (a
+# placeholder); the sidecar is the ONLY source on read — no dual reads.
+# ---------------------------------------------------------------------------
+SIDECAR_FIELDS: dict[str, dict[str, str]] = {
+    "Issue":      {"story": "story.md"},
+    "Story":      {"text": "story.md"},
+    "SceneModel": {"story": "scene.md"},
+    "Panel":      {"description": "brief.md"},
+    "Cover":      {"description": "brief.md"},
+    "Insert":     {"description": "brief.md"},
+    "ArtBoard":   {"description": "brief.md"},
+}
+
+
+def _write_sidecars(cls_name: str, obj_dir: str, payload: dict, base_path: str) -> dict:
+    """Prose fields leave the payload for their .md sidecars (atomic
+    write); emptied prose retires its sidecar to the wastebasket.  The
+    JSON keeps ''. """
+    fields = SIDECAR_FIELDS.get(cls_name)
+    if not fields:
+        return payload
+    for field, fname in fields.items():
+        text = payload.get(field) or ""
+        path = os.path.join(obj_dir, fname)
+        if text.strip():
+            tmp = f"{path}.{uuid4().hex[:8]}.tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(text)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+        elif os.path.exists(path):
+            # emptied words are still words — they wait in the wastebasket
+            from storage.trash import soft_delete
+            soft_delete(str(base_path), path,
+                        note=f"the emptied {fname} of a {cls_name.lower()}")
+        payload[field] = ""
+    return payload
+
+
+def _read_sidecars(cls_name: str, obj_dir: str, payload: dict) -> dict:
+    """Prose fields fill from their .md sidecars — a missing file reads
+    as empty (a co-author may have deleted it in their editor).  Any
+    other read failure RAISES: silently blanking the field would let
+    the next save destroy the real sidecar."""
+    fields = SIDECAR_FIELDS.get(cls_name)
+    if not fields:
+        return payload
+    for field, fname in fields.items():
+        path = os.path.join(obj_dir, fname)
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as f:
+                payload[field] = f.read()
+        else:
+            payload[field] = ""
+    return payload
+
+
+def backup_object_files(base_path: str, filepath: str, cls_name: str, note: str) -> None:
+    """Pre-mutation insurance for an object record AND its prose: the
+    JSON and any sidecars go to the wastebasket as paired entries."""
+    from storage.trash import soft_backup
+    if os.path.exists(filepath):
+        soft_backup(str(base_path), filepath, note=note)
+    for sname in (SIDECAR_FIELDS.get(cls_name) or {}).values():
+        sc = os.path.join(os.path.dirname(filepath), sname)
+        if os.path.exists(sc):
+            soft_backup(str(base_path), sc, note=f"{note} (the prose)")
+
+
+def migrate_house_prose(base_path: str) -> int:
+    """ONE-TIME per house: move inline prose out of existing JSON into
+    markdown sidecars.  Raw-JSON pass (never through model reads, which
+    are sidecar-only).  Idempotent; returns the number of files touched.
+    Walks the wastebasket too — a pre-ruling delete must come back
+    speaking sidecar when it is restored.  Skips .git only."""
+    NAME_TO_CLS = {"issue.json": "Issue", "story.json": "Story",
+                   "scene.json": "SceneModel", "panel.json": "Panel",
+                   "cover.json": "Cover", "insert.json": "Insert",
+                   "artboard.json": "ArtBoard"}
+    moved = 0
+    base_path = str(base_path)
+    for root, dirs, files in os.walk(base_path, followlinks=False):
+        dirs[:] = [d for d in dirs if d not in (".git", ".queue", "exports")]
+        for fn in files:
+            cls_name = NAME_TO_CLS.get(fn)
+            if not cls_name:
+                continue
+            p = os.path.join(root, fn)
+            try:
+                with open(p) as f:
+                    d = json.load(f)
+            except (json.JSONDecodeError, OSError) as ex:
+                logger.warning(f"prose migration cannot read {p} ({ex}) — "
+                               f"leaving it as it stands")
+                continue
+            dirty = False
+            for field, sname in SIDECAR_FIELDS[cls_name].items():
+                text = d.get(field) or ""
+                if not text:
+                    continue
+                sc = os.path.join(root, sname)
+                if text.strip() and not os.path.exists(sc):
+                    tmp = f"{sc}.{uuid4().hex[:8]}.tmp"
+                    with open(tmp, "w", encoding="utf-8") as f:
+                        f.write(text)
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(tmp, sc)
+                # the sidecar is the only read source from here on
+                d[field] = ""
+                dirty = True
+            if dirty:
+                tmp = f"{p}.{uuid4().hex[:8]}.tmp"
+                with _WRITE_LOCK:
+                    with open(tmp, "w") as f:
+                        f.write(json.dumps(d, indent=2))
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(tmp, p)
+                moved += 1
+    return moved
+
+
 class LocalStorage(GenericStorage):
 
     def __init__(self, base_path: str):
@@ -137,9 +266,11 @@ class LocalStorage(GenericStorage):
         tmp = f"{filepath}.{_uuid4().hex[:8]}.tmp"
         with _WRITE_LOCK:
             with open(tmp, 'w') as f:
-                f.write(json.dumps(
-                    self._rewrite_locators(json.loads(data.model_dump_json()), outbound=True),
-                    indent=2))
+                _payload = self._rewrite_locators(json.loads(data.model_dump_json()), outbound=True)
+                _payload = _write_sidecars(data.__class__.__name__,
+                                           os.path.dirname(filepath), _payload,
+                                           base_path=str(self.base_path))
+                f.write(json.dumps(_payload, indent=2))
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, filepath)
@@ -174,7 +305,11 @@ class LocalStorage(GenericStorage):
             raise FileNotFoundError(f"Path {filepath} is not a file.")
         
         with open(filepath, 'r') as f:
-            data = self._rewrite_locators(json.load(f), outbound=False)
+            # sidecars fill BEFORE the locator rewrite so prose passes the
+            # same inbound translation the rest of the payload does (writes
+            # extract it AFTER the outbound pass — symmetric)
+            data = _read_sidecars(cls.__name__, os.path.dirname(filepath), json.load(f))
+            data = self._rewrite_locators(data, outbound=False)
             f.flush()
             os.fsync(f.fileno())
 
@@ -287,9 +422,11 @@ class LocalStorage(GenericStorage):
         tmp = f"{filepath}.{_uuid4().hex[:8]}.tmp"
         with _WRITE_LOCK:
             with open(tmp, 'w') as f:
-                f.write(json.dumps(
-                    self._rewrite_locators(json.loads(data.model_dump_json()), outbound=True),
-                    indent=2))
+                _payload = self._rewrite_locators(json.loads(data.model_dump_json()), outbound=True)
+                _payload = _write_sidecars(data.__class__.__name__,
+                                           os.path.dirname(filepath), _payload,
+                                           base_path=str(self.base_path))
+                f.write(json.dumps(_payload, indent=2))
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, filepath)

@@ -90,6 +90,19 @@ One JSON file per object, with a fixed basename per class: `publisher.json`,
 `variant.json`, `issue.json`, `cover.json`, `scene.json`, `page.json`, `story.json`,
 `artboard.json`, `insert.json`, `panel.json`, `styled_variant.json`.
 
+**Prose lives in markdown, not JSON.** Long-form text is stored as a `.md` sidecar
+beside the object's JSON — `story.md` for an issue's script and a story's text,
+`scene.md` for a scene's manuscript, `brief.md` for the render brief of a panel, cover,
+insert, or artboard (the map is `SIDECAR_FIELDS` in `storage/local.py`). The JSON keeps
+the field as `""`; on read the sidecar is the ONLY source (a missing sidecar reads as
+empty), and on write the field leaves the payload for its sidecar — same atomic
+tmp-fsync-replace discipline, UTF-8. Emptying a prose field retires its sidecar to the
+wastebasket. This is the single supported way of storing prose: external editors and git
+diffs see manuscripts as manuscripts. A one-time idempotent migration
+(`migrate_house_prose`) runs when a house is mounted or adopted, converting any
+pre-ruling inline prose — including wastebasket payloads, so old deletes restore
+correctly — and stamps `.git/comic-prose-v1` so later boots skip the walk.
+
 Generated art lands in an `images/` subfolder per object. `StyledVariant` images are
 style-keyed at `variants/{variant_id}/images/{style_id}`. Reference uploads land in an
 `uploads/` subfolder per object — except `StyledVariant`, `Publisher`, and `StyleExample`,

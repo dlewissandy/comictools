@@ -168,8 +168,10 @@ def test_destructive_mutations_snapshot_first(storage):
     before = len(list_entries(str(storage.base_path)))
     snapshot_board(storage, cover, "pin test")
     entries = list_entries(str(storage.base_path))
-    assert len(entries) == before + 1 and entries[0]["occupied"], \
-        "the snapshot waits, occupied, ready for swap_entry"
+    # the record AND its brief.md snapshot as paired entries — both wait,
+    # occupied, ready for swap_entry
+    assert len(entries) == before + 2 and all(e["occupied"] for e in entries[:2]), \
+        "the snapshot (record + prose) waits, occupied, ready for swap_entry"
 
 
 def test_the_render_speaks_one_aspect():

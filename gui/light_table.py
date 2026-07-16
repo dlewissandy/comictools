@@ -1220,10 +1220,11 @@ def snapshot_board(storage, board, note: str):
     figure, rewritten brief) — 'swap it back' is always a door."""
     try:
         from storage.filepath import obj_to_filepath
-        from storage.trash import soft_backup
+        from storage.local import backup_object_files
         fp = obj_to_filepath(board, base_path=storage.base_path)
-        if os.path.exists(fp):
-            soft_backup(str(storage.base_path), fp, note=note)
+        # the record and its prose sidecars file as paired entries
+        backup_object_files(str(storage.base_path), fp,
+                            board.__class__.__name__, note)
     except Exception as ex:
         logger.debug(f"board snapshot skipped: {ex}")
 
