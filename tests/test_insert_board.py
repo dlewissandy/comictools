@@ -90,3 +90,14 @@ def test_the_book_offers_the_page_turn_door():
     lt = open("gui/light_table.py").read()
     assert "inside covers are ad/mailbag surfaces" in lt, \
         "inside covers wear no trade dress"
+
+
+def test_the_authors_imposition():
+    """Front cover pairs with the inside front; inside-back pins to
+    column 1 so [inside back][back cover] always close the book."""
+    src = open("gui/issue.py").read()
+    assert "recto" not in src.split("def cover_sheet", 1)[1][:400], \
+        "no solo recto front cover — it pairs with the inside front"
+    assert "book-col-1" in src, "the inside back pins to column 1"
+    css = open("main.py").read()
+    assert ".book-col-1 { grid-column: 1; }" in css

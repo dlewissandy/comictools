@@ -400,7 +400,7 @@ def view_issue(state: APPState):
             t.on('click', lambda _, s=scene_id, pid=panel_id: open_scene_panel(s, pid))
         return t
 
-    def cover_sheet(location, recto=False):
+    def cover_sheet(location):
         # AN INSIDE SLOT IS A FULL-PAGE SURFACE: a located insert (an ad,
         # the mailbag) prints here and beats cover art — its sheet renders
         # in place of the cover board
@@ -408,10 +408,16 @@ def view_issue(state: APPState):
             _loc_ins = next((i for i in inserts_all
                              if getattr(i, 'location', None) == location), None)
             if _loc_ins is not None:
-                insert_sheet(_loc_ins)
+                _el = insert_sheet(_loc_ins)
+                if _el is not None and location == 'inside-back':
+                    _el.classes('book-col-1')
                 return True
         c = cover_at.get(location)
-        classes = 'book-page' + (' book-page--recto' if recto else '')
+        # THE AUTHOR'S IMPOSITION: front+inside-front open the book as a
+        # pair; inside-back+back close it — inside-back pins to column 1
+        # so the final pair holds no matter the interior's parity (an odd
+        # book leaves one quiet blank slot, like a real print run)
+        classes = 'book-page' + (' book-col-1' if location == 'inside-back' else '')
         if c is not None:
             with ui.element('div').classes(classes + ('' if (c.image and os.path.exists(c.image))
                                                       else ' book-page--ghost')) as sh:
@@ -653,6 +659,7 @@ def view_issue(state: APPState):
         sh.on('click', lambda _, i=ins: goto(SelectedKind.INSERT, i.insert_id, i.name,
                                              anchor=f'insert-{i.insert_id}'))
         sh._props['data-banchor'] = f'insert-{ins.insert_id}'
+        return sh
 
     def scene_production_strip(sc):
         """The scene's production line — setting, cast, props — editable right
@@ -1066,7 +1073,7 @@ def view_issue(state: APPState):
             # its tiles show the inked proof or a placeholder, and click opens
             # the light board — just like BEATS and ROUGHS.  The bound spreads
             # live behind the 'Read' button.
-            cover_sheet('front', recto=True)
+            cover_sheet('front')
             cover_sheet('inside-front')
 
             # THE STORIES: the issue's own script, then the backups, in order.

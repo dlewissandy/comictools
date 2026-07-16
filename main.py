@@ -421,7 +421,7 @@ def init_layout(logger):
         @container (max-width: 560px) {
             .book { --pw: min(420px, 88cqw);
                     grid-template-columns: var(--pw) !important; }
-            .book-page--recto { grid-column: auto !important; }
+            .book-col-1 { grid-column: auto !important; }
             .book-masthead { flex-wrap: wrap !important; }
         }
         .book-page { width: var(--pw); aspect-ratio: 6.625 / 10.1875; position: relative;
@@ -433,7 +433,7 @@ def init_layout(logger):
                      color: #1c1a17;
                      --ink: #181410; --caption: #f9df7b; --caption-ink: #181410; }
         .book-page .text-gray-500 { color: #6b7280 !important; }
-        .book-page--recto { grid-column: 2; }
+        .book-col-1 { grid-column: 1; }
         .book-page--ghost-faint { opacity: .55; }
         /* THE PAGE TURN'S DOOR: zero real estate — a small round + riding
            the gutter between sheets; quiet until the hand comes near.
