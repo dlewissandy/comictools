@@ -208,10 +208,20 @@ def view_issue(state: APPState):
         fresh = storage.read_object(Insert, ins.primary_key)
         if fresh is None:
             return
-        # step through the REAL anchor spots: the front of the book, then
-        # each existing scene — never a number that matches nothing
-        anchors = [0] + sorted(s.scene_number for s in scenes_all)
-        cur = fresh.after_scene_number if fresh.after_scene_number in anchors else 0
+        # step through the REAL anchor spots — and the STRIDE matches the
+        # altitude the author stands at: on SCRIPTS a whole story at a
+        # time (each story's last scene), on scenes/panels one scene
+        detail = (getattr(state, '_book_detail', None) or {}).get(issue_id, 'beats')
+        if detail == 'stories':
+            _real = {st.story_id for st in stories_all}
+            _by = {}
+            for sc in scenes_all:
+                _key = sc.story_id if sc.story_id in _real else None
+                _by.setdefault(_key, []).append(sc.scene_number)
+            anchors = sorted({0} | {max(v) for v in _by.values() if v})
+        else:
+            anchors = [0] + sorted(s.scene_number for s in scenes_all)
+        cur = max([a for a in anchors if a <= fresh.after_scene_number], default=0)
         i = anchors.index(cur)
         if not (0 <= i + d < len(anchors)):
             return
@@ -585,7 +595,8 @@ def view_issue(state: APPState):
     _INSERT_KINDS = [('poster', 'A poster'), ('ad', 'An ad'),
                      ('pin-up', 'A pin-up'), ('mailbag', 'The mailbag')]
     _KIND_NAMES = {'poster': 'Poster', 'ad': 'Ad page',
-                   'pin-up': 'Pin-up', 'mailbag': 'The Mailbag'}
+                   'pin-up': 'Pin-up', 'mailbag': 'The Mailbag',
+                   'page': 'Full page'}
 
     def _make_insert(kind: str, after_n: int = 0, location: str | None = None):
         # STAY PUT: the page appears in place — compose it when you like
@@ -608,30 +619,31 @@ def view_issue(state: APPState):
         twice: first as a cell, then as a full row)."""
         if host is None:
             return
-        _KIND_ICONS = {'poster': 'image', 'ad': 'campaign',
-                       'pin-up': 'photo', 'mailbag': 'mail'}
         with host:
-            btn = ui.button('full page here', icon='add') \
-                .props('flat dense no-caps size=sm') \
-                .classes('book-turn-btn bg-white/70 dark:bg-black/50')
-            btn.on('click.stop', lambda *_: None)
-            with btn:
-                with ui.menu().props('auto-close'):
-                    ui.label('A FULL PAGE SLIPS IN AFTER THIS ONE') \
-                        .classes('comic-label-sm') \
-                        .style('padding: 8px 12px 4px; opacity: .7;')
-                    for k, lbl in _INSERT_KINDS:
-                        ui.menu_item(lbl, on_click=lambda *_, k=k, n=after_n:
-                                     _make_insert(k, after_n=n)) \
-                            .props('dense') \
-                            .classes('book-turn-kind')
+            bar = ui.element('div').classes('book-turn-bar')
+            bar.tooltip('Add a full page here — it appears as a dotted '
+                        'placeholder: drop art on it, or click it to compose')
+            bar.on('click.stop', lambda _, n=after_n: _make_insert('page', after_n=n))
+
     def insert_sheet(ins):
         rendered = ins.image and os.path.exists(ins.image)
         has_text = bool((ins.description or '').strip())
         classes = 'book-page'
         if not rendered:
             classes += ' book-page--script' if has_text else ' book-page--ghost book-page--insert'
-        with ui.element('div').classes(classes + ' cursor-pointer') as sh:
+        with ui.element('div').classes(classes + ' cursor-pointer insert-drop-sheet') as sh:
+            def _drop_art(e, i=ins):
+                fresh = storage.read_object(Insert, i.primary_key)
+                if fresh is None:
+                    return
+                locator = storage.upload_image(obj=fresh, name=e.name,
+                                               data=e.content, mime_type=e.type)
+                fresh.image = locator
+                storage.update_object(fresh)
+                receipt(f"🖼 dropped art onto **{fresh.name}** — the page wears it")
+                state.refresh_details()
+            ui.upload(on_upload=_drop_art, auto_upload=True, max_files=1) \
+                .style('display: none;')
             if rendered:
                 ui.image(source=ins.image).props('fit=cover').classes('absolute inset-0 w-full h-full')
             elif has_text:
@@ -641,7 +653,8 @@ def view_issue(state: APPState):
                     ui.markdown(ins.description).classes('script-text')
             else:
                 ui.icon({'poster': 'wallpaper', 'ad': 'storefront', 'pin-up': 'brush',
-                         'mailbag': 'mail', 'title-page': 'title'}.get(ins.kind, 'wallpaper')) \
+                         'mailbag': 'mail', 'title-page': 'title',
+                         'page': 'note_add'}.get(ins.kind, 'wallpaper')) \
                     .classes('text-4xl').style('opacity: .5;')
                 ui.label(ins.name).classes('page-ghost-cta')
             ui.label(f'{ins.kind} · {ins.name}'.upper()).classes('page-cap')
@@ -662,9 +675,15 @@ def view_issue(state: APPState):
                                lambda _, i=ins: post_user_message(
                                    state, f"Render the '{i.name}' insert."))
                 ui.space()
-                footer_btn('close', 'Tear this insert out…',
-                           lambda _, i=ins: post_user_message(
-                               state, f"I would like to delete the insert '{i.name}'."))
+                def _strike_insert(i=ins):
+                    from gui.strike import strike
+                    from agentic.tools.deleter import delete_insert as _del_ins
+                    return strike(state, _del_ins,
+                                  {"series_id": series_id, "issue_id": issue_id,
+                                   "insert_id": i.insert_id},
+                                  f"the '{i.name}' {i.kind}")
+                footer_btn('close', 'Tear this page out (it waits in the wastebasket)',
+                           lambda _, i=ins: _strike_insert(i))
         # the page IS a board: click it to open its light table
         sh.tooltip(f"The {ins.kind} — open it on the light table")
         sh.on('click', lambda _, i=ins: goto(SelectedKind.INSERT, i.insert_id, i.name,

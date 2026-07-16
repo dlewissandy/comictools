@@ -435,19 +435,15 @@ def init_layout(logger):
         .book-page .text-gray-500 { color: #6b7280 !important; }
         .book-col-1 { grid-column: 1; }
         .book-page--ghost-faint { opacity: .55; }
-        /* THE PAGE TURN'S DOOR: a collapsed pill at the bottom edge of
-           the sheet it follows — a quiet ⊕ at rest that BLOOMS into
-           '⊕ full page here' under the hand.  Never a grid element, so
-           the two-up pairing can never shift. */
-        .book-turn-btn { position: absolute; left: 50%; bottom: 4px;
-                         transform: translateX(-50%); z-index: 12;
-                         opacity: .45; transition: max-width .22s, opacity .15s;
-                         max-width: 30px; overflow: hidden;
-                         white-space: nowrap; border-radius: 15px;
-                         justify-content: flex-start; }
-        .book-turn-btn:hover { opacity: 1; max-width: 240px; }
-        .book-turn-btn .q-btn__content { flex-wrap: nowrap;
-                                         justify-content: flex-start; }
+        /* THE PAGE TURN'S BAR (the author's design): a slim dashed slot
+           riding the bottom edge of the sheet it follows — click it and a
+           dotted placeholder page appears right there.  Never a grid
+           element, so the two-up pairing can never shift. */
+        .book-turn-bar { position: absolute; left: 6%; right: 6%; bottom: 3px;
+                         height: 9px; border: 2px dashed var(--ink);
+                         border-radius: 5px; opacity: .3; cursor: copy;
+                         z-index: 12; transition: opacity .15s, height .15s; }
+        .book-turn-bar:hover { opacity: .9; height: 13px; }
         .book-page--ghost { border: 2px dashed var(--ink); background: transparent;
                             box-shadow: none; cursor: pointer;
                             display: flex; flex-direction: column;

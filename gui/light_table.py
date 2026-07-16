@@ -590,7 +590,7 @@ if (!window._roughDragInit) {
     if (!target || !target.closest) return null;
     let zone = target.closest('.q-uploader');
     if (zone) return zone;
-    const host = target.closest('.q-card, .mosaic-card, .create-drop, .table-drop-zone');
+    const host = target.closest('.q-card, .mosaic-card, .create-drop, .table-drop-zone, .insert-drop-sheet');
     return host ? host.querySelector('.q-uploader') : null;
   };
   // the visible outline goes on the element the user sees: the uploader
