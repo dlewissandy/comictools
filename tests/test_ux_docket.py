@@ -147,3 +147,90 @@ def test_the_header_and_box_stay_quiet():
         "the open-in-new-window button is gone"
     # the palette still stands behind Ctrl/Cmd-K
     assert "ui.keyboard" in main_src and "build_palette" in main_src
+
+
+def test_destructive_mutations_snapshot_first(storage):
+    """Q1 ruling: clearing the board (and its destructive siblings) files
+    the board's record in the wastebasket first — 'swap it back' is
+    always a door.  And the dead undo plumbing is gone (Q2)."""
+    src = open("gui/light_table.py").read()
+    assert src.count("snapshot_board(storage, panel,") >= 7
+    assert "snapshot_board(storage, fresh," in src, "the brief rewrite snapshots too"
+    assert "undo=undo" not in src, "the dead undo plumbing is swept"
+    assert "undo=undo" not in open("gui/strike.py").read()
+
+    # behavioral: snapshot_board files a swap-able copy
+    from gui.light_table import snapshot_board
+    from storage.trash import list_entries
+    from schema import Cover
+    cover = storage.read_object(Cover, primary_key={
+        "series_id": WL, "issue_id": "witchlight-carnival", "cover_id": "front"})
+    before = len(list_entries(str(storage.base_path)))
+    snapshot_board(storage, cover, "pin test")
+    entries = list_entries(str(storage.base_path))
+    assert len(entries) == before + 1 and entries[0]["occupied"], \
+        "the snapshot waits, occupied, ready for swap_entry"
+
+
+def test_the_render_speaks_one_aspect():
+    """The aspect bug: prompt, plate and canvas must all use the LAID
+    aspect — the same truth the table displays and the book prints."""
+    src = open("agentic/tools/imaging.py").read()
+    body = src.split("def _generate_panel_image_body", 1)[1].split("\ndef ", 1)[0]
+    assert "_render_aspect" in body
+    assert "Aspect/orientation: {_render_aspect.value}" in body
+    assert "scene_background(setting, scene.style_id, _render_aspect," in body
+    assert "aspect_ratio=_render_aspect," in body
+    # ONE PICKER BOTH PLACES (the author's ruling): the shared shape grid
+    # holds on pick, releases on Auto, and derives its boxes from the law
+    lt = open("gui/light_table.py").read()
+    assert "def shape_picker(" in lt
+    pick = lt.split("def shape_picker(", 1)[1]
+    assert "shape_locked = True" in pick and "size_mult" in pick
+    assert "shape_picker(state, storage, panel, receipt=_receipt)" in lt, \
+        "the panel page hosts the shared picker"
+    assert "shape_picker(state, storage, p, receipt=receipt)" in open("gui/issue.py").read(), \
+        "the book tile menu hosts the same picker"
+
+
+def test_the_law_offers_six_by_six(storage):
+    """The picker derives from size_mult: squares reach 3x (6×6), while
+    landscape and portrait stop at 2x — the menu can never drift again."""
+    from helpers.stitcher import size_mult, AR
+    assert size_mult("3x", AR["square"]) == 3
+    assert size_mult("3x", AR["landscape"]) == 2
+    assert size_mult("3x", AR["portrait"]) == 2
+
+
+def test_reshape_unselects_a_mismatched_proof(storage):
+    """The author's ruling: a reshaped panel loses its selected proof —
+    repack_page strips a take drawn for another frame and names it."""
+    import os
+    from PIL import Image
+    from helpers import stitcher
+    from schema import SceneModel, Panel, Page
+
+    WLs, C = "wonders-of-the-witchlight", "witchlight-carnival"
+    pages = storage.read_all_objects(Page, {"series_id": WLs, "issue_id": C},
+                                     order_by="page_number")
+    page = next((pm for pm in pages if pm.cells), None)
+    assert page is not None
+    cell = page.cells[0]
+    panel = storage.read_object(Panel, {"series_id": WLs, "issue_id": C,
+                                        "scene_id": cell.scene_id,
+                                        "panel_id": cell.panel_id})
+    # give the panel a proof drawn at the WRONG shape for its cell
+    laid_landscape = cell.w > cell.h
+    wrong = (400, 600) if laid_landscape else (600, 400)
+    art_dir = os.path.join(str(storage.base_path), "series", WLs, "issues", C,
+                           "scenes", cell.scene_id, "panels", cell.panel_id, "images")
+    os.makedirs(art_dir, exist_ok=True)
+    art = os.path.join(art_dir, "wrong-shape.png")
+    Image.new("RGB", wrong, "gray").save(art)
+    panel.image = art
+    storage.update_object(panel)
+
+    stitcher.repack_page(storage, page)
+    fresh = storage.read_object(Panel, panel.primary_key)
+    assert fresh.image is None, "the mismatched proof is unselected"
+    assert stitcher.LAST_UNPROOFED, "the receipt names it"

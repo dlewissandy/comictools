@@ -87,12 +87,11 @@ def thread_reply(state, text: str) -> dict:
     return entry
 
 
-def thread_aside(state, text: str, *, undo=None, bench: str | None = None,
+def thread_aside(state, text: str, *, bench: str | None = None,
                  image: str | None = None) -> dict:
     """A receipt of studio work: it persists in the thread and surfaces as
-    a quiet toast — the chat stays a conversation.  (The daybook door is
-    gone — the author's call.  `undo` is still accepted from callers; the
-    wastebasket remains the bring-it-back surface.)"""
+    a quiet toast — the chat stays a conversation.  The wastebasket (and
+    its 'swap it back' door) is the bring-it-back surface."""
     entry = _append(state, {"t": "aside", "text": text, "bench": bench,
                             "image": image})
     try:

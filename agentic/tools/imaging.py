@@ -2395,6 +2395,12 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
 
     panel: Panel = storage.read_object(cls=Panel, primary_key={
         "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id, "panel_id": panel_id})
+
+    # ONE ASPECT TRUTH: the render matches THE PAGE (the flow may have
+    # flexed an unlocked panel off its beat-shape) — prompt, background
+    # plate and canvas all speak the laid aspect, never a mix
+    from helpers.stitcher import laid_aspect as _laid
+    _render_aspect = _laid(storage, panel) if panel is not None else None
     if panel is None:
         return f"Panel '{panel_id}' not found in scene '{scene_id}'."
     scene: SceneModel = storage.read_object(cls=SceneModel, primary_key={
@@ -2434,7 +2440,7 @@ def _generate_panel_image_body(wrapper, series_id: str, issue_id: str, scene_id:
         if setting is not None:
             from helpers.masters import scene_background
             # the scene's chosen SHOT (angle + time of day) wins over the master
-            background, _exact = scene_background(setting, scene.style_id, panel.aspect,
+            background, _exact = scene_background(setting, scene.style_id, _render_aspect,
                                                   getattr(scene, 'setting_shot_id', None))
             if background and os.path.exists(background):
                 reference_images.append(background)
@@ -2604,7 +2610,7 @@ must look; keep them strictly on-model."""
         ref_guidance = """The character reference sheets show exactly how each character
 must look; keep them strictly on-model."""
 
-    prompt = f"""Render a single comic book panel.  Aspect/orientation: {panel.aspect.value}.
+    prompt = f"""Render a single comic book panel.  Aspect/orientation: {_render_aspect.value}.
 {f"Setting: {setting_line}" if setting_line else ""}
 {f"Mood: {scene.mood}" if scene.mood else ""}
 
@@ -2648,7 +2654,7 @@ flatten everything to the single style below so nothing looks pasted in from ano
         reference_images=reference_images,
         # render at the shape the PAGE gave this panel (the flow may have flexed
         # it), so the art fills its cell instead of being letterboxed/cropped
-        aspect_ratio=_laid_aspect(storage, panel),
+        aspect_ratio=_render_aspect,
         image_quality=IMAGE_QUALITY.HIGH,
         name=f"{panel_id}-render",
     )
@@ -3855,7 +3861,9 @@ def split_layer_body(state, series_id: str, issue_id: str, scene_id: str | None 
     from PIL import Image as _ImgSrc
     src_img = _ImgSrc.open(source).convert('RGBA')
     W0, H0 = src_img.size
-    canvas_ar = {"landscape": 1.5, "portrait": 2 / 3, "square": 1.0}[panel.aspect.value]
+    from helpers.stitcher import laid_aspect as _laid_sp
+    _sp_aspect = _laid_sp(storage, panel) if hasattr(panel, 'panel_id') else panel.aspect
+    canvas_ar = {"landscape": 1.5, "portrait": 2 / 3, "square": 1.0}[_sp_aspect.value]
     layer_blocking = dict((panel.figure_blocking or {}).get(layer) or {})
     lifted = []
     lifted_keys = []

@@ -28,13 +28,6 @@ from gui.state import APPState
 from gui.messaging import post_user_message
 from gui.selection import SelectionItem, SelectedKind
 
-def _norm_size(size, aspect: str) -> str:
-    """A panel's size as the multiplier it EFFECTIVELY packs at — legacy
-    names ('regular', 'large', 'splash', 'small') read as their multiplier,
-    clamped to what the aspect offers."""
-    from helpers.stitcher import AR, size_mult
-    return f"{size_mult(size, AR.get(aspect, 1.5))}x"
-
 
 def view_issue(state: APPState):
     selection = state.selection
@@ -171,42 +164,6 @@ def view_issue(state: APPState):
                   position='bottom', timeout=4000)
 
     # ---- mutations -------------------------------------------------------
-    def _repack_prints(panel_id):
-        from helpers.stitcher import repack_page
-        for pm in storage.read_all_objects(Page, {"series_id": series_id, "issue_id": issue_id}):
-            if pm.cells and any(r.panel_id == panel_id for row in pm.rows for r in row):
-                was_pinned = getattr(pm, 'pinned', False)
-                repack_page(storage, pm)
-                storage.update_object(pm)
-                if was_pinned:
-                    # reshaping a panel breaks the exact fill — say so
-                    receipt("📌 the reshape released this page's pin — the swatch no longer fit")
-
-    def set_shape(scene_id, panel_id, aspect, size):
-        # PICK THE WHOLE SHAPE AT ONCE: aspect AND size in one action, so a
-        # 2x2 square -> 4x6 portrait is a single pick, not a walk through
-        # intermediate locked states.  A picked shape HOLDS (the flow honors it).
-        p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
-                                        "scene_id": scene_id, "panel_id": panel_id})
-        if p is None:
-            return
-        p.aspect = FrameLayout(aspect)
-        p.size = size
-        p.shape_locked = True
-        storage.update_object(p)
-        _repack_prints(panel_id)
-        receipt(f"🔒 held the panel at {aspect} {size} — the book reflowed around it")
-
-    def set_auto(scene_id, panel_id):
-        p = storage.read_object(Panel, {"series_id": series_id, "issue_id": issue_id,
-                                        "scene_id": scene_id, "panel_id": panel_id})
-        if p is None:
-            return
-        p.shape_locked = False   # released: the flow reshapes it to fill the page
-        storage.update_object(p)
-        _repack_prints(panel_id)
-        receipt("🔓 released the panel — the flow shapes it to fill the page")
-
     def move_beat(scene_id, panel_id, d):
         sibs = sorted(storage.read_all_objects(Panel, primary_key={
             "series_id": series_id, "issue_id": issue_id, "scene_id": scene_id}),
@@ -363,7 +320,6 @@ def view_issue(state: APPState):
                     scene_menu(cap_scene)
                 cap.on('click.stop', lambda _: None)
             if p is not None:
-                size = _norm_size(getattr(p, 'size', None), p.aspect.value)
                 # THE PENCIL is context-aware AND non-destructive: "Rough it"
                 # shows ONLY while the panel has no rough — the instant one
                 # exists the pencil becomes "Proof it" (in every view), so a
@@ -404,10 +360,6 @@ def view_issue(state: APPState):
                                 .on('click', lambda _: (dlg.close(), _go_board('rough')))
                     dlg.open()
 
-                _held = bool(getattr(p, 'shape_locked', False))
-                _SHAPES = [("square", "1x", 2, 2), ("landscape", "1x", 3, 2),
-                           ("portrait", "1x", 2, 3), ("square", "2x", 4, 4),
-                           ("landscape", "2x", 6, 4), ("portrait", "2x", 4, 6)]
                 with ui.row().classes('tile-tools items-center flex-nowrap'):
                     ui.button(icon=_icon).props('flat round dense size=xs') \
                         .tooltip(_tip).on('click.stop', lambda _, f=_pencil: f())
@@ -418,27 +370,10 @@ def view_issue(state: APPState):
                     more_btn.on('click.stop', lambda *_: None)   # open the menu, not the panel
                     with more_btn:
                         with ui.menu().props('auto-close'):
-                            ui.label(f'Shape — {p.aspect.value} {size}'
-                                     + (' · held' if _held else ' · auto')) \
-                                .classes('comic-label-sm').style('padding: 8px 10px 2px;')
-                            with ui.element('div').style(
-                                    'display: grid; grid-template-columns: repeat(3, 46px); '
-                                    'gap: 6px; padding: 6px 10px 10px; justify-items: center; '
-                                    'align-items: center;'):
-                                for (a, s, gw, gh) in _SHAPES:
-                                    _cur = (p.aspect.value == a and size == s)
-                                    box = ui.element('div').style(
-                                        f'width: {gw / 6 * 40:.0f}px; height: {gh / 6 * 40:.0f}px; '
-                                        f'border: 2px solid '
-                                        f'{"#c0392b" if _cur else "rgba(130,130,130,.55)"}; '
-                                        f'border-radius: 3px; cursor: pointer; '
-                                        f'background: {"rgba(192,57,43,.18)" if _cur else "transparent"};')
-                                    box.tooltip(f'{a} {s}  ({gw}×{gh})')
-                                    box.on('click', lambda _, a=a, s=s, sc=scene_id, pid=panel_id:
-                                           set_shape(sc, pid, a, s))
-                            ui.menu_item('Auto — let the flow shape it',
-                                         on_click=lambda *_, sc=scene_id, pid=panel_id:
-                                         set_auto(sc, pid)).props('dense')
+                            # THE ONE SHAPE PICKER — the same control the
+                            # panel's own page shows (gui/light_table.py)
+                            from gui.light_table import shape_picker
+                            shape_picker(state, storage, p, receipt=receipt)
                             ui.separator()
                             ui.menu_item('◂ Move earlier in the scene',
                                          on_click=lambda *_, s=scene_id, pid=panel_id:

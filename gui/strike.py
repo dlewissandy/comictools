@@ -19,27 +19,13 @@ from nicegui import ui
 
 async def strike(state, tool, params: dict, label: str):
     """Invoke a delete TOOL directly (cascades included), then leave a
-    receipt with UNDO that restores the newest wastebasket entry."""
+    quiet receipt — the wastebasket is the way back."""
     from gui.light_table import table_receipt
-    from storage.trash import list_entries, restore_entry
 
     wrapper = SimpleNamespace(context=state)
     result = str(await tool.on_invoke_tool(wrapper, json.dumps(params)))
     if not result.startswith("Deleted"):
         ui.notify(result, type='warning')
         return
-    base = str(state.storage.base_path)
-    entries = list_entries(base, limit=1)
-    entry = entries[0]["entry"] if entries else None
-
-    def undo():
-        restored = entry and restore_entry(base, entry)
-        if restored:
-            table_receipt(state, f"↩️ brought {label} back from the wastebasket")
-            state.refresh_details()
-        else:
-            ui.notify("Couldn't bring it back — its place is occupied. "
-                      "The wastebasket (header) has the full list.", type='warning')
-
-    table_receipt(state, f"🗑 struck {label} — it waits in the wastebasket", undo=undo)
+    table_receipt(state, f"🗑 struck {label} — it waits in the wastebasket")
     state.refresh_details()

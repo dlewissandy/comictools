@@ -1131,13 +1131,109 @@ def read_board(storage, a: dict):
 # own pickers AND the assets drawer (a drawer tile lays its asset right here
 # when a panel is open — the drawer IS part of the table).
 # ---------------------------------------------------------------------------
-def table_receipt(state, text: str, undo=None, bench: str = 'the light table'):
+
+def shape_picker(state, storage, panel, *, receipt):
+    """THE ONE SHAPE PICKER (the author's ruling): the same control in the
+    open book's tile menu and on the panel's own page.  Its boxes are
+    GENERATED from the flow's law (size_mult × the 6-wide page) — the menu
+    can never drift from what the stitcher lays (that's how 6×6 arrives).
+
+    Pick a box → the panel HOLDS that exact shape+size, the book reflows.
+    AUTO → released; the flow may flex the shape to fill the page.
+    The lit box is what the page PRINTS; when auto flexed the panel, the
+    words say both truths.  A reshape that leaves the selected proof the
+    wrong shape UNSELECTS it (repack_page enforces this) — the author
+    decides: re-proof, or re-feature a take."""
+    from schema import FrameLayout, Page as _Page
+    import helpers.stitcher as _st
+
+    laid = _st.laid_aspect(storage, panel).value
+    held = bool(getattr(panel, 'shape_locked', False))
+    size = (getattr(panel, 'size', None) or '1x')
+
+    def _repack_and_receipt():
+        for pm in storage.read_all_objects(_Page, {
+                "series_id": panel.series_id, "issue_id": panel.issue_id}):
+            if pm.cells and any(r.panel_id == panel.panel_id
+                                for row in pm.rows for r in row):
+                _st.repack_page(storage, pm)
+                storage.update_object(pm)
+                for nm in _st.LAST_UNPROOFED:
+                    receipt(f"🫙 **{nm}** lost its proof — the frame changed "
+                            f"shape; re-proof it or feature another take")
+
+    def _pick(aspect_name: str, mult: int):
+        fresh_board(storage, panel)
+        panel.aspect = FrameLayout(aspect_name)
+        panel.size = f"{mult}x"
+        panel.shape_locked = True
+        storage.update_object(panel)
+        _repack_and_receipt()
+        receipt(f"🔒 held the frame at {aspect_name} {mult}x — the book reflowed around it")
+        state.refresh_details()
+
+    def _auto():
+        fresh_board(storage, panel)
+        panel.shape_locked = False
+        storage.update_object(panel)
+        _repack_and_receipt()
+        receipt("🔓 released the frame — the flow shapes it to fill the page")
+        state.refresh_details()
+
+    if held:
+        line = f"Shape — held at {panel.aspect.value} {size}"
+    elif laid != panel.aspect.value:
+        line = f"Shape — auto · laid {laid} (asked {panel.aspect.value})"
+    else:
+        line = f"Shape — auto · {panel.aspect.value} {size}"
+    ui.label(line).classes('comic-label-sm').style('padding: 8px 10px 2px;')
+
+    _BASE = {"square": (2, 2), "landscape": (3, 2), "portrait": (2, 3)}
+    boxes = []
+    for aspect_name, (bw, bh) in _BASE.items():
+        for mult in (1, 2, 3):
+            if _st.size_mult(f"{mult}x", _st.AR.get(aspect_name, 1.5)) != mult:
+                continue          # the law says no (e.g. landscape 3x is 9 wide)
+            boxes.append((aspect_name, mult, bw * mult, bh * mult))
+    with ui.element('div').style(
+            'display: grid; grid-template-columns: repeat(4, 46px); '
+            'gap: 6px; padding: 6px 10px 10px; justify-items: center; '
+            'align-items: center;'):
+        for aspect_name, mult, gw, gh in boxes:
+            lit = ((panel.aspect.value if held else laid) == aspect_name
+                   and size == f"{mult}x")
+            box = ui.element('div').style(
+                f'width: {gw / 6 * 40:.0f}px; height: {gh / 6 * 40:.0f}px; '
+                f'border: 2px solid '
+                f'{"#c0392b" if lit else "rgba(130,130,130,.55)"}; '
+                f'border-radius: 3px; cursor: pointer; '
+                f'background: {"rgba(192,57,43,.18)" if lit else "transparent"};')
+            box.tooltip(f'{aspect_name} {mult}x  ({gw}×{gh}) — pick it and the panel HOLDS this shape')
+            box.on('click', lambda _, a=aspect_name, m=mult: _pick(a, m))
+    ui.menu_item('Auto — let the flow shape it', on_click=lambda *_: _auto()) \
+        .props('dense')
+
+
+def snapshot_board(storage, board, note: str):
+    """PRE-MUTATION INSURANCE: the board's record goes to the wastebasket
+    before a destructive change (cleared table, dropped letters, uncast
+    figure, rewritten brief) — 'swap it back' is always a door."""
+    try:
+        from storage.filepath import obj_to_filepath
+        from storage.trash import soft_backup
+        fp = obj_to_filepath(board, base_path=storage.base_path)
+        if os.path.exists(fp):
+            soft_backup(str(storage.base_path), fp, note=note)
+    except Exception as ex:
+        logger.debug(f"board snapshot skipped: {ex}")
+
+def table_receipt(state, text: str, bench: str = 'the light table'):
     """A receipt slip in the one thread — the paper trail of GUI verbs.
     (Receipts are quiet toasts; the wastebasket and the torn-up pile
     are the ways back.)"""
     try:
         from gui.thread import thread_aside
-        thread_aside(state, text, undo=undo, bench=bench)
+        thread_aside(state, text, bench=bench)
     except Exception:
         pass
 
@@ -1520,24 +1616,11 @@ def tear_up_take(state, board, img: str):
         return
     was_featured = bool(board.image and (
         board.image == img or storage.find_image(obj=board, locator=board.image) == img))
-    saved_locator = board.image
     if was_featured:
         board.image = None
         storage.update_object(board)
 
-    def undo():
-        # a newer same-named take may have landed meanwhile — never clobber
-        # it; the restored take diverts to a fresh name (both stay visible)
-        dest = img
-        if os.path.exists(dest):
-            stem, ext = os.path.splitext(os.path.basename(img))
-            dest = os.path.join(os.path.dirname(img), f"{stem}--{uuid4().hex[:6]}{ext}")
-        os.replace(trash, dest)
-        if was_featured:
-            b = storage.read_object(cls=type(board), primary_key=board.primary_key) or board
-            b.image = saved_locator if dest == img else dest
-            storage.update_object(b)
-    table_receipt(state, '🗑 tore up a take — it waits in the torn-up pile above the takes', undo=undo)
+    table_receipt(state, '🗑 tore up a take — it waits in the torn-up pile above the takes')
     state.refresh_details()
 
 
@@ -2650,24 +2733,12 @@ def light_table(state: APPState, panel, scene, setting,
 
                         def drop_balloon(i=i):
                             fresh_board(storage, panel)
-                            saved_dialogue = list(panel.dialogue)
-                            saved_letters = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()
-                                             if k.startswith('balloon/') or k.startswith('caption/')}
+                            snapshot_board(storage, panel, "the letters before a balloon was removed")
                             panel.dialogue = [x for j, x in enumerate(panel.dialogue) if j != i]
                             remap_letter_blocking('balloon/', i)
                             storage.update_object(panel)
 
-                            def undo():
-                                # restore ONLY the letter blocking — figure
-                                # moves made since the removal stay put
-                                p = _fresh()
-                                p.dialogue = saved_dialogue
-                                merged = {k: v for k, v in (p.figure_blocking or {}).items()
-                                          if not (k.startswith('balloon/') or k.startswith('caption/'))}
-                                merged.update(saved_letters)
-                                p.figure_blocking = merged
-                                storage.update_object(p)
-                            _receipt('✂️ removed a balloon', undo=undo)
+                            _receipt('✂️ removed a balloon')
                             state.refresh_details()
                         ui.button(icon='close').props('flat round dense size=xs') \
                             .tooltip('Remove this balloon').on('click', lambda _, i=i: drop_balloon(i))
@@ -2685,24 +2756,13 @@ def light_table(state: APPState, panel, scene, setting,
 
                             def drop_caption(n=n, pos=pos, i=i):
                                 fresh_board(storage, panel)
-                                saved_narration = list(panel.narration)
-                                saved_letters = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()
-                                                 if k.startswith('balloon/') or k.startswith('caption/')}
+                                snapshot_board(storage, panel, "the letters before a caption was removed")
                                 panel.narration = [x for x in panel.narration if x is not n]
                                 # keep caption blocking aligned, same as balloons
                                 remap_letter_blocking(f'caption/{pos}/', i)
                                 storage.update_object(panel)
 
-                                def undo():
-                                    # letter blocking only — see drop_balloon
-                                    p = _fresh()
-                                    p.narration = saved_narration
-                                    merged = {k: v for k, v in (p.figure_blocking or {}).items()
-                                              if not (k.startswith('balloon/') or k.startswith('caption/'))}
-                                    merged.update(saved_letters)
-                                    p.figure_blocking = merged
-                                    storage.update_object(p)
-                                _receipt('✂️ removed a narrator box', undo=undo)
+                                _receipt('✂️ removed a narrator box')
                                 state.refresh_details()
                             ui.button(icon='close').props('flat round dense size=xs') \
                                 .tooltip('Remove this narrator box').on('click', lambda _, n=n: drop_caption(n))
@@ -2900,14 +2960,8 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.space()
 
                         def drop_element(key=f["key"], nm=f["name"]):
-                            import re as _re_d
-                            from agentic.tools.normalization import normalize_id as _nid_d
-                            _slug_d = _re_d.sub(r'-\d+$', '', key.split('/', 1)[1]) \
-                                if key.startswith('element/') else None
                             fresh_board(storage, panel)
-                            saved_img = (panel.figure_images or {}).get(key)
-                            saved_blk = (panel.figure_blocking or {}).get(key)
-                            saved_groups = {g: list(ks) for g, ks in (panel.layer_groups or {}).items()}
+                            snapshot_board(storage, panel, "the table before an element was removed")
                             panel.figure_images.pop(key, None)
                             panel.figure_blocking.pop(key, None)
                             for gname in list((panel.layer_groups or {})):
@@ -2916,15 +2970,7 @@ def light_table(state: APPState, panel, scene, setting,
                                     panel.layer_groups.pop(gname)
                             storage.update_object(panel)
 
-                            def undo():
-                                p = _fresh()
-                                if saved_img:
-                                    p.figure_images[key] = saved_img
-                                if saved_blk is not None:
-                                    p.figure_blocking[key] = saved_blk
-                                p.layer_groups = saved_groups
-                                storage.update_object(p)
-                            _receipt(f"✂️ removed **{nm}** from the table", undo=undo)
+                            _receipt(f"✂️ removed **{nm}** from the table")
                             state.refresh_details()
                         ui.button(icon='close').props('flat round dense size=xs') \
                             .classes('row-tool') \
@@ -3007,19 +3053,14 @@ def light_table(state: APPState, panel, scene, setting,
 
                     def uncast(ref=f["ref"]):
                         fresh_board(storage, panel)
+                        snapshot_board(storage, panel, "the cast before a figure was uncast")
                         panel.character_references = [
                             c for c in panel.character_references
                             if not (c.character_id == ref.character_id and c.variant_id == ref.variant_id)]
                         storage.update_object(panel)
 
-                        def undo():
-                            p = _fresh()
-                            if not any(c.character_id == ref.character_id and c.variant_id == ref.variant_id
-                                       for c in (p.character_references or [])):
-                                p.character_references = (p.character_references or []) + [ref]
-                                storage.update_object(p)
                         _receipt(f"✂️ removed **{_char_names.get(ref.character_id, ref.character_id)}** "
-                                 f"from this panel", undo=undo)
+                                 f"from this panel")
                         state.refresh_details()
                     ui.button(icon='close').props('flat round dense size=xs') \
                         .mark('uncast').classes('row-tool') \
@@ -3029,12 +3070,9 @@ def light_table(state: APPState, panel, scene, setting,
             def flatten_group(gname):
                 from uuid import uuid4
                 fresh_board(storage, panel)
+                snapshot_board(storage, panel, "the layers before the group was combined")
                 from helpers.compositor import DIMS, base_canvas, paste_acetates
                 # capture everything the flatten touches, for the undo chip
-                saved_imgs = dict(panel.figure_images or {})
-                saved_blk = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()}
-                saved_groups = {g: list(ks) for g, ks in (panel.layer_groups or {}).items()}
-                saved_refs = list(panel.character_references or [])
                 keys = list((panel.layer_groups or {}).get(gname, []))
                 has_plate = 'background/plate' in keys
                 fresh = storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
@@ -3089,14 +3127,7 @@ def light_table(state: APPState, panel, scene, setting,
                         'z': max((m["blocking"].get('z', 0) for m in live), default=0)}
                 storage.update_object(panel)
 
-                def undo():
-                    p = _fresh()
-                    p.figure_images = saved_imgs
-                    p.figure_blocking = saved_blk
-                    p.layer_groups = saved_groups
-                    p.character_references = saved_refs
-                    storage.update_object(p)
-                _receipt(f"🗜 combined the **{gname}** group into one acetate", undo=undo)
+                _receipt(f"🗜 combined the **{gname}** group into one acetate")
                 state.refresh_details()
 
             fig_by_key = {f["key"]: f for f in figures}
@@ -3184,15 +3215,11 @@ def light_table(state: APPState, panel, scene, setting,
 
                     def ungroup(gname=gname):
                         fresh_board(storage, panel)
-                        saved_members = list((panel.layer_groups or {}).get(gname) or [])
+                        snapshot_board(storage, panel, "the groups before one was dissolved")
                         panel.layer_groups.pop(gname, None)
                         storage.update_object(panel)
 
-                        def undo():
-                            p = _fresh()
-                            p.layer_groups[gname] = saved_members
-                            storage.update_object(p)
-                        _receipt(f"📂 ungrouped **{gname}**", undo=undo)
+                        _receipt(f"📂 ungrouped **{gname}**")
                         state.refresh_details()
                     ui.button(icon='folder_off').props('flat round dense size=xs') \
                         .classes('row-tool') \
@@ -3219,15 +3246,7 @@ def light_table(state: APPState, panel, scene, setting,
                         except OSError:
                             return
 
-                        def undo():
-                            # never clobber a newer same-named reference
-                            dest = path
-                            if os.path.exists(dest):
-                                stem, ext = os.path.splitext(os.path.basename(path))
-                                dest = os.path.join(os.path.dirname(path),
-                                                    f"{stem}--{uuid4().hex[:6]}{ext}")
-                            os.replace(trash, dest)
-                        _receipt(f"✂️ took the reference **{os.path.basename(path)}** off the table", undo=undo)
+                        _receipt(f"✂️ took the reference **{os.path.basename(path)}** off the table")
                         state.refresh_details()
                     ui.button(icon='close').props('flat round dense size=xs') \
                         .tooltip('Take this reference off the table') \
@@ -3275,9 +3294,6 @@ def light_table(state: APPState, panel, scene, setting,
                     def drop_background():
                         fresh_board(storage, panel)
                         saved_plate = (panel.figure_images or {}).get('background/plate')
-                        saved_blk = (panel.figure_blocking or {}).get('background/plate')
-                        saved_onflag = (panel.figure_blocking or {}).get('background')
-                        saved_groups = {g: list(ks) for g, ks in (panel.layer_groups or {}).items()}
                         if saved_plate is None:
                             return
                         panel.figure_images.pop('background/plate', None)
@@ -3290,17 +3306,7 @@ def light_table(state: APPState, panel, scene, setting,
                                 panel.layer_groups.pop(gname)
                         storage.update_object(panel)
 
-                        def undo():
-                            p = _fresh()
-                            p.figure_images['background/plate'] = saved_plate
-                            if saved_blk is not None:
-                                p.figure_blocking['background/plate'] = saved_blk
-                            if saved_onflag is not None:
-                                p.figure_blocking['background'] = saved_onflag
-                            p.layer_groups = saved_groups
-                            storage.update_object(p)
-                            state.refresh_details()
-                        _receipt('✂️ removed the background from the table', undo=undo)
+                        _receipt('✂️ removed the background from the table')
                         state.refresh_details()
                     ui.button(icon='close').props('flat round dense size=xs').classes('row-tool') \
                         .tooltip('Remove the background from this board') \
@@ -3309,8 +3315,8 @@ def light_table(state: APPState, panel, scene, setting,
             # LAY A NEW ACETATE: figures, props and backgrounds lay down in
             # ONE CLICK from a picker; letters go through the coauthor (they
             # need writing).
-            def _receipt(text: str, undo=None):
-                table_receipt(state, text, undo=undo)
+            def _receipt(text: str):
+                table_receipt(state, text)
 
             def _fresh():
                 return storage.read_object(cls=type(panel), primary_key=panel.primary_key) or panel
@@ -3821,6 +3827,7 @@ def light_table(state: APPState, panel, scene, setting,
 
                     def clear_board():
                         fresh_board(storage, panel)
+                        snapshot_board(storage, panel, "the table before it was cleared")
                         saved_imgs = dict(panel.figure_images or {})
                         saved_blk = {k: dict(v) for k, v in (panel.figure_blocking or {}).items()}
                         saved_groups = {g: list(ks) for g, ks in (panel.layer_groups or {}).items()}
@@ -3842,25 +3849,12 @@ def light_table(state: APPState, panel, scene, setting,
                             panel.narration = []
                         storage.update_object(panel)
 
-                        def undo():
-                            p = _fresh()
-                            p.figure_images = saved_imgs
-                            p.figure_blocking = saved_blk
-                            p.layer_groups = saved_groups
-                            if hasattr(p, 'character_references'):
-                                p.character_references = saved_cast
-                            if hasattr(p, 'dialogue'):
-                                p.dialogue = saved_dlg
-                            if hasattr(p, 'narration'):
-                                p.narration = saved_narr
-                            storage.update_object(p)
-                            state.refresh_details()
                         _receipt('🧹 cleared the board — everything lifted off '
-                                 '(only the print stays)', undo=undo)
+                                 '(only the print stays)')
                         state.refresh_details()
                     ui.button(icon='close').props('flat round dense size=sm') \
                         .tooltip('Clear the board — remove everything from the table '
-                                 '(only the print stays)') \
+                                 '(the cleared table waits in the wastebasket)') \
                         .on('click', lambda _: clear_board())
 
             # or just drop an image straight onto the table as a reference —
@@ -3869,14 +3863,8 @@ def light_table(state: APPState, panel, scene, setting,
             # delivers neither in this app)
             with ui.row().classes('light-layer w-full items-center justify-center table-drop-zone cursor-pointer').style('min-height: 34px;'):
                 def on_drop_reference(e):
-                    locator = storage.upload_reference_image(panel, e.name, e.content, e.type)
 
-                    def undo(path=locator):
-                        try:
-                            os.remove(path)
-                        except OSError:
-                            pass
-                    _receipt(f"📌 pinned **{e.name}** to the table as a reference", undo=undo)
+                    _receipt(f"📌 pinned **{e.name}** to the table as a reference")
                     state.refresh_details()
                 ui.upload(on_upload=on_drop_reference, auto_upload=True, max_files=1) \
                     .style('display: none;')
@@ -3969,32 +3957,40 @@ def light_table(state: APPState, panel, scene, setting,
                     if locked:
                         sw.classes('table-locked')
                 ui.space()
-                # the frame's SHAPE, switched right on the rough — panels
-                # come in landscape/portrait/square; covers only landscape
-                # or portrait
+                # THE ONE SHAPE PICKER (the author's ruling): panels use
+                # the SAME shape grid as the open book's tile menu — pick
+                # holds, Auto releases, the lit box is what prints.  Covers
+                # and marks aren't paginated, so they keep a plain aspect
+                # switch (there is no second truth to disagree with).
                 from schema import FrameLayout as _FL
-
-                def reshape(shape):
-                    fresh_board(storage, panel)
-                    panel.aspect = shape
-                    storage.update_object(panel)
-                    state.refresh_details()
-                shapes = [('crop_landscape', _FL.LANDSCAPE, 'Landscape frame'),
-                          ('crop_portrait', _FL.PORTRAIT, 'Portrait frame')]
-                if not cover_mode and not insert_mode:
-                    shapes.append(('crop_square', _FL.SQUARE, 'Square frame'))
-                if insert_mode:
-                    shapes = []   # a full page is portrait, always
-                for icon, shape, tip in shapes:
-                    b = ui.button(icon=icon).props('flat round dense size=sm')
-                    if panel.aspect == shape:
-                        b.props('color=primary')
-                    if locked and panel.aspect != shape:
-                        b.props('disable')
-                        b.tooltip(f'{tip} — unlock the table to reshape')
-                    else:
-                        b.tooltip(tip)
-                        b.on('click', lambda _, s=shape: reshape(s))
+                if hasattr(panel, 'shape_locked') and not insert_mode:
+                    _pk_btn = ui.button(icon='aspect_ratio') \
+                        .props('flat round dense size=sm') \
+                        .tooltip('Shape & size — the same picker as the book; '
+                                 'a pick HOLDS the frame, Auto lets the flow shape it')
+                    with _pk_btn:
+                        with ui.menu().props('auto-close'):
+                            shape_picker(state, storage, panel, receipt=_receipt)
+                elif not insert_mode:
+                    def reshape(shape):
+                        fresh_board(storage, panel)
+                        panel.aspect = shape
+                        storage.update_object(panel)
+                        state.refresh_details()
+                    _simple_shapes = [('crop_landscape', _FL.LANDSCAPE, 'Landscape frame'),
+                                      ('crop_portrait', _FL.PORTRAIT, 'Portrait frame')]
+                    if artboard_mode:
+                        _simple_shapes.append(('crop_square', _FL.SQUARE, 'Square frame'))
+                    for icon, shape, tip in _simple_shapes:
+                        b = ui.button(icon=icon).props('flat round dense size=sm')
+                        if panel.aspect == shape:
+                            b.props('color=primary')
+                        if locked and panel.aspect != shape:
+                            b.props('disable')
+                            b.tooltip(f'{tip} — unlock the table to reshape')
+                        else:
+                            b.tooltip(tip)
+                            b.on('click', lambda _, s=shape: reshape(s))
             rough()
             # THE BRIEF: the words the render is drawn from — editable RIGHT
             # HERE (a real editor, no confused coauthor round-trip), panel,
@@ -4015,21 +4011,14 @@ def light_table(state: APPState, panel, scene, setting,
                         ui.notify(f'{description_label} unchanged — write the words '
                                   f'after the prompt to rewrite it.', type='info')
                         return
-                    old = panel.description or ''
                     fresh = storage.read_object(cls=type(panel),
                                                 primary_key=panel.primary_key) or panel
                     fresh.description = text
+                    snapshot_board(storage, fresh, "the brief before it was rewritten")
                     storage.update_object(fresh)
                     panel.description = fresh.description
 
-                    def undo(prev=old):
-                        f2 = storage.read_object(cls=type(panel),
-                                                 primary_key=panel.primary_key) or panel
-                        f2.description = prev
-                        storage.update_object(f2)
-                        panel.description = prev
-                        state.refresh_details()
-                    _receipt(f"✍️ rewrote {description_label.lower()}", undo=undo)
+                    _receipt(f"✍️ rewrote {description_label.lower()}")
                     state.refresh_details()
                 state._input_intercept = (prefix, _save_brief, None)
                 try:
