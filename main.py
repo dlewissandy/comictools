@@ -435,6 +435,13 @@ def init_layout(logger):
         .book-page .text-gray-500 { color: #6b7280 !important; }
         .book-page--recto { grid-column: 2; }
         .book-page--ghost-faint { opacity: .55; }
+        /* THE PAGE TURN'S DOOR: a slim slip between scenes — a full page
+           (poster, ad, pin-up, mailbag) slides in here */
+        .book-turn-door { border: 1px dashed var(--ink); opacity: .35;
+                          border-radius: 4px; padding: 2px 10px; cursor: pointer;
+                          text-align: center; font-size: .7rem; width: 100%;
+                          transition: opacity .15s; }
+        .book-turn-door:hover { opacity: .85; }
         .book-page--ghost { border: 2px dashed var(--ink); background: transparent;
                             box-shadow: none; cursor: pointer;
                             display: flex; flex-direction: column;

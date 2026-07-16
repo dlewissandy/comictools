@@ -401,6 +401,15 @@ def view_issue(state: APPState):
         return t
 
     def cover_sheet(location, recto=False):
+        # AN INSIDE SLOT IS A FULL-PAGE SURFACE: a located insert (an ad,
+        # the mailbag) prints here and beats cover art — its sheet renders
+        # in place of the cover board
+        if location in ('inside-front', 'inside-back'):
+            _loc_ins = next((i for i in inserts_all
+                             if getattr(i, 'location', None) == location), None)
+            if _loc_ins is not None:
+                insert_sheet(_loc_ins)
+                return True
         c = cover_at.get(location)
         classes = 'book-page' + (' book-page--recto' if recto else '')
         if c is not None:
@@ -424,11 +433,27 @@ def view_issue(state: APPState):
             # the production dashboard's cover doors aim here even before
             # the cover exists — a ghost sheet still answers its anchor
             sh._props['data-banchor'] = f'cover-{location}'
-            sh.tooltip('The indicia prints here unless you give it art'
-                       if location == 'inside-front' else 'Every book needs one'
-                       if location in ('front', 'back') else 'An extra canvas, if you want one')
-            sh.on('click', lambda _, loc=location: post_user_message(
-                state, f"I would like to create a {loc} cover for this issue."))
+            if location in ('front', 'back'):
+                sh.tooltip('Every book needs one')
+                sh.on('click', lambda _, loc=location: post_user_message(
+                    state, f"I would like to create a {loc} cover for this issue."))
+            else:
+                # AN INSIDE SLOT offers both of its real lives: cover art,
+                # or a full-page insert (an ad, the mailbag) living there
+                sh.tooltip('The indicia prints here unless you fill the slot'
+                           if location == 'inside-front'
+                           else 'The classic home for an ad or the mailbag')
+                with sh:
+                    with ui.menu().props('auto-close'):
+                        ui.menu_item('Cover art here',
+                                     on_click=lambda *_, loc=location: post_user_message(
+                                         state, f"I would like to create a {loc} "
+                                                f"cover for this issue.")).props('dense')
+                        ui.separator()
+                        for k, lbl in _INSERT_KINDS:
+                            ui.menu_item(f'{lbl} here',
+                                         on_click=lambda *_, k=k, loc=location:
+                                         _make_insert(k, location=loc)).props('dense')
             return True
 
     def footer_btn(icon, tip, handler):
@@ -548,6 +573,37 @@ def view_issue(state: APPState):
         fresh.description = value or ""
         storage.update_object(fresh)
         receipt("✏️ described the insert")
+
+    _INSERT_KINDS = [('poster', 'A poster'), ('ad', 'An ad'),
+                     ('pin-up', 'A pin-up'), ('mailbag', 'The mailbag')]
+    _KIND_NAMES = {'poster': 'Poster', 'ad': 'Ad page',
+                   'pin-up': 'Pin-up', 'mailbag': 'The Mailbag'}
+
+    def _make_insert(kind: str, after_n: int = 0, location: str | None = None):
+        # STAY PUT: the page appears in place — compose it when you like
+        from uuid import uuid4
+        ins = Insert(insert_id=f"{kind}-{uuid4().hex[:6]}", issue_id=issue_id,
+                     series_id=series_id, kind=kind,
+                     name=_KIND_NAMES.get(kind, kind.title()),
+                     after_scene_number=after_n, location=location)
+        storage.create_object(data=ins)
+        where = (f"on the {location.replace('-', ' ')}" if location
+                 else f"after scene {after_n}" if after_n else "at the front of the book")
+        receipt(f"📄 laid a bare {kind} page {where} — click it to compose")
+        state.refresh_details()
+
+    def insert_door(after_n: int):
+        """THE PAGE TURN'S DOOR (the author's ruling: full pages belong to
+        inserts, never to the panel flow) — a slim slip between scenes."""
+        with ui.element('div').classes('book-turn-door') as door:
+            ui.label('+ full page here')
+        door.tooltip('A full-page insert at this page turn — poster, ad, '
+                     'pin-up, or the mailbag')
+        with door:
+            with ui.menu().props('auto-close'):
+                for k, lbl in _INSERT_KINDS:
+                    ui.menu_item(lbl, on_click=lambda *_, k=k, n=after_n:
+                                 _make_insert(k, after_n=n)).props('dense')
 
     def insert_sheet(ins):
         rendered = ins.image and os.path.exists(ins.image)
@@ -1026,11 +1082,16 @@ def view_issue(state: APPState):
                     is_first = st is None or not stories_all or st.story_id == stories_all[0].story_id
                     story_sheet(st, first=bool(is_first), last=(i == len(stories) - 1))
 
+            # located inserts (inside-front / inside-back) print on their
+            # cover slot, never at a page turn
             inserts_by_anchor = {}
             for ins in inserts_all:
+                if getattr(ins, 'location', None):
+                    continue
                 inserts_by_anchor.setdefault(ins.after_scene_number, []).append(ins)
             for ins in inserts_by_anchor.get(0, []):
                 insert_sheet(ins)
+            insert_door(0)
 
             if detail == 'scenes':
                 # every scene as a manuscript page, in order, inserts slotted in
@@ -1038,6 +1099,7 @@ def view_issue(state: APPState):
                     scene_sheet(sc)
                     for ins in inserts_by_anchor.get(sc.scene_number, []):
                         insert_sheet(ins)
+                    insert_door(sc.scene_number)
             elif detail in ('beats', 'roughs', 'proofs'):
                 # THE BOOK FLOWS CONTINUOUSLY: beats pack across page turns the
                 # way text reflows across lines — turning, resizing, or moving
@@ -1072,6 +1134,13 @@ def view_issue(state: APPState):
                     for ins in inserts_by_anchor.get(sc.scene_number, []):
                         flush()
                         segments.append(('insert', ins))
+                    # THE DOOR ONLY AT A SEAM: panels flow continuously
+                    # across scenes, so a mid-run boundary is not a page
+                    # turn — the slip appears where the book already
+                    # breaks (after a bare scene or an existing insert),
+                    # and placing an insert CREATES the seam
+                    if not run:
+                        segments.append(('turn-door', sc.scene_number))
                 flush()
 
                 # MANUSCRIPT SLIPS: at panels altitude, a run of bare scenes
@@ -1094,6 +1163,8 @@ def view_issue(state: APPState):
                 for kind, seg in segments:
                     if kind == 'manuscript':
                         slips.append(seg)
+                    elif kind == 'turn-door' and slips:
+                        continue   # doors fold into a running slip wall
                     else:
                         flush_slips()
                         packed.append((kind, seg))
@@ -1157,6 +1228,8 @@ def view_issue(state: APPState):
                         # bare scenes hold their place but don't PRINT —
                         # no folio, so screen and book agree on page numbers
                         slip_sheet(seg)
+                    elif kind == 'turn-door':
+                        insert_door(seg)
                     else:
                         insert_sheet(seg)
 

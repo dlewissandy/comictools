@@ -19,7 +19,8 @@ class Insert(BaseModel):
     kind: str = Field("poster", description="What kind of page: 'poster', 'ad', 'pin-up', 'mailbag', 'title-page'.  Default to 'poster'.")
     name: str = Field(..., description="A short name for the insert, e.g. 'Carnival poster'.")
     description: str = Field("", description="What the page shows, in enough detail to render it.  For a mailbag: the letters and replies.  Default to empty string.")
-    after_scene_number: int = Field(0, description="The insert appears after this scene number (0 = right after the script pages, before scene 1).  Default to 0.")
+    after_scene_number: int = Field(0, description="The insert appears after this scene number (0 = right after the script pages, before scene 1).  Default to 0.  Ignored when `location` is set.")
+    location: Optional[str] = Field(None, description="Pin the insert to a cover slot instead of a page turn: 'inside-front' or 'inside-back' (the classic homes for ads and the mailbag).  The indicia still prints over inside-front art.  Default None (the insert rides its after_scene_number page turn).")
     image: Optional[str] = Field(None, description="The rendered full-page art.  Default to None.")
 
     # THE LIGHT TABLE (same acetate model as Panel and Cover — an insert

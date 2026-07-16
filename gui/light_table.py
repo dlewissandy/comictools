@@ -2051,8 +2051,11 @@ def light_table(state: APPState, panel, scene, setting,
     # carry attribution.  Text snapshots refresh from the issue each paint.
     from helpers.trade_dress import (COVER_PIECES, PANEL_PIECES, DRESS_PIECES,
                                      DRESS_DEFAULTS, dress_text, refresh_dress_text)
-    if cover_mode:
+    if cover_mode and getattr(getattr(panel, 'location', None), 'value', '') in ('front', 'back'):
         dress_pieces = list(COVER_PIECES)
+    elif cover_mode:
+        dress_pieces = []          # inside covers are ad/mailbag surfaces —
+                                   # price and credits belong to the front
     elif insert_mode or artboard_mode:
         dress_pieces = []          # a mark IS lettering — it wears no dress
     else:

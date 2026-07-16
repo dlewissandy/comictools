@@ -199,6 +199,25 @@ def _indicia_sheet(issue: Issue, series: Series | None, publisher: Publisher | N
     return page
 
 
+def _insert_page(ins) -> tuple["Image.Image", str | None]:
+    """One insert as a printed sheet: its art full-bleed; the MAILBAG's
+    letters typeset until inked (its description IS the page — any other
+    kind's description is a render brief that never prints); a bare
+    insert prints a named placeholder.  Returns (sheet, missing-note)."""
+    if ins.image and os.path.exists(ins.image):
+        return _full_bleed(ins.image), None
+    if ins.kind == 'mailbag' and (ins.description or '').strip():
+        return _insert_text_sheet(ins), \
+            f"insert '{ins.name}' is not rendered (generate_insert_art)"
+    sheet = Image.new("RGB", (PAGE_W, PAGE_H), (244, 240, 232))
+    d = ImageDraw.Draw(sheet)
+    _center_text(d, PAGE_W // 2, PAGE_H // 2 - 40,
+                 ins.name.upper(), _font(40), (150, 144, 134))
+    _center_text(d, PAGE_W // 2, PAGE_H // 2 + 20,
+                 f"({ins.kind} — not rendered yet)", _font(22), (170, 164, 154))
+    return sheet, f"insert '{ins.name}' is not rendered (generate_insert_art)"
+
+
 def _stamp_indicia(art: "Image.Image", issue: Issue, series: Series | None,
                    publisher: Publisher | None) -> "Image.Image":
     """Run the indicia small print in a translucent band along the bottom of
@@ -395,47 +414,55 @@ def compose_book(storage: GenericStorage, series_id: str, issue_id: str
                                                order_by="page_number")
         page_scenes = [[scene_no.get(r.scene_id, 0) for row in pm.rows for r in row]
                        for pm in page_models]
-        for ins in reversed(inserts):
+        for ins in reversed([i for i in inserts if not getattr(i, 'location', None)]):
             # after the LAST page carrying a panel of the anchored scene (or
             # any earlier scene) — exactly where the open book slots it
+            # (located inserts print on their cover slot below, not here)
             at = 0
             for pi, nums in enumerate(page_scenes):
                 if any(0 < num <= ins.after_scene_number for num in nums):
                     at = pi + 1
-            if ins.image and os.path.exists(ins.image):
-                sheet = _full_bleed(ins.image)
-            elif ins.kind == 'mailbag' and (ins.description or '').strip():
-                # only the MAILBAG's description IS the page (letters and
-                # replies) — it prints typeset until it's inked.  Any other
-                # insert's description is a render BRIEF: production notes
-                # that must never reach the page
-                sheet = _insert_text_sheet(ins)
-                missing.append(f"insert '{ins.name}' is not rendered (generate_insert_art)")
-            else:
-                sheet = Image.new("RGB", (PAGE_W, PAGE_H), (244, 240, 232))
-                d = ImageDraw.Draw(sheet)
-                _center_text(d, PAGE_W // 2, PAGE_H // 2 - 40,
-                             ins.name.upper(), _font(40), (150, 144, 134))
-                _center_text(d, PAGE_W // 2, PAGE_H // 2 + 20,
-                             f"({ins.kind} — not rendered yet)", _font(22), (170, 164, 154))
-                missing.append(f"insert '{ins.name}' is not rendered (generate_insert_art)")
+            sheet, miss = _insert_page(ins)
+            if miss:
+                missing.append(miss)
             interior.insert(min(at, len(interior)), (f"insert — {ins.name}", sheet))
 
     if not interior and not front:
         return [], missing
 
+    def located_insert(loc: str):
+        cands = [i for i in inserts if getattr(i, 'location', None) == loc]
+        return cands[0] if cands else None
+
     sheets: list[tuple[str, Image.Image]] = []
     if front:
         sheets.append(("front cover", _full_bleed(front)))
+    # THE INSIDE FRONT: a located insert (an ad, the mailbag) beats cover
+    # art; either way the INDICIA prints over it — real books carry the
+    # small print here no matter what else does.  Bare slot → the composed
+    # indicia page.
+    _if_ins = located_insert("inside-front")
     inside_front = cover_art("inside-front")
-    if inside_front:
+    if _if_ins is not None:
+        sheet, miss = _insert_page(_if_ins)
+        if miss:
+            missing.append(miss)
+        sheets.append(("inside front cover",
+                       _stamp_indicia(sheet, issue, series, publisher)))
+    elif inside_front:
         sheets.append(("inside front cover",
                        _stamp_indicia(_full_bleed(inside_front), issue, series, publisher)))
     elif issue is not None:
         sheets.append(("indicia", _indicia_sheet(issue, series, publisher)))
     sheets += interior
+    _ib_ins = located_insert("inside-back")
     inside_back = cover_art("inside-back")
-    if inside_back:
+    if _ib_ins is not None:
+        sheet, miss = _insert_page(_ib_ins)
+        if miss:
+            missing.append(miss)
+        sheets.append(("inside back cover", sheet))
+    elif inside_back:
         sheets.append(("inside back cover", _full_bleed(inside_back)))
     if back:
         sheets.append(("back cover", _full_bleed(back)))
