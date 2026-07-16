@@ -2593,6 +2593,15 @@ def light_table(state: APPState, panel, scene, setting,
                         .classes('text-xs').style('overflow: hidden;')
                     ui.space()
 
+                    # THE EDIT DOOR RIDES THE LOCK (author report: a dropped
+                    # image landed them in a locked room with no obvious way
+                    # into the layers) — one click lays the print on the
+                    # table as the background layer, unlocked and editable
+                    ui.button('Edit in layers', icon='layers').props('unelevated dense size=sm') \
+                        .tooltip('Lay this print on the table as the background '
+                                 'layer — unlock it and edit in layers') \
+                        .on('click', lambda _: rework_take_on_table(state, panel, featured))
+
                     def unlock():
                         fresh_board(storage, panel)
                         panel.image = None
@@ -2600,6 +2609,8 @@ def light_table(state: APPState, panel, scene, setting,
                         _receipt('🔓 unlocked the table — no take is selected while you rework it')
                         state.refresh_details()
                     ui.button('Unlock', icon='lock_open').props('outline dense size=sm') \
+                        .tooltip('Deselect the take — the table opens bare; '
+                                 'the take stays on the wall') \
                         .on('click', lambda _: unlock())
             # the hand-skills placard teaches the gestures at the moment of
             # first selection — the standing hint stays short

@@ -103,3 +103,13 @@ def test_the_authors_imposition():
     assert "book-col-1" in src, "the inside back pins to column 1"
     css = open("main.py").read()
     assert ".book-col-1 { grid-column: 1; }" in css
+
+
+def test_the_locked_table_offers_the_edit_door():
+    """Author report: dropping art on a page landed them in a LOCKED room
+    with no way into the layers.  The lock banner now carries 'Edit in
+    layers' — one click lays the print as the background plate, unlocked."""
+    src = open("gui/light_table.py").read()
+    banner = src.split("The selected take is printed from this table", 1)[1][:1600]
+    assert "Edit in layers" in banner
+    assert "rework_take_on_table(state, panel, featured)" in banner
