@@ -24,7 +24,7 @@ def test_the_drop_row_rides_the_rescue():
     # its picker
     from gui.light_table import DRAG_JS
     assert ".table-drop-zone" in DRAG_JS
-    assert "'.q-card, .mosaic-card, .create-drop, .table-drop-zone'" in DRAG_JS
+    assert "'.q-card, .mosaic-card, .create-drop, .table-drop-zone, .insert-drop-sheet'" in DRAG_JS
     assert "'.drop-card, .table-drop-zone'" in DRAG_JS
 
 
