@@ -48,21 +48,36 @@ async def choose_folder() -> str | None:
 
 
 def found_house_dialog(state: APPState):
-    """FOUND (or ADOPT) A HOUSE: pick a folder on disk.  A folder that
-    already has a house's structure joins the rack as it is; anything else
-    gets a fresh repo founded in it with the studio's default styles."""
+    """FOUND (or ADOPT, or CLONE) A HOUSE: pick a folder on disk, or paste
+    a repository URL.  A folder that already has a house's structure joins
+    the rack as it is; a URL is cloned and adopted; anything else gets a
+    fresh repo founded in it with the studio's default styles."""
+    import asyncio
+    import re
     from storage import registry
     chosen = {'dir': None, 'existing': None}
     from gui.elements import studio_dialog
     with studio_dialog('A NEW PUBLISHING HOUSE', min_w=480) as dlg:
         ui.label('Every house is its own git repository.  Pick where it lives — '
-                 'an existing house joins the rack as it is.') \
+                 'an existing house joins the rack as it is — or paste a '
+                 'repository URL to clone a co-author’s house.') \
             .classes('text-sm q-mt-sm')
         name = ui.input('The house’s name', placeholder='e.g. Midnight Owl Press') \
             .classes('w-full q-mt-sm').props('outlined dense')
         status = ui.label('No folder chosen yet.').classes('text-xs text-gray-500 q-mt-xs')
 
+        def _clone_dest():
+            base = chosen['dir'] or os.path.expanduser('~/git')
+            repo = re.sub(r'\.git$', '', (url.value or '').strip().rstrip('/').split('/')[-1])
+            return os.path.join(base, repo or 'house')
+
         def _describe():
+            u = (url.value or '').strip()
+            if u:
+                status.text = (f"Clones {u} to {_clone_dest()} and hangs the "
+                               f"house on the wall.")
+                go_btn.set_text('Clone & adopt')
+                return
             d = chosen['dir']
             if not d:
                 return
@@ -113,18 +128,53 @@ def found_house_dialog(state: APPState):
         manual.on('change', lambda _: manual_changed())
         name.on('change', lambda _: _describe())
 
+        # THE CLONE DOOR: a co-author's house (or the studio's example)
+        # arrives straight from its repository — no terminal detour
+        url = ui.input('Or clone a house — repository URL',
+                       placeholder='https://github.com/you/your-comics') \
+            .classes('w-full q-mt-xs').props('outlined dense')
+        url.on('change', lambda _: _describe())
+
         with ui.row().classes('w-full items-center q-mt-sm').style('gap: 8px;'):
             ui.button('Choose a folder…', icon='folder_open').props('outline dense no-caps') \
                 .on('click', pick)
             ui.space()
 
-            def go():
+            async def go(_=None):
+                u = (url.value or '').strip()
+                if u:
+                    # THE CLONE DOOR: fetch, prove it's a house, adopt
+                    dest = _clone_dest()
+                    from helpers.house_git import clone_house
+                    go_btn.props('loading')
+                    status.set_text(f'Cloning {u}…')
+                    try:
+                        pub = await asyncio.to_thread(clone_house, u, dest)
+                        registry.register(dest)
+                    except Exception as ex:
+                        go_btn.props(remove='loading')
+                        status.set_text(str(ex))
+                        ui.notify(f"Couldn't clone the house: {ex}", type='warning',
+                                  timeout=8000)
+                        return
+                    dlg.close()
+                    from gui.light_table import table_receipt
+                    table_receipt(state, f"\U0001F3E0 cloned **{pub}** from `{u}` — "
+                                         f"the house stands at `{dest}` and hangs "
+                                         f"on the wall",
+                                  bench='the publishers wall')
+                    state.refresh_details()
+                    return
                 d = chosen['dir']
                 if not d:
                     ui.notify('Pick a folder first.', type='warning')
                     return
                 if chosen['existing']:
-                    registry.register(d)
+                    try:
+                        registry.register(d)
+                    except ValueError as ex:
+                        ui.notify(str(ex), type='warning')
+                        return
                     dlg.close()
                     ui.notify(f"“{chosen['existing']}” joined the rack — it's on the wall now.",
                               type='positive')
@@ -134,7 +184,6 @@ def found_house_dialog(state: APPState):
                 if not nm:
                     ui.notify('Give the house a name.', type='warning')
                     return
-                import re
                 # a not-yet-existing folder founds directly there (created
                 # by the founding); an occupied one gets a child repo
                 target = d if (not os.path.isdir(d) or not os.listdir(d)) else os.path.join(
@@ -151,7 +200,7 @@ def found_house_dialog(state: APPState):
                               bench='the publishers wall')
                 state.refresh_details()
             go_btn = ui.button('Found the house', icon='gavel').props('unelevated dense no-caps')
-            go_btn.on('click', lambda _: go())
+            go_btn.on('click', go)
     dlg.open()
 
 
@@ -224,8 +273,8 @@ def view_lobby(state: APPState):
                     .on('click', lambda _: found_house_dialog(state))
                 ui.button('Adopt the demo house', icon='auto_stories') \
                     .props('outline no-caps size=lg') \
-                    .tooltip('Foglamp Press and its one small series — a living '
-                             'example to walk through and make your own') \
+                    .tooltip('The studio’s living example house, cloned from '
+                             'GitHub — walk through it and make it your own') \
                     .on('click', lambda _: adopt_demo_house(state))
             return
 
@@ -447,11 +496,55 @@ def view_lobby(state: APPState):
             gh.on('click', lambda _: found_house_dialog(state))
 
 
-def adopt_demo_house(state):
-    """THE DEMO HOUSE: Foglamp Press — a lighthouse keeper's one-sheet
+DEMO_HOUSE_URL = "https://github.com/dlewissandy/comic-studio-example"
+DEMO_HOUSE_DIR = "~/git/comic-studio-example"
+
+
+async def adopt_demo_house(state):
+    """THE DEMO HOUSE ARRIVES BY CLONE: the studio's living example repo,
+    fetched straight from its home and hung on the wall — this is how a
+    new author's first house arrives.  Offline, or before the example
+    repo is published, the door still delivers: it falls back to founding
+    the built-in Foglamp Press demo locally, and says so.  STAY PUT: the
+    wall repaints; nothing redirects."""
+    import asyncio
+    import os as _os
+    from loguru import logger
+    from storage import registry as _reg
+    from helpers.house_git import clone_house
+
+    target = _os.path.expanduser(DEMO_HOUSE_DIR)
+    if _os.path.isdir(_os.path.join(target, "publishers")):
+        ui.notify(f"The demo house already stands at {DEMO_HOUSE_DIR} — "
+                  f"it hangs on the wall.", type="info")
+        return
+    ui.notify("Fetching the demo house…", type="info")
+    try:
+        pub = await asyncio.to_thread(clone_house, DEMO_HOUSE_URL, target)
+        _reg.register(target)
+    except Exception as ex:
+        logger.info(f"demo clone unavailable ({ex}) — founding the built-in demo")
+        ui.notify(f"Couldn't fetch the example repo ({ex}) — founding the "
+                  f"built-in demo instead.", type="warning", timeout=8000)
+        _found_local_demo(state)
+        return
+    from gui.thread import thread_aside, thread_reply
+    thread_aside(state, f"\U0001F3EE adopted **{pub}** — the demo house was cloned to "
+                        f"`{DEMO_HOUSE_DIR}`", bench="the front desk")
+    thread_reply(state, f"{pub} hangs on the wall now — walk through it, remake it, "
+                        f"tear it apart; it's yours.")
+    state.refresh_details()
+    try:
+        state.render_your_turn()
+    except Exception:
+        pass
+
+
+def _found_local_demo(state):
+    """THE BUILT-IN DEMO: Foglamp Press — a lighthouse keeper's one-sheet
     newspaper, told as a small comic.  Original work, founded like any
     real house (git repo, default styles), yours to walk through and
-    remake.  STAY PUT: the wall repaints; nothing redirects."""
+    remake.  The offline understudy for the cloned example repo."""
     import os as _os
     from storage import registry as _reg
     from schema import Series, Issue

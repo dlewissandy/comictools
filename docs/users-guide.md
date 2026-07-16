@@ -65,13 +65,13 @@ Everything file-based still works without a key; anything that needs the model t
 On first run, with no publishing house anywhere, the lobby shows a single line — *"Every comic starts with a conversation."* — and two buttons:
 
 - **Found your publishing house** — opens the founding dialog (next section).
-- **Adopt the demo house** — builds a small, complete example house you can explore.
+- **Adopt the demo house** — fetches a small, complete example house you can explore.
 
 ### The demo house
 
-Adopting the demo founds **Foglamp Press** at `~/git/foglamp-press-comics` — a real git repository with the studio's default styles copied in — then writes a publisher description and logo brief, a series called *the-lighthouse-post*, and an issue, *the-fog-edition* (issue #1, in the vintage-four-color style, with a full story script already written and no publication date).
+Adopting the demo **clones the studio's example repository** — `github.com/dlewissandy/comic-studio-example` — to `~/git/comic-studio-example` and hangs it on the wall, exactly the way any co-author's house arrives. If the repository can't be fetched (you're offline, or it isn't published yet), the door still delivers: it founds the built-in **Foglamp Press** demo at `~/git/foglamp-press-comics` instead — a real git repository with the studio's default styles copied in, a publisher description and logo brief, a series called *the-lighthouse-post*, and an issue, *the-fog-edition* (issue #1, in the vintage-four-color style, with a full story script already written) — and a notice says which demo you received.
 
-Adopting the demo bills nothing. It is entirely file and git operations; no image is rendered and no model is called. After adoption the wall repaints in place — nothing redirects you anywhere. If `~/git/foglamp-press-comics/publishers` already exists, adoption refuses with a notice that the house already stands, and does nothing.
+Adopting the demo bills nothing. It is entirely file and git operations; no image is rendered and no model is called. After adoption the wall repaints in place — nothing redirects you anywhere. If the demo already stands on disk, adoption refuses with a notice, and does nothing.
 
 The demo issue arrives with a script but no scenes, panels, or art — deliberately. It is the raw material for exactly the walkthrough in this guide.
 
@@ -81,16 +81,17 @@ The demo issue arrives with a script but no scenes, panels, or art — deliberat
 
 A **publishing house** is where your work lives: one self-contained git repository holding a publisher record, series, issues, styles, prompts, and references. The registry of houses on your machine lives at `~/.comic-studio/publishers.json`; the repositories themselves live wherever you put them.
 
-**Found your publishing house** opens a dialog titled *A NEW PUBLISHING HOUSE*. It asks for a name and a folder:
+**Found your publishing house** opens a dialog titled *A NEW PUBLISHING HOUSE*. It asks for a name and a folder — or a repository URL:
 
 - On macOS, **Choose a folder…** opens the native folder chooser.
 - On other platforms (or if the native chooser is unavailable), a manual **Folder path** input appears. A path that does not exist yet is accepted — it will be created when you found the house.
+- **Or clone a house — repository URL**: paste a git URL (HTTPS or SSH) and the button becomes **Clone & adopt**. The repository is cloned to `~/git/<repo-name>` (or under your chosen folder), proved to be a comics house, and hung on the wall in one step — no terminal detour. This is how you join a co-author's house. A repo that turns out not to be a comics house is refused plainly and nothing is adopted; a private repo over HTTPS fails fast with advice to use an SSH URL or a credential helper rather than hanging on a login prompt.
 
-What happens to the folder depends on what is in it:
+What happens to a chosen folder depends on what is in it:
 
 - **Empty or not yet existing** — the house is founded directly in it.
 - **Occupied, but not a house** — a child repository named `<slugified-name>-comics` is created inside it.
-- **Already a house** (it has `publishers/` plus `series/` or `styles/`, with a readable publisher record) — the button changes to **Adopt this house**, and clicking it only registers the existing repository. No git init, no style copying; the house joins the rack as-is. This is also how you join a house a co-author cloned for you — see [Collaboration via git](#collaboration-via-git).
+- **Already a house** (it has `publishers/` plus `series/` or `styles/`, with a readable publisher record) — the button changes to **Adopt this house**, and clicking it only registers the existing repository. No git init, no style copying; the house joins the rack as-is — see [Collaboration via git](#collaboration-via-git).
 
 Founding copies **styles, prompts, and references** into the new house from the first available source: your own template at `~/.comic-studio/templates/house`, else the first registered sister house, else the app's bundled templates. If no source exists at all, founding refuses with an error — *"cannot found a house without its styles"* — before anything is registered.
 
@@ -501,13 +502,13 @@ Then click the sync glyph on the house card. Until a remote exists, sync commits
 
 ### Author B: clone and adopt
 
-Your co-author, on their own machine with their own studio installed:
+Your co-author, on their own machine with their own studio installed, opens **Found your publishing house** and pastes your repo's URL into **Or clone a house — repository URL**:
 
-```bash
-git clone git@github.com:you/foglamp-press-comics.git ~/git/foglamp-press-comics
+```
+git@github.com:you/foglamp-press-comics.git
 ```
 
-Then, in their studio: **Found your publishing house** → choose the cloned folder. The dialog recognizes it as an existing house and the button becomes **Adopt this house** — clicking it only registers the repository on their rack. No re-initialization, no style copying; they see the same wall, series, and issues you do.
+The button becomes **Clone & adopt** — one click clones the repository to `~/git/foglamp-press-comics` and hangs it on their rack. No terminal, no re-initialization, no style copying; they see the same wall, series, and issues you do. (Cloning by hand and then choosing the folder still works — the dialog recognizes an existing house and offers **Adopt this house**.)
 
 ### Working and syncing
 

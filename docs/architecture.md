@@ -145,8 +145,10 @@ listing.
 Each house is a self-contained, normal git repository holding one `Publisher` record plus
 its series, styles, prompts, and references. The machine-local registry at
 `~/.comic-studio/publishers.json` holds `{"publishers": [{"slug", "path"}]}`. Registry
-writes are atomic; `register()` deduplicates by path (not slug); `registered()` silently
-drops entries whose path no longer exists on disk. `unregister()` removes only the
+writes are atomic; `register()` deduplicates by path, refuses a slug collision (two
+paths under one folder name would silently shadow each other's mount), and runs the
+prose migration on arrival; `registered()` silently drops entries whose path no longer
+exists on disk. `unregister()` removes only the
 registry entry and the mount — the repo on disk is never touched. An empty rack — a
 registry with no houses — is legal.
 
@@ -191,7 +193,15 @@ author's live data. The rule is named for the 2026-07-10 carnival-scene data-los
 sharing ids across houses. It is used only as a legacy-link fallback; canonical style URLs
 carry the publisher.
 
-### Founding, adopting, syncing
+### Founding, adopting, cloning, syncing
+
+`clone_house` (`helpers/house_git.py`) fetches a house from a git URL: it clones into a
+staging sibling of the destination (`GIT_TERMINAL_PROMPT=0`, so a private HTTPS repo
+fails fast instead of hanging), validates the result with `looks_like_house`, then moves
+it into place — a failed or foreign clone never leaves debris at the destination. The
+GUI's *A NEW PUBLISHING HOUSE* dialog exposes it as **Clone & adopt** (paste a URL), and
+the demo-house door clones `github.com/dlewissandy/comic-studio-example`, falling back
+to founding the built-in Foglamp Press demo locally when the clone cannot deliver.
 
 `found_house` (`storage/registry.py`) creates a new house: `target/series`, then styles /
 prompts / references copied from the first available source (`~/.comic-studio/templates/house`,

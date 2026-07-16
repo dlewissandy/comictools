@@ -231,6 +231,13 @@ def register(path: str, slug: str | None = None) -> str:
     slug = slug or os.path.basename(path.rstrip(os.sep))
     reg = _load()
     pubs = [p for p in reg.get("publishers", []) if p.get("path") != path]
+    # a slug names ONE house: mount_all keys mounts by slug, so a second
+    # path under the same name would silently shadow the first
+    taken = next((p for p in pubs if p.get("slug") == slug), None)
+    if taken:
+        raise ValueError(f"a house named '{slug}' already hangs on the wall "
+                         f"(at {taken.get('path')}) — rename the folder to "
+                         f"adopt this one alongside it")
     pubs.append({"slug": slug, "path": path})
     reg["publishers"] = pubs
     _save(reg)

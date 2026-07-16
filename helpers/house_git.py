@@ -155,3 +155,45 @@ def sync_house(path: str) -> list[str]:
     receipts.append("☁ pushed — the house is synced")
     _STATE_CACHE.pop(path, None)
     return receipts
+
+
+def clone_house(url: str, dest: str, timeout: int = 600) -> str:
+    """CLONE A HOUSE from a git URL: the repo lands at dest and the name
+    of the publisher living in it comes back.  The clone arrives in a
+    temporary sibling first and only takes its place once it proves to
+    be a comics house — a failed or foreign clone never leaves debris
+    at dest.  Never hangs on a login prompt (private repos over https
+    fail fast with advice).  Raises RuntimeError with an author-readable
+    reason."""
+    import shutil
+    from uuid import uuid4
+
+    dest = os.path.abspath(os.path.expanduser(dest))
+    if os.path.exists(dest):
+        raise RuntimeError(f"{dest} already exists — adopt it from disk "
+                           f"instead, or pick another spot")
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    staging = f"{dest}.cloning-{uuid4().hex[:6]}"
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    try:
+        try:
+            cp = subprocess.run(["git", "clone", "--", url, staging],
+                                capture_output=True, text=True,
+                                timeout=timeout, env=env)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"cloning {url} timed out after {timeout}s")
+        if cp.returncode != 0:
+            tail = ((cp.stderr or "").strip().splitlines() or ["git clone failed"])[-1]
+            raise RuntimeError(f"couldn't clone {url}: {tail}  (a private repo "
+                               f"needs an SSH url or a git credential helper)")
+        from storage.registry import looks_like_house
+        pub = looks_like_house(staging)
+        if not pub:
+            raise RuntimeError(f"{url} cloned, but it isn't a comics house "
+                               f"(no publisher record with series or styles) — "
+                               f"nothing was adopted")
+        os.replace(staging, dest)
+        return pub
+    finally:
+        if os.path.isdir(staging):
+            shutil.rmtree(staging, ignore_errors=True)
