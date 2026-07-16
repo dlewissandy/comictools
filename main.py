@@ -435,13 +435,19 @@ def init_layout(logger):
         .book-page .text-gray-500 { color: #6b7280 !important; }
         .book-col-1 { grid-column: 1; }
         .book-page--ghost-faint { opacity: .55; }
-        /* THE PAGE TURN'S DOOR: a small round + resting at the bottom
-           edge of the sheet it follows — never a grid element, so the
-           two-up pairing can never shift */
+        /* THE PAGE TURN'S DOOR: a collapsed pill at the bottom edge of
+           the sheet it follows — a quiet ⊕ at rest that BLOOMS into
+           '⊕ full page here' under the hand.  Never a grid element, so
+           the two-up pairing can never shift. */
         .book-turn-btn { position: absolute; left: 50%; bottom: 4px;
                          transform: translateX(-50%); z-index: 12;
-                         opacity: .35; transition: opacity .15s; }
-        .book-turn-btn:hover { opacity: 1; }
+                         opacity: .45; transition: max-width .22s, opacity .15s;
+                         max-width: 30px; overflow: hidden;
+                         white-space: nowrap; border-radius: 15px;
+                         justify-content: flex-start; }
+        .book-turn-btn:hover { opacity: 1; max-width: 240px; }
+        .book-turn-btn .q-btn__content { flex-wrap: nowrap;
+                                         justify-content: flex-start; }
         .book-page--ghost { border: 2px dashed var(--ink); background: transparent;
                             box-shadow: none; cursor: pointer;
                             display: flex; flex-direction: column;

@@ -608,18 +608,23 @@ def view_issue(state: APPState):
         twice: first as a cell, then as a full row)."""
         if host is None:
             return
+        _KIND_ICONS = {'poster': 'image', 'ad': 'campaign',
+                       'pin-up': 'photo', 'mailbag': 'mail'}
         with host:
-            btn = ui.button(icon='add').props('flat round dense size=xs') \
-                .classes('book-turn-btn bg-white/70 dark:bg-black/50') \
-                .tooltip('A full page after this one — poster, ad, pin-up, '
-                         'or the mailbag')
+            btn = ui.button('full page here', icon='add') \
+                .props('flat dense no-caps size=sm') \
+                .classes('book-turn-btn bg-white/70 dark:bg-black/50')
             btn.on('click.stop', lambda *_: None)
             with btn:
                 with ui.menu().props('auto-close'):
+                    ui.label('A FULL PAGE SLIPS IN AFTER THIS ONE') \
+                        .classes('comic-label-sm') \
+                        .style('padding: 8px 12px 4px; opacity: .7;')
                     for k, lbl in _INSERT_KINDS:
                         ui.menu_item(lbl, on_click=lambda *_, k=k, n=after_n:
-                                     _make_insert(k, after_n=n)).props('dense')
-
+                                     _make_insert(k, after_n=n)) \
+                            .props('dense') \
+                            .classes('book-turn-kind')
     def insert_sheet(ins):
         rendered = ins.image and os.path.exists(ins.image)
         has_text = bool((ins.description or '').strip())
