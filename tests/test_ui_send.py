@@ -312,6 +312,47 @@ async def test_cast_card_corner_remove(user: User) -> None:
 
 @pytest.mark.module_under_test(main)
 @pytest.mark.asyncio
+async def test_a_handed_full_page_wears_its_own_shape_in_the_book(user: User) -> None:
+    """THE HANDED PAGE KEEPS ITS EDGES: art pasted onto a full page arrives in
+    whatever shape it was drawn in — the book's sheet scales it WHOLE (the
+    press does the same, helpers.binder._fit_page), never cropping to the
+    trim.  A panel still fills its frame: its render was drawn to fit."""
+    from PIL import Image
+    from schema import Insert
+    from storage.filepath import obj_to_imagepath
+    main.LocalStorage = _TmpStorage
+    WL, CARN = "wonders-of-the-witchlight", "witchlight-carnival"
+
+    storage = _TmpStorage()
+    ins = storage.read_all_objects(Insert, {"series_id": WL, "issue_id": CARN})[0]
+    img_dir = obj_to_imagepath(obj=ins, base_path=storage.base_path)
+    os.makedirs(img_dir, exist_ok=True)
+    art = os.path.join(img_dir, "wide-ad.png")
+    Image.new("RGB", (1600, 900), (30, 60, 180)).save(art)   # a WIDE ad
+    ins.image = art
+    storage.update_object(ins)
+
+    sel = [{"name": "Series", "id": None, "kind": "all-series"},
+           {"name": "WL", "id": WL, "kind": "series"},
+           {"name": "C", "id": CARN, "kind": "issue"}]
+    json.dump({"selection": sel, "messages": [], "dark_mode": False},
+              open(gui_state.STATE_FILEPATH, "w"))
+    await user.open(_url_for(sel))
+    await user.should_see("COLOPHON")
+
+    sheets = [e for e in user.client.elements.values()
+              if 'insert-drop-sheet' in getattr(e, "_classes", [])]
+    assert sheets, "the insert lays a sheet in the book"
+    # (the art is served at a static URL, so it answers to its file name)
+    arts = [c for sh in sheets for c in sh.default_slot.children
+            if str(c._props.get('src', '')).endswith("wide-ad.png")]
+    assert arts, "the sheet wears the handed art"
+    assert all(a._props.get('fit') == 'contain' for a in arts), \
+        "the whole ad lands on the page — the book never crops its edges off"
+
+
+@pytest.mark.module_under_test(main)
+@pytest.mark.asyncio
 async def test_slips_pack_every_bare_scene_exactly_once(user: User) -> None:
     """MANUSCRIPT SLIPS: at the PANELS stop every bare scene appears exactly
     once, in reading order, 1-3 to a sheet — and the printed pagination

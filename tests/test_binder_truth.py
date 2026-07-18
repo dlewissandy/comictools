@@ -109,6 +109,60 @@ def test_only_the_mailbag_typesets_its_description(storage, tmp_data, monkeypatc
     assert typeset == ["mailbag"], "the mailbag's letters still print typeset"
 
 
+def test_a_handed_full_page_keeps_its_shape(storage, tmp_data):
+    """THE HANDED PAGE KEEPS ITS EDGES: art the author pastes onto a full
+    page (an ad, a scanned mailbag) arrives in its own shape.  The sheet
+    scales it WHOLE and centres it — it never crops the edges off to fill
+    the trim."""
+    from PIL import Image
+    from helpers import binder
+    from schema import Insert
+    from storage.filepath import obj_to_imagepath
+
+    ins = storage.read_all_objects(Insert, {"series_id": WL, "issue_id": CARN})[0]
+    # a WIDE ad — nothing like the page's portrait trim — with edges that
+    # only survive if the whole picture lands on the sheet
+    img_dir = obj_to_imagepath(obj=ins, base_path=storage.base_path)
+    os.makedirs(img_dir, exist_ok=True)
+    art = os.path.join(img_dir, "wide-ad.png")
+    ad = Image.new("RGB", (1600, 900), (30, 60, 180))
+    for x in range(40):
+        for y in range(900):
+            ad.putpixel((x, y), (255, 0, 0))          # left edge
+            ad.putpixel((1599 - x, y), (0, 255, 0))   # right edge
+    ad.save(art)
+    ins.image = art
+    storage.update_object(ins)
+
+    sheet, missing = binder._insert_page(ins)
+    assert missing is None
+    assert sheet.size == (binder.PAGE_W, binder.PAGE_H), "it still prints a full sheet"
+
+    mid = binder.PAGE_H // 2
+    assert sheet.getpixel((2, mid)) == (255, 0, 0), "the ad's left edge is still on the page"
+    assert sheet.getpixel((binder.PAGE_W - 3, mid)) == (0, 255, 0), "and its right edge too"
+
+    # the picture kept its own proportions: scaled to the page's width, the
+    # 16:9 ad stands 900/1600 as tall, and paper shows above and below
+    art_h = round(900 * (binder.PAGE_W / 1600))
+    assert sheet.getpixel((binder.PAGE_W // 2, (binder.PAGE_H - art_h) // 4)) == binder.PAPER
+    assert sheet.getpixel((binder.PAGE_W // 2, mid)) != binder.PAPER, "the art holds the middle"
+
+
+def test_the_reading_room_reprints_when_the_press_changes(storage):
+    """The sheets cache by signature, and the COMPOSITION MATH shapes the
+    sheet as surely as the art does — so the signature must move when the
+    press does, or a book composed yesterday serves yesterday's crop."""
+    from helpers import binder
+    before = binder.book_signature(storage, WL, CARN)
+    binder.BINDER_REV += 1
+    try:
+        assert binder.book_signature(storage, WL, CARN) != before, \
+            "a new press must invalidate the cached sheets"
+    finally:
+        binder.BINDER_REV -= 1
+
+
 def test_the_pdf_binds_at_full_quality(storage, tmp_path):
     """The flagship deliverable is never the softest copy: pages encode at
     JPEG q95, not Pillow's silent default 75."""

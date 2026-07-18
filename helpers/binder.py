@@ -29,6 +29,12 @@ MARGIN_X = (PAGE_W - 900) // 2    # 47px ≈ 5/16in side margins
 MARGIN_Y = (PAGE_H - 1500) // 2   # 14px top/bottom
 MARGIN = MARGIN_X                 # text blocks (indicia, credits) keep this inset
 GUTTER = 28      # space between panels on a page
+PAPER = (253, 252, 248)   # the sheet's own white — .book-page wears it too
+
+# BUMP THIS whenever the composition math changes shape: the reading room
+# caches sheets by book_signature, which sees content, not code — without a
+# bump, an issue composed before the change keeps serving the old sheets.
+BINDER_REV = 2
 
 
 def _reading_order(storage: GenericStorage, series_id: str, issue_id: str):
@@ -200,12 +206,13 @@ def _indicia_sheet(issue: Issue, series: Series | None, publisher: Publisher | N
 
 
 def _insert_page(ins) -> tuple["Image.Image", str | None]:
-    """One insert as a printed sheet: its art full-bleed; the MAILBAG's
+    """One insert as a printed sheet: its art scaled whole onto the page
+    (a handed ad keeps its shape — see _fit_page); the MAILBAG's
     letters typeset until inked (its description IS the page — any other
     kind's description is a render brief that never prints); a bare
     insert prints a named placeholder.  Returns (sheet, missing-note)."""
     if ins.image and os.path.exists(ins.image):
-        return _full_bleed(ins.image), None
+        return _fit_page(ins.image), None
     if ins.kind == 'mailbag' and (ins.description or '').strip():
         return _insert_text_sheet(ins), \
             f"insert '{ins.name}' is not rendered (generate_insert_art)"
@@ -279,6 +286,21 @@ def _full_bleed(path: str) -> "Image.Image":
     img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
     x, y = (img.width - PAGE_W) // 2, (img.height - PAGE_H) // 2
     return img.crop((x, y, x + PAGE_W, y + PAGE_H))
+
+
+def _fit_page(path: str) -> "Image.Image":
+    """Art the author HANDED the page (a pasted ad, a scanned mailbag) comes
+    in whatever shape it was drawn in — so it is scaled WHOLE onto the sheet
+    and centred, its own shape kept, the leftover trim reading as paper.
+    Cover art is rendered TO the trim and still bleeds (_full_bleed); only
+    the handed page has edges worth keeping."""
+    img = Image.open(path).convert("RGB")
+    scale = min(PAGE_W / img.width, PAGE_H / img.height)
+    w, h = max(1, round(img.width * scale)), max(1, round(img.height * scale))
+    img = img.resize((w, h), Image.LANCZOS)
+    sheet = Image.new("RGB", (PAGE_W, PAGE_H), PAPER)
+    sheet.paste(img, ((PAGE_W - w) // 2, (PAGE_H - h) // 2))
+    return sheet
 
 
 def _flow_pages(image_paths: list[str]) -> list["Image.Image"]:
@@ -526,7 +548,9 @@ def bind_issue_cbz(storage: GenericStorage, series_id: str, issue_id: str, outpu
 
 def book_signature(storage: GenericStorage, series_id: str, issue_id: str) -> str:
     """A fingerprint of everything that shapes the composed book: issue
-    metadata (the indicia), covers, page layout, and every panel's art."""
+    metadata (the indicia), covers, page layout, every panel's art — and
+    BINDER_REV, because the composition math shapes the sheet too.  Content
+    alone would hand back sheets composed by yesterday's press."""
     from schema import Page
 
     def stamp(path):
@@ -535,7 +559,7 @@ def book_signature(storage: GenericStorage, series_id: str, issue_id: str) -> st
         except OSError:
             return f"{path}:gone"
 
-    parts = []
+    parts = [f"binder-rev:{BINDER_REV}"]
     issue = storage.read_object(cls=Issue, primary_key={"series_id": series_id, "issue_id": issue_id})
     parts.append(issue.model_dump_json() if issue else "no-issue")
     series = storage.read_object(cls=Series, primary_key={"series_id": series_id})

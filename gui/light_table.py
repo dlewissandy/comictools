@@ -4095,7 +4095,12 @@ def light_table(state: APPState, panel, scene, setting,
             with ui.column().style('flex: 1 1 0; min-width: 0;'):
                 ui.label('THE PRINT').classes('comic-label-sm')
                 with ui.element('div').classes('rough-canvas').style(canvas_style):
-                    ui.image(source=_src(featured)).props('fit=cover') \
+                    # a PANEL's render is drawn to its frame, so filling it
+                    # crops nothing — but a full page can be HANDED art of any
+                    # shape, and the press scales that whole onto the sheet
+                    # (helpers.binder._fit_page).  THE PRINT shows what prints.
+                    ui.image(source=_src(featured)) \
+                        .props('fit=contain' if insert_mode else 'fit=cover') \
                         .classes('absolute inset-0 w-full h-full')
                     if actions:
                         with ui.row().classes('absolute top-1 right-1 z-10 items-center').style('gap: 4px;'):

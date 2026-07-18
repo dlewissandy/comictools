@@ -657,7 +657,10 @@ def view_issue(state: APPState):
             ui.upload(on_upload=_drop_art, auto_upload=True, max_files=1) \
                 .style('display: none;')
             if rendered:
-                ui.image(source=ins.image).props('fit=cover').classes('absolute inset-0 w-full h-full')
+                # the page wears the art WHOLE, its own shape kept — the same
+                # scale-to-fit the binder prints (helpers.binder._fit_page), so
+                # the sheet here is the sheet you read
+                ui.image(source=ins.image).props('fit=contain').classes('absolute inset-0 w-full h-full')
             elif has_text:
                 # a written page (the mailbag's letters, an ad's copy) reads
                 # as manuscript until it's inked
