@@ -139,7 +139,9 @@ def test_swatch_book_matches_the_catalog():
 
 def test_clear_acetate_apply_keeps_transparency(tmp_path, monkeypatch):
     """CLEAR ACETATE: applying a heal to a transparent acetate restores the
-    original's alpha outside the healed patch — never an opaque slab."""
+    original's alpha outside the healed patch — never an opaque slab.  The
+    heal lands as a NEW file beside the original (nothing the author made
+    is ever overwritten); the original acetate survives verbatim."""
     from types import SimpleNamespace
     from PIL import Image
     import json as j
@@ -173,7 +175,12 @@ def test_clear_acetate_apply_keeps_transparency(tmp_path, monkeypatch):
     monkeypatch.setattr("gui.light_table.table_receipt", lambda *a, **k: None)
     ch._apply(state)
 
-    out = Image.open(original).convert("RGBA")
+    # the original acetate is untouched — the heal is a NEW sibling file
+    kept = Image.open(original).convert("RGBA")
+    assert kept.getpixel((50, 50))[:3] == (200, 30, 30), "the original survives verbatim"
+    healed_files = [f for f in os.listdir(tmp_path) if f.startswith("healed-")]
+    assert healed_files, "the healed art landed beside the original"
+    out = Image.open(str(tmp_path / healed_files[0])).convert("RGBA")
     assert out.getpixel((5, 5))[3] == 0, "outside the patch stays CLEAR"
     assert out.getpixel((50, 50))[3] == 255, "inside the patch takes the heal"
     assert out.getpixel((50, 50))[:3] == (10, 200, 10), "the healed pixels are the take's"

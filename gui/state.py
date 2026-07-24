@@ -6,6 +6,7 @@ from loguru import logger
 from agents import Agent
 from agents.items import TResponseInputItem
 from storage.generic import GenericStorage
+from helpers.agent_thread import sane_tail
 
 STATE_FILEPATH = 'state.json'
 def elipsis(text: str, max_length: int = 50) -> str:
@@ -563,8 +564,11 @@ class APPState:
             state_json = {
                 "selection": [item.model_dump() for item in self.selection],
                 "thread": merged,
-                "agent_thread": [it for it in (getattr(self, "agent_thread", None) or [])
-                                 if isinstance(it, dict)][-120:],
+                # cap at a whole user turn, never mid tool-call — a blind
+                # [-120:] once beheaded a call from its output and every
+                # turn after failed with 'No tool call found…'
+                "agent_thread": sane_tail(
+                    getattr(self, "agent_thread", None) or [], 120),
                 "dark_mode": self.dark_mode,
             }
             from uuid import uuid4

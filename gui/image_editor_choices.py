@@ -122,8 +122,9 @@ def view_image_editor_choices(state: APPState):
             else:
                 ui.button("Paste it down", icon="check").classes("w-1/2") \
                     .props("no-caps") \
-                    .tooltip("Repaint the acetate with this take — the original goes "
-                             "to the wastebasket first (swap it back from there any time)") \
+                    .tooltip("Lay this take down as NEW art beside the original — "
+                             "the original is never overwritten, it keeps its "
+                             "place on the wall") \
                     .on("click", lambda _: _apply(state))
             ui.button("Leave the bench", icon="logout").classes("w-1/2") \
                 .props("flat no-caps") \
@@ -135,6 +136,56 @@ def view_image_editor_choices(state: APPState):
 def _select_choice(state: APPState, path: str):
     state.image_editor_choice_selected = path
     state.refresh_details()
+
+
+def _swap_trail_references(state: APPState, original: str, healed: str) -> bool:
+    """Every object on the selection trail that pointed at the original now
+    points at the healed art — a featured cover stays featured, an acetate
+    stays in its layer, a setting master stays keyed to its style — while
+    the ORIGINAL FILE is never touched.  Returns True when anything moved."""
+    from gui.selection import selection_to_context, SelectedKind as _SK
+    storage = getattr(state, "storage", None)
+    if storage is None:
+        return False
+    contexts = []
+    try:
+        contexts = list(selection_to_context(state.selection))
+    except Exception as ex:
+        logger.debug(f"trail context walk failed: {ex}")
+    # the mark board rides outside selection_to_context — add it by hand
+    scope = None
+    for s in state.selection:
+        if s.kind in (_SK.PUBLISHER, _SK.SERIES):
+            scope = s.id
+        elif s.kind == _SK.ARTBOARD and scope:
+            from schema import ArtBoard
+            contexts.append((ArtBoard, {"scope_id": scope, "board_id": s.id}))
+    swapped = False
+    for cls, pk in contexts:
+        try:
+            obj = storage.read_object(cls=cls, primary_key=pk)
+        except Exception:
+            obj = None
+        if obj is None:
+            continue
+        changed = False
+        for name in type(obj).model_fields:
+            val = getattr(obj, name, None)
+            if isinstance(val, str) and val == original:
+                setattr(obj, name, healed)
+                changed = True
+            elif isinstance(val, dict):
+                for k, v in list(val.items()):
+                    if isinstance(v, str) and v == original:
+                        val[k] = healed
+                        changed = True
+        if changed:
+            try:
+                storage.update_object(obj)
+                swapped = True
+            except Exception as ex:
+                logger.warning(f"reference swap failed for {cls.__name__}: {ex}")
+    return swapped
 
 
 def _apply(state: APPState):
@@ -151,13 +202,12 @@ def _apply(state: APPState):
         ui.notify("The original acetate is missing.", type="negative")
         return
 
-    # THE ORIGINAL GOES TO THE WASTEBASKET FIRST: applying an edit must
-    # never be the only copy's last moment — the wastebasket's 'swap it
-    # back' door restores the pre-edit art any time.
-    from storage.trash import soft_backup
-    _base = str(getattr(getattr(state, "storage", None), "base_path", "data"))
-    soft_backup(_base, original,
-                note=f"the art before a heal was applied — {os.path.basename(original)}")
+    # NOTHING THE AUTHOR MADE IS OVERWRITTEN: the heal lands as a NEW file
+    # beside the original — on a board that means the pre-heal art keeps
+    # its place in the takes list, and there is no last-copy moment at all.
+    folder = os.path.dirname(original)
+    ext = (os.path.splitext(original)[1] or os.path.splitext(chosen)[1] or ".png")
+    healed = os.path.join(folder, f"healed-{uuid4().hex[:8]}{ext}")
     try:
         # CLEAR ACETATE: healing a transparent image must never paste an
         # opaque card into the layered composite — outside the healed
@@ -196,27 +246,41 @@ def _apply(state: APPState):
                                int(region['y'] + region['height']))
                         alpha.paste(new.getchannel('A').crop(box), box)
                     new.putalpha(alpha)
-                    new.save(original, 'PNG')
+                    new.save(healed, 'PNG')
                     applied = True
         except Exception as ex:
             logger.warning(f"alpha-preserving apply fell back to plain copy: {ex}")
         if not applied:
-            shutil.copyfile(chosen, original)
+            shutil.copyfile(chosen, healed)
     except Exception as e:
-        logger.exception("Failed to overwrite original image")
+        logger.exception("Failed to lay down the healed take")
         ui.notify(f"Failed to apply edit: {e}", type="negative")
         return
 
+    # whatever featured or layered the original now shows the heal; the
+    # original file itself stands untouched on the wall
+    swapped = _swap_trail_references(state, original, healed)
+
     _cleanup_choices(state, keep_original=True)
-    state.image_editor_image = original
+    state.image_editor_image = healed
     state.is_dirty = True
 
     from gui.light_table import table_receipt
-    table_receipt(state, "🖌 pasted the take down — the acetate was repainted in place.  "
-                         "The pre-edit art waits in the wastebasket (swap it back any time).")
+    table_receipt(state, "🖌 pasted the take down as NEW art beside the original — "
+                         "nothing was overwritten"
+                         + (", and everything that showed the original now shows the heal"
+                            if swapped else
+                            ".  Click the new take on the wall to feature it") + ".")
 
-    # Return to editor view
-    new_sel = [s for s in state.selection if s.kind != SelectedKind.IMAGE_EDITOR_CHOICES]
+    # Return to the bench, now standing at the healed art
+    new_sel = []
+    for s in state.selection:
+        if s.kind == SelectedKind.IMAGE_EDITOR_CHOICES:
+            continue
+        if s.kind == SelectedKind.IMAGE_EDITOR and s.id == original:
+            from gui.selection import SelectionItem
+            s = SelectionItem(name=s.name, id=healed, kind=s.kind)
+        new_sel.append(s)
     state.change_selection(new=new_sel)
 
 

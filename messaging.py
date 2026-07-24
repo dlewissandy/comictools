@@ -196,19 +196,10 @@ async def handle_agent_events(state: APPState, messages: list[dict], response_ma
     return stream.to_input_list()
 
 
-def _trim_thread(items: list, max_items: int = 140) -> list:
-    """Cap a thread without splitting a tool call from its output: trim at
-    the nearest whole user turn.  (140: a tool-heavy render session was
-    forgetting its own morning at 80 — the author called it 'dumber than
-    dirt', and half of that was amnesia.)"""
-    if len(items) <= max_items:
-        return items
-    start = len(items) - max_items
-    for i in range(start, len(items)):
-        it = items[i]
-        if isinstance(it, dict) and it.get('role') == 'user':
-            return items[i:]
-    return items
+# Capping and healing the thread lives in helpers.agent_thread — the save
+# (gui/state.py) and load (main.py) paths use the same door, so a dangling
+# tool call/output half can never reach the API from any of them.
+from helpers.agent_thread import sane_tail as _trim_thread
 
 
 def stop_turn(state: APPState) -> bool:

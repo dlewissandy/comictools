@@ -915,8 +915,11 @@ def build_page(selection_override: list[SelectionItem] | None = None):
             convs, state.conversation_key(selection), storage=state.storage)
     else:
         state.thread = []
-    state.agent_thread = [it for it in (state_data.get('agent_thread') or [])
-                          if isinstance(it, dict)]
+    # heal on the way in: an older build's blind cap could save a thread
+    # whose head was half a tool call — sent as-is, the API refuses EVERY
+    # turn with 'No tool call found for function call output…'
+    from helpers.agent_thread import sane_tail
+    state.agent_thread = sane_tail(state_data.get('agent_thread') or [])
 
     state.dark_mode = dark_value
     render_thread(state, state.thread)

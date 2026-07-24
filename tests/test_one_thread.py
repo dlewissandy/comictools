@@ -282,3 +282,61 @@ def test_text_editors_ride_the_conversation_box():
     assert "_input_intercept" in body, "book text edits ride the conversation box"
     assert "studio_dialog" not in body and "ui.textarea" not in body, \
         "the shared text editor must not open a modal"
+
+
+# ---------------------------------------------------------------------------
+# THREAD HYGIENE: the agent thread never carries half a tool call — the
+# Responses API refuses a function_call_output whose call is missing
+# ('No tool call found for function call output…'), and once a dangling
+# half was SAVED, every later turn failed the same way.
+# ---------------------------------------------------------------------------
+def test_sane_tail_heals_a_beheaded_tool_call():
+    """The exact field failure: a blind [-120:] save cut between a call and
+    its output, so the loaded thread OPENED on a dangling output."""
+    from helpers.agent_thread import sane_tail
+    items = [
+        {"type": "function_call_output", "call_id": "c0", "output": "x"},
+        {"role": "user", "content": "heal the marked patch"},
+        {"type": "function_call", "call_id": "c1", "name": "inpaint_image_region",
+         "arguments": "{}"},
+        {"type": "function_call_output", "call_id": "c1", "output": "ok"},
+        {"role": "assistant", "content": "done"},
+    ]
+    out = sane_tail(items)
+    assert not any(it.get("call_id") == "c0" for it in out), \
+        "the orphaned output must not reach the API"
+    assert any(it.get("type") == "function_call" and it.get("call_id") == "c1"
+               for it in out)
+    assert any(it.get("type") == "function_call_output" and it.get("call_id") == "c1"
+               for it in out), "a whole pair survives intact"
+
+
+def test_sane_tail_caps_at_a_whole_user_turn_and_keeps_pairs_whole():
+    from helpers.agent_thread import sane_tail
+    items = []
+    for i in range(50):
+        items += [{"role": "user", "content": f"u{i}"},
+                  {"type": "function_call", "call_id": f"c{i}", "name": "t",
+                   "arguments": "{}"},
+                  {"type": "function_call_output", "call_id": f"c{i}", "output": "ok"},
+                  {"role": "assistant", "content": "done"}]
+    out = sane_tail(items, max_items=10)
+    assert len(out) <= 10
+    assert out[0].get("role") == "user", "the cap cuts at a whole user turn"
+    calls = {it["call_id"] for it in out if it.get("type") == "function_call"}
+    outs = {it["call_id"] for it in out if it.get("type") == "function_call_output"}
+    assert calls == outs, "no half-pairs survive the cap"
+
+
+def test_sane_tail_drops_unanswered_calls_and_non_dicts():
+    from helpers.agent_thread import sane_tail
+    items = [
+        {"role": "user", "content": "go"},
+        {"type": "function_call", "call_id": "c9", "name": "t", "arguments": "{}"},
+        "not-a-dict",
+        {"role": "assistant", "content": "…"},
+    ]
+    out = sane_tail(items)
+    assert not any(it.get("call_id") == "c9" for it in out), \
+        "a call whose answer never landed is dropped too"
+    assert all(isinstance(it, dict) for it in out)
