@@ -229,3 +229,55 @@ def test_panelize_resolves_names_to_ids(storage):
         if p.name == "Dangler Test")
     assert pnl.character_references and pnl.character_references[0].character_id == "ezra", \
         "the display name resolved to the roster id"
+
+
+# ---------------------------------------------------------------------------
+# THE MASK CONTRACT: the images/edits docs demand the edit target and the
+# mask share FORMAT and SIZE (a JPEG take beside a PNG mask had the mask
+# silently ignored) — and gpt-image follows a mask only loosely, so the
+# darkroom composites the original's exact pixels back where they rule.
+# ---------------------------------------------------------------------------
+def test_png_for_edit_matches_the_mask_format(tmp_path):
+    from PIL import Image
+    from agentic.tools.imaging import _png_for_edit
+    jpg = str(tmp_path / "take.jpg")
+    Image.new("RGB", (60, 40), (200, 10, 10)).save(jpg, "JPEG")
+    png_target = _png_for_edit(jpg)
+    assert png_target != jpg and png_target.endswith(".png")
+    assert Image.open(png_target).size == (60, 40)
+    os.remove(png_target)
+    png = str(tmp_path / "sheet.png")
+    Image.new("RGBA", (60, 40)).save(png)
+    assert _png_for_edit(png) == png, "a PNG rides as itself — nothing to clean"
+
+
+def test_honor_patch_keeps_the_original_outside_the_marquee(tmp_path):
+    from io import BytesIO
+    from PIL import Image
+    from agentic.tools.imaging import _honor_patch
+    original = str(tmp_path / "take.jpg")
+    Image.new("RGB", (100, 100), (200, 10, 10)).save(original, "JPEG")   # red
+    buf = BytesIO()
+    Image.new("RGB", (1024, 1024), (10, 200, 10)).save(buf, "PNG")       # green
+    region = {"x": 30, "y": 30, "width": 40, "height": 40}
+    out_bytes = _honor_patch(original, region, buf.getvalue())
+    out = Image.open(BytesIO(out_bytes)).convert("RGB")
+    assert out.size == (100, 100)
+    assert out.getpixel((5, 5))[0] > 150, "far outside the patch: the original's red"
+    assert out.getpixel((50, 50))[1] > 150, "the patch centre: the take's green"
+
+
+def test_honor_frame_keeps_the_art_in_its_berth(tmp_path):
+    from io import BytesIO
+    from PIL import Image
+    from agentic.tools.imaging import _honor_frame
+    original = str(tmp_path / "take.png")
+    Image.new("RGB", (100, 100), (200, 10, 10)).save(original)           # red
+    buf = BytesIO()
+    Image.new("RGB", (1024, 1024), (10, 10, 200)).save(buf, "PNG")       # blue
+    padding = {"top": 256, "bottom": 256, "left": 256, "right": 256}
+    out_bytes = _honor_frame(original, padding, buf.getvalue())
+    out = Image.open(BytesIO(out_bytes)).convert("RGB")
+    assert out.size == (612, 612), "the paper grew by the padding"
+    assert out.getpixel((306, 306))[0] > 150, "the art's centre survives verbatim"
+    assert out.getpixel((10, 10))[2] > 150, "the margins are the model's to paint"

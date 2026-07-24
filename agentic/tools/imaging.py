@@ -1697,6 +1697,75 @@ def _has_real_alpha(path: str) -> bool:
         return False
 
 
+def _png_for_edit(image_path: str) -> str:
+    """THE MASK CONTRACT (per the images/edits docs): the image to edit and
+    the mask must share FORMAT and SIZE.  The mask is always PNG, so the
+    edit target rides as PNG too — a JPEG take sent beside a PNG mask had
+    the mask silently ignored.  Returns image_path itself when it is
+    already PNG; otherwise a temp PNG the caller must clean up."""
+    if image_path.lower().endswith(".png"):
+        return image_path
+    img = Image.open(image_path).convert("RGBA")
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    img.save(tmp.name, "PNG")
+    return tmp.name
+
+
+def _bytes_in_source_format(img: "Image.Image", source_path: str) -> bytes:
+    """Encode a PIL image in the source file's own format, so the darkroom
+    hands back bytes that _save_image_bytes files under the right ext."""
+    from io import BytesIO
+    ext = os.path.splitext(source_path)[1].lower()
+    buf = BytesIO()
+    if ext in (".jpg", ".jpeg"):
+        img.convert("RGB").save(buf, "JPEG", quality=95)
+    else:
+        img.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _honor_patch(original_path: str, region: dict, image_bytes: bytes) -> bytes:
+    """THE MARQUEE IS A PROMISE: outside it, the original's exact pixels
+    survive.  GPT-image masking is guidance only (the docs: 'may not
+    follow its exact shape with complete precision'), so the studio
+    enforces it in the darkroom — the take is composited into the patch
+    with a soft seam, the rest of the sheet is the original, verbatim."""
+    from io import BytesIO
+    from PIL import ImageFilter
+    orig = Image.open(original_path).convert("RGBA")
+    take = Image.open(BytesIO(image_bytes)).convert("RGBA").resize(orig.size)
+    r = _normalize_selection(region, *orig.size)
+    keep = Image.new("L", orig.size, 255)          # 255 = the original rules
+    ImageDraw.Draw(keep).rectangle(
+        [r["x"], r["y"], r["x"] + r["width"], r["y"] + r["height"]], fill=0)
+    keep = keep.filter(ImageFilter.GaussianBlur(4))
+    out = Image.composite(orig, take, keep)
+    return _bytes_in_source_format(out, original_path)
+
+
+def _honor_frame(original_path: str, padding: dict, image_bytes: bytes) -> bytes:
+    """EXTEND THE PAPER, KEEP THE ART: the grown take comes back with the
+    original composited over its old berth — only the new margins are the
+    model's to paint, exactly as the tool promises."""
+    from io import BytesIO
+    from PIL import ImageFilter
+    orig = Image.open(original_path).convert("RGBA")
+    left, top = int(padding.get("left", 0)), int(padding.get("top", 0))
+    grown = (orig.width + left + int(padding.get("right", 0)),
+             orig.height + top + int(padding.get("bottom", 0)))
+    take = Image.open(BytesIO(image_bytes)).convert("RGBA").resize(grown)
+    plate = take.copy()
+    plate.paste(orig, (left, top))
+    keep = Image.new("L", grown, 0)                # 255 = the original rules
+    inset = 8                                       # a soft seam at the berth
+    ImageDraw.Draw(keep).rectangle(
+        [left + inset, top + inset,
+         left + orig.width - inset, top + orig.height - inset], fill=255)
+    keep = keep.filter(ImageFilter.GaussianBlur(4))
+    out = Image.composite(plate, take, keep)
+    return _bytes_in_source_format(out, original_path)
+
+
 def _choices_epilogue(state, image_locator: str, session_id: str, mode: str):
     """The on-loop epilogue for a queued heal: when the takes land, the
     editor state points at them and the choices sheet opens itself —
@@ -1763,6 +1832,8 @@ def inpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str)
     try:
         size = _choose_output_size(w, h)
         refs = _collect_reference_images(state, instruction)
+        # the mask contract: the edit target rides as PNG, like the mask
+        edit_target = _png_for_edit(image_locator)
     except Exception:
         if mask_path and os.path.exists(mask_path):
             os.remove(mask_path)
@@ -1777,9 +1848,13 @@ def inpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str)
                 # CLEAR ACETATE: the heal keeps the transparency and the
                 # exact pixels outside the patch
                 kwargs = {"background": "transparent", "input_fidelity": "high"}
+            elif selection:
+                # a MARKED patch on a print: hold the rest of the sheet
+                # faithful — the mask is guidance, fidelity is the anchor
+                kwargs = {"input_fidelity": "high"}
             images = invoke_edit_image_api(
                 prompt=instruction,
-                reference_images=_merge_reference_images(image_locator, refs),
+                reference_images=_merge_reference_images(edit_target, refs),
                 mask=mask_path,
                 size=size,
                 quality=IMAGE_QUALITY.HIGH,
@@ -1789,8 +1864,16 @@ def inpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str)
         finally:
             if mask_path and os.path.exists(mask_path):
                 os.remove(mask_path)
+            if edit_target != image_locator and os.path.exists(edit_target):
+                os.remove(edit_target)
         if isinstance(images, bytes):
             images = [images]
+        if selection:
+            # THE MARQUEE IS A PROMISE: gpt-image follows the mask only
+            # loosely — the darkroom composites the original's exact
+            # pixels back outside the patch before anything is offered
+            images = [_honor_patch(image_locator, selection, img)
+                      for img in images]
         choices = [_save_image_bytes(img, image_locator, prefix=f"choice-{session_id}")
                    for img in images]
         if not choices:
@@ -1860,6 +1943,8 @@ def outpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str
                 size=size,
                 quality=IMAGE_QUALITY.HIGH,
                 n=4,
+                # the art must survive its own extension verbatim
+                input_fidelity="high",
             )
         finally:
             for path in [base_path, mask_path]:
@@ -1867,6 +1952,10 @@ def outpaint_image_region(wrapper: RunContextWrapper[APPState], instruction: str
                     os.remove(path)
         if isinstance(images, bytes):
             images = [images]
+        # EXTEND THE PAPER, KEEP THE ART: the mask is guidance only — the
+        # darkroom composites the original back over its old berth, so
+        # only the new margins are the model's
+        images = [_honor_frame(image_locator, padding, img) for img in images]
         choices = [_save_image_bytes(img, image_locator, prefix=f"choice-{session_id}")
                    for img in images]
         if not choices:
