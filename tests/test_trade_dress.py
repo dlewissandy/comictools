@@ -9,7 +9,7 @@ from helpers.trade_dress import (COVER_PIECES, PANEL_PIECES, DRESS_DEFAULTS,
 
 def _issue(**kw):
     base = dict(writer="Ann Author", artist="Pei Painter", colorist=None,
-                creative_minds="The Table", issue_number=3, price=4.99)
+                creative_minds="The Table", issue_number=3, price="$4.99")
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -21,8 +21,23 @@ def test_dress_text_speaks_the_masthead():
     assert "COLORS" not in credits, "missing metadata never prints an empty slot"
     assert dress_text(iss, "dress/issue") == "No. 3"
     assert dress_text(iss, "dress/price") == "$4.99"
+    assert dress_text(_issue(price="Free"), "dress/price") == "Free", \
+        "the price is free text and prints verbatim"
     assert dress_text(_issue(price=None), "dress/price") is None
     assert dress_text(None, "dress/credits") is None
+
+
+def test_price_is_free_text_and_old_numbers_dress_themselves():
+    """The price field holds whatever should PRINT ('Free', '10¢') — and a
+    house minted before the ruling, whose JSON holds a NUMBER, loads with
+    the dollar dress it always printed."""
+    from schema import Issue
+    base = dict(issue_id="i", name="N", style_id="s", series_id="ser",
+                story=None, issue_number=1, publication_date=None,
+                writer=None, artist=None, colorist=None, creative_minds=None)
+    assert Issue(**base, price="Free").price == "Free"
+    assert Issue(**base, price=3.99).price == "$3.99"
+    assert Issue(**base, price=None).price is None
 
 
 def test_collect_dress_reads_snapshots_only():

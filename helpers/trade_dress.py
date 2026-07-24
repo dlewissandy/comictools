@@ -49,8 +49,9 @@ def dress_text(issue, key: str) -> str | None:
         n = getattr(issue, "issue_number", None)
         return f"No. {n}" if n is not None else None
     if key == "dress/price":
+        # free text, printed verbatim — '$3.99', 'Free', '10¢'
         p = getattr(issue, "price", None)
-        return f"${p:.2f}" if p is not None else None
+        return str(p) if p else None
     return None
 
 

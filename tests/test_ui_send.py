@@ -471,7 +471,7 @@ async def test_colophon_prints_all_credits_and_each_line_is_a_pencil(user: User,
     iss = _TmpStorage().read_object(Issue, {"series_id": "wonders-of-the-witchlight",
                                             "issue_id": "witchlight-carnival"})
     fields = [iss.creative_minds, iss.publication_date,
-              (f"${iss.price:.2f}" if iss.price is not None else None)]
+              iss.price or None]   # price is free text, printed verbatim
     for v in fields:
         if v:
             await user.should_see(str(v))

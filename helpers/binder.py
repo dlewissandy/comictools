@@ -161,7 +161,8 @@ def _small_print(issue: Issue, series: Series | None, publisher: Publisher | Non
     if publisher:
         parts.append(f"A {publisher.name} publication.")
     if issue.price:
-        parts.append(f"Cover price ${issue.price:.2f}.")
+        # free text, verbatim — 'Cover price $3.99.', 'Cover price Free.'
+        parts.append(f"Cover price {issue.price}.")
     parts.append("All characters and events in this issue are entirely fictional.  "
                  "Any similarity to actual persons is purely coincidental.")
     return "  ".join(parts)

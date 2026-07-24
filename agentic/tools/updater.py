@@ -209,15 +209,18 @@ def update_issue_publication_date(wrapper: RunContextWrapper[APPState], series_i
         value=publication_date)
 
 @function_tool
-def update_issue_price(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, price: Optional[float]) -> str:
+def update_issue_price(wrapper: RunContextWrapper[APPState], series_id: str, issue_id: str, price: Optional[str]) -> str:
     """
-    Update the price of the currently selected comic book issue.
-    
+    Update the price of the currently selected comic book issue.  The price
+    is free text and prints VERBATIM on the cover and in the indicia —
+    '$3.99', 'Free', '10¢' are all fine.  Include the currency symbol.
+
     Args:
         series_id (str): The ID of the comic series.
         issue_id (str): The ID of the comic book issue.
-        price (Optional[float]): The new price for the issue.  This can be None if the price is not known or not applicable.
-    
+        price (Optional[str]): The new price, exactly as it should print.
+            This can be None if the price is not known or not applicable.
+
     Returns:
         A status message indicating the result of the update.
     """

@@ -1,6 +1,6 @@
 from typing import Optional
 from schema.layout_feel import LayoutFeel
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
         
 
@@ -15,13 +15,22 @@ class Issue(BaseModel):
     issue_number: int = Field(..., description="The issue number.  Optional.  default to 1")
     publication_date: Optional[str] = Field(..., description="The publication date of the issue.  Optional.  Default to None")
     
-    price: Optional[float] = Field(..., description="The price of the issue.  Default to None")
+    price: Optional[str] = Field(..., description="The price of the issue, as it should PRINT — free text ('$3.99', 'Free', '10¢').  Default to None")
     writer: Optional[str] = Field(..., description="The writer of the issue.  Optional.   Default to None")
     artist: Optional[str] = Field(..., description="The artist of the issue.  Optional.   Default to None")
     colorist: Optional[str] = Field(..., description="The colorist of the issue.  Optional.   Default to None")
     creative_minds: Optional[str] = Field(..., description="The creative minds behind the issue. Optional. Default to None")
     layout_feel: LayoutFeel = Field(default_factory=LayoutFeel, description="The book's page-flow FEEL — density, verticality, irregularity, variety (each -1..1, 0 neutral).  Default all-neutral.")
     layout_by_scene: bool = Field(False, description="When True, each scene's panels flow into their OWN pages (a scene never shares a page with the next); when False, panels flow continuously across scenes.  Default False (continuous).")
+
+    @field_validator("price", mode="before")
+    @classmethod
+    def _price_reads_as_printed(cls, v):
+        # older books stored a NUMBER — dress it the way it always printed,
+        # so a house minted before the free-text ruling loads unchanged
+        if isinstance(v, (int, float)):
+            return f"${v:.2f}"
+        return v
 
     @property
     def primary_key(self) -> dict[str, str]:

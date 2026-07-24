@@ -1339,7 +1339,7 @@ def view_issue(state: APPState):
                     with ui.element('div').classes('colophon-credits q-mt-md'):
                         for role, val in (("creative minds", issue.creative_minds),
                                           ("publication date", issue.publication_date),
-                                          ("price", f"${issue.price:.2f}" if issue.price is not None else None)):
+                                          ("price", issue.price or None)):
                             line = ui.row().classes('credit-line items-baseline flex-nowrap')
                             with line:
                                 ui.label(role.upper()).classes('credit-role')
